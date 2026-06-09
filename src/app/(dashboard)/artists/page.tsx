@@ -58,10 +58,6 @@ export default function ArtistsPage() {
         </div>
 
         <div className="flex items-center gap-2 px-2 w-full sm:w-auto border-t sm:border-t-0 sm:border-l border-border pt-2 sm:pt-0">
-          <Button variant="ghost" size="sm" className="text-text-secondary hidden sm:flex">
-            <Filter className="w-4 h-4 mr-2" />
-            Filtrar
-          </Button>
           <div className="flex items-center bg-surface-elevated rounded-lg p-1">
             <button 
               onClick={() => setViewMode('grid')}
