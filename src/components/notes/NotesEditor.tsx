@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Save, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
-export function NotesEditor({ artistId }: { artistId: string }) {
+export function NotesEditor({ endpoint }: { endpoint: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -33,7 +33,7 @@ export function NotesEditor({ artistId }: { artistId: string }) {
   useEffect(() => {
     async function loadNotes() {
       try {
-        const res = await fetch(`/api/artists/${artistId}/notes`);
+        const res = await fetch(endpoint);
         const data = await res.json();
         if (data.notes && data.notes.content && editor) {
           editor.commands.setContent(data.notes.content);
@@ -47,13 +47,13 @@ export function NotesEditor({ artistId }: { artistId: string }) {
     if (editor && !isLoaded) {
       loadNotes();
     }
-  }, [artistId, editor, isLoaded]);
+  }, [endpoint, editor, isLoaded]);
 
   const handleSave = async () => {
     if (!editor) return;
     setIsSaving(true);
     try {
-      await fetch(`/api/artists/${artistId}/notes`, {
+      await fetch(endpoint, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: editor.getHTML() }),

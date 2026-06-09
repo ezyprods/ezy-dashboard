@@ -269,7 +269,9 @@ export default function ArtistDetailPage() {
             <h3 className="text-xl font-semibold">Bloc de Notas</h3>
             <p className="text-sm text-text-secondary">Guarda referencias, acordes, progreso...</p>
           </div>
-          <NotesEditor artistId={artistId} />
+          <div className="animate-fade-in">
+            <NotesEditor endpoint={`/api/artists/${artistId}/notes`} />
+          </div>
         </div>
       )}
 

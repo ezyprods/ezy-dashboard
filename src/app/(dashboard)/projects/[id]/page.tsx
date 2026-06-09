@@ -391,7 +391,7 @@ export default function ProjectDetailPage() {
 
       {/* Tab: Notes */}
       {activeTab === 'notes' && (
-        <NotesEditor endpoint={`/api/projects/${projectId}`} initialNotes={project.notes || ''} />
+        <NotesEditor endpoint={`/api/projects/${projectId}/notes`} />
       )}
 
       {/* Tab: Communications */}
