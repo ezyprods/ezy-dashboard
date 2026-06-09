@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus, ExternalLink } from "lucide-react";
+import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus, ExternalLink, Headphones } from "lucide-react";
 import type { Artist, Project } from '@/types';
 import { PROJECT_TYPE_LABELS, STATUS_CONFIG } from '@/lib/constants';
 import { useProjects } from '@/lib/hooks/useProjects';
