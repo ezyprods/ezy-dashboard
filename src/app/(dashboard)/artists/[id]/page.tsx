@@ -241,7 +241,7 @@ export default function ArtistDetailPage() {
                     <div className="flex items-center justify-between mt-4">
                       <div className="flex items-center gap-2 text-xs text-text-secondary">
                         <Folder className="w-3.5 h-3.5" />
-                        <span>{project.songs?.length || 0} canciones</span>
+                        <span>Sincronizado con Drive</span>
                       </div>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: status?.bgColor, color: status?.color }}>
                         {status?.label || 'Desconocido'}

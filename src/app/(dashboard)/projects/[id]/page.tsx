@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones } from "lucide-react";
 import { AudioPlayer } from '@/components/projects/AudioPlayer';
 import { FlexBoard } from '@/components/projects/FlexBoard';
+import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
+import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
+import { ReferenceTracksTab } from '@/components/projects/ReferenceTracksTab';
 import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
 import { ProjectPaymentsWidget } from '@/components/projects/ProjectPaymentsWidget';
+import { NotesEditor } from '@/components/notes/NotesEditor';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
@@ -117,42 +121,37 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="space-y-6 animate-fade-in pb-20">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-text-secondary hover:text-text-primary">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">{project.title}</h1>
-          <p className="text-text-secondary text-sm uppercase tracking-widest">{project.type}</p>
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-text-secondary hover:text-text-primary">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-text-primary">{project.title}</h1>
+            <p className="text-text-secondary text-sm uppercase tracking-widest">{project.type}</p>
+          </div>
+        </div>
+        
+        <div className="w-full md:w-80">
+          <TimeTrackerWidget projectId={projectId} />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto">
-        <button 
-          onClick={() => setActiveTab('files')}
-          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'files' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
-        >
-          <div className="flex items-center gap-2"><Music className="w-4 h-4" /> Archivos</div>
-        </button>
-        <button 
-          onClick={() => setActiveTab('tasks')}
-          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'tasks' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
-        >
-          <div className="flex items-center gap-2"><CheckSquare className="w-4 h-4" /> Estado</div>
-        </button>
-        <button 
-          onClick={() => setActiveTab('communications')}
-          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'communications' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
-        >
-          <div className="flex items-center gap-2"><Send className="w-4 h-4" /> Comms</div>
-        </button>
-        <button 
-          onClick={() => setActiveTab('payments')}
-          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'payments' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
-        >
-          <div className="flex items-center gap-2"><DollarSign className="w-4 h-4" /> Pagos</div>
-        </button>
+      <div className="flex items-center gap-6 border-b border-border/50 px-6 overflow-x-auto mt-6">
+        {(['files', 'tasks', 'grid', 'references', 'notes', 'communications', 'payments'] as const).map(tab => (
+          <button 
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`pb-3 border-b-2 transition-colors whitespace-nowrap capitalize ${
+              activeTab === tab 
+                ? 'border-accent text-text-primary font-medium' 
+                : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
+            }`}
+          >
+            {tab === 'files' ? 'Archivos' : tab === 'tasks' ? 'Kanban' : tab === 'grid' ? 'Matriz' : tab === 'references' ? 'Referencias' : tab === 'notes' ? 'Notas' : tab === 'communications' ? 'Comms' : 'Pagos'}
+          </button>
+        ))}
       </div>
 
       {/* Tab: Files */}
@@ -375,9 +374,24 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {/* Tab: Tasks */}
+      {/* Tab: Tasks (Kanban) */}
       {activeTab === 'tasks' && (
         <FlexBoard projectId={projectId} />
+      )}
+
+      {/* Tab: Grid (Matrix) */}
+      {activeTab === 'grid' && (
+        <ProductionGridBoard projectId={projectId} />
+      )}
+
+      {/* Tab: References */}
+      {activeTab === 'references' && (
+        <ReferenceTracksTab projectId={projectId} />
+      )}
+
+      {/* Tab: Notes */}
+      {activeTab === 'notes' && (
+        <NotesEditor endpoint={`/api/projects/${projectId}`} initialNotes={project.notes || ''} />
       )}
 
       {/* Tab: Communications */}

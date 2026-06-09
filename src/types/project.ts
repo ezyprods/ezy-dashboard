@@ -91,6 +91,7 @@ export interface Project {
   coverArtUrl?: string;
   releaseDate?: string;
   deliveryDate?: string;
+  budget?: number;
   songs: Song[];
   notes?: string;
   status: ProjectStatus;
@@ -98,6 +99,13 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   driveFolderId: string;
+  
+  // Pro Tools Extensions
+  folderStatuses?: Record<string, string>;
+  customFileOrders?: Record<string, string[]>;
+  productionGrid?: ProductionGrid;
+  referenceTracks?: ReferenceTrack[];
+  workSessions?: WorkSession[];
 }
 
 export interface CreateProjectInput {
@@ -108,3 +116,24 @@ export interface CreateProjectInput {
   deliveryDate?: string;
   templateId?: string;
 }
+
+// --- Pro Tools (Advanced Modularity) ---
+
+export interface GridCell {
+  status: FlexTaskStatus;
+  notes?: string;
+}
+
+export interface ProductionGrid {
+  columns: { id: string; name: string }[];
+  rows: { id: string; name: string; cells: Record<string, GridCell> }[];
+}
+
+export interface ReferenceTrack {
+  id: string;
+  title: string;
+  url: string; // Spotify, YouTube, or Drive Link
+  type: 'spotify' | 'youtube' | 'drive';
+  notes?: string;
+}
+
