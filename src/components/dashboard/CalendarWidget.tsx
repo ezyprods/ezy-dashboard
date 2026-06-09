@@ -71,12 +71,8 @@ export function CalendarWidget() {
             Necesitas sincronizar tu cuenta de Google Calendar para ver tus próximas sesiones aquí.
           </p>
           <Button 
-            onClick={async () => {
-              try {
-                await authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' });
-              } catch (e) {
-                console.error(e);
-              }
+            onClick={() => {
+              window.location.href = '/api/auth/google-token';
             }} 
             variant="outline" 
             size="sm" 

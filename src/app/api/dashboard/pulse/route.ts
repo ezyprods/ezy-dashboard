@@ -6,7 +6,12 @@ import type { ArtistConfig, Artist } from '@/types';
 export async function GET() {
   try {
     const [folders, artistsDbResult] = await Promise.all([
-      listFolders(DRIVE_ROOT_FOLDER_ID),
+      listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {
+        if (e.message?.includes('invalid_grant') || e.message?.includes('credentials')) {
+          throw new Error('AUTH_REQUIRED');
+        }
+        throw e;
+      }),
       findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null)
     ]);
     
@@ -71,6 +76,9 @@ export async function GET() {
       }
     });
   } catch (error: any) {
+    if (error.message === 'AUTH_REQUIRED') {
+      return NextResponse.json({ artists: [], globalStats: null, needsAuth: true, error: 'Auth required' });
+    }
     console.error('API /dashboard/pulse GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch pulse', details: error.message }, { status: 500 });
   }
