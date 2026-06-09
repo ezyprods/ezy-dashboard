@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       access_type: 'offline',
       prompt: 'consent select_account',
       scope: [
-        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/drive',
         'https://www.googleapis.com/auth/calendar.events',
         'email',
         'profile'
@@ -34,8 +34,8 @@ export async function GET(request: Request) {
       return new NextResponse(`
         <html>
           <body style="font-family: sans-serif; padding: 40px; text-align: center;">
-            <h1 style="color: #4CAF50;">¡Conexión Exitosa!</h1>
-            <p>Este es tu nuevo Token Maestro (tiene permisos de Drive + Calendario):</p>
+            <h1 style="color: #4CAF50;">¡Conexión Exitosa (FULL PERMISSIONS)!</h1>
+            <p>Este es tu nuevo Token Maestro (tiene permisos TOTALES de Drive + Calendario):</p>
             <div style="background: #eee; padding: 20px; border-radius: 8px; word-break: break-all; margin: 20px auto; max-width: 600px; font-family: monospace;">
               ${tokens.refresh_token}
             </div>
