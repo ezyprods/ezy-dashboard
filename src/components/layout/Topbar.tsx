@@ -35,13 +35,27 @@ export function Topbar() {
           </div>
         </div>
         
-        <div className="flex items-center gap-3 border-l border-border pl-4 ml-2">
+        <div className="flex items-center gap-3 border-l border-border pl-4 ml-2 group relative cursor-pointer">
           <div className="w-9 h-9 rounded-full bg-surface-elevated border border-border flex items-center justify-center overflow-hidden">
             <span className="text-sm font-medium">P</span>
           </div>
           <div className="hidden md:block">
             <p className="text-sm font-medium text-text-primary">Productor</p>
             <p className="text-xs text-text-secondary">Admin</p>
+          </div>
+          
+          {/* Profile Dropdown */}
+          <div className="absolute right-0 top-full mt-2 w-48 glass rounded-xl shadow-xl border border-border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 p-2">
+            <button 
+              onClick={async () => {
+                const { authClient } = await import('@/lib/auth-client');
+                await authClient.signOut();
+                window.location.reload();
+              }}
+              className="w-full text-left px-4 py-2 text-sm text-error hover:bg-error/10 rounded-lg transition-colors flex items-center gap-2"
+            >
+              Cerrar Sesión
+            </button>
           </div>
         </div>
       </div>
