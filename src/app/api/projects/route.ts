@@ -26,8 +26,26 @@ export async function GET(request: Request) {
         const config = await findAndReadJsonFile<Project>('project_config.json', folder.id!);
         if (config) {
           return { ...config, driveFolderId: folder.id! };
+        } else {
+          // Es una subcarpeta antigua que no fue creada por la app. Auto-inicializar como proyecto.
+          const now = new Date().toISOString();
+          const newProject: Project = {
+            id: folder.id!,
+            artistId: artistId,
+            title: folder.name || 'Proyecto sin título',
+            type: 'song', // default
+            status: 'active',
+            songs: [],
+            createdAt: now,
+            updatedAt: now,
+            driveFolderId: folder.id!,
+          };
+          
+          // Guardar en background
+          await saveJsonFile('project_config.json', newProject, folder.id!);
+          
+          return newProject;
         }
-        return null;
       } catch (err) {
         return null;
       }
