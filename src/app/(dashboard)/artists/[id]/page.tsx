@@ -10,6 +10,7 @@ import { useProjects } from '@/lib/hooks/useProjects';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { NotesEditor } from '@/components/notes/NotesEditor';
 import { getProjectTypeIcon } from '@/lib/utils';
+import { ArtistReleasesTab } from '@/components/artists/ArtistReleasesTab';
 import * as LucideIcons from 'lucide-react';
 
 export default function ArtistDetailPage() {
@@ -163,8 +164,8 @@ export default function ArtistDetailPage() {
         </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto">
-        {['projects', 'files', 'notes', 'payments'].map((tab) => (
+      <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">
+        {(['projects', 'releases', 'files', 'notes', 'payments'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -174,10 +175,15 @@ export default function ArtistDetailPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
             }`}
           >
-            {tab === 'projects' ? 'Proyectos' : tab === 'files' ? 'Archivos' : tab === 'notes' ? 'Notas' : 'Pagos'}
+            {tab === 'projects' ? 'Proyectos' : tab === 'releases' ? 'Lanzamientos' : tab === 'files' ? 'Archivos' : tab === 'notes' ? 'Notas' : 'Pagos'}
           </button>
         ))}
       </div>
+
+      {/* Tab Content: Releases */}
+      {activeTab === 'releases' && (
+        <ArtistReleasesTab artistId={artistId} />
+      )}
 
       {/* Tab Content: Projects */}
       {activeTab === 'projects' && (

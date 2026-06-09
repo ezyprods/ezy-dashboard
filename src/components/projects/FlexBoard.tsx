@@ -380,7 +380,7 @@ export function FlexBoard({ projectId }: { projectId: string }) {
             return (
               <div key={group.id} className="rounded-xl border border-border bg-surface/30 overflow-hidden">
                 {/* Group header */}
-                <div className="flex items-center gap-3 p-4 border-b border-border/50">
+                <div className="flex items-center gap-3 p-4 border-b border-border/50 group">
                   <button onClick={() => updateGroup(group.id, { collapsed: !group.collapsed })} className="text-text-secondary hover:text-text-primary">
                     {group.collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>

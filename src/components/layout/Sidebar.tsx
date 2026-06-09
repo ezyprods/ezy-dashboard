@@ -27,7 +27,7 @@ export function Sidebar() {
             alt="EZY"
             width={240}
             height={96}
-            className="h-20 w-auto object-contain block dark:hidden"
+            className="h-16 w-auto object-contain block dark:hidden scale-[2.5] origin-center"
             priority
           />
           {/* Dark Mode Logo (White) */}
@@ -36,7 +36,7 @@ export function Sidebar() {
             alt="EZY"
             width={240}
             height={96}
-            className="h-20 w-auto object-contain hidden dark:block"
+            className="h-16 w-auto object-contain hidden dark:block scale-[2.5] origin-center"
             priority
           />
         </Link>

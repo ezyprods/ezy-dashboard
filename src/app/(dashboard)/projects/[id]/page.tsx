@@ -177,9 +177,45 @@ export default function ProjectDetailPage() {
                   ]);
                 }}
               >
-                <div className="flex items-center gap-2">
-                  <Folder className="w-5 h-5 text-accent" />
-                  <h3 className="font-bold text-lg">{folder.name}</h3>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Folder className="w-5 h-5 text-accent" />
+                    <h3 className="font-bold text-lg">{folder.name}</h3>
+                  </div>
+                  
+                  <select
+                    className="bg-surface-elevated border border-border rounded-full text-xs px-2 py-1 focus:outline-none focus:border-accent text-text-primary font-medium cursor-pointer"
+                    style={{
+                      backgroundColor: data?.project?.folderStatuses?.[folder.id] ? STATUS_CONFIG[data.project.folderStatuses[folder.id]]?.bgColor : 'transparent',
+                      color: data?.project?.folderStatuses?.[folder.id] ? STATUS_CONFIG[data.project.folderStatuses[folder.id]]?.color : 'inherit',
+                    }}
+                    value={data?.project?.folderStatuses?.[folder.id] || ''}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value;
+                      const customStatuses = data?.project?.folderStatuses || {};
+                      customStatuses[folder.id] = newStatus;
+                      
+                      try {
+                        const res = await fetch(`/api/projects/${projectId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ folderStatuses: customStatuses })
+                        });
+                        if (!res.ok) throw new Error('Error');
+                        setData({
+                          ...data,
+                          project: { ...data.project, folderStatuses: customStatuses }
+                        });
+                      } catch (err) {
+                        alert('Error guardando el estado');
+                      }
+                    }}
+                  >
+                    <option value="">(Sin estado)</option>
+                    {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div className="flex items-center gap-4">
