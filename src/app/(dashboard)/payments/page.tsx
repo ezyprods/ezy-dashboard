@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { Button } from "@/components/ui/Button";
-import { Plus, Search, DollarSign, ArrowUpRight, ArrowDownRight, CheckCircle2, Clock, Folder } from "lucide-react";
+import { Plus, Search, DollarSign, ArrowUpRight, ArrowDownRight, CheckCircle2, Clock, Folder, Banknote, ArrowRightLeft, Smartphone, CreditCard } from "lucide-react";
 import { usePayments } from "@/lib/hooks/usePayments";
 import { useArtists } from "@/lib/hooks/useArtists";
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_CONFIG } from "@/lib/constants";
+import { getPaymentMethodIcon } from "@/lib/utils";
 import { NewPaymentModal } from "@/components/payments/NewPaymentModal";
 
 export default function PaymentsPage() {
@@ -104,7 +105,13 @@ export default function PaymentsPage() {
                       <td className="p-4 text-sm">
                         {payment.concept}
                         {payment.projectId && <div className="text-xs text-accent mt-0.5 flex items-center gap-1"><Folder className="w-3 h-3"/> Vinculado a Proyecto</div>}
-                        <div className="text-xs text-text-secondary mt-0.5">{PAYMENT_METHOD_LABELS[payment.method]}</div>
+                        <div className="text-xs text-text-secondary mt-1 flex items-center gap-1">
+                          {payment.method === 'cash' ? <Banknote className="w-3 h-3" /> :
+                           payment.method === 'transfer' ? <ArrowRightLeft className="w-3 h-3" /> :
+                           payment.method === 'bizum' ? <Smartphone className="w-3 h-3" /> :
+                           <CreditCard className="w-3 h-3" />}
+                          {PAYMENT_METHOD_LABELS[payment.method]}
+                        </div>
                       </td>
                       <td className="p-4 font-bold">
                         {payment.amount.toFixed(2)}€

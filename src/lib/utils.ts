@@ -115,3 +115,36 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 }
+
+// --- Icon helpers (return icon name strings for lucide-react) ---
+
+export function getFileIconName(mimeType: string): string {
+  if (!mimeType) return 'File';
+  if (mimeType.startsWith('audio/')) return 'FileAudio';
+  if (mimeType.startsWith('image/')) return 'FileImage';
+  if (mimeType.startsWith('video/')) return 'Film';
+  if (mimeType === 'application/pdf') return 'FileText';
+  if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('7z')) return 'FileArchive';
+  if (mimeType.includes('sheet') || mimeType.includes('csv')) return 'FileSpreadsheet';
+  if (mimeType.includes('document') || mimeType.includes('word')) return 'FileText';
+  return 'File';
+}
+
+export function getProjectTypeIcon(type: string): string {
+  switch (type) {
+    case 'single': return 'Disc';
+    case 'ep': return 'Disc3';
+    case 'album': return 'Library';
+    case 'free': return 'Sparkles';
+    default: return 'FolderOpen';
+  }
+}
+
+export function getPaymentMethodIcon(method: string): string {
+  switch (method) {
+    case 'cash': return 'Banknote';
+    case 'transfer': return 'ArrowRightLeft';
+    case 'bizum': return 'Smartphone';
+    default: return 'CreditCard';
+  }
+}

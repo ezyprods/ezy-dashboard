@@ -37,7 +37,7 @@ export function CommandMenu() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="hidden md:flex items-center justify-between w-64 px-3 py-1.5 text-sm text-text-secondary bg-surface border border-border rounded-lg hover:border-accent/50 hover:bg-surface-elevated transition-colors mx-4"
+        className="hidden md:flex items-center justify-between flex-1 max-w-md px-3 py-1.5 text-sm text-text-secondary bg-surface border border-border rounded-lg hover:border-accent/50 hover:bg-surface-elevated transition-colors mx-4"
       >
         <div className="flex items-center gap-2">
           <Search className="w-4 h-4" />

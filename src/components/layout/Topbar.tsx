@@ -3,6 +3,7 @@
 import { Bell, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { CommandMenu } from '@/components/layout/CommandMenu';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 
 export function Topbar() {
   return (
@@ -17,13 +18,15 @@ export function Topbar() {
         <CommandMenu />
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        <ThemeToggle />
+
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="w-5 h-5" />
           <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface" />
         </Button>
         
-        <div className="flex items-center gap-3 border-l border-border pl-4">
+        <div className="flex items-center gap-3 border-l border-border pl-4 ml-2">
           <div className="w-9 h-9 rounded-full bg-surface-elevated border border-border flex items-center justify-center overflow-hidden">
             <span className="text-sm font-medium">P</span>
           </div>

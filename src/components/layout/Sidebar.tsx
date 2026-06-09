@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { APP_NAME } from '@/lib/constants';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -21,10 +21,14 @@ export function Sidebar() {
     <aside className="w-64 border-r border-border bg-surface flex flex-col h-screen sticky top-0">
       <div className="h-16 flex items-center px-6 border-b border-border">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-accent to-accent-secondary flex items-center justify-center shadow-lg shadow-accent/20">
-            <span className="text-white font-bold text-lg">E</span>
-          </div>
-          <span className="text-xl font-bold gradient-text">{APP_NAME}</span>
+          <Image
+            src="/logo.png"
+            alt="EZY"
+            width={120}
+            height={32}
+            className="h-7 w-auto object-contain"
+            priority
+          />
         </Link>
       </div>
 

@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Folder, FileAudio, File as FileIcon, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign } from "lucide-react";
+import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen } from "lucide-react";
 import { AudioPlayer } from '@/components/projects/AudioPlayer';
-import { ProjectChecklist } from '@/components/projects/ProjectChecklist';
+import { FlexBoard } from '@/components/projects/FlexBoard';
 import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
 import { ProjectPaymentsWidget } from '@/components/projects/ProjectPaymentsWidget';
 
@@ -156,12 +156,18 @@ export default function ProjectDetailPage() {
                       return isAudio ? (
                         <AudioPlayer key={file.id} fileId={file.id} fileName={file.name} />
                       ) : (
-                        <div key={file.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface/30">
+                        <div key={file.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface-elevated/50 hover:border-accent/30 transition-colors">
                           <div className="flex items-center gap-3">
-                            <FileIcon className="w-5 h-5 text-text-secondary" />
-                            <span className="text-sm font-medium">{file.name}</span>
+                            {file.mimeType?.startsWith('image/') ? <FileImage className="w-5 h-5 text-accent-secondary" /> :
+                             file.mimeType?.startsWith('video/') ? <Film className="w-5 h-5 text-warning" /> :
+                             file.mimeType === 'application/pdf' ? <FileText className="w-5 h-5 text-error" /> :
+                             <FileIcon className="w-5 h-5 text-text-secondary" />}
+                            <div>
+                              <span className="text-sm font-medium">{file.name}</span>
+                              {file.size && <span className="text-[10px] text-text-secondary ml-2">{(Number(file.size) / 1024 / 1024).toFixed(1)} MB</span>}
+                            </div>
                           </div>
-                          <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">Ver en Drive</a>
+                          <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" /> Drive</a>
                         </div>
                       );
                     })}
@@ -175,7 +181,7 @@ export default function ProjectDetailPage() {
 
       {/* Tab: Tasks */}
       {activeTab === 'tasks' && (
-        <ProjectChecklist projectId={projectId} />
+        <FlexBoard projectId={projectId} />
       )}
 
       {/* Tab: Communications */}

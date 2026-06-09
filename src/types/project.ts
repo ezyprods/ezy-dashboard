@@ -22,6 +22,33 @@ export interface Task {
   status: 'pending' | 'completed';
 }
 
+// --- Flexible Board System ---
+export type FlexTaskStatus = 'todo' | 'in_progress' | 'review' | 'done';
+export type FlexTaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface FlexTask {
+  id: string;
+  title: string;
+  status: FlexTaskStatus;
+  priority?: FlexTaskPriority;
+  notes?: string;
+  tags?: string[];
+  dueDate?: string;
+  createdAt: string;
+}
+
+export interface TaskGroup {
+  id: string;
+  title: string;
+  color?: string;
+  collapsed?: boolean;
+  tasks: FlexTask[];
+}
+
+export interface FlexBoardData {
+  groups: TaskGroup[];
+}
+
 export interface LinkedFile {
   driveFileId: string;
   name: string;
