@@ -12,6 +12,7 @@ import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
 import { CustomSortModal } from '@/components/projects/CustomSortModal';
+import { STATUS_CONFIG } from '@/lib/constants';
 
 export default function ProjectDetailPage() {
   const params = useParams();
