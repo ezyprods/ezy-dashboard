@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Folder, FileAudio, File as FileIcon, UploadCloud, Loader2, Music, CheckSquare, Send } from "lucide-react";
+import { ArrowLeft, Folder, FileAudio, File as FileIcon, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign } from "lucide-react";
 import { AudioPlayer } from '@/components/projects/AudioPlayer';
 import { ProjectChecklist } from '@/components/projects/ProjectChecklist';
 import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
