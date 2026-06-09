@@ -25,3 +25,16 @@ export interface PaymentSummary {
   status: PaymentStatus;
   lastPaymentDate?: string;
 }
+
+export interface Payment {
+  id: string;
+  artistId: string;
+  projectId?: string;
+  amount: number;
+  concept?: string;
+  date: string;
+  status: PaymentStatus;
+  method: PaymentMethod;
+  createdAt: string;
+  updatedAt: string;
+}

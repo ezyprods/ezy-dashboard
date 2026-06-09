@@ -16,6 +16,12 @@ export interface ChecklistItem {
   checked: boolean;
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  status: 'pending' | 'completed';
+}
+
 export interface LinkedFile {
   driveFileId: string;
   name: string;

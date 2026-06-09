@@ -30,7 +30,10 @@ export function NewPaymentModal({ isOpen, onClose }: { isOpen: boolean, onClose:
     setIsLoading(true);
 
     try {
-      const result = await createPayment(formData);
+      const result = await createPayment({
+        ...formData,
+        amount: Number(formData.amount)
+      } as any);
       if (result.success) {
         onClose();
         setFormData({ artistId: '', amount: '', concept: '', date: new Date().toISOString().split('T')[0], method: 'transfer' });

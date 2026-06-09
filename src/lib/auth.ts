@@ -15,7 +15,7 @@ export const auth = betterAuth({
         "email", 
         "https://www.googleapis.com/auth/drive.file",
         "https://www.googleapis.com/auth/calendar.events"
-      ].join(" "),
+      ],
       accessType: "offline",
       prompt: "consent"
     },
