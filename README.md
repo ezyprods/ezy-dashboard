@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# EZY Dashboard
 
-## Getting Started
+Plataforma de gestión de producción musical que usa **Google Drive como único backend** (archivos JSON para metadatos, carpetas para organización de archivos).
 
-First, run the development server:
+## 🚀 Tecnologías
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Framework**: Next.js 16 (App Router)
+- **Lenguaje**: TypeScript
+- **Estilos**: Tailwind CSS v4
+- **Autenticación**: Better Auth (Google OAuth)
+- **Almacenamiento**: Google Drive API (`googleapis`)
+- **Emails**: Resend
+- **UI/UX**: Componentes premium, glassmorphism, modo oscuro por defecto.
+
+## 📋 Requisitos Previos
+
+1. Node.js (v20.9+ recomendado)
+2. Cuenta de Google Cloud con la API de Google Drive habilitada.
+3. Cuenta de Resend (para el envío de emails).
+
+## 🛠 Instalación y Configuración Local
+
+1. Instalar las dependencias:
+   ```bash
+   npm install
+   ```
+
+2. Configurar variables de entorno:
+   Renombra o copia el archivo `.env.example` a `.env.local` y rellena los valores.
+   
+   - **`BETTER_AUTH_SECRET`**: Genera un string aleatorio (puedes usar `npx better-auth generate-secret` o cualquier generador UUID).
+   - **`DRIVE_ROOT_FOLDER_ID`**: El ID de la carpeta en Google Drive donde se guardarán los archivos. (Por defecto: `182uxxUjN7KJJDm1vAZ_AEyKvAwwcTPxY`)
+
+3. Ejecutar el servidor de desarrollo:
+   ```bash
+   npm run dev
+   ```
+   Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
+
+## 🔐 Obtener Credenciales de Google (Paso a Paso)
+
+1. Ve a la [Consola de Google Cloud](https://console.cloud.google.com/).
+2. Crea un nuevo proyecto.
+3. En el menú, ve a **APIs & Services > Library** y habilita la **Google Drive API**.
+4. Ve a **APIs & Services > OAuth consent screen**. Configúralo como Externo o Interno según necesites, y añade tu correo electrónico.
+5. Ve a **APIs & Services > Credentials**.
+6. Haz clic en **Create Credentials > OAuth client ID**.
+7. Selecciona **Web application**.
+8. Añade en "Authorized JavaScript origins": `http://localhost:3000` (y tu dominio de producción luego).
+9. Añade en "Authorized redirect URIs": `http://localhost:3000/api/auth/callback/google` (y la ruta equivalente para producción).
+10. Obtendrás tu **Client ID** y **Client Secret**. Añádelos al archivo `.env.local`.
+
+*(Nota: Para el uso continuo sin re-autenticar la app constantemente, necesitarás configurar un mecanismo para refrescar y guardar el Google Refresh Token asociado a la cuenta de servicio o administrador principal).*
+
+## ☁️ Despliegue en Vercel
+
+1. Haz push de tu código a GitHub.
+2. En [Vercel](https://vercel.com/), crea un nuevo proyecto e importa tu repositorio de GitHub.
+3. Configura las **Variables de Entorno** en Vercel copiando los valores de tu `.env.local`. Asegúrate de cambiar `BETTER_AUTH_URL` a tu dominio real de Vercel (ej: `https://tu-app.vercel.app`).
+4. Haz deploy.
+
+## 📁 Estructura del Proyecto en Drive
+
+La aplicación interactúa con Google Drive creando la siguiente estructura a partir del `DRIVE_ROOT_FOLDER_ID`:
+
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+📁 ARTISTAS (DRIVE_ROOT_FOLDER_ID)
+├── 📁 [Nombre Artista]/
+│   ├── 📄 artist_config.json
+│   ├── 📁 Images/
+│   ├── 📁 [Nombre Proyecto 1]/
+│   │   ├── 📄 project_config.json
+│   │   ├── 📁 Sessions/
+│   │   ├── 📁 Bounces/
+│   │   ├── 📁 Mix/
+│   │   ├── 📁 Master/
+│   │   ├── 📁 References/
+│   │   └── 📁 Other/
+│   └── 📁 [Nombre Proyecto 2]/
+```
