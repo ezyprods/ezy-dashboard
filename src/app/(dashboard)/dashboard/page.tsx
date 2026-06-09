@@ -70,33 +70,33 @@ export default function DashboardPage() {
           </div>
         </button>
 
-        <button className="glass p-5 rounded-2xl border border-border text-left hover:border-accent/50 hover:bg-accent/5 transition-all group flex flex-col gap-3">
+        <button onClick={() => router.push('/artists')} className="glass p-5 rounded-2xl border border-border text-left hover:border-accent/50 hover:bg-accent/5 transition-all group flex flex-col gap-3">
           <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
             <FolderPlus className="w-5 h-5 text-blue-500" />
           </div>
           <div>
             <h3 className="font-semibold text-text-primary">Nuevo Proyecto</h3>
-            <p className="text-xs text-text-secondary mt-0.5">Asignar a artista</p>
+            <p className="text-xs text-text-secondary mt-0.5">Elige un artista primero</p>
           </div>
         </button>
 
-        <button className="glass p-5 rounded-2xl border border-border text-left hover:border-accent/50 hover:bg-accent/5 transition-all group flex flex-col gap-3">
+        <button onClick={() => router.push('/artists')} className="glass p-5 rounded-2xl border border-border text-left hover:border-accent/50 hover:bg-accent/5 transition-all group flex flex-col gap-3">
           <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
             <UploadCloud className="w-5 h-5 text-green-500" />
           </div>
           <div>
             <h3 className="font-semibold text-text-primary">Subida Rápida</h3>
-            <p className="text-xs text-text-secondary mt-0.5">Archivos a Drive</p>
+            <p className="text-xs text-text-secondary mt-0.5">En el perfil del artista</p>
           </div>
         </button>
 
-        <button className="glass p-5 rounded-2xl border border-border text-left hover:border-accent/50 hover:bg-accent/5 transition-all group flex flex-col gap-3">
+        <button onClick={() => router.push('/artists')} className="glass p-5 rounded-2xl border border-border text-left hover:border-accent/50 hover:bg-accent/5 transition-all group flex flex-col gap-3">
           <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
             <Music className="w-5 h-5 text-purple-500" />
           </div>
           <div>
-            <h3 className="font-semibold text-text-primary">Ver Lanzamientos</h3>
-            <p className="text-xs text-text-secondary mt-0.5">Spotify Previews</p>
+            <h3 className="font-semibold text-text-primary">Lanzamientos</h3>
+            <p className="text-xs text-text-secondary mt-0.5">Ve a la pestaña del artista</p>
           </div>
         </button>
       </div>
