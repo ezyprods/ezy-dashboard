@@ -26,7 +26,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         driveFolderId: id,
       };
     } else {
-      // Artista no inicializado (carpeta antigua de Drive)
+      // Artista no inicializado (carpeta antigua de Drive) -> Auto-inicializamos
       artist = {
         id: id,
         name: folderRes.data.name!,
@@ -38,6 +38,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         updatedAt: folderRes.data.createdTime || new Date().toISOString(),
         driveFolderId: id,
       };
+      
+      // Guardar en background el json para auto-sincronizar
+      await saveJsonFile('artist_config.json', {
+        id: artist.id,
+        name: artist.name,
+        genre: artist.genre,
+        tags: artist.tags,
+        services: artist.services,
+        status: artist.status,
+        createdAt: artist.createdAt,
+        updatedAt: artist.updatedAt
+      }, id);
     }
 
     return NextResponse.json({ artist });

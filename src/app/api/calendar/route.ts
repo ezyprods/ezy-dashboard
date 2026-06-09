@@ -40,6 +40,14 @@ export async function GET() {
     return NextResponse.json({ events });
   } catch (error: any) {
     console.error('Calendar API Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch calendar events', details: error.message }, { status: 500 });
+    
+    // Check if it's a permissions error
+    const isAuthError = error.code === 401 || error.code === 403 || error.message?.includes('invalid_grant') || error.message?.includes('insufficient');
+    
+    return NextResponse.json({ 
+      error: 'Failed to fetch calendar events', 
+      details: error.message,
+      needsAuth: isAuthError 
+    }, { status: isAuthError ? 403 : 500 });
   }
 }

@@ -71,7 +71,7 @@ export default function ArtistDetailPage() {
     );
   }
 
-  const isOldFolder = !artist.services || artist.services.length === 0 && artist.genre.length === 0;
+  const isOldFolder = false; // Ya no hay carpetas antiguas, todo se auto-sincroniza
 
   return (
     <div className="space-y-6 animate-fade-in pb-20">
@@ -83,22 +83,6 @@ export default function ArtistDetailPage() {
         </Button>
         <h1 className="text-2xl font-bold text-text-primary">Perfil del Artista</h1>
       </div>
-
-      {isOldFolder && (
-        <div className="glass p-4 rounded-xl border-warning/30 bg-warning/5 flex items-start justify-between gap-4">
-          <div>
-            <h3 className="font-semibold text-warning">Carpeta antigua detectada</h3>
-            <p className="text-sm text-text-secondary mt-1">
-              Este artista proviene de una carpeta de Drive que no fue creada por EZY Dashboard. 
-              Sincronízala para organizar su estructura y habilitar todas las funciones.
-            </p>
-          </div>
-          <Button onClick={handleSync} disabled={isSyncing} className="bg-warning text-black hover:bg-warning/90 shrink-0">
-            {isSyncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Sincronizar
-          </Button>
-        </div>
-      )}
 
       {/* Header Profile */}
       <div className="glass rounded-xl p-8 border border-border relative overflow-hidden">
@@ -197,9 +181,7 @@ export default function ArtistDetailPage() {
             <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border">
               <Disc className="w-12 h-12 mb-4 mx-auto opacity-50" />
               <p>No hay proyectos para este artista.</p>
-              {!isOldFolder && (
                 <Button variant="link" onClick={() => setIsNewProjectModalOpen(true)}>Crear el primer proyecto</Button>
-              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

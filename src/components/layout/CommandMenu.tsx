@@ -12,8 +12,12 @@ export function CommandMenu() {
   const router = useRouter();
   const { activeArtists } = useArtists();
 
-  // Atajo de teclado Cmd+K o Ctrl+K
+  const [isMac, setIsMac] = React.useState(true);
+
   React.useEffect(() => {
+    // Detect OS after mount to avoid hydration mismatch
+    setIsMac(typeof window !== 'undefined' && navigator.userAgent.toUpperCase().indexOf('MAC') >= 0);
+    
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -33,12 +37,14 @@ export function CommandMenu() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="hidden md:flex items-center gap-2 px-3 py-1.5 text-sm text-text-secondary bg-surface-elevated border border-border rounded-md hover:border-accent/50 hover:text-text-primary transition-colors"
+        className="hidden md:flex items-center justify-between w-64 px-3 py-1.5 text-sm text-text-secondary bg-surface border border-border rounded-lg hover:border-accent/50 hover:bg-surface-elevated transition-colors mx-4"
       >
-        <Search className="w-4 h-4" />
-        <span>Buscar...</span>
-        <kbd className="hidden lg:inline-flex items-center gap-1 font-sans text-xs bg-surface border border-border rounded px-1.5 ml-4">
-          <span className="text-xs">⌘</span>K
+        <div className="flex items-center gap-2">
+          <Search className="w-4 h-4" />
+          <span>Buscar artista, proyecto...</span>
+        </div>
+        <kbd className="hidden lg:inline-flex items-center font-sans text-[10px] font-medium text-text-secondary bg-surface-elevated border border-border rounded px-1.5 shadow-sm">
+          {isMac ? '⌘K' : 'Ctrl K'}
         </kbd>
       </button>
 

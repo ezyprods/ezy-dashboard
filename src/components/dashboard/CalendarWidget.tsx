@@ -26,8 +26,15 @@ export function CalendarWidget() {
   const fetchEvents = async () => {
     try {
       const res = await fetch('/api/calendar');
-      if (!res.ok) throw new Error('Failed to fetch calendar');
       const data = await res.json();
+      
+      if (!res.ok) {
+        if (data.needsAuth) {
+          throw new Error('Faltan permisos de Calendario. Por favor, asegúrate de actualizar tu GOOGLE_REFRESH_TOKEN tras añadir los nuevos scopes.');
+        }
+        throw new Error(data.error || 'Failed to fetch calendar');
+      }
+      
       setEvents(data.events || []);
     } catch (err: any) {
       setError(err.message);
@@ -57,7 +64,10 @@ export function CalendarWidget() {
       ) : error ? (
         <div className="flex items-start gap-3 p-3 bg-error/10 border border-error/20 rounded-lg text-error">
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <p className="text-sm">No se pudo cargar el calendario. {error}</p>
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium">Error de Calendario</p>
+            <p className="text-xs opacity-90">{error}</p>
+          </div>
         </div>
       ) : events.length === 0 ? (
         <div className="flex items-start gap-3 opacity-60 p-4 border border-dashed border-border rounded-lg justify-center text-center">
