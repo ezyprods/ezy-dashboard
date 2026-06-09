@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus } from "lucide-react";
+import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus, ExternalLink } from "lucide-react";
 import type { Artist, Project } from '@/types';
 import { PROJECT_TYPE_LABELS, STATUS_CONFIG } from '@/lib/constants';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { NotesEditor } from '@/components/notes/NotesEditor';
+import { getProjectTypeIcon } from '@/lib/utils';
 
 export default function ArtistDetailPage() {
   const params = useParams();
@@ -203,13 +204,27 @@ export default function ArtistDetailPage() {
                   <div key={project.id} onClick={() => router.push(`/projects/${project.id}`)} className="bg-surface-elevated rounded-xl p-5 border border-border card-hover group cursor-pointer">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-2">
+                        {(() => {
+                          const iconName = getProjectTypeIcon(project.type);
+                          const IconComponent = (LucideIcons as any)[iconName] || Folder;
+                          return <IconComponent className="w-4 h-4 text-accent" />;
+                        })()}
                         <span className="text-[10px] uppercase font-bold text-text-secondary tracking-widest">
                           {PROJECT_TYPE_LABELS[project.type] || project.type}
                         </span>
                       </div>
-                      <button className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface">
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); router.push(`/projects/${project.id}/preview`); }}
+                          className="text-text-secondary hover:text-accent p-1 rounded hover:bg-surface"
+                          title="Preview Lanzamiento"
+                        >
+                          <Headphones className="w-4 h-4" />
+                        </button>
+                        <button className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface">
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     
                     <h4 className="text-lg font-bold text-text-primary mb-1 group-hover:text-accent transition-colors">

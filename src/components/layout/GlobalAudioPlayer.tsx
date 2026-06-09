@@ -3,7 +3,6 @@
 import React from 'react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music } from 'lucide-react';
-import { Slider } from '@/components/ui/Slider'; // Let's assume we have a simple slider or we'll make a custom one below
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '0:00';

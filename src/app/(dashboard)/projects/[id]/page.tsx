@@ -10,7 +10,8 @@ import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
 import { ProjectPaymentsWidget } from '@/components/projects/ProjectPaymentsWidget';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
-import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon } from 'lucide-react';
+import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
+import { CustomSortModal } from '@/components/projects/CustomSortModal';
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -24,7 +25,37 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('files');
   const [uploadingTo, setUploadingTo] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<{key: 'name'|'date'|'size', direction: 'asc'|'desc'}>({key: 'name', direction: 'asc'});
+  const [sortConfig, setSortConfig] = useState<{key: 'name'|'date'|'size'|'custom', direction: 'asc'|'desc'}>({key: 'name', direction: 'asc'});
+  const [sortModalFolder, setSortModalFolder] = useState<any | null>(null);
+
+  const handleSaveCustomOrder = async (orderedFileIds: string[]) => {
+    if (!sortModalFolder || !data?.project) return;
+    try {
+      const customFileOrders = data.project.customFileOrders || {};
+      customFileOrders[sortModalFolder.id] = orderedFileIds;
+      
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customFileOrders })
+      });
+      if (!res.ok) throw new Error('Failed to save order');
+      
+      // Update local state
+      setData({
+        ...data,
+        project: {
+          ...data.project,
+          customFileOrders
+        }
+      });
+    } catch (e) {
+      console.error(e);
+      alert('Error guardando el orden personalizado');
+    } finally {
+      setSortModalFolder(null);
+    }
+  };
 
   useEffect(() => {
     fetchProject();
@@ -148,7 +179,14 @@ export default function ProjectDetailPage() {
                     <option value="date-desc">Fecha (Más nuevos)</option>
                     <option value="date-asc">Fecha (Más antiguos)</option>
                     <option value="size-desc">Tamaño (Mayor a menor)</option>
+                    <option value="custom-asc">Orden personalizado</option>
                   </select>
+                  {sortConfig.key === 'custom' && (
+                    <Button variant="ghost" size="sm" onClick={() => setSortModalFolder(folder)}>
+                      <Settings2 className="w-4 h-4 mr-2" />
+                      Personalizar Orden
+                    </Button>
+                  )}
 
                   <div>
                     <input 
@@ -187,6 +225,14 @@ export default function ProjectDetailPage() {
                         return sortConfig.direction === 'desc'
                           ? Number(b.size || 0) - Number(a.size || 0)
                           : Number(a.size || 0) - Number(b.size || 0);
+                      } else if (sortConfig.key === 'custom') {
+                        const order = data?.project?.customFileOrders?.[folder.id] || [];
+                        const indexA = order.indexOf(a.id);
+                        const indexB = order.indexOf(b.id);
+                        if (indexA === -1 && indexB === -1) return 0;
+                        if (indexA === -1) return 1;
+                        if (indexB === -1) return -1;
+                        return indexA - indexB;
                       }
                       return 0;
                     }).map((file: any) => {
@@ -288,6 +334,15 @@ export default function ProjectDetailPage() {
       {/* Tab: Payments */}
       {activeTab === 'payments' && (
         <ProjectPaymentsWidget projectId={projectId} initialBudget={project.budget || 0} artistId={project.artistId} />
+      )}
+      
+      {sortModalFolder && (
+        <CustomSortModal 
+          folderName={sortModalFolder.name} 
+          files={sortModalFolder.files} 
+          onClose={() => setSortModalFolder(null)} 
+          onSave={handleSaveCustomOrder} 
+        />
       )}
     </div>
   );
