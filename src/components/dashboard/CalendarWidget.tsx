@@ -70,7 +70,18 @@ export function CalendarWidget() {
           <p className="text-xs text-text-secondary mb-4 px-2">
             Necesitas sincronizar tu cuenta de Google Calendar para ver tus próximas sesiones aquí.
           </p>
-          <Button onClick={() => authClient.signIn.social({ provider: 'google' })} variant="outline" size="sm" className="w-full">
+          <Button 
+            onClick={async () => {
+              try {
+                await authClient.signIn.social({ provider: 'google', callbackURL: '/dashboard' });
+              } catch (e) {
+                console.error(e);
+              }
+            }} 
+            variant="outline" 
+            size="sm" 
+            className="w-full"
+          >
             Configurar conexión
           </Button>
         </div>

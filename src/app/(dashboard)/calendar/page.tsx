@@ -88,7 +88,17 @@ export default function CalendarPage() {
           <p className="text-text-secondary mb-8">
             {error.includes('permisos') ? error : 'Necesitas sincronizar tu cuenta de Google Calendar para usar el Calendario Inteligente.'}
           </p>
-          <Button onClick={() => authClient.signIn.social({ provider: 'google' })} size="lg" className="w-full">
+          <Button 
+            onClick={async () => {
+              try {
+                await authClient.signIn.social({ provider: 'google', callbackURL: '/calendar' });
+              } catch (e) {
+                console.error(e);
+              }
+            }} 
+            size="lg" 
+            className="w-full"
+          >
             Conectar con Google
           </Button>
         </div>
