@@ -27,7 +27,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (config) {
       // Dynamic count of audio files
       const audioQuery = `mimeType contains 'audio/' and '${folder.id}' in parents and trashed=false`;
-      const audioRes = await drive.files.list({ q: audioQuery, fields: 'files(id)' });
+      const audioRes = await drive.files.list({ 
+        q: audioQuery, 
+        fields: 'files(id)',
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
+      });
       
       releases.push({
         ...config,

@@ -42,6 +42,7 @@ export async function createFolder(name: string, parentId: string = DRIVE_ROOT_F
   const response = await drive.files.create({
     requestBody: fileMetadata,
     fields: 'id',
+    supportsAllDrives: true,
   });
 
   if (!response.data.id) {
@@ -59,7 +60,12 @@ export async function saveJsonFile(name: string, data: any, parentId: string): P
   
   // Primero comprobamos si ya existe
   const query = `name='${name}' and '${parentId}' in parents and trashed=false`;
-  const existing = await drive.files.list({ q: query, fields: 'files(id)' });
+  const existing = await drive.files.list({ 
+    q: query, 
+    fields: 'files(id)',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
+  });
   
   const fileMetadata = {
     name,
@@ -78,6 +84,7 @@ export async function saveJsonFile(name: string, data: any, parentId: string): P
     await drive.files.update({
       fileId,
       media: media,
+      supportsAllDrives: true,
     });
     return fileId;
   } else {
@@ -86,6 +93,7 @@ export async function saveJsonFile(name: string, data: any, parentId: string): P
       requestBody: fileMetadata,
       media: media,
       fields: 'id',
+      supportsAllDrives: true,
     });
     return response.data.id!;
   }
@@ -100,6 +108,7 @@ export async function readJsonFile<T>(fileId: string): Promise<T> {
   const response = await drive.files.get({
     fileId,
     alt: 'media',
+    supportsAllDrives: true,
   });
 
   return response.data as T;
@@ -112,7 +121,12 @@ export async function findAndReadJsonFile<T>(name: string, folderId: string): Pr
   const drive = getDriveService();
   const query = `name='${name}' and '${folderId}' in parents and trashed=false`;
   
-  const existing = await drive.files.list({ q: query, fields: 'files(id)' });
+  const existing = await drive.files.list({ 
+    q: query, 
+    fields: 'files(id)',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
+  });
   
   if (!existing.data.files || existing.data.files.length === 0) {
     return null;
@@ -132,6 +146,8 @@ export async function listFolders(parentId: string = DRIVE_ROOT_FOLDER_ID) {
     q: query,
     fields: 'files(id, name, createdTime)',
     orderBy: 'name',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
 
   return response.data.files || [];
@@ -148,6 +164,8 @@ export async function listFiles(parentId: string): Promise<DriveFile[]> {
     q: query,
     fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink)',
     orderBy: 'modifiedTime desc',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
 
   const files = response.data.files || [];
