@@ -62,12 +62,15 @@ export function CalendarWidget() {
           <Loader2 className="w-5 h-5 animate-spin text-text-secondary" />
         </div>
       ) : error ? (
-        <div className="flex items-start gap-3 p-3 bg-error/10 border border-error/20 rounded-lg text-error">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">Error de Calendario</p>
-            <p className="text-xs opacity-90">{error}</p>
-          </div>
+        <div className="flex flex-col items-center justify-center p-6 bg-surface-elevated rounded-xl border border-border text-center">
+          <Calendar className="w-8 h-8 text-text-secondary mb-3 opacity-50" />
+          <p className="text-sm font-medium text-text-primary mb-1">Conecta tu Calendario</p>
+          <p className="text-xs text-text-secondary mb-4 px-2">
+            Necesitas sincronizar tu cuenta de Google Calendar para ver tus próximas sesiones aquí.
+          </p>
+          <button className="text-xs font-semibold text-accent hover:text-accent-light transition-colors">
+            Configurar conexión
+          </button>
         </div>
       ) : events.length === 0 ? (
         <div className="flex items-start gap-3 opacity-60 p-4 border border-dashed border-border rounded-lg justify-center text-center">

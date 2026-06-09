@@ -1,0 +1,52 @@
+import { NextResponse } from 'next/server';
+import { getDriveService, findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
+import { Release } from '@/types';
+
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  
+  const config = await findAndReadJsonFile<Release>('release_config.json', id);
+  if (!config) {
+    return NextResponse.json({ error: 'Release not found' }, { status: 404 });
+  }
+  
+  return NextResponse.json(config);
+}
+
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const updates = await request.json();
+  
+  const config = await findAndReadJsonFile<Release>('release_config.json', id);
+  if (!config) {
+    return NextResponse.json({ error: 'Release not found' }, { status: 404 });
+  }
+  
+  const updatedRelease = {
+    ...config,
+    ...updates,
+    id, // Ensure ID is not changed
+    updatedAt: new Date().toISOString(),
+  };
+  
+  await saveJsonFile('release_config.json', updatedRelease, id);
+  
+  return NextResponse.json(updatedRelease);
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const drive = getDriveService();
+  
+  try {
+    await drive.files.update({
+      fileId: id,
+      requestBody: {
+        trashed: true,
+      },
+    });
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

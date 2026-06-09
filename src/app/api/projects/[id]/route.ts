@@ -1,6 +1,43 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, getDriveService, saveJsonFile } from '@/lib/drive';
 
+// Función recursiva para obtener todas las carpetas y sus archivos
+async function fetchFoldersRecursively(drive: any, parentId: string, parentPath: string = ''): Promise<{folders: any[], files: any[]}> {
+  let allFolders: any[] = [];
+  let rootFiles: any[] = [];
+
+  const response = await drive.files.list({
+    q: `'${parentId}' in parents and trashed=false`,
+    fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)',
+    orderBy: 'folder, name',
+  });
+
+  const items = response.data.files || [];
+  
+  // Archivos directos en este parent
+  const files = items.filter((f: any) => f.mimeType !== 'application/vnd.google-apps.folder');
+  rootFiles = files;
+
+  // Carpetas directas
+  const folders = items.filter((f: any) => f.mimeType === 'application/vnd.google-apps.folder');
+
+  for (const folder of folders) {
+    const currentPath = parentPath ? `${parentPath} / ${folder.name}` : folder.name;
+    const { folders: subFolders, files: subFiles } = await fetchFoldersRecursively(drive, folder.id, currentPath);
+    
+    allFolders.push({
+      id: folder.id,
+      name: currentPath, // Mostramos la ruta completa para dar contexto
+      files: subFiles,
+    });
+    
+    // Añadimos las subcarpetas encontradas
+    allFolders = allFolders.concat(subFolders);
+  }
+
+  return { folders: allFolders, files: rootFiles };
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const resolvedParams = await params;
@@ -12,37 +49,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // 2. Listar TODO el contenido (carpetas y archivos)
+    // 2. Extraer todo recursivamente
     const drive = getDriveService();
-    const response = await drive.files.list({
-      q: `'${id}' in parents and trashed=false`,
-      fields: 'files(id, name, mimeType, webViewLink, createdTime, size)',
-      orderBy: 'folder, name',
-    });
+    const { folders: foldersWithFiles, files: rootFiles } = await fetchFoldersRecursively(drive, id);
 
-    const items = response.data.files || [];
-    const folders = items.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
-    
-    // 3. Para cada carpeta clave (ej. Bounces), listar sus archivos
-    const foldersWithFiles = await Promise.all(
-      folders.map(async (folder) => {
-        const res = await drive.files.list({
-          q: `'${folder.id}' in parents and trashed=false`,
-          fields: 'files(id, name, mimeType, webViewLink, createdTime, size)',
-          orderBy: 'createdTime desc',
-        });
-        return {
-          id: folder.id,
-          name: folder.name,
-          files: res.data.files || [],
-        };
-      })
-    );
+    // Filtramos las carpetas que no tienen archivos para que la UI no quede sucia (opcional, pero recomendado)
+    const activeFolders = foldersWithFiles.filter(f => f.files.length > 0);
 
     return NextResponse.json({ 
       project: { ...config, driveFolderId: id },
-      folders: foldersWithFiles,
-      rootFiles: items.filter(f => f.mimeType !== 'application/vnd.google-apps.folder')
+      folders: activeFolders,
+      rootFiles
     });
   } catch (error: any) {
     console.error('API /projects/[id] GET error:', error);
