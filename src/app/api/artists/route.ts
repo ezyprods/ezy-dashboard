@@ -5,26 +5,23 @@ import type { Artist, ArtistConfig, CreateArtistInput } from '@/types';
 
 export async function GET() {
   try {
-    // Ejecutar ambas peticiones en paralelo para reducir el tiempo de carga a la mitad
     const [folders, artistsDbResult] = await Promise.all([
-      listFolders(DRIVE_ROOT_FOLDER_ID),
+      listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {
+        if (e.message?.includes('invalid_grant') || e.message?.includes('credentials')) {
+          throw new Error('AUTH_REQUIRED');
+        }
+        throw e;
+      }),
       findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null)
     ]);
     
     const artistsDb = artistsDbResult || [];
     
-    // 3. Cruzar datos (Extremadamente rápido)
     const validArtists = folders.map(folder => {
       const syncedData = artistsDb.find(a => a.id === folder.id);
-      
       if (syncedData) {
-        return {
-          ...syncedData,
-          driveFolderId: folder.id!,
-        } as Artist;
+        return { ...syncedData, driveFolderId: folder.id! } as Artist;
       }
-      
-      // Artista no sincronizado (carpeta antigua)
       return {
         id: folder.id!,
         name: folder.name!,
@@ -40,6 +37,9 @@ export async function GET() {
 
     return NextResponse.json({ artists: validArtists });
   } catch (error: any) {
+    if (error.message === 'AUTH_REQUIRED') {
+      return NextResponse.json({ artists: [], needsAuth: true, error: 'Token de Google expirado o inválido. Debes reconectar.' });
+    }
     console.error('API /artists GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch artists', details: error.message }, { status: 500 });
   }
