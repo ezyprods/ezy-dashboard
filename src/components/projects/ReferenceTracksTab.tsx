@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Link2, Trash2, Youtube, Music, Disc } from 'lucide-react';
+import { Loader2, Link2, Trash2, Video, Music, Disc } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { ReferenceTrack } from '@/types';
@@ -120,7 +120,7 @@ export function ReferenceTracksTab({ projectId }: { projectId: string }) {
             <div className="p-3 border-b border-border/50 flex justify-between items-center bg-surface/50">
               <div className="flex items-center gap-2 font-medium truncate">
                 {ref.type === 'spotify' ? <Music className="w-4 h-4 text-[#1DB954]" /> : 
-                 ref.type === 'youtube' ? <Youtube className="w-4 h-4 text-[#FF0000]" /> : 
+                 ref.type === 'youtube' ? <Video className="w-4 h-4 text-[#FF0000]" /> : 
                  <Disc className="w-4 h-4 text-accent" />}
                 <span className="truncate">{ref.title}</span>
               </div>
