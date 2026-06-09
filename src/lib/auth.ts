@@ -17,7 +17,7 @@ export const auth = betterAuth({
         "https://www.googleapis.com/auth/calendar.events"
       ],
       accessType: "offline",
-      prompt: "consent"
+      prompt: "select_account consent"
     },
   },
   plugins: [
