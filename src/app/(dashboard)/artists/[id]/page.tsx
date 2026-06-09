@@ -10,6 +10,7 @@ import { useProjects } from '@/lib/hooks/useProjects';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { NotesEditor } from '@/components/notes/NotesEditor';
 import { getProjectTypeIcon } from '@/lib/utils';
+import * as LucideIcons from 'lucide-react';
 
 export default function ArtistDetailPage() {
   const params = useParams();
