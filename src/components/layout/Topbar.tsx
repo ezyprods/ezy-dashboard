@@ -1,7 +1,8 @@
 'use client';
 
-import { Search, Bell, Menu } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { CommandMenu } from '@/components/layout/CommandMenu';
 
 export function Topbar() {
   return (
@@ -12,11 +13,8 @@ export function Topbar() {
           <Menu className="w-5 h-5" />
         </Button>
 
-        {/* Search bar */}
-        <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-surface-elevated border border-border rounded-lg text-sm text-text-secondary hover:border-accent/50 transition-colors w-64 max-w-md group">
-          <Search className="w-4 h-4 group-hover:text-accent transition-colors" />
-          <span>Buscar (Cmd+K)...</span>
-        </button>
+        {/* Global Search */}
+        <CommandMenu />
       </div>
 
       <div className="flex items-center gap-4">

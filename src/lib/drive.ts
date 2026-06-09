@@ -4,7 +4,7 @@ import { getFileType } from './utils';
 import type { DriveFile, FileType } from '@/types';
 
 // Singleton para el cliente de Google Auth
-const getAuthClient = () => {
+export const getAuthClient = () => {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,

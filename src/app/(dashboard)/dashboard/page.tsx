@@ -6,6 +6,7 @@ import { Plus, FolderPlus, UploadCloud, AlertCircle, Loader2 } from "lucide-reac
 import { useArtists } from "@/lib/hooks/useArtists";
 import { SERVICE_LABELS } from "@/lib/constants";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
+import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
 import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
@@ -113,19 +114,8 @@ export default function DashboardPage() {
         {/* Right Column (Sidebars) */}
         <div className="space-y-6">
           
-          {/* This Week Panel */}
-          <div className="glass rounded-xl p-6 border border-border">
-            <h2 className="text-lg font-semibold mb-4">Esta semana</h2>
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 opacity-50">
-                <div className="w-1.5 h-1.5 rounded-full bg-border mt-2" />
-                <div>
-                  <p className="text-sm font-medium text-text-primary">No hay eventos próximos</p>
-                  <p className="text-xs text-text-secondary">Conecta tu calendario para verlos aquí</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* This Week Panel (Calendar) */}
+          <CalendarWidget />
 
           {/* Pending Payments */}
           <div className="glass rounded-xl p-6 border border-border">
