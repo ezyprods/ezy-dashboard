@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Folder, FileAudio, File as FileIcon, UploadCloud, Loader2, Music, CheckSquare } from "lucide-react";
+import { ArrowLeft, Folder, FileAudio, File as FileIcon, UploadCloud, Loader2, Music, CheckSquare, Send } from "lucide-react";
 import { AudioPlayer } from '@/components/projects/AudioPlayer';
 import { ProjectChecklist } from '@/components/projects/ProjectChecklist';
+import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -101,6 +102,12 @@ export default function ProjectDetailPage() {
         >
           <div className="flex items-center gap-2"><CheckSquare className="w-4 h-4" /> Control de Estado</div>
         </button>
+        <button 
+          onClick={() => setActiveTab('communications')}
+          className={`pb-3 border-b-2 font-medium ${activeTab === 'communications' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+        >
+          <div className="flex items-center gap-2"><Send className="w-4 h-4" /> Comunicaciones</div>
+        </button>
       </div>
 
       {/* Tab: Files */}
@@ -162,6 +169,11 @@ export default function ProjectDetailPage() {
       {/* Tab: Tasks */}
       {activeTab === 'tasks' && (
         <ProjectChecklist projectId={projectId} />
+      )}
+
+      {/* Tab: Communications */}
+      {activeTab === 'communications' && (
+        <CommunicationsTab projectId={projectId} projectTitle={project.title} artistId={project.artistId} />
       )}
     </div>
   );
