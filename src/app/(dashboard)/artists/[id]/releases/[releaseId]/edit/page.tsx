@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, Save, Plus, GripVertical, Image as ImageIcon, Loader2, Music, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Plus, GripVertical, Image as ImageIcon, Loader2, Music, Trash2, Play } from 'lucide-react';
 import type { Release, ReleaseTrack } from '@/types';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 // A modal to pick files from the artist's drive
