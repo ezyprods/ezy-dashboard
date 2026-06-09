@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Calendar, Loader2, AlertCircle } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { authClient } from '@/lib/auth-client';
+import { Button } from '@/components/ui/Button';
 
 interface CalendarEvent {
   id: string;
@@ -25,7 +27,7 @@ export function CalendarWidget() {
 
   const fetchEvents = async () => {
     try {
-      const res = await fetch('/api/calendar');
+      const res = await fetch('/api/calendar?days=7');
       const data = await res.json();
       
       if (!res.ok) {
@@ -68,9 +70,9 @@ export function CalendarWidget() {
           <p className="text-xs text-text-secondary mb-4 px-2">
             Necesitas sincronizar tu cuenta de Google Calendar para ver tus próximas sesiones aquí.
           </p>
-          <button className="text-xs font-semibold text-accent hover:text-accent-light transition-colors">
+          <Button onClick={() => authClient.signIn.social({ provider: 'google' })} variant="outline" size="sm" className="w-full">
             Configurar conexión
-          </button>
+          </Button>
         </div>
       ) : events.length === 0 ? (
         <div className="flex items-start gap-3 opacity-60 p-4 border border-dashed border-border rounded-lg justify-center text-center">

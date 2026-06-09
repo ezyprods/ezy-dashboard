@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Artistas', href: '/artists', icon: Users },
+  { name: 'Calendario', href: '/calendar', icon: Calendar },
   { name: 'Pagos', href: '/payments', icon: CreditCard },
   { name: 'Comunicaciones', href: '/communications', icon: MessageSquare },
   { name: 'Configuración', href: '/settings', icon: Settings },
@@ -27,7 +28,7 @@ export function Sidebar() {
             alt="EZY"
             width={240}
             height={96}
-            className="h-16 w-auto object-contain block dark:hidden scale-[2.5] origin-center"
+            className="logo-light h-16 w-auto object-contain scale-[2.5] origin-center"
             priority
           />
           {/* Dark Mode Logo (White) */}
@@ -36,7 +37,7 @@ export function Sidebar() {
             alt="EZY"
             width={240}
             height={96}
-            className="h-16 w-auto object-contain hidden dark:block scale-[2.5] origin-center"
+            className="logo-dark h-16 w-auto object-contain scale-[2.5] origin-center"
             priority
           />
         </Link>

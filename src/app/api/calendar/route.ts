@@ -2,24 +2,27 @@ import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getAuthClient } from '@/lib/drive';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const days = parseInt(searchParams.get('days') || '30', 10);
+
     const auth = getAuthClient();
     const calendar = google.calendar({ version: 'v3', auth });
     
-    // Configurar fechas (hoy hasta dentro de 7 días)
+    // Configurar fechas
     const timeMin = new Date();
     timeMin.setHours(0, 0, 0, 0); // Inicio de hoy
     
     const timeMax = new Date();
-    timeMax.setDate(timeMax.getDate() + 7);
-    timeMax.setHours(23, 59, 59, 999); // Fin del séptimo día
+    timeMax.setDate(timeMax.getDate() + days);
+    timeMax.setHours(23, 59, 59, 999); // Fin del periodo
 
     const response = await calendar.events.list({
       calendarId: 'primary',
       timeMin: timeMin.toISOString(),
       timeMax: timeMax.toISOString(),
-      maxResults: 15,
+      maxResults: days > 7 ? 100 : 15,
       singleEvents: true,
       orderBy: 'startTime',
     });

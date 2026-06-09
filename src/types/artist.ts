@@ -1,6 +1,15 @@
 export type ArtistStatus = 'active' | 'archived';
 export type ServiceType = 'production' | 'mix' | 'master' | 'songwriting' | 'other';
 
+export interface PulseStats {
+  statusColor: 'gray' | 'purple' | 'orange' | 'green';
+  activeProjects: Array<{ id: string; title: string; type: string }>;
+  pendingPayments: number;
+  newFiles: number;
+  lastSessionDate?: string;
+  progressPercent?: number;
+}
+
 export interface Artist {
   id: string; // Drive folder ID
   name: string;
@@ -20,6 +29,7 @@ export interface Artist {
   // Computed/joined fields
   activeProject?: string;
   projectCount?: number;
+  pulseStats?: PulseStats;
 }
 
 export interface ArtistConfig {
@@ -36,6 +46,7 @@ export interface ArtistConfig {
   portalToken?: string;
   createdAt: string;
   updatedAt: string;
+  pulseStats?: PulseStats;
 }
 
 export interface CreateArtistInput {

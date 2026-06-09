@@ -109,6 +109,23 @@ body {
   background: var(--text-secondary);
 }
 
+/* Logo toggling */
+:root .logo-light,
+html.dark .logo-light {
+  display: none !important;
+}
+:root .logo-dark,
+html.dark .logo-dark {
+  display: block !important;
+}
+
+html.light .logo-light {
+  display: block !important;
+}
+html.light .logo-dark {
+  display: none !important;
+}
+
 /* Custom Utilities */
 @layer utilities {
   .glass {
