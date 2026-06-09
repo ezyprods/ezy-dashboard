@@ -159,7 +159,24 @@ export default function ProjectDetailPage() {
         <div className="space-y-8 animate-fade-in">
           {folders.map((folder: any) => (
             <div key={folder.id} className="glass rounded-xl border border-border overflow-hidden">
-              <div className="flex justify-between items-center p-4 border-b border-border bg-surface/50">
+              <div 
+                className="flex justify-between items-center p-4 border-b border-border bg-surface/50"
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  showContextMenu(e, [
+                    {
+                      label: 'Copiar ID de carpeta',
+                      icon: <Copy className="w-4 h-4" />,
+                      onClick: () => navigator.clipboard.writeText(folder.id)
+                    },
+                    {
+                      label: 'Personalizar orden',
+                      icon: <Settings2 className="w-4 h-4" />,
+                      onClick: () => setSortModalFolder(folder)
+                    }
+                  ]);
+                }}
+              >
                 <div className="flex items-center gap-2">
                   <Folder className="w-5 h-5 text-accent" />
                   <h3 className="font-bold text-lg">{folder.name}</h3>

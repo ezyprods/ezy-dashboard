@@ -21,10 +21,19 @@ export function Topbar() {
       <div className="flex items-center gap-2">
         <ThemeToggle />
 
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface" />
-        </Button>
+        <div className="relative group">
+          <Button variant="ghost" size="icon" className="relative cursor-pointer">
+            <Bell className="w-5 h-5" />
+            <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface" />
+          </Button>
+          <div className="absolute right-0 mt-2 w-64 glass rounded-xl shadow-xl border border-border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 p-4">
+            <h4 className="font-bold text-sm mb-2 text-text-primary">Notificaciones</h4>
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <Bell className="w-8 h-8 text-text-secondary opacity-50 mb-2" />
+              <p className="text-xs text-text-secondary">No tienes notificaciones nuevas.</p>
+            </div>
+          </div>
+        </div>
         
         <div className="flex items-center gap-3 border-l border-border pl-4 ml-2">
           <div className="w-9 h-9 rounded-full bg-surface-elevated border border-border flex items-center justify-center overflow-hidden">
