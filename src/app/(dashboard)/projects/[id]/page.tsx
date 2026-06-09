@@ -7,6 +7,7 @@ import { ArrowLeft, Folder, FileAudio, File as FileIcon, UploadCloud, Loader2, M
 import { AudioPlayer } from '@/components/projects/AudioPlayer';
 import { ProjectChecklist } from '@/components/projects/ProjectChecklist';
 import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
+import { ProjectPaymentsWidget } from '@/components/projects/ProjectPaymentsWidget';
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -89,24 +90,30 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-border/50 px-2">
+      <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto">
         <button 
           onClick={() => setActiveTab('files')}
-          className={`pb-3 border-b-2 font-medium ${activeTab === 'files' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'files' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
         >
-          <div className="flex items-center gap-2"><Music className="w-4 h-4" /> Archivos de Audio</div>
+          <div className="flex items-center gap-2"><Music className="w-4 h-4" /> Archivos</div>
         </button>
         <button 
           onClick={() => setActiveTab('tasks')}
-          className={`pb-3 border-b-2 font-medium ${activeTab === 'tasks' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'tasks' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
         >
-          <div className="flex items-center gap-2"><CheckSquare className="w-4 h-4" /> Control de Estado</div>
+          <div className="flex items-center gap-2"><CheckSquare className="w-4 h-4" /> Estado</div>
         </button>
         <button 
           onClick={() => setActiveTab('communications')}
-          className={`pb-3 border-b-2 font-medium ${activeTab === 'communications' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'communications' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
         >
-          <div className="flex items-center gap-2"><Send className="w-4 h-4" /> Comunicaciones</div>
+          <div className="flex items-center gap-2"><Send className="w-4 h-4" /> Comms</div>
+        </button>
+        <button 
+          onClick={() => setActiveTab('payments')}
+          className={`pb-3 border-b-2 font-medium whitespace-nowrap ${activeTab === 'payments' ? 'border-accent text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'}`}
+        >
+          <div className="flex items-center gap-2"><DollarSign className="w-4 h-4" /> Pagos</div>
         </button>
       </div>
 
@@ -174,6 +181,11 @@ export default function ProjectDetailPage() {
       {/* Tab: Communications */}
       {activeTab === 'communications' && (
         <CommunicationsTab projectId={projectId} projectTitle={project.title} artistId={project.artistId} />
+      )}
+
+      {/* Tab: Payments */}
+      {activeTab === 'payments' && (
+        <ProjectPaymentsWidget projectId={projectId} initialBudget={project.budget || 0} artistId={project.artistId} />
       )}
     </div>
   );

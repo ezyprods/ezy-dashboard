@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from "@/components/ui/Button";
-import { Plus, Search, DollarSign, ArrowUpRight, ArrowDownRight, CheckCircle2, Clock } from "lucide-react";
+import { Plus, Search, DollarSign, ArrowUpRight, ArrowDownRight, CheckCircle2, Clock, Folder } from "lucide-react";
 import { usePayments } from "@/lib/hooks/usePayments";
 import { useArtists } from "@/lib/hooks/useArtists";
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_CONFIG } from "@/lib/constants";
@@ -77,7 +77,7 @@ export default function PaymentsPage() {
               <tr className="border-b border-border/50 text-text-secondary text-sm">
                 <th className="p-4 font-medium">Fecha</th>
                 <th className="p-4 font-medium">Artista</th>
-                <th className="p-4 font-medium">Concepto</th>
+                <th className="p-4 font-medium">Concepto / Proyecto</th>
                 <th className="p-4 font-medium">Cantidad</th>
                 <th className="p-4 font-medium">Estado</th>
                 <th className="p-4 font-medium text-right">Acción</th>
@@ -103,6 +103,7 @@ export default function PaymentsPage() {
                       </td>
                       <td className="p-4 text-sm">
                         {payment.concept}
+                        {payment.projectId && <div className="text-xs text-accent mt-0.5 flex items-center gap-1"><Folder className="w-3 h-3"/> Vinculado a Proyecto</div>}
                         <div className="text-xs text-text-secondary mt-0.5">{PAYMENT_METHOD_LABELS[payment.method]}</div>
                       </td>
                       <td className="p-4 font-bold">

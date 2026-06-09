@@ -114,39 +114,51 @@ export default function ArtistDetailPage() {
               ))}
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveTab('projects')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'projects' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
-                >
-                  Proyectos
-                </button>
-                <button
-                  onClick={() => setActiveTab('notes')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'notes' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
-                >
-                  Notas
-                </button>
-                <button
-                  onClick={() => setActiveTab('files')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'files' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
-                >
-                  Archivos Drive
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-1.5 rounded-full border border-accent text-accent hover:bg-accent/10 transition-colors flex items-center gap-1.5 font-medium">
-                  Ver Portal de Cliente
-                </a>
-                <Button onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0">
-                  <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
-                </Button>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab('projects')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'projects' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
+                  >
+                    Proyectos
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('notes')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'notes' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
+                  >
+                    Notas
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('files')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'files' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
+                  >
+                    Archivos Drive
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="border-accent text-accent hover:bg-accent/10"
+                    onClick={() => {
+                      const url = `${window.location.origin}/portal/${artistId}`;
+                      navigator.clipboard.writeText(url);
+                      alert('¡Enlace del portal copiado al portapapeles!');
+                    }}
+                  >
+                    Copiar Enlace Portal
+                  </Button>
+                  <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-1.5 rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1.5 font-medium h-9">
+                    Ver
+                  </a>
+                  <Button size="sm" onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0 h-9">
+                    <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto">

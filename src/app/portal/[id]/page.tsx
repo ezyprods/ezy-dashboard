@@ -144,6 +144,22 @@ export default function PortalPage() {
             })}
           </div>
         )}
+
+        {/* Payment Summary */}
+        {data.payments && data.payments.pendingPayment > 0 && (
+          <div className="mt-12 p-6 rounded-2xl bg-warning/10 border border-warning/20 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div>
+              <h3 className="text-lg font-bold text-warning mb-1">Pagos Pendientes</h3>
+              <p className="text-sm text-text-secondary">
+                Tienes un saldo pendiente de <strong>{data.payments.pendingPayment}€</strong> de un total de {data.payments.totalBudget}€. 
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="text-2xl font-bold text-warning">{data.payments.pendingPayment}€</div>
+              <p className="text-xs text-warning/70">Falta por abonar</p>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

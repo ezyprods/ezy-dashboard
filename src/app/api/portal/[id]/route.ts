@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, getDriveService, listFolders } from '@/lib/drive';
+import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -46,11 +47,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           title: projectConfig.title,
           type: projectConfig.type,
           status: projectConfig.status || 'active',
+          budget: projectConfig.budget || 0,
           tasks,
           bounces,
         };
       })
     );
+
+    // 4. Obtener resumen de pagos del artista (sin exponer IDs ni datos sensibles)
+    const allPayments = await findAndReadJsonFile<any[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID) || [];
+    const artistPayments = allPayments.filter(p => p.artistId === id && p.status === 'paid');
+    
+    let totalBudget = 0;
+    let totalPaid = 0;
+    
+    projectsData.forEach(p => {
+      totalBudget += (p.budget || 0);
+    });
+    
+    artistPayments.forEach(p => {
+      totalPaid += (p.amount || 0);
+    });
+
+    const pendingPayment = Math.max(0, totalBudget - totalPaid);
 
     return NextResponse.json({ 
       artist: {
@@ -59,6 +78,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       },
       projects: projectsData,
       producerName: process.env.NEXT_PUBLIC_PRODUCER_NAME || 'EZY Studio',
+      payments: {
+        totalBudget,
+        totalPaid,
+        pendingPayment
+      }
     });
   } catch (error: any) {
     console.error('API /portal/[id] GET error:', error);

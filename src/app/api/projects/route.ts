@@ -33,7 +33,7 @@ export async function GET(request: Request) {
             id: folder.id!,
             artistId: artistId,
             title: folder.name || 'Proyecto sin título',
-            type: 'song', // default
+            type: 'single', // default
             status: 'active',
             songs: [],
             createdAt: now,
