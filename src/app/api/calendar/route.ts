@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     timeMax.setHours(23, 59, 59, 999); // Fin del periodo
 
     const response = await calendar.events.list({
-      calendarId: 'primary',
+      calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
       timeMin: timeMin.toISOString(),
       timeMax: timeMax.toISOString(),
       maxResults: days > 7 ? 100 : 15,
