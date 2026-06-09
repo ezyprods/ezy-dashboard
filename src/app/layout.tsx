@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { AudioProvider } from "@/lib/contexts/AudioContext";
+import { ContextMenuProvider } from "@/lib/contexts/ContextMenuContext";
+import { GlobalAudioPlayer } from "@/components/layout/GlobalAudioPlayer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,7 +34,14 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ContextMenuProvider>
+          <AudioProvider>
+            {children}
+            <GlobalAudioPlayer />
+          </AudioProvider>
+        </ContextMenuProvider>
+      </body>
     </html>
   );
 }

@@ -19,14 +19,24 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 border-r border-border bg-surface flex flex-col h-screen sticky top-0">
-      <div className="h-16 flex items-center px-6 border-b border-border">
-        <Link href="/dashboard" className="flex items-center gap-2">
+      <div className="h-16 flex items-center px-6 border-b border-border justify-center md:justify-start">
+        <Link href="/dashboard" className="flex items-center">
+          {/* Light Mode Logo (Black) */}
+          <Image
+            src="/logo-black.png"
+            alt="EZY"
+            width={160}
+            height={48}
+            className="h-10 w-auto object-contain block dark:hidden"
+            priority
+          />
+          {/* Dark Mode Logo (White) */}
           <Image
             src="/logo.png"
             alt="EZY"
-            width={120}
-            height={32}
-            className="h-7 w-auto object-contain"
+            width={160}
+            height={48}
+            className="h-10 w-auto object-contain hidden dark:block"
             priority
           />
         </Link>

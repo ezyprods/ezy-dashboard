@@ -3,22 +3,28 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen } from "lucide-react";
+import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones } from "lucide-react";
 import { AudioPlayer } from '@/components/projects/AudioPlayer';
 import { FlexBoard } from '@/components/projects/FlexBoard';
 import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
 import { ProjectPaymentsWidget } from '@/components/projects/ProjectPaymentsWidget';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
+import { useAudio } from '@/lib/contexts/AudioContext';
+import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
+  const { showContextMenu } = useContextMenu();
+  const { playTrack } = useAudio();
   
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('files');
   const [uploadingTo, setUploadingTo] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{key: 'name'|'date'|'size', direction: 'asc'|'desc'}>({key: 'name', direction: 'asc'});
 
   useEffect(() => {
     fetchProject();
@@ -128,21 +134,38 @@ export default function ProjectDetailPage() {
                   <h3 className="font-bold text-lg">{folder.name}</h3>
                 </div>
                 
-                <div>
-                  <input 
-                    type="file" 
-                    id={`upload-${folder.id}`} 
-                    className="hidden" 
-                    onChange={(e) => handleFileUpload(folder.id, e)}
-                  />
-                  <label htmlFor={`upload-${folder.id}`}>
-                    <Button variant="secondary" size="sm" className="cursor-pointer" asChild>
-                      <span>
-                        {uploadingTo === folder.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-2" />}
-                        Subir Archivo
-                      </span>
-                    </Button>
-                  </label>
+                <div className="flex items-center gap-4">
+                  <select
+                    className="bg-surface border border-border rounded-md text-sm px-2 py-1.5 focus:outline-none focus:border-accent text-text-primary"
+                    value={`${sortConfig.key}-${sortConfig.direction}`}
+                    onChange={(e) => {
+                      const [key, direction] = e.target.value.split('-') as ['name'|'date'|'size', 'asc'|'desc'];
+                      setSortConfig({ key, direction });
+                    }}
+                  >
+                    <option value="name-asc">Nombre (A-Z)</option>
+                    <option value="name-desc">Nombre (Z-A)</option>
+                    <option value="date-desc">Fecha (Más nuevos)</option>
+                    <option value="date-asc">Fecha (Más antiguos)</option>
+                    <option value="size-desc">Tamaño (Mayor a menor)</option>
+                  </select>
+
+                  <div>
+                    <input 
+                      type="file" 
+                      id={`upload-${folder.id}`} 
+                      className="hidden" 
+                      onChange={(e) => handleFileUpload(folder.id, e)}
+                    />
+                    <label htmlFor={`upload-${folder.id}`}>
+                      <Button variant="secondary" size="sm" className="cursor-pointer" asChild>
+                        <span>
+                          {uploadingTo === folder.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-2" />}
+                          Subir Archivo
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
                 </div>
               </div>
               
@@ -151,12 +174,85 @@ export default function ProjectDetailPage() {
                   <p className="text-text-secondary text-sm text-center py-4">La carpeta está vacía.</p>
                 ) : (
                   <div className="space-y-3">
-                    {folder.files.map((file: any) => {
+                    {[...folder.files].sort((a: any, b: any) => {
+                      if (sortConfig.key === 'name') {
+                        return sortConfig.direction === 'asc' 
+                          ? a.name.localeCompare(b.name)
+                          : b.name.localeCompare(a.name);
+                      } else if (sortConfig.key === 'date') {
+                        return sortConfig.direction === 'desc'
+                          ? new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime()
+                          : new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime();
+                      } else if (sortConfig.key === 'size') {
+                        return sortConfig.direction === 'desc'
+                          ? Number(b.size || 0) - Number(a.size || 0)
+                          : Number(a.size || 0) - Number(b.size || 0);
+                      }
+                      return 0;
+                    }).map((file: any) => {
                       const isAudio = file.mimeType?.startsWith('audio/');
                       return isAudio ? (
-                        <AudioPlayer key={file.id} fileId={file.id} fileName={file.name} />
+                        <AudioPlayer 
+                          key={file.id} 
+                          fileId={file.id} 
+                          fileName={file.name} 
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            showContextMenu(e, [
+                              {
+                                label: 'Reproducir',
+                                icon: <Play className="w-4 h-4" />,
+                                onClick: () => {
+                                  playTrack({
+                                    id: file.id,
+                                    name: file.name.replace(/\.[^/.]+$/, ''),
+                                    url: `/api/audio/${file.id}`,
+                                    artistName: project.title
+                                  });
+                                }
+                              },
+                              {
+                                label: 'Ver en Drive',
+                                icon: <ExternalLinkIcon className="w-4 h-4" />,
+                                onClick: () => window.open(file.webViewLink, '_blank')
+                              },
+                              {
+                                label: 'Descargar',
+                                icon: <Download className="w-4 h-4" />,
+                                onClick: () => {
+                                  if (file.webContentLink) {
+                                    window.open(file.webContentLink, '_blank');
+                                  } else {
+                                    window.open(`/api/audio/${file.id}`, '_blank');
+                                  }
+                                }
+                              }
+                            ]);
+                          }}
+                        />
                       ) : (
-                        <div key={file.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface-elevated/50 hover:border-accent/30 transition-colors">
+                        <div 
+                          key={file.id} 
+                          className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface-elevated/50 hover:border-accent/30 transition-colors"
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            showContextMenu(e, [
+                              {
+                                label: 'Ver archivo',
+                                icon: <Eye className="w-4 h-4" />,
+                                onClick: () => window.open(file.webViewLink, '_blank')
+                              },
+                              {
+                                label: 'Copiar enlace',
+                                icon: <Copy className="w-4 h-4" />,
+                                onClick: () => {
+                                  navigator.clipboard.writeText(file.webViewLink);
+                                  // Optional: toast success
+                                }
+                              }
+                            ]);
+                          }}
+                        >
                           <div className="flex items-center gap-3">
                             {file.mimeType?.startsWith('image/') ? <FileImage className="w-5 h-5 text-accent-secondary" /> :
                              file.mimeType?.startsWith('video/') ? <Film className="w-5 h-5 text-warning" /> :
