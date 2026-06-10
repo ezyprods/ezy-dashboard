@@ -15,8 +15,9 @@ interface WaveformPlayerProps {
   currentFolderId?: string;
 }
 
-const BAR_COUNT = 45; // reduced bar count for compact canvas
-const CANVAS_HEIGHT = 20; // reduced height
+const BAR_COUNT = 90; // High detail
+const CANVAS_HEIGHT = 28; // Slightly taller for more visual impact
+const REFLECTION_OPACITY = 0.2;
 
 export function WaveformPlayer({ 
   fileId, 
@@ -45,7 +46,6 @@ export function WaveformPlayer({
     setDisplayName(fileName.replace(/\.[^/.]+$/, ''));
   }, [fileName]);
 
-  // Observe container width
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -58,7 +58,6 @@ export function WaveformPlayer({
     return () => ro.disconnect();
   }, []);
 
-  // Lazily fetch and decode audio for waveform
   useEffect(() => {
     if (waveformData) return;
     setIsLoadingWaveform(true);
@@ -66,7 +65,7 @@ export function WaveformPlayer({
     let cancelled = false;
     const generate = async () => {
       try {
-        const cacheKey = `waveform_v2_compact_${fileId}`;
+        const cacheKey = `waveform_v3_hq_${fileId}`;
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -103,7 +102,8 @@ export function WaveformPlayer({
         }
 
         const max = Math.max(...bars, 0.001);
-        const normalized = bars.map((v) => v / max);
+        // Exagerate waveform slightly to make it pop
+        const normalized = bars.map((v) => Math.pow(v / max, 0.8));
 
         if (!cancelled) {
           setWaveformData(normalized);
@@ -115,7 +115,7 @@ export function WaveformPlayer({
       } catch (e) {
         if (!cancelled) {
           const fallback = Array.from({ length: BAR_COUNT }, (_, i) =>
-            0.3 + 0.5 * Math.sin(i * 0.4) * Math.random()
+            0.2 + 0.6 * Math.abs(Math.sin(i * 0.3)) * Math.random()
           );
           setWaveformData(fallback);
           setIsLoadingWaveform(false);
@@ -127,7 +127,6 @@ export function WaveformPlayer({
     return () => { cancelled = true; };
   }, [fileId, waveformData]);
 
-  // Draw waveform on canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !waveformData) return;
@@ -136,42 +135,59 @@ export function WaveformPlayer({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
+    // We draw reflection too, so total height is CANVAS_HEIGHT * 1.3
+    const totalHeight = CANVAS_HEIGHT * 1.3;
+    
     canvas.width = canvasWidth * dpr;
-    canvas.height = CANVAS_HEIGHT * dpr;
+    canvas.height = totalHeight * dpr;
     canvas.style.width = `${canvasWidth}px`;
-    canvas.style.height = `${CANVAS_HEIGHT}px`;
+    canvas.style.height = `${totalHeight}px`;
     ctx.scale(dpr, dpr);
 
-    ctx.clearRect(0, 0, canvasWidth, CANVAS_HEIGHT);
+    ctx.clearRect(0, 0, canvasWidth, totalHeight);
 
     const barWidth = (canvasWidth - BAR_COUNT * 1) / BAR_COUNT;
     const progress = isThisTrackActive && duration > 0 ? currentTime / duration : 0;
     const progressX = progress * canvasWidth;
 
+    // Create Gradients
+    const activeGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    activeGradient.addColorStop(0, '#a29bfe');
+    activeGradient.addColorStop(1, '#6c5ce7');
+
     for (let i = 0; i < BAR_COUNT; i++) {
       const x = i * (barWidth + 1);
-      const barH = Math.max(3, waveformData[i] * CANVAS_HEIGHT * 0.9);
-      const y = (CANVAS_HEIGHT - barH) / 2;
+      const val = waveformData[i];
+      const barH = Math.max(2, val * CANVAS_HEIGHT);
+      const y = CANVAS_HEIGHT - barH;
 
       const barCenterX = x + barWidth / 2;
       const isPlayed = barCenterX <= progressX;
 
-      if (isThisTrackActive && isPlayed) {
-        ctx.fillStyle = '#6c5ce7';
-      } else if (isThisTrackActive) {
-        ctx.fillStyle = 'rgba(108, 92, 231, 0.25)';
-      } else {
-        ctx.fillStyle = '#2a2a3a';
-      }
-
+      // Draw Main Bar
+      ctx.fillStyle = isThisTrackActive 
+        ? (isPlayed ? activeGradient : 'rgba(108, 92, 231, 0.25)') 
+        : '#2a2a3a';
+      
       ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barH, 1.5);
+      ctx.roundRect(x, y, barWidth, barH, 2);
+      ctx.fill();
+
+      // Draw Reflection
+      const reflectionH = barH * 0.4;
+      ctx.fillStyle = isThisTrackActive 
+        ? (isPlayed ? `rgba(108, 92, 231, ${REFLECTION_OPACITY})` : `rgba(108, 92, 231, ${REFLECTION_OPACITY * 0.3})`) 
+        : `rgba(42, 42, 58, ${REFLECTION_OPACITY})`;
+      
+      ctx.beginPath();
+      ctx.roundRect(x, CANVAS_HEIGHT + 1, barWidth, reflectionH, 2);
       ctx.fill();
     }
 
+    // Hover Indicator
     if (hoverX !== null) {
       ctx.fillStyle = 'rgba(240, 240, 245, 0.6)';
-      ctx.fillRect(hoverX, 0, 1.5, CANVAS_HEIGHT);
+      ctx.fillRect(hoverX, 0, 1.5, totalHeight);
     }
   }, [waveformData, canvasWidth, isThisTrackActive, currentTime, duration, hoverX]);
 
@@ -180,59 +196,39 @@ export function WaveformPlayer({
     if (isThisTrackActive) {
       togglePlay();
     } else {
-      playTrack({
-        id: fileId,
-        name: displayName,
-        url: `/api/audio/${fileId}`,
-        artistName,
-      });
+      playTrack({ id: fileId, name: displayName, url: `/api/audio/${fileId}`, artistName });
     }
   };
 
-  const getTimeAtX = useCallback(
-    (x: number): string => {
-      if (!duration || !canvasWidth) return '0:00';
-      const t = (x / canvasWidth) * duration;
-      const m = Math.floor(t / 60);
-      const s = Math.floor(t % 60);
-      return `${m}:${s.toString().padStart(2, '0')}`;
-    },
-    [duration, canvasWidth]
-  );
+  const getTimeAtX = useCallback((x: number): string => {
+    if (!duration || !canvasWidth) return '0:00';
+    const t = (x / canvasWidth) * duration;
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }, [duration, canvasWidth]);
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setHoverX(e.clientX - rect.left);
-    },
-    []
-  );
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setHoverX(e.clientX - rect.left);
+  }, []);
 
   const handleMouseLeave = useCallback(() => setHoverX(null), []);
 
-  const handleCanvasClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      e.stopPropagation();
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const x = e.clientX - rect.left;
+  const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.stopPropagation();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
 
-      if (isThisTrackActive && duration > 0) {
-        seek((x / canvasWidth) * duration);
-      } else {
-        playTrack({
-          id: fileId,
-          name: displayName,
-          url: `/api/audio/${fileId}`,
-          artistName,
-        });
-      }
-    },
-    [isThisTrackActive, duration, canvasWidth, seek, playTrack, fileId, displayName, artistName]
-  );
+    if (isThisTrackActive && duration > 0) {
+      seek((x / canvasWidth) * duration);
+    } else {
+      playTrack({ id: fileId, name: displayName, url: `/api/audio/${fileId}`, artistName });
+    }
+  }, [isThisTrackActive, duration, canvasWidth, seek, playTrack, fileId, displayName, artistName]);
 
-  // Rename action
   const handleRename = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const currentExt = fileName.substring(fileName.lastIndexOf('.'));
@@ -244,196 +240,112 @@ export function WaveformPlayer({
       const res = await fetch('/api/files', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileId,
-          name: newName.trim() + currentExt,
-        }),
+        body: JSON.stringify({ fileId, name: newName.trim() + currentExt }),
       });
       if (!res.ok) throw new Error('Error al renombrar archivo');
       setDisplayName(newName.trim());
       if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsUpdating(false);
-    }
+    } catch (err: any) { alert(err.message); } finally { setIsUpdating(false); }
   };
 
-  // Move action
   const handleMove = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!folders.length) return;
-
-    // Create a simple prompt listing folders
     const options = folders.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
     const choice = prompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
     if (!choice) return;
-
     const idx = parseInt(choice, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= folders.length) {
-      alert('Selección no válida.');
-      return;
-    }
-
+    if (isNaN(idx) || idx < 0 || idx >= folders.length) { alert('Selección no válida.'); return; }
     const targetFolder = folders[idx];
-    if (targetFolder.id === currentFolderId) {
-      alert('El archivo ya está en esa carpeta.');
-      return;
-    }
+    if (targetFolder.id === currentFolderId) { alert('El archivo ya está en esa carpeta.'); return; }
 
     setIsUpdating(true);
     try {
       const res = await fetch('/api/files', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileId,
-          newParentId: targetFolder.id,
-          oldParentId: currentFolderId,
-        }),
+        body: JSON.stringify({ fileId, newParentId: targetFolder.id, oldParentId: currentFolderId }),
       });
       if (!res.ok) throw new Error('Error al mover el archivo');
       alert(`Archivo movido con éxito a ${targetFolder.name}`);
       if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsUpdating(false);
-    }
+    } catch (err: any) { alert(err.message); } finally { setIsUpdating(false); }
   };
 
-  // Delete action
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm(`¿Estás seguro de que quieres eliminar el archivo "${fileName}" de forma permanente?`)) return;
-
     setIsUpdating(true);
     try {
       const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el archivo');
       if (onRefresh) onRefresh();
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsUpdating(false);
-    }
+    } catch (err: any) { alert(err.message); } finally { setIsUpdating(false); }
   };
 
   return (
     <div
       onContextMenu={onContextMenu}
       className={cn(
-        'py-1.5 px-3 rounded-lg border bg-surface-elevated/50 flex items-center justify-between gap-4 transition-colors group/audio',
-        isThisTrackActive
-          ? 'border-accent shadow-[0_0_10px_rgba(108,92,231,0.1)] bg-accent/5'
-          : 'border-border hover:border-accent/30'
+        'py-2 px-3 rounded-xl border bg-surface-elevated/40 flex items-center justify-between gap-4 transition-all group/audio shadow-sm hover:shadow-md hover:bg-surface-elevated/70',
+        isThisTrackActive ? 'border-accent shadow-[0_0_15px_rgba(108,92,231,0.15)] bg-accent/5' : 'border-border/60 hover:border-accent/40'
       )}
     >
       {/* 1. Play Button & Title */}
-      <div className="flex items-center gap-3 min-w-0 flex-1 sm:max-w-[40%]">
+      <div className="flex items-center gap-3 min-w-0 flex-1 sm:max-w-[35%]">
         <button
           className={cn(
-            'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all',
-            isThisTrackActive
-              ? 'bg-accent text-white'
-              : 'bg-accent/10 text-accent hover:bg-accent hover:text-white'
+            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm hover:scale-105',
+            isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
           )}
           onClick={handlePlayClick}
-          aria-label={isThisTrackPlaying ? 'Pausar' : 'Reproducir'}
         >
-          {isThisTrackPlaying ? (
-            <Pause className="w-3 h-3 fill-current" />
-          ) : (
-            <Play className="w-3 h-3 fill-current ml-0.5" />
-          )}
+          {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
         </button>
 
         <div className="flex-1 min-w-0">
-          <span
-            className={cn(
-              'text-sm font-medium truncate block',
-              isThisTrackActive ? 'text-accent' : 'text-text-primary'
-            )}
-            title={displayName}
-          >
+          <span className={cn('text-[13px] font-semibold truncate block transition-colors', isThisTrackActive ? 'text-accent' : 'text-text-primary')} title={displayName}>
             {displayName}
           </span>
         </div>
       </div>
 
-      {/* 2. Waveform canvas - Inline middle */}
-      <div ref={containerRef} className="relative flex-1 hidden md:block max-w-[40%] h-5" style={{ height: CANVAS_HEIGHT }}>
+      {/* 2. Waveform canvas */}
+      <div ref={containerRef} className="relative flex-1 hidden md:flex items-end max-w-[45%]" style={{ height: CANVAS_HEIGHT * 1.3 }}>
         {isLoadingWaveform && (
-          <div className="absolute inset-0 rounded animate-pulse bg-white/5" style={{ height: CANVAS_HEIGHT }} />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-full h-1/2 bg-surface rounded-full animate-pulse opacity-50" />
+          </div>
         )}
         <canvas
           ref={canvasRef}
           className="w-full cursor-pointer"
-          style={{ height: CANVAS_HEIGHT, display: isLoadingWaveform ? 'none' : 'block' }}
+          style={{ display: isLoadingWaveform ? 'none' : 'block' }}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           onClick={handleCanvasClick}
         />
         {hoverX !== null && !isLoadingWaveform && (
           <span
-            className="absolute top-0 bg-surface-elevated text-text-primary text-[9px] font-mono px-1 py-0.5 rounded pointer-events-none z-10"
-            style={{
-              left: Math.min(hoverX + 4, canvasWidth - 36),
-              transform: 'translateY(-100%)',
-              top: 0,
-            }}
+            className="absolute top-0 bg-surface-elevated border border-border text-text-primary text-[10px] font-mono px-1.5 py-0.5 rounded pointer-events-none z-10 shadow-lg"
+            style={{ left: Math.min(hoverX + 4, canvasWidth - 40), transform: 'translateY(-50%)' }}
           >
             {getTimeAtX(hoverX)}
           </span>
         )}
       </div>
 
-      {/* 3. Action Buttons - Inline right */}
-      <div className="flex items-center gap-1 shrink-0">
+      {/* 3. Action Buttons */}
+      <div className="flex items-center gap-1.5 shrink-0">
         {isUpdating ? (
-          <Loader2 className="w-4 h-4 animate-spin text-accent" />
+          <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
         ) : (
           <>
-            <button
-              onClick={handleRename}
-              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/audio:opacity-100 transition-opacity"
-              title="Renombrar archivo"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleMove}
-              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/audio:opacity-100 transition-opacity"
-              title="Mover de carpeta"
-            >
-              <FolderInput className="w-3.5 h-3.5" />
-            </button>
-            <a
-              href={`/api/audio/${fileId}`}
-              download={fileName}
-              onClick={(e) => e.stopPropagation()}
-              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/audio:opacity-100 transition-opacity"
-              title="Descargar"
-            >
-              <Download className="w-3.5 h-3.5" />
-            </a>
-            <button
-              onClick={handleDelete}
-              className="p-1 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover/audio:opacity-100 transition-opacity"
-              title="Eliminar"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-            <a
-              href={`/api/audio/${fileId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-1 text-text-secondary hover:text-accent rounded hover:bg-surface/50"
-              onClick={(e) => e.stopPropagation()}
-              title="Ver en Drive"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            <button onClick={handleRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
+            <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>
+            <a href={`/api/audio/${fileId}`} download={fileName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
+            <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-0 group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+            <a href={`/api/audio/${fileId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"><ExternalLink className="w-3.5 h-3.5" /></a>
           </>
         )}
       </div>

@@ -5,9 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones, Trash2, MoreVertical, Edit3, FolderInput } from "lucide-react";
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
-import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
-import { ProjectPaymentsWidget } from '@/components/projects/ProjectPaymentsWidget';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
@@ -205,12 +203,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* 1. Matriz de Producción */}
-      <div className="glass rounded-xl p-6 border border-border space-y-4">
-        <ProductionGridBoard projectId={projectId} projectTitle={project.title} />
-      </div>
-
-      {/* 2. Archivos del Proyecto (Google Drive) */}
+      {/* 1. Archivos del Proyecto (Google Drive) */}
       <div className="space-y-4">
         <div className="flex items-center justify-between border-b border-border/50 pb-2">
           <h3 className="text-xl font-bold text-text-primary">Archivos de Google Drive</h3>
@@ -549,12 +542,6 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* 3. Estado de Pagos */}
-      <div className="glass rounded-xl p-6 border border-border space-y-4">
-        <h3 className="text-xl font-bold text-text-primary border-b border-border/50 pb-2">Estado de Pagos</h3>
-        <ProjectPaymentsWidget projectId={projectId} initialBudget={project.budget || 0} artistId={project.artistId} />
-      </div>
-      
       {sortModalFolder && (
         <CustomSortModal 
           folderName={sortModalFolder.name} 

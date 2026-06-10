@@ -12,6 +12,8 @@ import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { NotesEditor } from '@/components/notes/NotesEditor';
 import { getProjectTypeIcon } from '@/lib/utils';
 import { ArtistReleasesTab } from '@/components/artists/ArtistReleasesTab';
+import { ArtistMatricesTab } from '@/components/artists/ArtistMatricesTab';
+import { ArtistPaymentsTab } from '@/components/artists/ArtistPaymentsTab';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import * as LucideIcons from 'lucide-react';
 
@@ -187,7 +189,7 @@ export default function ArtistDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">
-        {(['projects', 'files', 'notes', 'payments'] as const).map(tab => (
+        {(['projects', 'matrices', 'files', 'notes', 'payments'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -197,7 +199,7 @@ export default function ArtistDetailPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
             }`}
           >
-            {tab === 'projects' ? 'Proyectos' : tab === 'files' ? 'Archivos' : tab === 'notes' ? 'Notas' : 'Pagos'}
+            {tab === 'projects' ? 'Proyectos' : tab === 'matrices' ? 'Matrices' : tab === 'files' ? 'Archivos' : tab === 'notes' ? 'Notas' : 'Pagos'}
           </button>
         ))}
       </div>
@@ -341,8 +343,18 @@ export default function ArtistDetailPage() {
         </div>
       )}
 
+      {/* Tab Content: Matrices */}
+      {activeTab === 'matrices' && (
+        <ArtistMatricesTab artistId={artistId} artistName={artist?.name} />
+      )}
+
+      {/* Tab Content: Payments */}
+      {activeTab === 'payments' && (
+        <ArtistPaymentsTab artistId={artistId} />
+      )}
+
       {/* Tab Content: Placeholder for others */}
-      {activeTab !== 'projects' && activeTab !== 'notes' && (
+      {activeTab !== 'projects' && activeTab !== 'notes' && activeTab !== 'matrices' && activeTab !== 'payments' && (
         <div className="glass rounded-xl p-12 text-center text-text-secondary border border-border animate-fade-in">
           <h3 className="text-lg font-medium text-text-primary mb-2 capitalize">Módulo de {activeTab}</h3>
           <p className="max-w-md mx-auto">Esta sección se está construyendo actualmente.</p>
