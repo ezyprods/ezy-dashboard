@@ -383,7 +383,7 @@ function CellComponent({
           </div>
         </div>
       )}
-    </div>
+    </td>
   );
 }
 
@@ -551,7 +551,7 @@ export function ProductionGridBoard({
   const handleCellUpdate = (rowId: string, colId: string, updates: Partial<GridCellData>) => {
     const newRows = grid.rows.map(r => {
       if (r.id !== rowId) return r;
-      const updatedCell = { ...(r.cells[colId] || { status: 'todo' }) };
+      const updatedCell: GridCellData = { ...(r.cells[colId] || { status: 'todo' }) };
       if (updates.status !== undefined) updatedCell.status = updates.status;
       if (updates.fileId !== undefined) updatedCell.fileId = updates.fileId;
       if (updates.fileName !== undefined) updatedCell.fileName = updates.fileName;
