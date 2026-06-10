@@ -15,6 +15,8 @@ async function fetchFoldersRecursively(drive: any, parentId: string, parentPath:
       orderBy: 'folder, name',
       pageSize: 1000,
       pageToken: pageToken,
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
     });
     
     if (response.data.files) {
@@ -34,18 +36,26 @@ async function fetchFoldersRecursively(drive: any, parentId: string, parentPath:
   // Carpetas directas
   const folders = items.filter((f: any) => f.mimeType === 'application/vnd.google-apps.folder');
 
-  for (const folder of folders) {
+  const folderPromises = folders.map(async (folder) => {
     const currentPath = parentPath ? `${parentPath} / ${folder.name}` : folder.name;
     const { folders: subFolders, files: subFiles } = await fetchFoldersRecursively(drive, folder.id, currentPath);
-    
-    allFolders.push({
-      id: folder.id,
-      name: currentPath, // Mostramos la ruta completa para dar contexto
+    return {
+      folderId: folder.id,
+      name: currentPath,
       files: subFiles,
+      subFolders,
+    };
+  });
+
+  const results = await Promise.all(folderPromises);
+
+  for (const res of results) {
+    allFolders.push({
+      id: res.folderId,
+      name: res.name,
+      files: res.files,
     });
-    
-    // Añadimos las subcarpetas encontradas
-    allFolders = allFolders.concat(subFolders);
+    allFolders = allFolders.concat(res.subFolders);
   }
 
   return { folders: allFolders, files: rootFiles };
@@ -98,5 +108,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     console.error('API /projects/[id] PUT error:', error);
     return NextResponse.json({ error: 'Failed to update project config', details: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
+
+    const drive = getDriveService();
+    await drive.files.delete({
+      fileId: id,
+      supportsAllDrives: true,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('API /projects/[id] DELETE error:', error);
+    return NextResponse.json({ error: 'Failed to delete project', details: error.message }, { status: 500 });
   }
 }

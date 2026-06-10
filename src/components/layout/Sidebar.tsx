@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -74,7 +74,18 @@ export function Sidebar() {
 
       <div className="p-4 border-t border-border mt-auto">
         <div className="glass rounded-xl p-4 flex flex-col gap-2">
-          <p className="text-xs text-text-secondary">Conectado a Google Drive</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-text-secondary">Conectado a Google Drive</p>
+            <a 
+              href="https://drive.google.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-text-secondary hover:text-accent transition-colors p-1 rounded hover:bg-surface-elevated"
+              title="Abrir Google Drive"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
           <div className="flex items-center gap-2 text-sm text-success">
             <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
             <span>Sincronizado</span>

@@ -24,8 +24,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       projectFolders.map(async (projectFolder) => {
         // Leer config del proyecto (para saber tipo y portada)
         const projectConfig = await findAndReadJsonFile<any>('project_config.json', projectFolder.id!) || { title: projectFolder.name, type: 'Project' };
-        // Leer progreso del proyecto
-        const tasks = await findAndReadJsonFile<any>('tasks.json', projectFolder.id!) || [];
+        // Leer progreso del proyecto (formato FlexBoardData)
+        const tasksData = await findAndReadJsonFile<any>('tasks.json', projectFolder.id!) || { groups: [] };
+        const flatTasks: any[] = [];
+        if (tasksData && Array.isArray(tasksData.groups)) {
+          tasksData.groups.forEach((g: any) => {
+            if (Array.isArray(g.tasks)) {
+              g.tasks.forEach((t: any) => {
+                flatTasks.push({
+                  id: t.id,
+                  title: t.title,
+                  status: t.status === 'done' ? 'completed' : 'pending',
+                });
+              });
+            }
+          });
+        } else if (Array.isArray(tasksData)) {
+          tasksData.forEach((t: any) => {
+            flatTasks.push({
+              id: t.id,
+              title: t.title,
+              status: t.status === 'completed' ? 'completed' : 'pending',
+            });
+          });
+        }
+        
         
         // Obtener subcarpetas del proyecto (Bounces)
         const subfolders = await listFolders(projectFolder.id!);
@@ -50,7 +73,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           type: projectConfig.type,
           status: projectConfig.status || 'active',
           budget: projectConfig.budget || 0,
-          tasks,
+          tasks: flatTasks,
           bounces,
         };
       })

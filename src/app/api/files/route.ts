@@ -41,3 +41,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to upload file', details: error.message }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const fileId = searchParams.get('id');
+
+    if (!fileId) {
+      return NextResponse.json({ error: 'Missing file id' }, { status: 400 });
+    }
+
+    const drive = getDriveService();
+    await drive.files.delete({ 
+      fileId,
+      supportsAllDrives: true,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('API /files DELETE error:', error);
+    return NextResponse.json({ error: 'Failed to delete item', details: error.message }, { status: 500 });
+  }
+}

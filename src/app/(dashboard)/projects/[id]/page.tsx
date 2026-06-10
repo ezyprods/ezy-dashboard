@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones } from "lucide-react";
+import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones, Trash2, MoreVertical } from "lucide-react";
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
@@ -26,7 +26,6 @@ export default function ProjectDetailPage() {
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('files');
   const [uploadingTo, setUploadingTo] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{key: 'name'|'date'|'size'|'custom', direction: 'asc'|'desc'}>({key: 'name', direction: 'asc'});
   const [sortModalFolder, setSortModalFolder] = useState<any | null>(null);
@@ -57,6 +56,30 @@ export default function ProjectDetailPage() {
       alert('Error guardando el orden personalizado');
     } finally {
       setSortModalFolder(null);
+    }
+  };
+
+  const handleDeleteFolder = async (folderId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar esta carpeta y todo su contenido en Google Drive de forma permanente?')) return;
+    try {
+      const res = await fetch(`/api/files?id=${folderId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar la carpeta');
+      alert('Carpeta eliminada con éxito');
+      fetchProject();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este archivo de Google Drive de forma permanente?')) return;
+    try {
+      const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar el archivo');
+      alert('Archivo eliminado con éxito');
+      fetchProject();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
@@ -135,25 +158,16 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-border/50 px-6 overflow-x-auto mt-6">
-        {(['files', 'grid', 'payments'] as const).map(tab => (
-          <button 
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`pb-3 border-b-2 transition-colors whitespace-nowrap capitalize ${
-              activeTab === tab 
-                ? 'border-accent text-text-primary font-medium' 
-                : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
-            }`}
-          >
-            {tab === 'files' ? 'Archivos' : tab === 'grid' ? 'Matriz' : 'Pagos'}
-          </button>
-        ))}
+      {/* 1. Matriz de Producción */}
+      <div className="glass rounded-xl p-6 border border-border space-y-4">
+        <ProductionGridBoard projectId={projectId} projectTitle={project.title} />
       </div>
 
-      {/* Tab: Files */}
-      {activeTab === 'files' && (
+      {/* 2. Archivos del Proyecto (Google Drive) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b border-border/50 pb-2">
+          <h3 className="text-xl font-bold text-text-primary">Archivos de Google Drive</h3>
+        </div>
         <div className="space-y-8 animate-fade-in">
           {folders.map((folder: any) => (
             <div key={folder.id} className="glass rounded-xl border border-border overflow-hidden">
@@ -165,12 +179,21 @@ export default function ProjectDetailPage() {
                     {
                       label: 'Copiar ID de carpeta',
                       icon: 'Copy',
-                      action: () => navigator.clipboard.writeText(folder.id)
+                      action: () => {
+                        navigator.clipboard.writeText(folder.id);
+                        alert('ID de carpeta copiado');
+                      }
                     },
                     {
                       label: 'Personalizar orden',
                       icon: 'Settings2',
                       action: () => setSortModalFolder(folder)
+                    },
+                    {
+                      label: 'Eliminar Carpeta',
+                      icon: 'Trash2',
+                      variant: 'danger',
+                      action: () => handleDeleteFolder(folder.id)
                     }
                   ]);
                 }}
@@ -249,6 +272,39 @@ export default function ProjectDetailPage() {
                       </Button>
                     </label>
                   </div>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="w-8 h-8 rounded-lg text-text-secondary hover:text-text-primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      showMenu(rect.left, rect.bottom + window.scrollY, [
+                        {
+                          label: 'Copiar ID de carpeta',
+                          icon: 'Copy',
+                          action: () => {
+                            navigator.clipboard.writeText(folder.id);
+                            alert('ID de carpeta copiado');
+                          }
+                        },
+                        {
+                          label: 'Personalizar orden',
+                          icon: 'Settings2',
+                          action: () => setSortModalFolder(folder)
+                        },
+                        {
+                          label: 'Eliminar Carpeta',
+                          icon: 'Trash2',
+                          variant: 'danger',
+                          action: () => handleDeleteFolder(folder.id)
+                        }
+                      ]);
+                    }}
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
               
@@ -317,6 +373,12 @@ export default function ProjectDetailPage() {
                                     window.open(`/api/audio/${file.id}`, '_blank');
                                   }
                                 }
+                              },
+                              {
+                                label: 'Eliminar Archivo',
+                                icon: 'Trash2',
+                                variant: 'danger',
+                                action: () => handleDeleteFile(file.id)
                               }
                             ]);
                           }}
@@ -338,8 +400,13 @@ export default function ProjectDetailPage() {
                                 icon: 'Copy',
                                 action: () => {
                                   navigator.clipboard.writeText(file.webViewLink);
-                                  // Optional: toast success
                                 }
+                              },
+                              {
+                                label: 'Eliminar Archivo',
+                                icon: 'Trash2',
+                                variant: 'danger',
+                                action: () => handleDeleteFile(file.id)
                               }
                             ]);
                           }}
@@ -364,17 +431,13 @@ export default function ProjectDetailPage() {
             </div>
           ))}
         </div>
-      )}
+      </div>
 
-      {/* Tab: Grid (Matrix) */}
-      {activeTab === 'grid' && (
-        <ProductionGridBoard projectId={projectId} />
-      )}
-
-      {/* Tab: Payments */}
-      {activeTab === 'payments' && (
+      {/* 3. Estado de Pagos */}
+      <div className="glass rounded-xl p-6 border border-border space-y-4">
+        <h3 className="text-xl font-bold text-text-primary border-b border-border/50 pb-2">Estado de Pagos</h3>
         <ProjectPaymentsWidget projectId={projectId} initialBudget={project.budget || 0} artistId={project.artistId} />
-      )}
+      </div>
       
       {sortModalFolder && (
         <CustomSortModal 

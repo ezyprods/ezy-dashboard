@@ -11,12 +11,14 @@ import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { NotesEditor } from '@/components/notes/NotesEditor';
 import { getProjectTypeIcon } from '@/lib/utils';
 import { ArtistReleasesTab } from '@/components/artists/ArtistReleasesTab';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import * as LucideIcons from 'lucide-react';
 
 export default function ArtistDetailPage() {
   const params = useParams();
   const router = useRouter();
   const artistId = params.id as string;
+  const { showMenu } = useContextMenu();
   
   const [artist, setArtist] = useState<Artist | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,7 +28,19 @@ export default function ArtistDetailPage() {
   const [activeTab, setActiveTab] = useState('projects');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
 
-  const { projects, isLoading: projectsLoading } = useProjects(artistId);
+  const { projects, isLoading: projectsLoading, fetchProjects } = useProjects(artistId);
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este proyecto y su carpeta en Google Drive de forma permanente?')) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar el proyecto');
+      alert('Proyecto eliminado con éxito');
+      fetchProjects();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   useEffect(() => {
     fetchArtist();
@@ -210,7 +224,36 @@ export default function ArtistDetailPage() {
               {projects.map(project => {
                 const status = STATUS_CONFIG[project.status === 'active' ? 'in_progress' : project.status];
                 return (
-                  <div key={project.id} onClick={() => router.push(`/projects/${project.id}`)} className="bg-surface-elevated rounded-xl p-5 border border-border card-hover group cursor-pointer">
+                   <div 
+                    key={project.id} 
+                    onClick={() => router.push(`/projects/${project.id}`)} 
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      showMenu(e.clientX, e.clientY, [
+                        {
+                          label: 'Abrir proyecto',
+                          icon: 'FolderOpen',
+                          action: () => router.push(`/projects/${project.id}`)
+                        },
+                        {
+                          label: 'Copiar ID de carpeta',
+                          icon: 'Copy',
+                          action: () => {
+                            navigator.clipboard.writeText(project.id);
+                            alert('ID de carpeta copiado');
+                          }
+                        },
+                        {
+                          label: 'Eliminar Proyecto',
+                          icon: 'Trash2',
+                          variant: 'danger',
+                          action: () => handleDeleteProject(project.id)
+                        }
+                      ]);
+                    }}
+                    className="bg-surface-elevated rounded-xl p-5 border border-border card-hover group cursor-pointer"
+                  >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-2">
                         {(() => {
@@ -223,8 +266,34 @@ export default function ArtistDetailPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-
-                        <button className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface">
+                        <button 
+                          className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            showMenu(rect.left, rect.bottom + window.scrollY, [
+                              {
+                                label: 'Abrir proyecto',
+                                icon: 'FolderOpen',
+                                action: () => router.push(`/projects/${project.id}`)
+                              },
+                              {
+                                label: 'Copiar ID de carpeta',
+                                icon: 'Copy',
+                                action: () => {
+                                  navigator.clipboard.writeText(project.id);
+                                  alert('ID de carpeta copiado');
+                                }
+                              },
+                              {
+                                label: 'Eliminar Proyecto',
+                                icon: 'Trash2',
+                                variant: 'danger',
+                                action: () => handleDeleteProject(project.id)
+                              }
+                            ]);
+                          }}
+                        >
                           <MoreVertical className="w-4 h-4" />
                         </button>
                       </div>
