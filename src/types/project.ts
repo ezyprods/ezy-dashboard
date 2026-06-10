@@ -47,6 +47,8 @@ export interface TaskGroup {
 
 export interface FlexBoardData {
   groups: TaskGroup[];
+  productionGrid?: any;
+  paymentGrid?: any;
 }
 
 export interface LinkedFile {
