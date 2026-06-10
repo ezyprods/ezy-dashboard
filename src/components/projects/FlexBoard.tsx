@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { StatusPicker } from '@/components/projects/StatusPicker';
 import type { FlexBoardData, TaskGroup, FlexTask, FlexTaskStatus, FlexTaskPriority } from '@/types';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent, DragStartEvent,
@@ -86,10 +87,11 @@ function SortableTaskItem({
           <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${PRIORITY_CONFIG[task.priority].dot}`} title={PRIORITY_CONFIG[task.priority].label} />
         )}
 
-        {/* Status toggle */}
-        <button onClick={cycleStatus} className={`shrink-0 transition-colors ${statusCfg.color}`} title={statusCfg.label}>
-          <StatusIcon className="w-4 h-4" />
-        </button>
+        {/* Status picker */}
+        <StatusPicker
+          value={task.status}
+          onChange={(status) => onUpdate(groupId, task.id, { status })}
+        />
 
         {/* Title */}
         {isEditing ? (
