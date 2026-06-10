@@ -203,8 +203,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    showMenu(rect.left + e.nativeEvent.offsetX, rect.top + e.nativeEvent.offsetY, [
+                    showMenu(e.clientX, e.clientY, [
                       {
                         label: isFolder ? 'Abrir' : 'Ver en Drive',
                         icon: isFolder ? 'FolderOpen' : 'ExternalLink',
@@ -250,7 +249,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   {/* Waveform for audio files directly in explorer */}
                   {isAudio && (
                     <div className="flex-1 hidden md:block mr-4 opacity-50 group-hover:opacity-100 transition-opacity">
-                      <WaveformPlayer fileId={item.id} />
+                      <WaveformPlayer fileId={item.id} fileName={item.name} />
                     </div>
                   )}
 
