@@ -5,7 +5,7 @@ import { Loader2, Plus, Trash2, CheckCircle2, Clock, Eye, Circle, GripVertical }
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { ProductionGrid, FlexTaskStatus } from '@/types';
-import { Switch } from '@/components/ui/Switch';
+
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
 } from '@dnd-kit/core';
@@ -204,6 +204,7 @@ function SortableColHeader({
 function SortableRow({
   row,
   columns,
+  mode,
   onDelete,
   onCellChange,
 }: {
@@ -358,7 +359,7 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
   };
 
   const toggleMode = async () => {
-    const newMode = grid.mode === 'simple' ? 'interconnected' : 'simple';
+    const newMode: 'simple' | 'interconnected' = grid.mode === 'simple' ? 'interconnected' : 'simple';
     setIsModeLoading(true);
     const newGrid = { ...grid, mode: newMode };
     await saveGrid(newGrid);

@@ -129,6 +129,7 @@ export interface GridCell {
 export interface ProductionGrid {
   columns: { id: string; name: string }[];
   rows: { id: string; name: string; cells: Record<string, GridCell> }[];
+  mode?: 'simple' | 'interconnected';
 }
 
 export interface ReferenceTrack {
