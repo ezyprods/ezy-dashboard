@@ -322,7 +322,7 @@ export default function ProjectDetailPage() {
                     onClick={(e) => {
                       e.stopPropagation();
                       const rect = e.currentTarget.getBoundingClientRect();
-                      showMenu(rect.left, rect.bottom + window.scrollY, [
+                      showMenu(rect.left, rect.bottom + 8, [
                         {
                           label: 'Copiar ID de carpeta',
                           icon: 'Copy',

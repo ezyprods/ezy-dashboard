@@ -161,28 +161,33 @@ export default function ArtistDetailPage() {
                     Archivos Drive
                   </button>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="border-accent text-accent hover:bg-accent/10"
-                    onClick={() => {
-                      const url = `${window.location.origin}/portal/${artistId}`;
-                      navigator.clipboard.writeText(url);
-                      customAlert('¡Enlace del portal copiado al portapapeles!');
-                    }}
-                  >
-                    Copiar Enlace Portal
-                  </Button>
-                  <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-1.5 rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1.5 font-medium h-9">
-                    Ver
-                  </a>
-                  <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-9">
-                    <Headphones className="w-4 h-4 mr-2" /> Gestor Previews
-                  </Button>
-                  <Button size="sm" onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0 h-9">
-                    <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
-                  </Button>
+                <div className="flex flex-col items-end gap-2 mt-6 sm:mt-0">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-accent text-accent hover:bg-accent/10"
+                      onClick={() => {
+                        const url = `${window.location.origin}/portal/${artistId}`;
+                        navigator.clipboard.writeText(url);
+                        customAlert('¡Enlace del portal copiado al portapapeles!');
+                      }}
+                    >
+                      Copiar Enlace Portal
+                    </Button>
+                    <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-1.5 rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1.5 font-medium h-9">
+                      Ver
+                    </a>
+                    <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-9">
+                      <Headphones className="w-4 h-4 mr-2" /> Gestor Previews
+                    </Button>
+                    <Button size="sm" onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0 h-9">
+                      <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-text-secondary italic text-right max-w-xs">
+                    * El portal es una vista unificada para el artista. Muestra los proyectos en progreso, audios y facturación automáticamente.
+                  </p>
                 </div>
               </div>
             </div>
@@ -250,6 +255,15 @@ export default function ArtistDetailPage() {
                           }
                         },
                         {
+                          label: 'Enlace Google Drive',
+                          icon: 'ExternalLink',
+                          action: () => {
+                            const url = `https://drive.google.com/drive/folders/${project.id}`;
+                            navigator.clipboard.writeText(url);
+                            customAlert('Enlace de Drive copiado al portapapeles');
+                          }
+                        },
+                        {
                           label: 'Eliminar Proyecto',
                           icon: 'Trash2',
                           variant: 'danger',
@@ -272,11 +286,23 @@ export default function ArtistDetailPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <button 
+                          className="text-text-secondary hover:text-accent p-1 rounded hover:bg-surface"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const url = `https://drive.google.com/drive/folders/${project.id}`;
+                            navigator.clipboard.writeText(url);
+                            customAlert('Enlace de Drive copiado al portapapeles');
+                          }}
+                          title="Copiar enlace a Drive"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                        <button 
                           className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface"
                           onClick={(e) => {
                             e.stopPropagation();
                             const rect = e.currentTarget.getBoundingClientRect();
-                            showMenu(rect.left, rect.bottom + window.scrollY, [
+                            showMenu(rect.left, rect.bottom + 8, [
                               {
                                 label: 'Abrir proyecto',
                                 icon: 'FolderOpen',
@@ -288,6 +314,15 @@ export default function ArtistDetailPage() {
                                 action: () => {
                                   navigator.clipboard.writeText(project.id);
                                   customAlert('ID de carpeta copiado');
+                                }
+                              },
+                              {
+                                label: 'Enlace Google Drive',
+                                icon: 'ExternalLink',
+                                action: () => {
+                                  const url = `https://drive.google.com/drive/folders/${project.id}`;
+                                  navigator.clipboard.writeText(url);
+                                  customAlert('Enlace de Drive copiado al portapapeles');
                                 }
                               },
                               {

@@ -48,7 +48,12 @@ export default function ArtistPreviewsPage() {
       });
       if (!res.ok) throw new Error('Error creating release');
       const data = await res.json();
-      router.push(`/artists/${artistId}/releases/${data.release.id}/edit`);
+      const releaseId = data.id || data.release?.id;
+      if (releaseId) {
+        router.push(`/artists/${artistId}/releases/${releaseId}/edit`);
+      } else {
+        throw new Error('No release ID returned');
+      }
     } catch (err) {
       console.error(err);
       customAlert('Error creando el preview');

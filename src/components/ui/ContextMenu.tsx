@@ -162,6 +162,29 @@ export function GlobalContextMenu() {
     return () => document.removeEventListener('contextmenu', handleContextMenu);
   }, [getDefaultItems, getArtistItems, getAudioItems, showMenu]);
 
+  const [position, setPosition] = React.useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (menuState.visible && typeof window !== 'undefined') {
+      let x = menuState.x;
+      let y = menuState.y;
+
+      // Ensure menu fits in viewport
+      if (menuRef.current) {
+        const rect = menuRef.current.getBoundingClientRect();
+        if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 8;
+        if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 8;
+      } else {
+        // Fallback approximate bounds if ref is not measured yet
+        const approxW = 200;
+        const approxH = menuState.items.length * 40 + 16;
+        if (x + approxW > window.innerWidth) x = window.innerWidth - approxW - 8;
+        if (y + approxH > window.innerHeight) y = window.innerHeight - approxH - 8;
+      }
+      setPosition({ x: Math.max(8, x), y: Math.max(8, y) });
+    }
+  }, [menuState]);
+
   // Close on outside click, scroll, escape
   useEffect(() => {
     if (!menuState.visible) return;
@@ -191,7 +214,7 @@ export function GlobalContextMenu() {
     <div
       ref={menuRef}
       className="fixed z-[9999] min-w-[200px] py-1.5 rounded-xl border border-border/60 bg-surface-elevated/90 backdrop-blur-xl shadow-2xl shadow-black/40 animate-menu-in"
-      style={{ top: menuState.y, left: menuState.x }}
+      style={{ top: position.y, left: position.x }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {menuState.items.map((item, i) => {

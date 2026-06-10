@@ -43,6 +43,8 @@ export function WaveformPlayer({
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [canvasWidth, setCanvasWidth] = useState(120);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
 
   useEffect(() => {
     setDisplayName(fileName.replace(/\.[^/.]+$/, ''));
@@ -231,23 +233,41 @@ export function WaveformPlayer({
     }
   }, [isThisTrackActive, duration, canvasWidth, seek, playTrack, fileId, displayName, artistName]);
 
-  const handleRename = async (e: React.MouseEvent) => {
+  const startRename = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setEditNameValue(displayName);
+    setIsEditingName(true);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!editNameValue || editNameValue.trim() === '' || editNameValue === displayName) {
+      setIsEditingName(false);
+      return;
+    }
+
     const currentExt = fileName.substring(fileName.lastIndexOf('.'));
-    const newName = await customPrompt('Introduce el nuevo nombre del archivo:', displayName);
-    if (!newName || newName.trim() === '' || newName === displayName) return;
+    const newName = editNameValue.trim();
 
     setIsUpdating(true);
     try {
       const res = await fetch('/api/files', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, name: newName.trim() + currentExt }),
+        body: JSON.stringify({ fileId, name: newName + currentExt }),
       });
       if (!res.ok) throw new Error('Error al renombrar archivo');
-      setDisplayName(newName.trim());
+      setDisplayName(newName);
       if (onRefresh) onRefresh();
-    } catch (err: any) { customAlert(err.message); } finally { setIsUpdating(false); }
+    } catch (err: any) { customAlert(err.message); } finally { 
+      setIsUpdating(false);
+      setIsEditingName(false);
+    }
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') handleRenameSubmit();
+    if (e.key === 'Escape') setIsEditingName(false);
   };
 
   const handleMove = async (e: React.MouseEvent) => {
@@ -306,9 +326,26 @@ export function WaveformPlayer({
         </button>
 
         <div className="flex-1 min-w-0">
-          <span className={cn('text-[13px] font-semibold truncate block transition-colors', isThisTrackActive ? 'text-accent' : 'text-text-primary')} title={displayName}>
-            {displayName}
-          </span>
+          {isEditingName ? (
+            <input
+              autoFocus
+              type="text"
+              value={editNameValue}
+              onChange={(e) => setEditNameValue(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onBlur={handleRenameSubmit}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full bg-surface-elevated/50 border border-accent/50 rounded px-2 py-0.5 text-[13px] font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+          ) : (
+            <span 
+              className={cn('text-[13px] font-semibold truncate block transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
+              title={displayName}
+              onDoubleClick={startRename}
+            >
+              {displayName}
+            </span>
+          )}
         </div>
       </div>
 
@@ -343,7 +380,7 @@ export function WaveformPlayer({
           <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
         ) : (
           <>
-            <button onClick={handleRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
+            <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
             <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>
             <a href={`/api/audio/${fileId}`} download={fileName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
             <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-0 group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
