@@ -288,6 +288,7 @@ export default function ArtistDetailPage() {
                         <button 
                           className="text-text-secondary hover:text-accent p-1 rounded hover:bg-surface"
                           onClick={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
                             const url = `https://drive.google.com/drive/folders/${project.id}`;
                             navigator.clipboard.writeText(url);
@@ -300,6 +301,7 @@ export default function ArtistDetailPage() {
                         <button 
                           className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface"
                           onClick={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
                             const rect = e.currentTarget.getBoundingClientRect();
                             showMenu(rect.left, rect.bottom + 8, [
