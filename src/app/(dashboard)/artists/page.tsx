@@ -108,7 +108,7 @@ export default function ArtistsPage() {
       ) : (
         <div className={
           viewMode === 'grid' 
-            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" 
+            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3" 
             : "space-y-3"
         }>
           {filteredArtists.map((artist) => (
@@ -123,45 +123,45 @@ export default function ArtistsPage() {
             >
               {/* Banner background for Grid mode */}
               {viewMode === 'grid' && (
-                <div className="h-12 w-full bg-gradient-to-r from-accent/20 to-surface-elevated shrink-0" />
+                <div className="h-8 w-full bg-gradient-to-r from-accent/20 to-surface-elevated shrink-0" />
               )}
               
-              <div className={cn("flex flex-col flex-1", viewMode === 'grid' ? "px-5 pb-5 pt-0" : "p-4 flex-row items-center gap-6")}>
+              <div className={cn("flex flex-col flex-1", viewMode === 'grid' ? "px-3 pb-3 pt-0" : "p-4 flex-row items-center gap-6")}>
                 {/* Photo & Main Info */}
                 <div className={cn("flex", viewMode === 'grid' ? "flex-col items-start" : "items-center gap-4 flex-1")}>
                   <div className={cn(
-                    "rounded-full bg-surface border-4 border-surface-elevated flex items-center justify-center overflow-hidden shrink-0 shadow-sm",
-                    viewMode === 'grid' ? "-mt-8 w-16 h-16 mb-3" : "w-10 h-10 border-none"
+                    "rounded-full bg-surface border-[3px] border-surface-elevated flex items-center justify-center overflow-hidden shrink-0 shadow-sm",
+                    viewMode === 'grid' ? "-mt-5 w-10 h-10 mb-2" : "w-10 h-10 border-none"
                   )}>
                     {artist.photoUrl ? (
                       <img src={artist.photoUrl} alt={artist.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                     ) : (
-                      <span className="font-bold text-xl text-text-secondary">{artist.name.charAt(0)}</span>
+                      <span className="font-bold text-sm text-text-secondary">{artist.name.charAt(0)}</span>
                     )}
                   </div>
                   
                   <div className={cn(viewMode === 'grid' ? "w-full" : "")}>
-                    <h3 className="font-bold text-text-primary text-lg leading-tight group-hover:text-accent transition-colors">{artist.name}</h3>
-                    <p className="text-sm text-text-secondary mt-0.5 truncate max-w-[180px]">{artist.activeProject || 'Sin proyecto activo'}</p>
+                    <h3 className="font-bold text-text-primary text-sm leading-tight group-hover:text-accent transition-colors truncate">{artist.name}</h3>
+                    <p className="text-[10px] text-text-secondary mt-0.5 truncate">{artist.activeProject || 'Sin proyecto'}</p>
                   </div>
                 </div>
 
-                {viewMode === 'grid' && <div className="w-full h-px bg-border/50 my-4" />}
+                {viewMode === 'grid' && <div className="w-full h-px bg-border/50 my-2" />}
 
                 {/* Tags & Services */}
-                <div className={cn("flex flex-wrap items-center gap-2", viewMode === 'list' ? "flex-1 justify-end" : "mt-auto")}>
+                <div className={cn("flex flex-wrap items-center gap-1.5", viewMode === 'list' ? "flex-1 justify-end" : "mt-auto")}>
                   {(!artist.genre?.length && !artist.services?.length && viewMode === 'grid') && (
-                    <span className="text-[11px] text-text-secondary/60 italic">Sin etiquetas ni servicios</span>
+                    <span className="text-[9px] text-text-secondary/60 italic">Sin etiquetas</span>
                   )}
                   
                   {artist.genre?.slice(0, 2).map(g => (
-                    <span key={g} className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary bg-surface px-2 py-1 rounded">
+                    <span key={g} className="text-[8px] uppercase tracking-wider font-semibold text-text-secondary bg-surface px-1.5 py-0.5 rounded">
                       {g}
                     </span>
                   ))}
                   
                   {artist.services?.slice(0, 3).map((service) => (
-                    <span key={service} className="px-2 py-1 rounded-md text-[10px] font-medium bg-accent/10 border border-accent/20 text-accent-light">
+                    <span key={service} className="px-1.5 py-0.5 rounded text-[8px] font-medium bg-accent/10 border border-accent/20 text-accent-light">
                       {SERVICE_LABELS[service] || service}
                     </span>
                   ))}
