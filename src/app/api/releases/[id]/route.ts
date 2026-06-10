@@ -10,7 +10,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Release not found' }, { status: 404 });
   }
   
-  return NextResponse.json(config);
+  // Wrap in { release } so both the dashboard edit page and the public preview page
+  // can use data.release consistently
+  return NextResponse.json({ release: config });
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +33,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   
   await saveJsonFile('release_config.json', updatedRelease, id);
   
-  return NextResponse.json(updatedRelease);
+  return NextResponse.json({ release: updatedRelease });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {

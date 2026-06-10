@@ -81,7 +81,7 @@ export function ArtistReleasesTab({ artistId }: { artistId: string }) {
             <div key={release.id} className="bg-surface-elevated rounded-xl p-4 border border-border group relative overflow-hidden card-hover">
               <div 
                 className="w-full aspect-square bg-surface border border-border/50 rounded-lg mb-3 flex items-center justify-center overflow-hidden cursor-pointer relative"
-                onClick={() => router.push(`/releases/${release.id}/preview`)}
+                onClick={() => router.push(`/previews/${release.id}`)}
               >
                 {release.coverArtId ? (
                   <img src={`/api/audio/${release.coverArtId}`} alt={release.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />

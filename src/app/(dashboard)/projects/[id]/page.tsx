@@ -5,13 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones } from "lucide-react";
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
-import { FlexBoard } from '@/components/projects/FlexBoard';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
-import { ReferenceTracksTab } from '@/components/projects/ReferenceTracksTab';
-import { CommunicationsTab } from '@/components/projects/CommunicationsTab';
 import { ProjectPaymentsWidget } from '@/components/projects/ProjectPaymentsWidget';
-import { NotesEditor } from '@/components/notes/NotesEditor';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
@@ -141,7 +137,7 @@ export default function ProjectDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-6 overflow-x-auto mt-6">
-        {(['files', 'tasks', 'grid', 'references', 'notes', 'communications', 'payments'] as const).map(tab => (
+        {(['files', 'grid', 'payments'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -151,7 +147,7 @@ export default function ProjectDetailPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
             }`}
           >
-            {tab === 'files' ? 'Archivos' : tab === 'tasks' ? 'Kanban' : tab === 'grid' ? 'Matriz' : tab === 'references' ? 'Referencias' : tab === 'notes' ? 'Notas' : tab === 'communications' ? 'Comms' : 'Pagos'}
+            {tab === 'files' ? 'Archivos' : tab === 'grid' ? 'Matriz' : 'Pagos'}
           </button>
         ))}
       </div>
@@ -370,29 +366,9 @@ export default function ProjectDetailPage() {
         </div>
       )}
 
-      {/* Tab: Tasks (Kanban) */}
-      {activeTab === 'tasks' && (
-        <FlexBoard projectId={projectId} />
-      )}
-
       {/* Tab: Grid (Matrix) */}
       {activeTab === 'grid' && (
         <ProductionGridBoard projectId={projectId} />
-      )}
-
-      {/* Tab: References */}
-      {activeTab === 'references' && (
-        <ReferenceTracksTab projectId={projectId} />
-      )}
-
-      {/* Tab: Notes */}
-      {activeTab === 'notes' && (
-        <NotesEditor endpoint={`/api/projects/${projectId}/notes`} />
-      )}
-
-      {/* Tab: Communications */}
-      {activeTab === 'communications' && (
-        <CommunicationsTab projectId={projectId} projectTitle={project.title} artistId={project.artistId} />
       )}
 
       {/* Tab: Payments */}
