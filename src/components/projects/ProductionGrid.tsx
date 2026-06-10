@@ -506,6 +506,8 @@ export function ProductionGridBoard({
   };
 
   const saveGrid = async (newGrid: ProductionGrid, newLinkedProjectId?: string) => {
+    // Actualización optimista de la UI
+    setGrid(newGrid);
     setIsSaving(true);
     try {
       await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
@@ -516,8 +518,12 @@ export function ProductionGridBoard({
           projectId: newLinkedProjectId !== undefined ? newLinkedProjectId : linkedProjectId 
         })
       });
-      setGrid(newGrid);
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch (e) { 
+      console.error(e); 
+      customAlert('Error guardando en Drive. Los cambios podrían no haberse sincronizado.', true);
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const handleLinkProject = async (projId: string) => {
