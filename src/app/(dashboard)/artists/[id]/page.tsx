@@ -11,6 +11,7 @@ import { useProjects } from '@/lib/hooks/useProjects';
 import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
 import { CustomSortModal } from '@/components/projects/CustomSortModal';
 import { DriveExplorer } from '@/components/artists/DriveExplorer';
+import { ArtistPortalTab } from '@/components/artists/ArtistPortalTab';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { NotesEditor } from '@/components/notes/NotesEditor';
 import { getProjectTypeIcon } from '@/lib/utils';
@@ -196,7 +197,7 @@ export default function ArtistDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">
-        {(['projects', 'matrices', 'files', 'notes', 'payments'] as const).map(tab => (
+        {(['files', 'projects', 'matrices', 'notes', 'payments', 'portal'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -206,7 +207,7 @@ export default function ArtistDetailPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
             }`}
           >
-            {tab === 'projects' ? 'Proyectos' : tab === 'matrices' ? 'Matrices' : tab === 'files' ? 'Archivos' : tab === 'notes' ? 'Notas' : 'Pagos'}
+            {tab === 'files' ? 'Archivos' : tab === 'projects' ? 'Proyectos' : tab === 'matrices' ? 'Matrices' : tab === 'notes' ? 'Notas' : tab === 'payments' ? 'Pagos' : 'Portal'}
           </button>
         ))}
       </div>
@@ -397,8 +398,13 @@ export default function ArtistDetailPage() {
         <DriveExplorer rootFolderId={artist?.driveFolderId || artistId} rootName={artist?.name || 'Archivos'} />
       )}
 
+      {/* Tab Content: Portal */}
+      {activeTab === 'portal' && (
+        <ArtistPortalTab artistId={artistId} />
+      )}
+
       {/* Tab Content: Placeholder for others */}
-      {activeTab !== 'projects' && activeTab !== 'notes' && activeTab !== 'matrices' && activeTab !== 'payments' && activeTab !== 'files' && (
+      {activeTab !== 'projects' && activeTab !== 'notes' && activeTab !== 'matrices' && activeTab !== 'payments' && activeTab !== 'files' && activeTab !== 'portal' && (
         <div className="glass rounded-xl p-12 text-center text-text-secondary border border-border animate-fade-in">
           <h3 className="text-lg font-medium text-text-primary mb-2 capitalize">Módulo de {activeTab}</h3>
           <p className="max-w-md mx-auto">Esta sección se está construyendo actualmente.</p>

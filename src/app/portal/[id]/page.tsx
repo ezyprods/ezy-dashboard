@@ -86,183 +86,134 @@ export default function PortalPage() {
       {/* Main Container */}
       <main className="max-w-5xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
         
-        {/* Left Column: Project Selector & Payments Card */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          {/* Projects Selector Panel */}
-          <div className="glass rounded-2xl border border-border p-5 space-y-4">
-            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">Tus Proyectos</h3>
-            {data.projects.length === 0 ? (
-              <p className="text-sm text-text-secondary italic">No hay proyectos activos.</p>
-            ) : (
-              <div className="space-y-2">
-                {data.projects.map((project: any) => {
-                  const isActive = project.id === selectedProjectId;
-                  return (
-                    <button
-                      key={project.id}
-                      onClick={() => setSelectedProjectId(project.id)}
-                      className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-1.5 ${
-                        isActive
-                          ? 'border-accent bg-accent/10 text-text-primary shadow-lg shadow-accent/5'
-                          : 'border-border bg-surface/30 text-text-secondary hover:border-accent/30 hover:text-text-primary'
-                      }`}
-                    >
-                      <span className="font-bold text-sm truncate">{project.title}</span>
-                      <div className="flex justify-between items-center text-[10px] w-full uppercase tracking-wider font-semibold opacity-80">
-                        <span>{project.type}</span>
-                        <span className={isActive ? 'text-accent-light' : 'text-text-secondary'}>
-                          {project.status === 'active' ? 'En Progreso' : 'Terminado'}
-                        </span>
+        <div className="lg:col-span-12 space-y-6">
+          {/* Main Grid for Modules */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {data.config?.modules?.map((mod: any) => {
+              if (!mod.visible) return null;
+
+              if (mod.type === 'projects') {
+                return (
+                  <div key={mod.id} className="glass rounded-2xl border border-border p-5 space-y-4">
+                    <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">{mod.title || 'Tus Proyectos'}</h3>
+                    {data.projects.length === 0 ? (
+                      <p className="text-sm text-text-secondary italic">No hay proyectos activos.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {data.projects.map((project: any) => {
+                          const isActive = project.id === selectedProjectId;
+                          return (
+                            <button
+                              key={project.id}
+                              onClick={() => setSelectedProjectId(project.id)}
+                              className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex flex-col gap-1.5 ${
+                                isActive
+                                  ? 'border-accent bg-accent/10 text-text-primary shadow-lg shadow-accent/5'
+                                  : 'border-border bg-surface/30 text-text-secondary hover:border-accent/30 hover:text-text-primary'
+                              }`}
+                            >
+                              <span className="font-bold text-sm truncate">{project.title}</span>
+                              <div className="flex justify-between items-center text-[10px] w-full uppercase tracking-wider font-semibold opacity-80">
+                                <span>{project.type}</span>
+                                <span className={isActive ? 'text-accent-light' : 'text-text-secondary'}>
+                                  {project.status === 'active' ? 'En Progreso' : 'Terminado'}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Billing Card (Payments Summary) */}
-          {data.payments && (
-            <div className="glass rounded-2xl border border-border p-5 space-y-4 bg-gradient-to-br from-surface to-surface-elevated">
-              <div className="flex justify-between items-center border-b border-border/50 pb-3">
-                <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">Resumen Financiero</h3>
-                <CreditCard className="w-4 h-4 text-accent-light" />
-              </div>
-              <div className="space-y-3.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-text-secondary">Presupuesto Total:</span>
-                  <span className="font-bold text-sm text-text-primary">{data.payments.totalBudget}€</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-text-secondary">Total Abonado:</span>
-                  <span className="font-bold text-sm text-success">{data.payments.totalPaid}€</span>
-                </div>
-                <div className="flex flex-col gap-1 pt-3 border-t border-border/55">
-                  <div className="flex justify-between items-center">
-                     <span className="text-sm font-semibold text-text-primary">Pendiente de Pago:</span>
-                    <span className={`text-xl font-black ${data.payments.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
-                      {data.payments.pendingPayment}€
-                    </span>
+                    )}
                   </div>
-                  {data.payments.pendingPayment > 0 && (
-                    <p className="text-[10px] text-warning mt-1 flex items-center gap-1 bg-warning/10 border border-warning/20 p-2 rounded">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>Listo para facturación y cobro final.</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+                );
+              }
 
-        {/* Right Column: Active Project Details */}
-        <div className="lg:col-span-8 space-y-6">
-          {activeProject ? (
-            <div className="space-y-6">
-              
-              {/* Project Title and Progress Header */}
-              <div className="glass rounded-2xl border border-border p-6 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[10px] bg-accent/15 text-accent-light font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      {activeProject.type}
-                    </span>
-                    <h2 className="text-2xl font-extrabold text-text-primary tracking-tight mt-2">{activeProject.title}</h2>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-3xl font-black text-accent">{progressPercent}%</span>
-                    <p className="text-[10px] text-text-secondary uppercase tracking-widest font-semibold mt-0.5">Progreso Total</p>
-                  </div>
-                </div>
-
-                <div className="w-full h-2 bg-surface-elevated border border-border rounded-full overflow-hidden">
-                  <div className="h-full bg-accent transition-all duration-500 rounded-full" style={{ width: `${progressPercent}%` }} />
-                </div>
-              </div>
-
-              {/* Grid: Audios / Tasks */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Audiomix / Bounces Section */}
-                <div className="glass rounded-2xl border border-border p-5 flex flex-col gap-4">
-                  <div className="flex items-center gap-2 border-b border-border/50 pb-3">
-                    <Headphones className="w-4 h-4 text-accent" />
-                    <h4 className="font-bold text-sm text-text-primary uppercase tracking-wider">Últimas Mezclas / Audios</h4>
-                  </div>
-                  
-                  {activeProject.bounces && activeProject.bounces.length > 0 ? (
-                    <div className="space-y-2 flex-1 overflow-y-auto max-h-[360px] pr-1 scrollbar-thin">
-                      {activeProject.bounces.map((bounce: any) => (
-                        <WaveformPlayer 
-                          key={bounce.id} 
-                          fileId={bounce.id} 
-                          fileName={bounce.name} 
-                          artistName={data.artist.name} 
-                        />
-                      ))}
+              if (mod.type === 'billing') {
+                if (!data.payments) return null;
+                return (
+                  <div key={mod.id} className="glass rounded-2xl border border-border p-5 space-y-4 bg-gradient-to-br from-surface to-surface-elevated">
+                    <div className="flex justify-between items-center border-b border-border/50 pb-3">
+                      <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">{mod.title || 'Resumen Financiero'}</h3>
+                      <CreditCard className="w-4 h-4 text-accent-light" />
                     </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center bg-surface-elevated/40 rounded-xl border border-dashed border-border/50">
-                      <Music className="w-8 h-8 text-text-secondary mb-2 opacity-50" />
-                      <p className="text-xs text-text-secondary italic">Aún no hay audios cargados en la carpeta.</p>
+                    <div className="space-y-3.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-text-secondary">Presupuesto Total:</span>
+                        <span className="font-bold text-sm text-text-primary">{data.payments.totalBudget}€</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-text-secondary">Total Abonado:</span>
+                        <span className="font-bold text-sm text-success">{data.payments.totalPaid}€</span>
+                      </div>
+                      <div className="flex flex-col gap-1 pt-3 border-t border-border/55">
+                        <div className="flex justify-between items-center">
+                           <span className="text-sm font-semibold text-text-primary">Pendiente de Pago:</span>
+                          <span className={`text-xl font-black ${data.payments.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
+                            {data.payments.pendingPayment}€
+                          </span>
+                        </div>
+                        {data.payments.pendingPayment > 0 && (
+                          <p className="text-[10px] text-warning mt-1 flex items-center gap-1 bg-warning/10 border border-warning/20 p-2 rounded">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Listo para facturación y cobro final.</span>
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                {/* Tasks / Checklist Section */}
-                <div className="glass rounded-2xl border border-border p-5 flex flex-col gap-4">
-                  <div className="flex items-center gap-2 border-b border-border/50 pb-3">
-                    <CheckCircle2 className="w-4 h-4 text-accent" />
-                    <h4 className="font-bold text-sm text-text-primary uppercase tracking-wider">Estado del Trabajo</h4>
                   </div>
+                );
+              }
 
-                  {activeProject.tasks && activeProject.tasks.length > 0 ? (
-                    <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[360px] pr-1">
-                      {activeProject.tasks.map((task: any) => {
-                        const isCompleted = task.status === 'completed';
-                        return (
-                          <div 
-                            key={task.id} 
-                            className={`flex items-start gap-3 p-2.5 rounded-xl border transition-colors ${
-                              isCompleted 
-                                ? 'bg-success/10 border-success/20 text-text-secondary' 
-                                : 'bg-surface-elevated/50 border-border text-text-primary'
-                            }`}
-                          >
-                            <div className="mt-0.5 shrink-0">
-                              {isCompleted ? (
-                                <CheckCircle2 className="w-4 h-4 text-success" />
-                              ) : (
-                                <Circle className="w-4 h-4 text-text-secondary opacity-40" />
-                              )}
+              if (mod.type === 'tasks') {
+                if (!activeProject) return null;
+                return (
+                  <div key={mod.id} className="glass rounded-2xl border border-border p-5 flex flex-col gap-4">
+                    <div className="flex items-center gap-2 border-b border-border/50 pb-3">
+                      <CheckCircle2 className="w-4 h-4 text-accent" />
+                      <h4 className="font-bold text-sm text-text-primary uppercase tracking-wider">{mod.title || 'Estado del Trabajo'}</h4>
+                    </div>
+
+                    {activeProject.tasks && activeProject.tasks.length > 0 ? (
+                      <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[360px] pr-1">
+                        {activeProject.tasks.map((task: any) => {
+                          const isCompleted = task.status === 'completed';
+                          return (
+                            <div 
+                              key={task.id} 
+                              className={`flex items-start gap-3 p-2.5 rounded-xl border transition-colors ${
+                                isCompleted 
+                                  ? 'bg-success/10 border-success/20 text-text-secondary' 
+                                  : 'bg-surface-elevated/50 border-border text-text-primary'
+                              }`}
+                            >
+                              <div className="mt-0.5 shrink-0">
+                                {isCompleted ? (
+                                  <CheckCircle2 className="w-4 h-4 text-success" />
+                                ) : (
+                                  <Circle className="w-4 h-4 text-text-secondary opacity-40" />
+                                )}
+                              </div>
+                              <span className={`text-xs font-semibold leading-normal ${isCompleted ? 'line-through opacity-70' : ''}`}>
+                                {task.title}
+                              </span>
                             </div>
-                            <span className={`text-xs font-semibold leading-normal ${isCompleted ? 'line-through opacity-70' : ''}`}>
-                              {task.title}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center bg-surface-elevated/40 rounded-xl border border-dashed border-border/50">
-                      <CheckCircle2 className="w-8 h-8 text-text-secondary opacity-50 mb-2" />
-                      <p className="text-xs text-text-secondary italic">No hay tareas o fases configuradas.</p>
-                    </div>
-                  )}
-                </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-center bg-surface-elevated/40 rounded-xl border border-dashed border-border/50">
+                        <CheckCircle2 className="w-8 h-8 text-text-secondary opacity-50 mb-2" />
+                        <p className="text-xs text-text-secondary italic">No hay tareas o fases configuradas.</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
 
-              </div>
-
-            </div>
-          ) : (
-            <div className="glass p-12 rounded-2xl border border-border text-center">
-              <p className="text-text-secondary">Selecciona un proyecto para ver sus detalles.</p>
-            </div>
-          )}
+              return null;
+            })}
+          </div>
         </div>
-
       </main>
     </div>
   );

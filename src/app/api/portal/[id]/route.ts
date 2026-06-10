@@ -13,6 +13,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
     }
 
+    // 1.5 Obtener configuración del portal
+    let portalConfig = await findAndReadJsonFile<any>('portal_config.json', id);
+    if (!portalConfig) {
+      portalConfig = {
+        modules: [
+          { id: 'projects', type: 'projects', isVisible: true, order: 0, title: 'Proyectos Activos' },
+          { id: 'bounces', type: 'bounces', isVisible: true, order: 1, title: 'Últimas Mezclas / Audios' },
+          { id: 'finances', type: 'finances', isVisible: true, order: 2, title: 'Resumen Financiero' },
+          { id: 'tasks', type: 'tasks', isVisible: true, order: 3, title: 'Estado del Trabajo' },
+          { id: 'releases', type: 'releases', isVisible: true, order: 4, title: 'Releases / Previews' }
+        ]
+      };
+    }
+
     // 2. Obtener los proyectos del artista
     const folders = await listFolders(id);
     // Ignorar las carpetas por defecto de la estructura (Images, etc.)
@@ -98,16 +112,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ 
       artist: {
-        id,
+        id: artistConfig.id,
         name: artistConfig.name,
+        photo: artistConfig.photo,
       },
+      producerName: portalConfig.producerName || 'EZY Studio',
       projects: projectsData,
-      producerName: process.env.NEXT_PUBLIC_PRODUCER_NAME || 'EZY Studio',
-      payments: {
+      finances: {
         totalBudget,
         totalPaid,
-        pendingPayment
-      }
+        pendingPayment,
+      },
+      config: portalConfig
     });
   } catch (error: any) {
     console.error('API /portal/[id] GET error:', error);

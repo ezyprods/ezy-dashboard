@@ -1,3 +1,12 @@
+export interface PortalModule {
+  id: string;
+  type: 'projects' | 'finances' | 'bounces' | 'tasks' | 'releases' | 'custom_text' | 'custom_link';
+  title?: string;
+  isVisible: boolean;
+  order: number;
+  config?: any;
+}
+
 export interface PortalConfig {
   artistId: string;
   token: string;
@@ -5,6 +14,9 @@ export interface PortalConfig {
   producerLogo?: string;
   showFeedback: boolean;
   createdAt: string;
+  theme?: 'dark' | 'light' | 'custom';
+  accentColor?: string;
+  modules?: PortalModule[];
 }
 
 export interface FeedbackComment {
