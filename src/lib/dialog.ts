@@ -1,3 +1,6 @@
+'use client';
+import { toast } from 'sonner';
+
 export type DialogOptions = {
   type: 'confirm' | 'prompt';
   title?: string;
@@ -47,16 +50,12 @@ export const customPrompt = (message: string, defaultValue?: string, title?: str
   });
 };
 
+
+
 export const customAlert = (message: string) => {
-  // Try to use toast dynamically if available
-  try {
-    const sonner = require('sonner');
-    if (message.toLowerCase().includes('error') || message.toLowerCase().includes('inválid')) {
-      sonner.toast.error(message);
-    } else {
-      sonner.toast.success(message);
-    }
-  } catch (e) {
-    window.alert(message);
+  if (message.toLowerCase().includes('error') || message.toLowerCase().includes('inválid')) {
+    toast.error(message);
+  } else {
+    toast.success(message);
   }
 };

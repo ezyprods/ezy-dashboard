@@ -185,9 +185,6 @@ export default function ArtistDetailPage() {
                       <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
                     </Button>
                   </div>
-                  <p className="text-[10px] text-text-secondary italic text-right max-w-xs">
-                    * El portal es una vista unificada para el artista. Muestra los proyectos en progreso, audios y facturación automáticamente.
-                  </p>
                 </div>
               </div>
             </div>
