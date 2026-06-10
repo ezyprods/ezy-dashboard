@@ -94,9 +94,9 @@ export default function ArtistDetailPage() {
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6 relative z-10">
           <div className="w-24 h-24 rounded-full bg-surface-elevated border-2 border-border flex items-center justify-center text-3xl font-bold overflow-hidden shadow-xl shrink-0">
             {artist.photoUrl ? (
-              <img src={artist.photoUrl} alt={artist.name} className="w-full h-full object-cover" />
+              <img src={artist.photoUrl} alt={artist.name || '?'} className="w-full h-full object-cover" />
             ) : (
-              artist.name.charAt(0)
+              (artist.name || '?').charAt(0)
             )}
           </div>
           
@@ -110,11 +110,15 @@ export default function ArtistDetailPage() {
             </div>
             
             <div className="flex flex-wrap items-center gap-2">
-              {artist.genre?.map(g => (
+              {Array.isArray(artist.genre) ? artist.genre.map(g => (
                 <span key={g} className="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
                   {g}
                 </span>
-              ))}
+              )) : typeof artist.genre === 'string' && (
+                <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
+                  {artist.genre}
+                </span>
+              )}
             </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
@@ -138,7 +142,7 @@ export default function ArtistDetailPage() {
                     Archivos Drive
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -154,6 +158,9 @@ export default function ArtistDetailPage() {
                   <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-1.5 rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1.5 font-medium h-9">
                     Ver
                   </a>
+                  <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-9">
+                    <Headphones className="w-4 h-4 mr-2" /> Gestor Previews
+                  </Button>
                   <Button size="sm" onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0 h-9">
                     <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
                   </Button>
@@ -165,7 +172,7 @@ export default function ArtistDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">
-        {(['projects', 'releases', 'files', 'notes', 'payments'] as const).map(tab => (
+        {(['projects', 'files', 'notes', 'payments'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -175,15 +182,10 @@ export default function ArtistDetailPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
             }`}
           >
-            {tab === 'projects' ? 'Proyectos' : tab === 'releases' ? 'Lanzamientos' : tab === 'files' ? 'Archivos' : tab === 'notes' ? 'Notas' : 'Pagos'}
+            {tab === 'projects' ? 'Proyectos' : tab === 'files' ? 'Archivos' : tab === 'notes' ? 'Notas' : 'Pagos'}
           </button>
         ))}
       </div>
-
-      {/* Tab Content: Releases */}
-      {activeTab === 'releases' && (
-        <ArtistReleasesTab artistId={artistId} />
-      )}
 
       {/* Tab Content: Projects */}
       {activeTab === 'projects' && (

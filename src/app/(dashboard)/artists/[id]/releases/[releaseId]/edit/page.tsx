@@ -120,7 +120,7 @@ export default function ReleaseEditorPage() {
           <h1 className="text-2xl font-bold text-text-primary">Editar Lanzamiento</h1>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={() => router.push(`/releases/${releaseId}/preview`)}>
+          <Button variant="secondary" onClick={() => window.open(`/previews/${releaseId}`, '_blank')}>
             <Play className="w-4 h-4 mr-2" /> Preview
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>
@@ -157,7 +157,35 @@ export default function ReleaseEditorPage() {
                       <span className="text-sm text-text-secondary">Subir Portada</span>
                     </>
                   )}
-                  {/* TODO: Implement Cover Upload */}
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    title="Cambiar portada"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      
+                      const formData = new FormData();
+                      formData.append('file', file);
+                      formData.append('parentId', artistId); // Sube a la carpeta raíz del artista
+                      
+                      try {
+                        setIsSaving(true);
+                        const res = await fetch('/api/files/upload', {
+                          method: 'POST',
+                          body: formData
+                        });
+                        if (!res.ok) throw new Error('Error subiendo imagen');
+                        const data = await res.json();
+                        setRelease(prev => prev ? { ...prev, coverArtId: data.fileId } : null);
+                      } catch (err) {
+                        alert('Error al subir la portada');
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -183,8 +211,44 @@ export default function ReleaseEditorPage() {
             ) : (
               <div className="space-y-2">
                 {release.tracks.map((track, index) => (
-                  <div key={track.id} className="flex items-center gap-3 bg-surface-elevated border border-border rounded-lg p-2 group">
-                    <div className="cursor-grab text-text-secondary hover:text-text-primary px-1">
+                  <div 
+                    key={track.id} 
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', index.toString());
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.currentTarget.classList.add('opacity-50');
+                    }}
+                    onDragEnd={(e) => {
+                      e.currentTarget.classList.remove('opacity-50');
+                      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over', 'border-accent'));
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      e.currentTarget.classList.add('drag-over', 'border-accent');
+                    }}
+                    onDragLeave={(e) => {
+                      e.currentTarget.classList.remove('drag-over', 'border-accent');
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.classList.remove('drag-over', 'border-accent');
+                      const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                      const toIndex = index;
+                      if (fromIndex === toIndex || isNaN(fromIndex)) return;
+                      
+                      setRelease(prev => {
+                        if (!prev) return prev;
+                        const newTracks = [...prev.tracks];
+                        const [moved] = newTracks.splice(fromIndex, 1);
+                        newTracks.splice(toIndex, 0, moved);
+                        return { ...prev, tracks: newTracks };
+                      });
+                    }}
+                    className="flex items-center gap-3 bg-surface-elevated border border-border rounded-lg p-2 group transition-all"
+                  >
+                    <div className="cursor-grab active:cursor-grabbing text-text-secondary hover:text-text-primary px-1">
                       <GripVertical className="w-4 h-4" />
                     </div>
                     <span className="text-sm font-medium w-6 text-center text-text-secondary">{index + 1}</span>
@@ -194,7 +258,7 @@ export default function ReleaseEditorPage() {
                       onChange={e => updateTrackTitle(track.id, e.target.value)}
                       className="flex-1 bg-transparent border-none focus:outline-none text-sm font-medium focus:ring-1 focus:ring-accent/50 rounded px-2 py-1"
                     />
-                    <Button variant="ghost" size="icon" onClick={() => removeTrack(track.id)} className="opacity-0 group-hover:opacity-100 text-error hover:bg-error/10">
+                    <Button variant="ghost" size="icon" onClick={() => removeTrack(track.id)} className="opacity-0 group-hover:opacity-100 text-error hover:bg-error/10 transition-opacity">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -202,7 +266,7 @@ export default function ReleaseEditorPage() {
               </div>
             )}
             <p className="text-xs text-text-secondary mt-4">
-              Nota: Al añadir canciones, se realizará una copia exacta del archivo original a la carpeta del lanzamiento en Drive.
+              Nota: Arrastra las canciones para cambiar el orden. El nombre se cambia de forma virtual, sin alterar el archivo de Drive.
             </p>
           </div>
         </div>
