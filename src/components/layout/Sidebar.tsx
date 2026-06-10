@@ -77,7 +77,7 @@ export function Sidebar() {
           <div className="flex items-center justify-between">
             <p className="text-xs text-text-secondary">Conectado a Google Drive</p>
             <a 
-              href="https://drive.google.com" 
+              href="https://drive.google.com/drive/folders/182uxxUjN7KJJDm1vAZ_AEyKvAwwcTPxY?usp=drive_link" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-text-secondary hover:text-accent transition-colors p-1 rounded hover:bg-surface-elevated"
