@@ -17,9 +17,8 @@ interface WaveformPlayerProps {
   currentFolderId?: string;
 }
 
-const BAR_COUNT = 90; // High detail
-const CANVAS_HEIGHT = 28; // Slightly taller for more visual impact
-const REFLECTION_OPACITY = 0.2;
+const BAR_COUNT = 70; // Fewer, thicker bars for minimalist look
+const CANVAS_HEIGHT = 24; // Slimmer height
 
 export function WaveformPlayer({ 
   fileId, 
@@ -139,8 +138,7 @@ export function WaveformPlayer({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    // We draw reflection too, so total height is CANVAS_HEIGHT * 1.3
-    const totalHeight = CANVAS_HEIGHT * 1.3;
+    const totalHeight = CANVAS_HEIGHT;
     
     canvas.width = canvasWidth * dpr;
     canvas.height = totalHeight * dpr;
@@ -154,10 +152,9 @@ export function WaveformPlayer({
     const progress = isThisTrackActive && duration > 0 ? currentTime / duration : 0;
     const progressX = progress * canvasWidth;
 
-    // Create Gradients
-    const activeGradient = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    activeGradient.addColorStop(0, '#a29bfe');
-    activeGradient.addColorStop(1, '#6c5ce7');
+    const activeGradient = ctx.createLinearGradient(0, 0, canvasWidth, 0);
+    activeGradient.addColorStop(0, '#6c5ce7');
+    activeGradient.addColorStop(1, '#a29bfe');
 
     for (let i = 0; i < BAR_COUNT; i++) {
       const x = i * (barWidth + 1);
@@ -168,23 +165,13 @@ export function WaveformPlayer({
       const barCenterX = x + barWidth / 2;
       const isPlayed = barCenterX <= progressX;
 
-      // Draw Main Bar
+      // Draw Main Bar - Minimalist rounded
       ctx.fillStyle = isThisTrackActive 
-        ? (isPlayed ? activeGradient : 'rgba(108, 92, 231, 0.25)') 
-        : '#2a2a3a';
+        ? (isPlayed ? activeGradient : 'rgba(108, 92, 231, 0.15)') 
+        : (isPlayed ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)');
       
       ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barH, 2);
-      ctx.fill();
-
-      // Draw Reflection
-      const reflectionH = barH * 0.4;
-      ctx.fillStyle = isThisTrackActive 
-        ? (isPlayed ? `rgba(108, 92, 231, ${REFLECTION_OPACITY})` : `rgba(108, 92, 231, ${REFLECTION_OPACITY * 0.3})`) 
-        : `rgba(42, 42, 58, ${REFLECTION_OPACITY})`;
-      
-      ctx.beginPath();
-      ctx.roundRect(x, CANVAS_HEIGHT + 1, barWidth, reflectionH, 2);
+      ctx.roundRect(x, y + (CANVAS_HEIGHT - barH) / 2, barWidth, barH, barWidth / 2);
       ctx.fill();
     }
 
