@@ -142,15 +142,27 @@ export async function listFolders(parentId: string = DRIVE_ROOT_FOLDER_ID) {
   const drive = getDriveService();
   const query = `mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
   
-  const response = await drive.files.list({
-    q: query,
-    fields: 'files(id, name, createdTime)',
-    orderBy: 'name',
-    includeItemsFromAllDrives: true,
-    supportsAllDrives: true,
-  });
+  let allFiles: any[] = [];
+  let pageToken: string | undefined = undefined;
 
-  return response.data.files || [];
+  do {
+    const response: any = await drive.files.list({
+      q: query,
+      fields: 'nextPageToken, files(id, name, createdTime)',
+      orderBy: 'name',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      pageSize: 1000,
+      pageToken: pageToken,
+    });
+    
+    if (response.data.files) {
+      allFiles = allFiles.concat(response.data.files);
+    }
+    pageToken = response.data.nextPageToken || undefined;
+  } while (pageToken);
+
+  return allFiles;
 }
 
 /**
@@ -160,15 +172,27 @@ export async function listFiles(parentId: string): Promise<DriveFile[]> {
   const drive = getDriveService();
   const query = `mimeType!='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
   
-  const response = await drive.files.list({
-    q: query,
-    fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink)',
-    orderBy: 'modifiedTime desc',
-    includeItemsFromAllDrives: true,
-    supportsAllDrives: true,
-  });
+  let allFiles: any[] = [];
+  let pageToken: string | undefined = undefined;
 
-  const files = response.data.files || [];
+  do {
+    const response: any = await drive.files.list({
+      q: query,
+      fields: 'nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, thumbnailLink)',
+      orderBy: 'modifiedTime desc',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      pageSize: 1000,
+      pageToken: pageToken,
+    });
+    
+    if (response.data.files) {
+      allFiles = allFiles.concat(response.data.files);
+    }
+    pageToken = response.data.nextPageToken || undefined;
+  } while (pageToken);
+
+  const files = allFiles;
   
   return files.map(file => ({
     id: file.id!,

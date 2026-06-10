@@ -20,12 +20,13 @@ export async function GET(request: Request) {
     const excludeFolders = ['Images', 'images'];
     const projectFolders = folders.filter(f => !excludeFolders.includes(f.name || ''));
 
-    // 3. Leer project_config.json
-    const projectsPromises = projectFolders.map(async (folder) => {
+    // 3. Leer project_config.json de forma secuencial para evitar rate limits
+    const validProjects: Project[] = [];
+    for (const folder of projectFolders) {
       try {
         const config = await findAndReadJsonFile<Project>('project_config.json', folder.id!);
         if (config) {
-          return { ...config, driveFolderId: folder.id! };
+          validProjects.push({ ...config, driveFolderId: folder.id! });
         } else {
           // Es una subcarpeta antigua que no fue creada por la app. Auto-inicializar como proyecto.
           const now = new Date().toISOString();
@@ -41,18 +42,16 @@ export async function GET(request: Request) {
             driveFolderId: folder.id!,
           };
           
-          // Guardar en background
+          // Guardar
           await saveJsonFile('project_config.json', newProject, folder.id!);
           
-          return newProject;
+          validProjects.push(newProject);
         }
       } catch (err) {
-        return null;
+        console.error(`Error procesando proyecto ${folder.id}:`, err);
+        // Ignorar el error y continuar con el siguiente
       }
-    });
-
-    const projectsResult = await Promise.all(projectsPromises);
-    const validProjects = projectsResult.filter((p): p is Project => p !== null);
+    }
 
     return NextResponse.json({ projects: validProjects });
   } catch (error: any) {

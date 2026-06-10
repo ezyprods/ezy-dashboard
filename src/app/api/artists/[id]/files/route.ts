@@ -4,14 +4,23 @@ import { getDriveService } from '@/lib/drive';
 // Función recursiva para obtener SOLO archivos de audio
 async function fetchAudioFilesRecursively(drive: any, parentId: string): Promise<any[]> {
   let audioFiles: any[] = [];
+  let items: any[] = [];
+  let pageToken: string | undefined = undefined;
 
-  const response = await drive.files.list({
-    q: `'${parentId}' in parents and trashed=false`,
-    fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)',
-    orderBy: 'folder, name',
-  });
-
-  const items = response.data.files || [];
+  do {
+    const response: any = await drive.files.list({
+      q: `'${parentId}' in parents and trashed=false`,
+      fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)',
+      orderBy: 'folder, name',
+      pageSize: 1000,
+      pageToken: pageToken,
+    });
+    
+    if (response.data.files) {
+      items = items.concat(response.data.files);
+    }
+    pageToken = response.data.nextPageToken || undefined;
+  } while (pageToken);
   
   // Archivos de audio directos
   const files = items.filter((f: any) => f.mimeType?.startsWith('audio/'));

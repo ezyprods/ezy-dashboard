@@ -5,14 +5,23 @@ import { findAndReadJsonFile, getDriveService, saveJsonFile } from '@/lib/drive'
 async function fetchFoldersRecursively(drive: any, parentId: string, parentPath: string = ''): Promise<{folders: any[], files: any[]}> {
   let allFolders: any[] = [];
   let rootFiles: any[] = [];
+  let items: any[] = [];
+  let pageToken: string | undefined = undefined;
 
-  const response = await drive.files.list({
-    q: `'${parentId}' in parents and trashed=false`,
-    fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)',
-    orderBy: 'folder, name',
-  });
-
-  const items = response.data.files || [];
+  do {
+    const response: any = await drive.files.list({
+      q: `'${parentId}' in parents and trashed=false`,
+      fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)',
+      orderBy: 'folder, name',
+      pageSize: 1000,
+      pageToken: pageToken,
+    });
+    
+    if (response.data.files) {
+      items = items.concat(response.data.files);
+    }
+    pageToken = response.data.nextPageToken || undefined;
+  } while (pageToken);
   
   // Archivos directos en este parent
   const files = items.filter((f: any) => f.mimeType !== 'application/vnd.google-apps.folder');
