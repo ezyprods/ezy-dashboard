@@ -22,7 +22,7 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
-  const { showContextMenu } = useContextMenu();
+  const { showMenu } = useContextMenu();
   const { playTrack } = useAudio();
   
   const [data, setData] = useState<any>(null);
@@ -163,7 +163,7 @@ export default function ProjectDetailPage() {
                 className="flex justify-between items-center p-4 border-b border-border bg-surface/50"
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  showContextMenu(e, [
+                  showMenu(e, [
                     {
                       label: 'Copiar ID de carpeta',
                       icon: <Copy className="w-4 h-4" />,
@@ -297,7 +297,7 @@ export default function ProjectDetailPage() {
                           fileName={file.name} 
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            showContextMenu(e, [
+                            showMenu(e, [
                               {
                                 label: 'Reproducir',
                                 icon: <Play className="w-4 h-4" />,
@@ -335,7 +335,7 @@ export default function ProjectDetailPage() {
                           className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface-elevated/50 hover:border-accent/30 transition-colors"
                           onContextMenu={(e) => {
                             e.preventDefault();
-                            showContextMenu(e, [
+                            showMenu(e, [
                               {
                                 label: 'Ver archivo',
                                 icon: <Eye className="w-4 h-4" />,
