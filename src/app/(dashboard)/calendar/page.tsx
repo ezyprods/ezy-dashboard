@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Calendar as CalendarIcon, 
@@ -58,7 +58,8 @@ export default function CalendarPage() {
   // Custom filter and view states
   const [artistFilter, setArtistFilter] = useState<string | null>(null);
   const [showMonthYearSelector, setShowMonthYearSelector] = useState(false);
-  const [lastScrollTime, setLastScrollTime] = useState(0);
+  const calendarGridRef = useRef<HTMLDivElement>(null);
+  const lastScrollTimeRef = useRef(0);
 
   const fetchEvents = useCallback(async () => {
     setIsLoading(true);
@@ -201,18 +202,29 @@ export default function CalendarPage() {
     }
   };
 
-  // Wheel Month Navigation
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    const now = Date.now();
-    if (now - lastScrollTime < 450) return;
-    if (Math.abs(e.deltaY) < 15) return;
-    setLastScrollTime(now);
-    if (e.deltaY > 0) {
-      setCurrentMonth(prev => addMonths(prev, 1));
-    } else {
-      setCurrentMonth(prev => subMonths(prev, 1));
-    }
-  };
+  // Wheel Month Navigation (Non-passive to prevent page scroll)
+  useEffect(() => {
+    const el = calendarGridRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault(); // Prevents the whole page from scrolling
+      
+      const now = Date.now();
+      if (now - lastScrollTimeRef.current < 450) return;
+      if (Math.abs(e.deltaY) < 15) return;
+      
+      lastScrollTimeRef.current = now;
+      if (e.deltaY > 0) {
+        setCurrentMonth(prev => addMonths(prev, 1));
+      } else {
+        setCurrentMonth(prev => subMonths(prev, 1));
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Context Menu handlers
   const handleDayContextMenu = (e: React.MouseEvent, d: { day: number, isCurrentMonth: boolean, date: Date }) => {
@@ -419,7 +431,7 @@ export default function CalendarPage() {
         
         {/* INTERACTIVE CALENDAR GRID */}
         <div 
-          onWheel={handleWheel}
+          ref={calendarGridRef}
           className="xl:col-span-3 glass rounded-2xl border border-border flex flex-col overflow-hidden shadow-2xl"
         >
           {/* Calendar Nav */}
