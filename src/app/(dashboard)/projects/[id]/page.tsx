@@ -166,13 +166,13 @@ export default function ProjectDetailPage() {
                   showMenu(e.clientX, e.clientY, [
                     {
                       label: 'Copiar ID de carpeta',
-                      icon: <Copy className="w-4 h-4" />,
-                      onClick: () => navigator.clipboard.writeText(folder.id)
+                      icon: 'Copy',
+                      action: () => navigator.clipboard.writeText(folder.id)
                     },
                     {
                       label: 'Personalizar orden',
-                      icon: <Settings2 className="w-4 h-4" />,
-                      onClick: () => setSortModalFolder(folder)
+                      icon: 'Settings2',
+                      action: () => setSortModalFolder(folder)
                     }
                   ]);
                 }}
@@ -300,8 +300,8 @@ export default function ProjectDetailPage() {
                             showMenu(e.clientX, e.clientY, [
                               {
                                 label: 'Reproducir',
-                                icon: <Play className="w-4 h-4" />,
-                                onClick: () => {
+                                icon: 'Play',
+                                action: () => {
                                   playTrack({
                                     id: file.id,
                                     name: file.name.replace(/\.[^/.]+$/, ''),
@@ -312,13 +312,13 @@ export default function ProjectDetailPage() {
                               },
                               {
                                 label: 'Ver en Drive',
-                                icon: <ExternalLinkIcon className="w-4 h-4" />,
-                                onClick: () => window.open(file.webViewLink, '_blank')
+                                icon: 'ExternalLink',
+                                action: () => window.open(file.webViewLink, '_blank')
                               },
                               {
                                 label: 'Descargar',
-                                icon: <Download className="w-4 h-4" />,
-                                onClick: () => {
+                                icon: 'Download',
+                                action: () => {
                                   if (file.webContentLink) {
                                     window.open(file.webContentLink, '_blank');
                                   } else {
@@ -338,13 +338,13 @@ export default function ProjectDetailPage() {
                             showMenu(e.clientX, e.clientY, [
                               {
                                 label: 'Ver archivo',
-                                icon: <Eye className="w-4 h-4" />,
-                                onClick: () => window.open(file.webViewLink, '_blank')
+                                icon: 'Eye',
+                                action: () => window.open(file.webViewLink, '_blank')
                               },
                               {
                                 label: 'Copiar enlace',
-                                icon: <Copy className="w-4 h-4" />,
-                                onClick: () => {
+                                icon: 'Copy',
+                                action: () => {
                                   navigator.clipboard.writeText(file.webViewLink);
                                   // Optional: toast success
                                 }

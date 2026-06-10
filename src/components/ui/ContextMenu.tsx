@@ -14,6 +14,10 @@ import {
   Play,
   Download,
   Link,
+  Copy,
+  Settings2,
+  ExternalLink,
+  Eye,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -31,6 +35,10 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Play,
   Download,
   Link,
+  Copy,
+  Settings2,
+  ExternalLink,
+  Eye,
 };
 
 function MenuIcon({ name }: { name?: string }) {
