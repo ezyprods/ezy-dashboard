@@ -63,3 +63,36 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Failed to delete item', details: error.message }, { status: 500 });
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { fileId, name, newParentId, oldParentId } = body;
+
+    if (!fileId) {
+      return NextResponse.json({ error: 'Missing fileId' }, { status: 400 });
+    }
+
+    const drive = getDriveService();
+    const updateParams: any = {
+      fileId,
+      supportsAllDrives: true,
+      requestBody: {},
+    };
+
+    if (name) {
+      updateParams.requestBody.name = name;
+    }
+
+    if (newParentId && oldParentId) {
+      updateParams.addParents = newParentId;
+      updateParams.removeParents = oldParentId;
+    }
+
+    const res = await drive.files.update(updateParams);
+    return NextResponse.json({ success: true, file: res.data });
+  } catch (error: any) {
+    console.error('API /files PUT error:', error);
+    return NextResponse.json({ error: 'Failed to update file', details: error.message }, { status: 500 });
+  }
+}

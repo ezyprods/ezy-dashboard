@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones, Trash2, MoreVertical } from "lucide-react";
+import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones, Trash2, MoreVertical, Edit3, FolderInput } from "lucide-react";
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
@@ -77,6 +77,53 @@ export default function ProjectDetailPage() {
       const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el archivo');
       alert('Archivo eliminado con éxito');
+      fetchProject();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRenameFile = async (fileId: string, currentName: string) => {
+    const ext = currentName.substring(currentName.lastIndexOf('.'));
+    const base = currentName.replace(/\.[^/.]+$/, '');
+    const newName = prompt('Introduce el nuevo nombre del archivo:', base);
+    if (!newName || newName.trim() === '' || newName === base) return;
+    try {
+      const res = await fetch('/api/files', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, name: newName.trim() + ext })
+      });
+      if (!res.ok) throw new Error('Error al renombrar el archivo');
+      fetchProject();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleMoveFile = async (fileId: string, currentFolderId: string) => {
+    if (!folders || !folders.length) return;
+    const options = folders.map((f: any, i: number) => `${i + 1}. ${f.name}`).join('\n');
+    const choice = prompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
+    if (!choice) return;
+    const idx = parseInt(choice, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= folders.length) {
+      alert('Selección no válida.');
+      return;
+    }
+    const targetFolder = folders[idx];
+    if (targetFolder.id === currentFolderId) {
+      alert('El archivo ya está en esa carpeta.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/files', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, newParentId: targetFolder.id, oldParentId: currentFolderId })
+      });
+      if (!res.ok) throw new Error('Error al mover el archivo');
+      alert(`Archivo movido con éxito a ${targetFolder.name}`);
       fetchProject();
     } catch (err: any) {
       alert(err.message);
@@ -343,6 +390,10 @@ export default function ProjectDetailPage() {
                           key={file.id} 
                           fileId={file.id} 
                           fileName={file.name} 
+                          artistName={project.title}
+                          folders={folders}
+                          onRefresh={fetchProject}
+                          currentFolderId={folder.id}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             showMenu(e.clientX, e.clientY, [
@@ -357,6 +408,16 @@ export default function ProjectDetailPage() {
                                     artistName: project.title
                                   });
                                 }
+                              },
+                              {
+                                label: 'Renombrar',
+                                icon: 'Edit3',
+                                action: () => handleRenameFile(file.id, file.name)
+                              },
+                              {
+                                label: 'Mover a carpeta',
+                                icon: 'FolderInput',
+                                action: () => handleMoveFile(file.id, folder.id)
                               },
                               {
                                 label: 'Ver en Drive',
@@ -386,7 +447,7 @@ export default function ProjectDetailPage() {
                       ) : (
                         <div 
                           key={file.id} 
-                          className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface-elevated/50 hover:border-accent/30 transition-colors"
+                          className="py-1.5 px-3 rounded-lg border border-border bg-surface-elevated/50 hover:border-accent/30 transition-colors flex items-center justify-between gap-4 group/file"
                           onContextMenu={(e) => {
                             e.preventDefault();
                             showMenu(e.clientX, e.clientY, [
@@ -394,6 +455,16 @@ export default function ProjectDetailPage() {
                                 label: 'Ver archivo',
                                 icon: 'Eye',
                                 action: () => window.open(file.webViewLink, '_blank')
+                              },
+                              {
+                                label: 'Renombrar',
+                                icon: 'Edit3',
+                                action: () => handleRenameFile(file.id, file.name)
+                              },
+                              {
+                                label: 'Mover a carpeta',
+                                icon: 'FolderInput',
+                                action: () => handleMoveFile(file.id, folder.id)
                               },
                               {
                                 label: 'Copiar enlace',
@@ -411,17 +482,62 @@ export default function ProjectDetailPage() {
                             ]);
                           }}
                         >
-                          <div className="flex items-center gap-3">
-                            {file.mimeType?.startsWith('image/') ? <FileImage className="w-5 h-5 text-accent-secondary" /> :
-                             file.mimeType?.startsWith('video/') ? <Film className="w-5 h-5 text-warning" /> :
-                             file.mimeType === 'application/pdf' ? <FileText className="w-5 h-5 text-error" /> :
-                             <FileIcon className="w-5 h-5 text-text-secondary" />}
-                            <div>
-                              <span className="text-sm font-medium">{file.name}</span>
-                              {file.size && <span className="text-[10px] text-text-secondary ml-2">{(Number(file.size) / 1024 / 1024).toFixed(1)} MB</span>}
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {file.mimeType?.startsWith('image/') ? <FileImage className="w-4 h-4 text-accent-secondary shrink-0" /> :
+                             file.mimeType?.startsWith('video/') ? <Film className="w-4 h-4 text-warning shrink-0" /> :
+                             file.mimeType === 'application/pdf' ? <FileText className="w-4 h-4 text-error shrink-0" /> :
+                             <FileIcon className="w-4 h-4 text-text-secondary shrink-0" />}
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium truncate block text-text-primary">{file.name}</span>
                             </div>
+                            {file.size && (
+                              <span className="text-[10px] text-text-secondary font-mono shrink-0 hidden sm:inline">
+                                {(Number(file.size) / 1024 / 1024).toFixed(1)} MB
+                              </span>
+                            )}
                           </div>
-                          <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline flex items-center gap-1"><ExternalLink className="w-3 h-3" /> Drive</a>
+                          
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => handleRenameFile(file.id, file.name)}
+                              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                              title="Renombrar archivo"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleMoveFile(file.id, folder.id)}
+                              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                              title="Mover de carpeta"
+                            >
+                              <FolderInput className="w-3.5 h-3.5" />
+                            </button>
+                            <a
+                              href={file.webContentLink || file.webViewLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                              title="Descargar"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              onClick={() => handleDeleteFile(file.id)}
+                              className="p-1 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover/file:opacity-100 transition-opacity"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <a 
+                              href={file.webViewLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="p-1 text-text-secondary hover:text-accent rounded hover:bg-surface/50"
+                              title="Ver en Drive"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
                         </div>
                       );
                     })}

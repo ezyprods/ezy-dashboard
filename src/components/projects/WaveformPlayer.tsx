@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, ExternalLink } from 'lucide-react';
+import { Play, Pause, ExternalLink, Edit3, FolderInput, Download, Trash2, Loader2 } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
 
@@ -10,15 +10,26 @@ interface WaveformPlayerProps {
   fileName: string;
   artistName?: string;
   onContextMenu?: React.MouseEventHandler<HTMLDivElement>;
+  folders?: { id: string; name: string }[];
+  onRefresh?: () => void;
+  currentFolderId?: string;
 }
 
-const BAR_COUNT = 80;
-const CANVAS_HEIGHT = 48;
+const BAR_COUNT = 45; // reduced bar count for compact canvas
+const CANVAS_HEIGHT = 20; // reduced height
 
-export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: WaveformPlayerProps) {
+export function WaveformPlayer({ 
+  fileId, 
+  fileName, 
+  artistName, 
+  onContextMenu,
+  folders = [],
+  onRefresh,
+  currentFolderId
+}: WaveformPlayerProps) {
   const { currentTrack, isPlaying, duration, currentTime, playTrack, togglePlay, seek } = useAudio();
 
-  const displayName = fileName.replace(/\.[^/.]+$/, '');
+  const [displayName, setDisplayName] = useState(fileName.replace(/\.[^/.]+$/, ''));
   const isThisTrackActive = currentTrack?.id === fileId;
   const isThisTrackPlaying = isThisTrackActive && isPlaying;
 
@@ -27,7 +38,12 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
   const [waveformData, setWaveformData] = useState<number[] | null>(null);
   const [isLoadingWaveform, setIsLoadingWaveform] = useState(false);
   const [hoverX, setHoverX] = useState<number | null>(null);
-  const [canvasWidth, setCanvasWidth] = useState(300);
+  const [canvasWidth, setCanvasWidth] = useState(120);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    setDisplayName(fileName.replace(/\.[^/.]+$/, ''));
+  }, [fileName]);
 
   // Observe container width
   useEffect(() => {
@@ -38,7 +54,7 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
       if (w && w > 0) setCanvasWidth(Math.floor(w));
     });
     ro.observe(el);
-    setCanvasWidth(el.clientWidth || 300);
+    setCanvasWidth(el.clientWidth || 120);
     return () => ro.disconnect();
   }, []);
 
@@ -50,8 +66,7 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
     let cancelled = false;
     const generate = async () => {
       try {
-        // 1. Check local cache first
-        const cacheKey = `waveform_v1_${fileId}`;
+        const cacheKey = `waveform_v2_compact_${fileId}`;
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -63,10 +78,9 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
               }
               return;
             }
-          } catch (e) { /* ignore parse error */ }
+          } catch (e) { }
         }
 
-        // 2. Not in cache, fetch and decode
         const response = await fetch(`/api/audio/${fileId}`);
         const arrayBuffer = await response.arrayBuffer();
         if (cancelled) return;
@@ -88,7 +102,6 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
           bars.push(sum / blockSize);
         }
 
-        // Normalize
         const max = Math.max(...bars, 0.001);
         const normalized = bars.map((v) => v / max);
 
@@ -97,11 +110,10 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
           setIsLoadingWaveform(false);
           try {
             localStorage.setItem(cacheKey, JSON.stringify(normalized));
-          } catch (e) { /* ignore storage errors */ }
+          } catch (e) { }
         }
       } catch (e) {
         if (!cancelled) {
-          // Fallback: random-looking waveform so something renders
           const fallback = Array.from({ length: BAR_COUNT }, (_, i) =>
             0.3 + 0.5 * Math.sin(i * 0.4) * Math.random()
           );
@@ -136,7 +148,6 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
     const progress = isThisTrackActive && duration > 0 ? currentTime / duration : 0;
     const progressX = progress * canvasWidth;
 
-    // Accent color: #6c5ce7, inactive: #2a2a3a (border)
     for (let i = 0; i < BAR_COUNT; i++) {
       const x = i * (barWidth + 1);
       const barH = Math.max(3, waveformData[i] * CANVAS_HEIGHT * 0.9);
@@ -154,18 +165,18 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
       }
 
       ctx.beginPath();
-      ctx.roundRect(x, y, barWidth, barH, 2);
+      ctx.roundRect(x, y, barWidth, barH, 1.5);
       ctx.fill();
     }
 
-    // Hover cursor line
     if (hoverX !== null) {
       ctx.fillStyle = 'rgba(240, 240, 245, 0.6)';
       ctx.fillRect(hoverX, 0, 1.5, CANVAS_HEIGHT);
     }
   }, [waveformData, canvasWidth, isThisTrackActive, currentTime, duration, hoverX]);
 
-  const handlePlayClick = () => {
+  const handlePlayClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (isThisTrackActive) {
       togglePlay();
     } else {
@@ -202,6 +213,7 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
 
   const handleCanvasClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
+      e.stopPropagation();
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
       const x = e.clientX - rect.left;
@@ -209,7 +221,6 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
       if (isThisTrackActive && duration > 0) {
         seek((x / canvasWidth) * duration);
       } else {
-        // Start playing from beginning first, then seek once metadata loads
         playTrack({
           id: fileId,
           name: displayName,
@@ -221,21 +232,108 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
     [isThisTrackActive, duration, canvasWidth, seek, playTrack, fileId, displayName, artistName]
   );
 
+  // Rename action
+  const handleRename = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentExt = fileName.substring(fileName.lastIndexOf('.'));
+    const newName = prompt('Introduce el nuevo nombre del archivo:', displayName);
+    if (!newName || newName.trim() === '' || newName === displayName) return;
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch('/api/files', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId,
+          name: newName.trim() + currentExt,
+        }),
+      });
+      if (!res.ok) throw new Error('Error al renombrar archivo');
+      setDisplayName(newName.trim());
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Move action
+  const handleMove = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!folders.length) return;
+
+    // Create a simple prompt listing folders
+    const options = folders.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
+    const choice = prompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
+    if (!choice) return;
+
+    const idx = parseInt(choice, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= folders.length) {
+      alert('Selección no válida.');
+      return;
+    }
+
+    const targetFolder = folders[idx];
+    if (targetFolder.id === currentFolderId) {
+      alert('El archivo ya está en esa carpeta.');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch('/api/files', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileId,
+          newParentId: targetFolder.id,
+          oldParentId: currentFolderId,
+        }),
+      });
+      if (!res.ok) throw new Error('Error al mover el archivo');
+      alert(`Archivo movido con éxito a ${targetFolder.name}`);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Delete action
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`¿Estás seguro de que quieres eliminar el archivo "${fileName}" de forma permanente?`)) return;
+
+    setIsUpdating(true);
+    try {
+      const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar el archivo');
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <div
       onContextMenu={onContextMenu}
       className={cn(
-        'p-3 rounded-lg border bg-surface-elevated/50 flex flex-col gap-2 transition-colors',
+        'py-1.5 px-3 rounded-lg border bg-surface-elevated/50 flex items-center justify-between gap-4 transition-colors group/audio',
         isThisTrackActive
-          ? 'border-accent shadow-[0_0_15px_rgba(108,92,231,0.15)] bg-accent/5'
+          ? 'border-accent shadow-[0_0_10px_rgba(108,92,231,0.1)] bg-accent/5'
           : 'border-border hover:border-accent/30'
       )}
     >
-      {/* Top row: play button + name */}
-      <div className="flex items-center gap-3">
+      {/* 1. Play Button & Title */}
+      <div className="flex items-center gap-3 min-w-0 flex-1 sm:max-w-[40%]">
         <button
           className={cn(
-            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all',
+            'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all',
             isThisTrackActive
               ? 'bg-accent text-white'
               : 'bg-accent/10 text-accent hover:bg-accent hover:text-white'
@@ -244,9 +342,9 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
           aria-label={isThisTrackPlaying ? 'Pausar' : 'Reproducir'}
         >
           {isThisTrackPlaying ? (
-            <Pause className="w-4 h-4 fill-current" />
+            <Pause className="w-3 h-3 fill-current" />
           ) : (
-            <Play className="w-4 h-4 fill-current ml-0.5" />
+            <Play className="w-3 h-3 fill-current ml-0.5" />
           )}
         </button>
 
@@ -256,37 +354,17 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
               'text-sm font-medium truncate block',
               isThisTrackActive ? 'text-accent' : 'text-text-primary'
             )}
+            title={displayName}
           >
             {displayName}
           </span>
-          {isThisTrackActive && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="w-1 h-1 bg-accent rounded-full animate-pulse" />
-              <span className="text-[10px] text-accent uppercase tracking-wider font-bold">
-                {isThisTrackPlaying ? 'Reproduciendo' : 'En pausa'}
-              </span>
-            </div>
-          )}
         </div>
-
-        <a
-          href={`/api/audio/${fileId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-text-secondary hover:text-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
       </div>
 
-      {/* Waveform canvas row */}
-      <div ref={containerRef} className="relative w-full group/waveform" style={{ height: CANVAS_HEIGHT }}>
+      {/* 2. Waveform canvas - Inline middle */}
+      <div ref={containerRef} className="relative flex-1 hidden md:block max-w-[40%] h-5" style={{ height: CANVAS_HEIGHT }}>
         {isLoadingWaveform && (
-          <div
-            className="absolute inset-0 rounded animate-skeleton"
-            style={{ height: CANVAS_HEIGHT }}
-          />
+          <div className="absolute inset-0 rounded animate-pulse bg-white/5" style={{ height: CANVAS_HEIGHT }} />
         )}
         <canvas
           ref={canvasRef}
@@ -296,10 +374,9 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
           onMouseLeave={handleMouseLeave}
           onClick={handleCanvasClick}
         />
-        {/* Hover time tooltip */}
         {hoverX !== null && !isLoadingWaveform && (
           <span
-            className="absolute top-0 bg-surface-elevated text-text-primary text-[10px] font-mono px-1 py-0.5 rounded pointer-events-none"
+            className="absolute top-0 bg-surface-elevated text-text-primary text-[9px] font-mono px-1 py-0.5 rounded pointer-events-none z-10"
             style={{
               left: Math.min(hoverX + 4, canvasWidth - 36),
               transform: 'translateY(-100%)',
@@ -308,6 +385,56 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
           >
             {getTimeAtX(hoverX)}
           </span>
+        )}
+      </div>
+
+      {/* 3. Action Buttons - Inline right */}
+      <div className="flex items-center gap-1 shrink-0">
+        {isUpdating ? (
+          <Loader2 className="w-4 h-4 animate-spin text-accent" />
+        ) : (
+          <>
+            <button
+              onClick={handleRename}
+              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/audio:opacity-100 transition-opacity"
+              title="Renombrar archivo"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleMove}
+              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/audio:opacity-100 transition-opacity"
+              title="Mover de carpeta"
+            >
+              <FolderInput className="w-3.5 h-3.5" />
+            </button>
+            <a
+              href={`/api/audio/${fileId}`}
+              download={fileName}
+              onClick={(e) => e.stopPropagation()}
+              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/audio:opacity-100 transition-opacity"
+              title="Descargar"
+            >
+              <Download className="w-3.5 h-3.5" />
+            </a>
+            <button
+              onClick={handleDelete}
+              className="p-1 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover/audio:opacity-100 transition-opacity"
+              title="Eliminar"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <a
+              href={`/api/audio/${fileId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1 text-text-secondary hover:text-accent rounded hover:bg-surface/50"
+              onClick={(e) => e.stopPropagation()}
+              title="Ver en Drive"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </>
         )}
       </div>
     </div>

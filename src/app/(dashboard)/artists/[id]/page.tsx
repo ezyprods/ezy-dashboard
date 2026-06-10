@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus, ExternalLink, Headphones } from "lucide-react";
@@ -224,9 +225,9 @@ export default function ArtistDetailPage() {
               {projects.map(project => {
                 const status = STATUS_CONFIG[project.status === 'active' ? 'in_progress' : project.status];
                 return (
-                   <div 
+                   <Link 
                     key={project.id} 
-                    onClick={() => router.push(`/projects/${project.id}`)} 
+                    href={`/projects/${project.id}`}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -252,7 +253,7 @@ export default function ArtistDetailPage() {
                         }
                       ]);
                     }}
-                    className="bg-surface-elevated rounded-xl p-5 border border-border card-hover group cursor-pointer"
+                    className="bg-surface-elevated rounded-xl p-5 border border-border card-hover block group cursor-pointer"
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-2">
@@ -319,7 +320,7 @@ export default function ArtistDetailPage() {
                         <span>Entrega: {new Date(project.deliveryDate).toLocaleDateString()}</span>
                       </div>
                     )}
-                  </div>
+                  </Link>
                 );
               })}
             </div>
