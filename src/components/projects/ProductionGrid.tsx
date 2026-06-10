@@ -20,11 +20,14 @@ import { CellComponent, COL_TYPES, STATUS_CONFIG } from './GridCells';
 import type { ColumnType } from '@/types';
 
 // --- Sortable Column Header ---
-function SortableColHeader({ col, onDelete }: { col: { id: string; name: string; type?: ColumnType }; onDelete: (id: string) => void; }) {
+function SortableColHeader({ col, onDelete, onRename }: { col: { id: string; name: string; type?: ColumnType }; onDelete: (id: string) => void; onRename: (id: string, name: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const typeCfg = COL_TYPES.find(t => t.id === (col.type || 'status'));
   const Icon = typeCfg ? typeCfg.icon : Circle;
+
+  const [localName, setLocalName] = useState(col.name);
+  useEffect(() => { setLocalName(col.name); }, [col.name]);
 
   return (
     <th
@@ -37,7 +40,14 @@ function SortableColHeader({ col, onDelete }: { col: { id: string; name: string;
           <GripVertical className="w-3.5 h-3.5" />
         </button>
         <Icon className="w-3 h-3 text-accent shrink-0" />
-        <span className="font-semibold text-sm text-center truncate">{col.name}</span>
+        <input 
+          value={localName} 
+          onChange={e => setLocalName(e.target.value)}
+          onBlur={() => { if(localName.trim() && localName !== col.name) onRename(col.id, localName.trim()); else setLocalName(col.name); }}
+          onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
+          className="font-semibold text-sm text-center bg-transparent border-none outline-none w-full truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors" 
+          title={localName}
+        />
         <button onClick={() => onDelete(col.id)} className="opacity-0 group-hover:opacity-100 text-error hover:bg-error/10 p-0.5 rounded transition-opacity shrink-0">
           <Trash2 className="w-3 h-3" />
         </button>
@@ -51,6 +61,7 @@ function SortableRow({
   row,
   columns,
   onDelete,
+  onRename,
   onCellUpdate,
   artistName,
   files,
@@ -59,6 +70,7 @@ function SortableRow({
   row: { id: string; name: string; cells: Record<string, GridCell> };
   columns: { id: string; name: string; type?: ColumnType }[];
   onDelete: (id: string) => void;
+  onRename: (id: string, name: string) => void;
   onCellUpdate: (rowId: string, colId: string, updates: Partial<any>) => void;
   artistName: string;
   files: any[];
@@ -67,12 +79,22 @@ function SortableRow({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 1 };
 
+  const [localName, setLocalName] = useState(row.name);
+  useEffect(() => { setLocalName(row.name); }, [row.name]);
+
   return (
     <tr ref={setNodeRef} style={style} className={`group/row transition-colors ${isDragging ? 'bg-surface-elevated shadow-lg' : 'hover:bg-surface/30'}`}>
       <td className="p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 max-w-[200px]">
         <div className="flex items-center gap-2">
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
-          <span className="truncate flex-1" title={row.name}>{row.name}</span>
+          <input 
+            value={localName} 
+            onChange={e => setLocalName(e.target.value)}
+            onBlur={() => { if(localName.trim() && localName !== row.name) onRename(row.id, localName.trim()); else setLocalName(row.name); }}
+            onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
+            className="font-medium text-sm bg-transparent border-none outline-none flex-1 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors" 
+            title={localName}
+          />
           <button onClick={() => onDelete(row.id)} className="opacity-0 group-hover/row:opacity-100 text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </td>
@@ -204,6 +226,16 @@ export function ProductionGridBoard({
     setNewRowName('');
   };
 
+  const renameColumn = (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    saveGrid({ ...grid, columns: grid.columns.map(c => c.id === id ? { ...c, name: newName } : c) });
+  };
+
+  const renameRow = (id: string, newName: string) => {
+    if (!newName.trim()) return;
+    saveGrid({ ...grid, rows: grid.rows.map(r => r.id === id ? { ...r, name: newName } : r) });
+  };
+
   const deleteColumn = async (id: string) => {
     if (!await customConfirm('Eliminar columna y sus datos?')) return;
     saveGrid({ ...grid, columns: grid.columns.filter(c => c.id !== id) });
@@ -284,7 +316,7 @@ export function ProductionGridBoard({
                 </th>
 
                 <SortableContext items={grid.columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
-                  {grid.columns.map(col => <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} />)}
+                  {grid.columns.map(col => <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} onRename={renameColumn} />)}
                 </SortableContext>
 
                 <th className="p-2 border-b border-border bg-surface/50 min-w-[200px] max-w-[240px]">
@@ -309,7 +341,7 @@ export function ProductionGridBoard({
                 <SortableContext items={grid.rows.map(r => r.id)} strategy={verticalListSortingStrategy}>
                   {grid.rows.map(row => (
                     <SortableRow
-                      key={row.id} row={row} columns={grid.columns} onDelete={deleteRow} onCellUpdate={handleCellUpdate}
+                      key={row.id} row={row} columns={grid.columns} onDelete={deleteRow} onRename={renameRow} onCellUpdate={handleCellUpdate}
                       artistName={artistName} files={files} uploadTargetId={linkedProjectId || artistId}
                     />
                   ))}

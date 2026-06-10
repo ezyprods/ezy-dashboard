@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { setDialogListener, DialogOptions } from '@/lib/dialog';
 import { X } from 'lucide-react';
 import { Button } from './Button';
@@ -20,17 +20,37 @@ export function DialogProvider() {
 
   if (!options) return null;
 
-  const handleConfirm = () => {
-    if (options.onConfirm) {
+  const handleConfirm = useCallback(() => {
+    if (options?.onConfirm) {
       options.onConfirm(options.type === 'prompt' ? inputValue : undefined);
     }
     setOptions(null);
-  };
+  }, [options, inputValue]);
 
-  const handleCancel = () => {
-    if (options.onCancel) options.onCancel();
+  const handleCancel = useCallback(() => {
+    if (options?.onCancel) options.onCancel();
     setOptions(null);
-  };
+  }, [options]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!options) return;
+      if (e.key === 'Escape') {
+        handleCancel();
+      } else if (e.key === 'Enter') {
+        // If it's a prompt, the input's own onKeyDown will handle it to avoid double-firing,
+        // but it's safe to call handleConfirm if we prevent default.
+        // Wait, actually, let's just handle it.
+        if (options.type !== 'prompt') {
+          e.preventDefault();
+          handleConfirm();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [options, inputValue, handleConfirm, handleCancel]);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in" onClick={handleCancel}>
