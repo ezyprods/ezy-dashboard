@@ -223,13 +223,7 @@ export default function ArtistDetailPage() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); router.push(`/projects/${project.id}/preview`); }}
-                          className="text-text-secondary hover:text-accent p-1 rounded hover:bg-surface"
-                          title="Preview Lanzamiento"
-                        >
-                          <Headphones className="w-4 h-4" />
-                        </button>
+
                         <button className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface">
                           <MoreVertical className="w-4 h-4" />
                         </button>

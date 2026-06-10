@@ -16,11 +16,30 @@ export default function ArtistsPage() {
   const router = useRouter();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'recent' | 'name-asc' | 'name-desc'>('recent');
 
-  const filteredArtists = activeArtists.filter(artist => 
-    artist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    artist.genre?.some(g => g.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredArtists = activeArtists
+    .filter(artist => 
+      artist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      artist.genre?.some(g => g.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+    .sort((a, b) => {
+      if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
+      if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
+      
+      // Default: recent (last accessed via localStorage, fallback to updatedAt)
+      let accessedA = 0, accessedB = 0;
+      if (typeof window !== 'undefined') {
+        const storedA = localStorage.getItem(`accessed_${a.id}`);
+        const storedB = localStorage.getItem(`accessed_${b.id}`);
+        accessedA = storedA ? parseInt(storedA, 10) : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
+        accessedB = storedB ? parseInt(storedB, 10) : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+      } else {
+        accessedA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        accessedB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      }
+      return accessedB - accessedA;
+    });
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -59,7 +78,16 @@ export default function ArtistsPage() {
         </div>
 
         <div className="flex items-center gap-2 px-2 w-full sm:w-auto border-t sm:border-t-0 sm:border-l border-border pt-2 sm:pt-0">
-          <div className="flex items-center bg-surface-elevated rounded-lg p-1">
+          <select 
+            className="bg-surface border border-border text-text-secondary text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-accent"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'recent' | 'name-asc' | 'name-desc')}
+          >
+            <option value="recent">Recientes</option>
+            <option value="name-asc">Nombre (A-Z)</option>
+            <option value="name-desc">Nombre (Z-A)</option>
+          </select>
+          <div className="flex items-center bg-surface-elevated rounded-lg p-1 ml-1">
             <button 
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-surface shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
@@ -114,7 +142,12 @@ export default function ArtistsPage() {
           {filteredArtists.map((artist) => (
             <div 
               key={artist.id} 
-              onClick={() => router.push(`/artists/${artist.id}`)}
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem(`accessed_${artist.id}`, Date.now().toString());
+                }
+                router.push(`/artists/${artist.id}`);
+              }}
               data-context="artist"
               data-artist-id={artist.id}
               className={`bg-surface-elevated border border-border card-hover cursor-pointer group rounded-xl overflow-hidden relative ${
