@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Plus, Trash2, CheckCircle2, Clock, Eye, Circle, GripVertical } from 'lucide-react';
+import { Loader2, Plus, Trash2, CheckCircle2, Clock, Circle, GripVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { ProductionGrid, FlexTaskStatus } from '@/types';
-import { Switch } from '@/components/ui/Switch';
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
 } from '@dnd-kit/core';
@@ -14,11 +13,11 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const STATUS_CONFIG: Record<FlexTaskStatus, { label: string; icon: typeof Circle; color: string; bgColor: string }> = {
-  todo: { label: 'Pendiente', icon: Circle, color: 'text-text-secondary', bgColor: 'bg-surface' },
-  in_progress: { label: 'En progreso', icon: Clock, color: 'text-accent', bgColor: 'bg-accent/10' },
-  review: { label: 'Revisión', icon: Eye, color: 'text-warning', bgColor: 'bg-warning/10' },
-  done: { label: 'Hecho', icon: CheckCircle2, color: 'text-success', bgColor: 'bg-success/10' },
+const PAYMENT_STATUS_CONFIG: Record<FlexTaskStatus, { label: string; icon: typeof Circle; color: string; bgColor: string }> = {
+  todo: { label: 'Sin Acción', icon: Circle, color: 'text-text-secondary', bgColor: 'bg-surface' },
+  in_progress: { label: 'Facturado', icon: FileText, color: 'text-accent', bgColor: 'bg-accent/10' },
+  review: { label: 'Pendiente Pago', icon: Clock, color: 'text-warning', bgColor: 'bg-warning/10' },
+  done: { label: 'Pagado', icon: CheckCircle2, color: 'text-success', bgColor: 'bg-success/10' },
 };
 
 const NEXT_STATUS: Record<FlexTaskStatus, FlexTaskStatus> = {
@@ -28,9 +27,6 @@ const NEXT_STATUS: Record<FlexTaskStatus, FlexTaskStatus> = {
   done: 'todo'
 };
 
-const STATUSES: FlexTaskStatus[] = ['todo', 'in_progress', 'review', 'done'];
-
-// --- Radial Status Picker cell ---
 function StatusCell({
   status,
   onStatusChange,
@@ -43,7 +39,7 @@ function StatusCell({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const cfg = STATUS_CONFIG[status];
+  const cfg = PAYMENT_STATUS_CONFIG[status];
   const Icon = cfg.icon;
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -77,14 +73,12 @@ function StatusCell({
       setHovered(null);
       return;
     }
-    const angle = Math.atan2(dy, dx); // -PI to PI
-    // Map angle to status: right=in_progress, top=review, left=done, bottom=todo
-    // Divide circle into 4 quadrants
+    const angle = Math.atan2(dy, dx);
     const positions: [FlexTaskStatus, number][] = [
-      ['in_progress', 0],      // right
-      ['review', -Math.PI / 2], // top
-      ['done', Math.PI],        // left
-      ['todo', Math.PI / 2],    // bottom
+      ['in_progress', 0],
+      ['review', -Math.PI / 2],
+      ['done', Math.PI],
+      ['todo', Math.PI / 2],
     ];
     let closest: FlexTaskStatus = 'todo';
     let minDiff = Infinity;
@@ -112,7 +106,6 @@ function StatusCell({
     }
   };
 
-  // Radial positions for the 4 statuses (in display order)
   const radialItems: { s: FlexTaskStatus; x: number; y: number }[] = [
     { s: 'in_progress', x: 44, y: 0 },
     { s: 'review',      x: 0,  y: -44 },
@@ -140,11 +133,10 @@ function StatusCell({
         <Icon className={`w-5 h-5 ${cfg.color}`} />
       </button>
 
-      {/* Radial menu */}
       {showRadial && (
         <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
           {radialItems.map(({ s, x, y }) => {
-            const scfg = STATUS_CONFIG[s];
+            const scfg = PAYMENT_STATUS_CONFIG[s];
             const SIcon = scfg.icon;
             const isHov = hovered === s;
             return (
@@ -168,7 +160,6 @@ function StatusCell({
   );
 }
 
-// --- Sortable Column Header ---
 function SortableColHeader({
   col,
   onDelete,
@@ -200,10 +191,10 @@ function SortableColHeader({
   );
 }
 
-// --- Sortable Row ---
 function SortableRow({
   row,
   columns,
+  mode,
   onDelete,
   onCellChange,
 }: {
@@ -250,14 +241,13 @@ function SortableRow({
   );
 }
 
-export function ProductionGridBoard({ projectId }: { projectId: string }) {
-  const [grid, setGrid] = useState<ProductionGrid>({ columns: [], rows: [] });
+export function PaymentGridBoard({ projectId }: { projectId: string }) {
+  const [grid, setGrid] = useState<ProductionGrid>({ columns: [], rows: [], mode: 'interconnected' });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [newColName, setNewColName] = useState('');
   const [newRowName, setNewRowName] = useState('');
   const [files, setFiles] = useState<any[]>([]);
-  const [isModeLoading, setIsModeLoading] = useState(false);
 
   const colSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rowSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -280,8 +270,8 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
       ];
       setFiles(allFiles);
       
-      const g: ProductionGrid = data.productionGrid || { columns: [], rows: [] };
-      if (!g.mode) g.mode = 'simple';
+      const g: ProductionGrid = data.paymentGrid || { columns: [{id: 'col1', name: 'Adelanto'}, {id: 'col2', name: 'Restante'}], rows: [] };
+      if (!g.mode) g.mode = 'interconnected';
       setGrid(g);
     } catch (err) { console.error(err); }
     finally { setIsLoading(false); }
@@ -294,7 +284,7 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
       await fetch(`/api/projects/${projectId}/tasks`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productionGrid: newGrid }),
+        body: JSON.stringify({ paymentGrid: newGrid }),
       });
     } catch (err) { console.error(err); }
     finally { setIsSaving(false); }
@@ -337,6 +327,17 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
       const currentCell = r.cells[colId] || { status: 'todo' };
       return { ...r, cells: { ...r.cells, [colId]: { ...currentCell, status } } };
     });
+    // Si la fila no existía (estamos en interconnected mode y clickeamos un archivo), la creamos
+    if (!newRows.find(r => r.id === rowId)) {
+      const file = files.find(f => f.id === rowId);
+      if (file) {
+        newRows.push({
+          id: file.id,
+          name: file.name,
+          cells: { [colId]: { status } }
+        });
+      }
+    }
     saveGrid({ ...grid, rows: newRows });
   };
 
@@ -349,7 +350,7 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
   };
 
   const handleRowDragEnd = (event: DragEndEvent) => {
-    if (grid.mode === 'interconnected') return; // Cannot drag rows in interconnected mode
+    if (grid.mode === 'interconnected') return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIdx = grid.rows.findIndex(r => r.id === active.id);
@@ -357,17 +358,8 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
     saveGrid({ ...grid, rows: arrayMove(grid.rows, oldIdx, newIdx) });
   };
 
-  const toggleMode = async () => {
-    const newMode = grid.mode === 'simple' ? 'interconnected' : 'simple';
-    setIsModeLoading(true);
-    const newGrid = { ...grid, mode: newMode };
-    await saveGrid(newGrid);
-    setIsModeLoading(false);
-  };
-
   if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>;
 
-  // Si es modo interconectado, usar los archivos como filas (preservando estado de celdas)
   const displayRows = grid.mode === 'interconnected' 
     ? files.map(f => {
         const existing = grid.rows.find(r => r.id === f.id);
@@ -375,45 +367,13 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
       })
     : grid.rows;
 
-  const totalCells = grid.columns.length * displayRows.length;
-  const doneCells = displayRows.reduce((acc, row) => {
-    return acc + Object.values(row.cells).filter(c => c.status === 'done').length;
-  }, 0);
-  const progress = totalCells === 0 ? 0 : Math.round((doneCells / totalCells) * 100);
-
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold">Matriz de Producción</h3>
-          <p className="text-sm text-text-secondary">Trackeo modular por canción y fase.</p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex items-center gap-3 bg-surface-elevated px-3 py-1.5 rounded-lg border border-border">
-            <span className={`text-xs font-medium ${grid.mode === 'simple' ? 'text-text-primary' : 'text-text-secondary'}`}>Simple</span>
-            <button 
-              onClick={toggleMode}
-              disabled={isModeLoading}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${grid.mode === 'interconnected' ? 'bg-accent' : 'bg-surface'} border border-border`}
-            >
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${grid.mode === 'interconnected' ? 'translate-x-4' : 'translate-x-1'}`} />
-            </button>
-            <span className={`text-xs font-medium ${grid.mode === 'interconnected' ? 'text-accent' : 'text-text-secondary'}`}>Interconectado</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-text-secondary">{progress}% Completado</div>
-            {isSaving && <Loader2 className="w-4 h-4 animate-spin text-accent" />}
-          </div>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border">
-        {/* Column DnD context */}
+    <div className="space-y-6 animate-fade-in mt-6">
+      <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border mt-4">
         <DndContext sensors={colSensors} collisionDetection={closestCenter} onDragEnd={handleColDragEnd}>
           <table className="w-full text-left border-collapse">
             <thead>
               <tr>
-                {/* Row name column + add row input */}
                 <th className="p-3 border-b border-r border-border bg-surface/50 w-56 min-w-[180px]">
                   {grid.mode === 'simple' ? (
                     <div className="flex items-center gap-1">
@@ -427,22 +387,20 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
                       <Button size="sm" variant="ghost" onClick={addRow} disabled={!newRowName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>
                     </div>
                   ) : (
-                    <div className="text-xs text-text-secondary font-medium uppercase tracking-wider">Archivos del Proyecto</div>
+                    <div className="text-xs text-text-secondary font-medium uppercase tracking-wider">Archivos (Cobros)</div>
                   )}
                 </th>
 
-                {/* Sortable column headers */}
                 <SortableContext items={grid.columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
                   {grid.columns.map(col => (
                     <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} />
                   ))}
                 </SortableContext>
 
-                {/* Add phase input — compact */}
                 <th className="p-2 border-b border-border bg-surface/50 min-w-[130px] max-w-[160px]">
                   <div className="flex items-center gap-1">
                     <Input
-                      placeholder="+ Fase..."
+                      placeholder="+ Fase de cobro..."
                       value={newColName}
                       onChange={e => setNewColName(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && addColumn()}
@@ -454,7 +412,6 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
               </tr>
             </thead>
 
-            {/* Row DnD context */}
             <DndContext sensors={rowSensors} collisionDetection={closestCenter} onDragEnd={handleRowDragEnd}>
               <tbody>
                 <SortableContext items={displayRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
@@ -463,7 +420,7 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
                       key={row.id}
                       row={row}
                       columns={grid.columns}
-                      mode={grid.mode || 'simple'}
+                      mode={grid.mode || 'interconnected'}
                       onDelete={deleteRow}
                       onCellChange={handleCellChange}
                     />
@@ -472,7 +429,7 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
                 {displayRows.length === 0 && (
                   <tr>
                     <td colSpan={grid.columns.length + 2} className="p-8 text-center text-text-secondary border-b border-border">
-                      Empieza añadiendo columnas (fases) y filas (canciones).
+                      {grid.mode === 'interconnected' ? 'Sube archivos al proyecto para empezar a cobrar por ellos.' : 'Añade filas para empezar.'}
                     </td>
                   </tr>
                 )}
@@ -482,9 +439,8 @@ export function ProductionGridBoard({ projectId }: { projectId: string }) {
         </DndContext>
       </div>
 
-      {/* Legend */}
       <div className="flex items-center gap-6 justify-center pt-2 text-xs text-text-secondary">
-        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
+        {Object.entries(PAYMENT_STATUS_CONFIG).map(([key, cfg]) => {
           const Icon = cfg.icon;
           return (
             <div key={key} className="flex items-center gap-1.5">

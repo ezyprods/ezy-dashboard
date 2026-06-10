@@ -23,8 +23,12 @@ async function fetchFoldersRecursively(drive: any, parentId: string, parentPath:
     pageToken = response.data.nextPageToken || undefined;
   } while (pageToken);
   
-  // Archivos directos en este parent
-  const files = items.filter((f: any) => f.mimeType !== 'application/vnd.google-apps.folder');
+  // Archivos directos en este parent (ocultamos los de sistema)
+  const SYSTEM_FILES = ['tasks.json', 'project_config.json', 'release_config.json', 'notes.json', 'payments.json', 'payments_db.json'];
+  const files = items.filter((f: any) => 
+    f.mimeType !== 'application/vnd.google-apps.folder' && 
+    !SYSTEM_FILES.includes(f.name)
+  );
   rootFiles = files;
 
   // Carpetas directas

@@ -59,14 +59,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     // Asegurar IDs
     const board: FlexBoardData = {
-      groups: body.groups.map(g => ({
+      groups: (body.groups || []).map(g => ({
         ...g,
         id: g.id || randomUUID(),
-        tasks: g.tasks.map(t => ({
+        tasks: (g.tasks || []).map(t => ({
           ...t,
           id: t.id || randomUUID(),
         })),
       })),
+      productionGrid: body.productionGrid, // Preservar la matriz de producción
+      paymentGrid: body.paymentGrid, // Preservar la matriz de pagos interconectada
     };
 
     await saveJsonFile('tasks.json', board, id);

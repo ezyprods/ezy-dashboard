@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { usePayments } from '@/lib/hooks/usePayments';
 import { NewPaymentModal } from '@/components/payments/NewPaymentModal';
+import { PaymentGridBoard } from './PaymentGridBoard';
 
 export function ProjectPaymentsWidget({ projectId, initialBudget = 0, artistId }: { projectId: string, initialBudget?: number, artistId: string }) {
   const { payments, updatePaymentStatus } = usePayments();
@@ -14,6 +15,7 @@ export function ProjectPaymentsWidget({ projectId, initialBudget = 0, artistId }
   const [tempBudget, setTempBudget] = useState(initialBudget.toString());
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [mode, setMode] = useState<'simple' | 'interconnected'>('simple');
 
   // Filter payments for this specific project
   const projectPayments = payments.filter(p => p.projectId === projectId);
@@ -59,9 +61,23 @@ export function ProjectPaymentsWidget({ projectId, initialBudget = 0, artistId }
           <h3 className="text-lg font-bold text-text-primary">Control de Pagos</h3>
           <p className="text-sm text-text-secondary">Presupuesto y cobros del proyecto</p>
         </div>
-        <Button size="sm" onClick={() => setIsModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Registrar Cobro
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 bg-surface-elevated px-3 py-1.5 rounded-lg border border-border">
+            <span className={`text-xs font-medium ${mode === 'simple' ? 'text-text-primary' : 'text-text-secondary'}`}>Simple</span>
+            <button 
+              onClick={() => setMode(mode === 'simple' ? 'interconnected' : 'simple')}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${mode === 'interconnected' ? 'bg-accent' : 'bg-surface'} border border-border`}
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${mode === 'interconnected' ? 'translate-x-4' : 'translate-x-1'}`} />
+            </button>
+            <span className={`text-xs font-medium ${mode === 'interconnected' ? 'text-accent' : 'text-text-secondary'}`}>Interconectado</span>
+          </div>
+          {mode === 'simple' && (
+            <Button size="sm" onClick={() => setIsModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> Registrar Cobro
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -122,35 +138,41 @@ export function ProjectPaymentsWidget({ projectId, initialBudget = 0, artistId }
         </div>
       )}
 
-      {/* Payment History */}
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">Historial</h4>
-        {projectPayments.length === 0 ? (
-          <p className="text-sm text-text-secondary italic">No hay pagos registrados para este proyecto.</p>
-        ) : (
-          projectPayments.map(payment => (
-            <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface/30">
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${payment.status === 'paid' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
-                  <DollarSign className="w-4 h-4" />
+      {mode === 'simple' ? (
+        <>
+          {/* Payment History */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-3">Historial</h4>
+            {projectPayments.length === 0 ? (
+              <p className="text-sm text-text-secondary italic">No hay pagos registrados para este proyecto.</p>
+            ) : (
+              projectPayments.map(payment => (
+                <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-surface/30">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${payment.status === 'paid' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                      <DollarSign className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">{payment.concept || 'Pago'}</div>
+                      <div className="text-xs text-text-secondary">{new Date(payment.date).toLocaleDateString()} • {payment.method}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="font-bold">{payment.amount}€</div>
+                    {payment.status === 'pending' && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => updatePaymentStatus(payment.id, 'paid')}>
+                        Marcar Pagado
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <div className="text-sm font-medium">{payment.concept || 'Pago'}</div>
-                  <div className="text-xs text-text-secondary">{new Date(payment.date).toLocaleDateString()} • {payment.method}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="font-bold">{payment.amount}€</div>
-                {payment.status === 'pending' && (
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => updatePaymentStatus(payment.id, 'paid')}>
-                    Marcar Pagado
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+              ))
+            )}
+          </div>
+        </>
+      ) : (
+        <PaymentGridBoard projectId={projectId} />
+      )}
     </div>
   );
 }
