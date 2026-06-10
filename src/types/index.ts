@@ -18,6 +18,7 @@ export interface Release {
   artistId: string;
   coverArtId?: string;
   tracks: ReleaseTrack[];
+  isPublic?: boolean;
   createdAt: string;
   updatedAt: string;
 }
