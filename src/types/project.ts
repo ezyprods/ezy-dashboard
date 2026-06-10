@@ -121,13 +121,21 @@ export interface CreateProjectInput {
 
 // --- Pro Tools (Advanced Modularity) ---
 
+export type ColumnType = 'status' | 'file' | 'checklist' | 'text' | 'date';
+
 export interface GridCell {
   status: FlexTaskStatus;
   notes?: string;
+  // Advanced Matrix properties
+  fileId?: string;
+  fileName?: string;
+  dueDate?: string;
+  textValue?: string;
+  checklist?: { id: string; text: string; done: boolean }[];
 }
 
 export interface ProductionGrid {
-  columns: { id: string; name: string }[];
+  columns: { id: string; name: string; type?: ColumnType }[];
   rows: { id: string; name: string; cells: Record<string, GridCell> }[];
   mode?: 'simple' | 'interconnected';
 }
