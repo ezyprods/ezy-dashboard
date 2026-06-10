@@ -675,7 +675,14 @@ export function ProductionGridBoard({ projectId, projectTitle = 'Proyecto' }: { 
   };
 
   const handleCellUpdate = (rowId: string, colId: string, updates: Partial<GridCellData>) => {
-    const newRows = grid.rows.map(r => {
+    let baseRows = [...grid.rows];
+    const exists = baseRows.some(r => r.id === rowId);
+    if (!exists) {
+      const rowName = files.find(f => f.id === rowId)?.name || 'Nueva Fila';
+      baseRows.push({ id: rowId, name: rowName, cells: {} });
+    }
+
+    const newRows = baseRows.map(r => {
       if (r.id !== rowId) return r;
       const currentCell = r.cells[colId] || { status: 'todo' };
       

@@ -19,6 +19,9 @@ import {
   ExternalLink,
   Eye,
   UploadCloud,
+  CalendarDays,
+  ArrowRightLeft,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -41,6 +44,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ExternalLink,
   Eye,
   UploadCloud,
+  CalendarDays,
+  ArrowRightLeft,
+  Trash2,
 };
 
 function MenuIcon({ name }: { name?: string }) {
@@ -127,6 +133,11 @@ export function GlobalContextMenu() {
       const context = contextEl?.dataset.context;
       const artistId = contextEl?.dataset.artistId;
       const fileId = contextEl?.dataset.fileId;
+
+      if (context?.startsWith('calendar-')) {
+        // Let local calendar component handle its own custom context menu
+        return;
+      }
 
       let items: MenuItem[];
 
