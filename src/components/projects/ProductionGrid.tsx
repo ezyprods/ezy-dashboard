@@ -287,17 +287,18 @@ export function ProductionGridBoard({
                   {grid.columns.map(col => <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} />)}
                 </SortableContext>
 
-                <th className="p-2 border-b border-border bg-surface/50 min-w-[140px] max-w-[200px]">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-1">
-                      <select value={newColType} onChange={e => setNewColType(e.target.value as ColumnType)} className="h-7 text-xs bg-surface-elevated border border-border rounded px-1 outline-none text-text-secondary w-full">
-                        {COL_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Input placeholder="+ Fase..." value={newColName} onChange={e => setNewColName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addColumn()} className="h-7 text-xs bg-transparent w-full" />
-                      <Button size="sm" variant="ghost" onClick={addColumn} disabled={!newColName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>
-                    </div>
+                <th className="p-2 border-b border-border bg-surface/50 min-w-[200px] max-w-[240px]">
+                  <div className="flex items-center gap-1">
+                    <select 
+                      value={newColType} 
+                      onChange={e => setNewColType(e.target.value as ColumnType)} 
+                      className="h-7 w-20 shrink-0 text-[10px] bg-surface-elevated border border-border rounded outline-none text-text-secondary px-1"
+                      title="Tipo de Fase"
+                    >
+                      {COL_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                    </select>
+                    <Input placeholder="+ Fase..." value={newColName} onChange={e => setNewColName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addColumn()} className="h-7 text-xs bg-transparent w-full px-2" />
+                    <Button size="sm" variant="ghost" onClick={addColumn} disabled={!newColName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>
                   </div>
                 </th>
               </tr>
