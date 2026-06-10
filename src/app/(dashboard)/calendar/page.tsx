@@ -30,6 +30,8 @@ import { NewEventModal } from '@/components/calendar/NewEventModal';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import type { Artist } from '@/types';
 import { cn } from '@/lib/utils';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 interface CalendarEvent {
   id: string;
@@ -100,7 +102,7 @@ export default function CalendarPage() {
 
   // CRUD event operations
   const handleDelete = async (eventId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este evento?')) return;
+    if (!await customConfirm('¿Estás seguro de que quieres eliminar este evento?')) return;
     try {
       const res = await fetch(`/api/calendar/${eventId}`, {
         method: 'DELETE',
@@ -108,11 +110,11 @@ export default function CalendarPage() {
       if (res.ok) {
         fetchEvents();
       } else {
-        alert('Error al eliminar el evento.');
+        customAlert('Error al eliminar el evento.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error de red al eliminar el evento.');
+      customAlert('Error de red al eliminar el evento.');
     }
   };
 
@@ -131,11 +133,11 @@ export default function CalendarPage() {
       if (res.ok) {
         fetchEvents();
       } else {
-        alert('Error al duplicar el evento.');
+        customAlert('Error al duplicar el evento.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error de red al duplicar el evento.');
+      customAlert('Error de red al duplicar el evento.');
     }
   };
 
@@ -158,21 +160,21 @@ export default function CalendarPage() {
       if (res.ok) {
         fetchEvents();
       } else {
-        alert('Error al mover el evento.');
+        customAlert('Error al mover el evento.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error de red al mover el evento.');
+      customAlert('Error de red al mover el evento.');
     }
   };
 
   const handleMoveToDate = async (event: CalendarEvent) => {
     const defaultDateStr = event.start.split('T')[0];
-    const newDateStr = prompt('Introduce la nueva fecha (AAAA-MM-DD):', defaultDateStr);
+    const newDateStr = await customPrompt('Introduce la nueva fecha (AAAA-MM-DD):', defaultDateStr);
     if (!newDateStr) return;
     
     if (!/^\d{4}-\d{2}-\d{2}$/.test(newDateStr)) {
-      alert('Formato de fecha inválido. Utilice AAAA-MM-DD.');
+      customAlert('Formato de fecha inválido. Utilice AAAA-MM-DD.');
       return;
     }
 
@@ -194,11 +196,11 @@ export default function CalendarPage() {
       if (res.ok) {
         fetchEvents();
       } else {
-        alert('Error al mover el evento.');
+        customAlert('Error al mover el evento.');
       }
     } catch (err) {
       console.error(err);
-      alert('Error de red al mover el evento.');
+      customAlert('Error de red al mover el evento.');
     }
   };
 

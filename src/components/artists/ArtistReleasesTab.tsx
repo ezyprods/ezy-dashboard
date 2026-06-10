@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { Plus, Disc, Loader2, Play, Settings2, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Release } from '@/types';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export function ArtistReleasesTab({ artistId }: { artistId: string }) {
   const [releases, setReleases] = useState<Release[]>([]);
@@ -31,7 +33,7 @@ export function ArtistReleasesTab({ artistId }: { artistId: string }) {
   };
 
   const handleCreateRelease = async () => {
-    const title = prompt('Nombre del lanzamiento (Ej. Album Debut, Single Verano):');
+    const title = await customPrompt('Nombre del lanzamiento (Ej. Album Debut, Single Verano):');
     if (!title) return;
     
     setIsCreating(true);
@@ -46,7 +48,7 @@ export function ArtistReleasesTab({ artistId }: { artistId: string }) {
       router.push(`/artists/${artistId}/releases/${data.release.id}/edit`);
     } catch (err) {
       console.error(err);
-      alert('Error creando el lanzamiento');
+      customAlert('Error creando el lanzamiento');
     } finally {
       setIsCreating(false);
     }

@@ -9,6 +9,8 @@ import { NewArtistModal } from "@/components/artists/NewArtistModal";
 import { Input } from "@/components/ui/Input";
 import { useRouter } from 'next/navigation';
 import { cn } from "@/lib/utils";
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export default function ArtistsPage() {
   const { artists, activeArtists, archivedArtists, isLoading, error } = useArtists();
@@ -195,7 +197,7 @@ export default function ArtistsPage() {
               {viewMode === 'grid' && (
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                   <button 
-                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`); alert('Enlace de portal copiado'); }}
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`); customAlert('Enlace de portal copiado'); }}
                     className="p-1.5 bg-surface-elevated/90 backdrop-blur-sm hover:bg-accent hover:text-white rounded-md text-text-secondary transition-colors shadow-sm"
                     title="Copiar Portal"
                   >

@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft, Plus, Disc, Loader2, Play, Settings2, Shield, ShieldOff } from 'lucide-react';
 import type { Release } from '@/types';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export default function ArtistPreviewsPage() {
   const params = useParams();
@@ -34,7 +36,7 @@ export default function ArtistPreviewsPage() {
   };
 
   const handleCreateRelease = async () => {
-    const title = prompt('Nombre de la nueva Preview (Ej. Album Debut, EP Verano):');
+    const title = await customPrompt('Nombre de la nueva Preview (Ej. Album Debut, EP Verano):');
     if (!title) return;
     
     setIsCreating(true);
@@ -49,7 +51,7 @@ export default function ArtistPreviewsPage() {
       router.push(`/artists/${artistId}/releases/${data.release.id}/edit`);
     } catch (err) {
       console.error(err);
-      alert('Error creando el preview');
+      customAlert('Error creando el preview');
     } finally {
       setIsCreating(false);
     }
@@ -65,7 +67,7 @@ export default function ArtistPreviewsPage() {
       if (!res.ok) throw new Error('Error toggling');
       setReleases(prev => prev.map(r => r.id === releaseId ? { ...r, isPublic: !currentIsPublic } : r));
     } catch (e) {
-      alert('Error al cambiar la privacidad');
+      customAlert('Error al cambiar la privacidad');
     }
   };
 

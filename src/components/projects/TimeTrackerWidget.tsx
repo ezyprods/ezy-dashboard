@@ -5,6 +5,8 @@ import { Play, Square, Save, Clock, History, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { WorkSession } from '@/types';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 function formatDuration(seconds: number) {
   const h = Math.floor(seconds / 3600);
@@ -57,7 +59,7 @@ export function TimeTrackerWidget({ projectId }: { projectId: string }) {
   };
 
   const handleSaveSession = async () => {
-    if (elapsedSeconds < 60 && !confirm('La sesión duró menos de 1 minuto. ¿Seguro que quieres guardarla?')) {
+    if (elapsedSeconds < 60 && !await customConfirm('La sesión duró menos de 1 minuto. ¿Seguro que quieres guardarla?')) {
       resetTimer();
       return;
     }

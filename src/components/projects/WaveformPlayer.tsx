@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, ExternalLink, Edit3, FolderInput, Download, Trash2, Loader2 } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 interface WaveformPlayerProps {
   fileId: string;
@@ -232,7 +234,7 @@ export function WaveformPlayer({
   const handleRename = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const currentExt = fileName.substring(fileName.lastIndexOf('.'));
-    const newName = prompt('Introduce el nuevo nombre del archivo:', displayName);
+    const newName = await customPrompt('Introduce el nuevo nombre del archivo:', displayName);
     if (!newName || newName.trim() === '' || newName === displayName) return;
 
     setIsUpdating(true);
@@ -245,19 +247,19 @@ export function WaveformPlayer({
       if (!res.ok) throw new Error('Error al renombrar archivo');
       setDisplayName(newName.trim());
       if (onRefresh) onRefresh();
-    } catch (err: any) { alert(err.message); } finally { setIsUpdating(false); }
+    } catch (err: any) { customAlert(err.message); } finally { setIsUpdating(false); }
   };
 
   const handleMove = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!folders.length) return;
     const options = folders.map((f, i) => `${i + 1}. ${f.name}`).join('\n');
-    const choice = prompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
+    const choice = await customPrompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
     if (!choice) return;
     const idx = parseInt(choice, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= folders.length) { alert('Selección no válida.'); return; }
+    if (isNaN(idx) || idx < 0 || idx >= folders.length) { customAlert('Selección no válida.'); return; }
     const targetFolder = folders[idx];
-    if (targetFolder.id === currentFolderId) { alert('El archivo ya está en esa carpeta.'); return; }
+    if (targetFolder.id === currentFolderId) { customAlert('El archivo ya está en esa carpeta.'); return; }
 
     setIsUpdating(true);
     try {
@@ -267,20 +269,20 @@ export function WaveformPlayer({
         body: JSON.stringify({ fileId, newParentId: targetFolder.id, oldParentId: currentFolderId }),
       });
       if (!res.ok) throw new Error('Error al mover el archivo');
-      alert(`Archivo movido con éxito a ${targetFolder.name}`);
+      customAlert(`Archivo movido con éxito a ${targetFolder.name}`);
       if (onRefresh) onRefresh();
-    } catch (err: any) { alert(err.message); } finally { setIsUpdating(false); }
+    } catch (err: any) { customAlert(err.message); } finally { setIsUpdating(false); }
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`¿Estás seguro de que quieres eliminar el archivo "${fileName}" de forma permanente?`)) return;
+    if (!await customConfirm(`¿Estás seguro de que quieres eliminar el archivo "${fileName}" de forma permanente?`)) return;
     setIsUpdating(true);
     try {
       const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el archivo');
       if (onRefresh) onRefresh();
-    } catch (err: any) { alert(err.message); } finally { setIsUpdating(false); }
+    } catch (err: any) { customAlert(err.message); } finally { setIsUpdating(false); }
   };
 
   return (

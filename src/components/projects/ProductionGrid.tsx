@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { ProductionGrid, FlexTaskStatus } from '@/types';
 import { useAudio } from '@/lib/contexts/AudioContext';
+import { customConfirm, customAlert } from '@/lib/dialog';
 
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
@@ -259,7 +260,7 @@ function CellComponent({
         status: 'done',
       });
       setIsModalOpen(false);
-    } catch (err) { alert('Error subiendo archivo'); } finally { setIsUploading(false); }
+    } catch (err) { customAlert('Error subiendo archivo'); } finally { setIsUploading(false); }
   };
 
   return (
@@ -538,13 +539,13 @@ export function ProductionGridBoard({
     setNewRowName('');
   };
 
-  const deleteColumn = (id: string) => {
-    if (!confirm('Eliminar columna y sus datos?')) return;
+  const deleteColumn = async (id: string) => {
+    if (!await customConfirm('Eliminar columna y sus datos?')) return;
     saveGrid({ ...grid, columns: grid.columns.filter(c => c.id !== id) });
   };
 
-  const deleteRow = (id: string) => {
-    if (!confirm('Eliminar fila?')) return;
+  const deleteRow = async (id: string) => {
+    if (!await customConfirm('Eliminar fila?')) return;
     saveGrid({ ...grid, rows: grid.rows.filter(r => r.id !== id) });
   };
 

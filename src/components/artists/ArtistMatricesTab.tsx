@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; artistName?: string }) {
   const [matrices, setMatrices] = useState<any[]>([]);
@@ -30,7 +32,7 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
   };
 
   const createMatrix = async () => {
-    const name = prompt('Nombre de la nueva matriz (ej: Álbum 2024):');
+    const name = await customPrompt('Nombre de la nueva matriz (ej: Álbum 2024):');
     if (!name) return;
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices`, {
@@ -47,7 +49,7 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
   };
 
   const deleteMatrix = async (matrixId: string) => {
-    if (!confirm('¿Seguro que quieres eliminar esta matriz por completo?')) return;
+    if (!await customConfirm('¿Seguro que quieres eliminar esta matriz por completo?')) return;
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, { method: 'DELETE' });
       if (res.ok) {

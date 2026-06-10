@@ -8,6 +8,8 @@ import type { Release, ReleaseTrack } from '@/types';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 // A modal to pick files from the artist's drive
 import { TrackPickerModal } from '@/components/releases/TrackPickerModal';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export default function ReleaseEditorPage() {
   const params = useParams();
@@ -33,7 +35,7 @@ export default function ReleaseEditorPage() {
       setRelease(data.release);
     } catch (err) {
       console.error(err);
-      alert('Error al cargar el lanzamiento');
+      customAlert('Error al cargar el lanzamiento');
     } finally {
       setIsLoading(false);
     }
@@ -49,10 +51,10 @@ export default function ReleaseEditorPage() {
         body: JSON.stringify(release)
       });
       if (!res.ok) throw new Error('Error saving');
-      alert('Lanzamiento guardado');
+      customAlert('Lanzamiento guardado');
     } catch (err) {
       console.error(err);
-      alert('Error al guardar');
+      customAlert('Error al guardar');
     } finally {
       setIsSaving(false);
     }
@@ -72,7 +74,7 @@ export default function ReleaseEditorPage() {
       setRelease(prev => prev ? { ...prev, tracks: [...prev.tracks, data.track] } : null);
     } catch (err) {
       console.error(err);
-      alert('Error añadiendo la canción. Asegúrate de tener permisos.');
+      customAlert('Error añadiendo la canción. Asegúrate de tener permisos.');
     } finally {
       setIsSaving(false);
       setIsPickerOpen(false);
@@ -180,7 +182,7 @@ export default function ReleaseEditorPage() {
                         const data = await res.json();
                         setRelease(prev => prev ? { ...prev, coverArtId: data.fileId } : null);
                       } catch (err) {
-                        alert('Error al subir la portada');
+                        customAlert('Error al subir la portada');
                       } finally {
                         setIsSaving(false);
                       }

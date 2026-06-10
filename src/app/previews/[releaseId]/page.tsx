@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2, Play, Pause, SkipForward, SkipBack, Disc, Share2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 // Un visor público simplificado para los lanzamientos
 export default function PublicPreviewPage() {
@@ -177,7 +179,7 @@ export default function PublicPreviewPage() {
             <h2 className="text-xl font-semibold text-gray-300 uppercase tracking-widest text-sm">Tracklist</h2>
             <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white" onClick={() => {
               navigator.clipboard.writeText(window.location.href);
-              alert('Enlace copiado');
+              customAlert('Enlace copiado');
             }}>
               <Share2 className="w-4 h-4 mr-2" /> Compartir
             </Button>

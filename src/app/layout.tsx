@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { AudioProvider } from "@/lib/contexts/AudioContext";
 import { ContextMenuProvider } from "@/lib/contexts/ContextMenuContext";
 import { GlobalAudioPlayer } from "@/components/layout/GlobalAudioPlayer";
+import { DialogProvider } from "@/components/ui/DialogProvider";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -39,6 +41,8 @@ export default function RootLayout({
           <AudioProvider>
             {children}
             <GlobalAudioPlayer />
+            <DialogProvider />
+            <Toaster theme="dark" position="bottom-right" className="!font-sans" />
           </AudioProvider>
         </ContextMenuProvider>
       </body>

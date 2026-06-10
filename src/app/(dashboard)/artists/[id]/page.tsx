@@ -16,6 +16,8 @@ import { ArtistMatricesTab } from '@/components/artists/ArtistMatricesTab';
 import { ArtistPaymentsTab } from '@/components/artists/ArtistPaymentsTab';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import * as LucideIcons from 'lucide-react';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export default function ArtistDetailPage() {
   const params = useParams();
@@ -34,14 +36,14 @@ export default function ArtistDetailPage() {
   const { projects, isLoading: projectsLoading, fetchProjects } = useProjects(artistId);
 
   const handleDeleteProject = async (projectId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este proyecto y su carpeta en Google Drive de forma permanente?')) return;
+    if (!await customConfirm('¿Estás seguro de que quieres eliminar este proyecto y su carpeta en Google Drive de forma permanente?')) return;
     try {
       const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el proyecto');
-      alert('Proyecto eliminado con éxito');
+      customAlert('Proyecto eliminado con éxito');
       fetchProjects();
     } catch (err: any) {
-      alert(err.message);
+      customAlert(err.message);
     }
   };
 
@@ -70,7 +72,7 @@ export default function ArtistDetailPage() {
       if (!res.ok) throw new Error('Error sincronizando la carpeta');
       await fetchArtist();
     } catch (err: any) {
-      alert(err.message);
+      customAlert(err.message);
     } finally {
       setIsSyncing(false);
     }
@@ -167,7 +169,7 @@ export default function ArtistDetailPage() {
                     onClick={() => {
                       const url = `${window.location.origin}/portal/${artistId}`;
                       navigator.clipboard.writeText(url);
-                      alert('¡Enlace del portal copiado al portapapeles!');
+                      customAlert('¡Enlace del portal copiado al portapapeles!');
                     }}
                   >
                     Copiar Enlace Portal
@@ -244,7 +246,7 @@ export default function ArtistDetailPage() {
                           icon: 'Copy',
                           action: () => {
                             navigator.clipboard.writeText(project.id);
-                            alert('ID de carpeta copiado');
+                            customAlert('ID de carpeta copiado');
                           }
                         },
                         {
@@ -285,7 +287,7 @@ export default function ArtistDetailPage() {
                                 icon: 'Copy',
                                 action: () => {
                                   navigator.clipboard.writeText(project.id);
-                                  alert('ID de carpeta copiado');
+                                  customAlert('ID de carpeta copiado');
                                 }
                               },
                               {

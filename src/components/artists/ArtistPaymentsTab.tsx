@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { Loader2, Plus, DollarSign, Trash2, ChevronRight, CheckCircle2, Clock, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export function ArtistPaymentsTab({ artistId }: { artistId: string }) {
   const [sheets, setSheets] = useState<any[]>([]);
@@ -24,7 +26,7 @@ export function ArtistPaymentsTab({ artistId }: { artistId: string }) {
   };
 
   const createSheet = async () => {
-    const name = prompt('Nombre de la hoja de pagos (ej: Álbum 2024):');
+    const name = await customPrompt('Nombre de la hoja de pagos (ej: Álbum 2024):');
     if (!name) return;
     try {
       const res = await fetch(`/api/artists/${artistId}/payments`, {
@@ -37,7 +39,7 @@ export function ArtistPaymentsTab({ artistId }: { artistId: string }) {
   };
 
   const deleteSheet = async (sheetId: string) => {
-    if (!confirm('¿Seguro que quieres eliminar esta hoja de pagos por completo?')) return;
+    if (!await customConfirm('¿Seguro que quieres eliminar esta hoja de pagos por completo?')) return;
     try {
       const res = await fetch(`/api/artists/${artistId}/payments/${sheetId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -132,10 +134,10 @@ function ActivePaymentSheet({ sheet, artistId, onBack, onRefresh }: { sheet: any
     } catch (e) { console.error(e); } finally { setIsSaving(false); setIsEditingBudget(false); }
   };
 
-  const addPayment = () => {
-    const concept = prompt('Concepto del pago:');
+  const addPayment = async () => {
+    const concept = await customPrompt('Concepto del pago:');
     if (!concept) return;
-    const amountStr = prompt('Cantidad (€):');
+    const amountStr = await customPrompt('Cantidad (€):');
     if (!amountStr) return;
     const amount = Number(amountStr);
     if (isNaN(amount)) return;
@@ -156,8 +158,8 @@ function ActivePaymentSheet({ sheet, artistId, onBack, onRefresh }: { sheet: any
     updateSheet({ payments: updatedPayments });
   };
 
-  const deletePayment = (paymentId: string) => {
-    if (!confirm('Eliminar pago?')) return;
+  const deletePayment = async (paymentId: string) => {
+    if (!await customConfirm('Eliminar pago?')) return;
     updateSheet({ payments: payments.filter((p:any) => p.id !== paymentId) });
   };
 

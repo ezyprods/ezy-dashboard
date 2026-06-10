@@ -13,6 +13,8 @@ import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 
 import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
 import { CustomSortModal } from '@/components/projects/CustomSortModal';
 import { STATUS_CONFIG } from '@/lib/constants';
+import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -51,40 +53,40 @@ export default function ProjectDetailPage() {
       });
     } catch (e) {
       console.error(e);
-      alert('Error guardando el orden personalizado');
+      customAlert('Error guardando el orden personalizado');
     } finally {
       setSortModalFolder(null);
     }
   };
 
   const handleDeleteFolder = async (folderId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar esta carpeta y todo su contenido en Google Drive de forma permanente?')) return;
+    if (!await customConfirm('¿Estás seguro de que quieres eliminar esta carpeta y todo su contenido en Google Drive de forma permanente?')) return;
     try {
       const res = await fetch(`/api/files?id=${folderId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar la carpeta');
-      alert('Carpeta eliminada con éxito');
+      customAlert('Carpeta eliminada con éxito');
       fetchProject();
     } catch (err: any) {
-      alert(err.message);
+      customAlert(err.message);
     }
   };
 
   const handleDeleteFile = async (fileId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este archivo de Google Drive de forma permanente?')) return;
+    if (!await customConfirm('¿Estás seguro de que quieres eliminar este archivo de Google Drive de forma permanente?')) return;
     try {
       const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el archivo');
-      alert('Archivo eliminado con éxito');
+      customAlert('Archivo eliminado con éxito');
       fetchProject();
     } catch (err: any) {
-      alert(err.message);
+      customAlert(err.message);
     }
   };
 
   const handleRenameFile = async (fileId: string, currentName: string) => {
     const ext = currentName.substring(currentName.lastIndexOf('.'));
     const base = currentName.replace(/\.[^/.]+$/, '');
-    const newName = prompt('Introduce el nuevo nombre del archivo:', base);
+    const newName = await customPrompt('Introduce el nuevo nombre del archivo:', base);
     if (!newName || newName.trim() === '' || newName === base) return;
     try {
       const res = await fetch('/api/files', {
@@ -95,23 +97,23 @@ export default function ProjectDetailPage() {
       if (!res.ok) throw new Error('Error al renombrar el archivo');
       fetchProject();
     } catch (err: any) {
-      alert(err.message);
+      customAlert(err.message);
     }
   };
 
   const handleMoveFile = async (fileId: string, currentFolderId: string) => {
     if (!folders || !folders.length) return;
     const options = folders.map((f: any, i: number) => `${i + 1}. ${f.name}`).join('\n');
-    const choice = prompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
+    const choice = await customPrompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
     if (!choice) return;
     const idx = parseInt(choice, 10) - 1;
     if (isNaN(idx) || idx < 0 || idx >= folders.length) {
-      alert('Selección no válida.');
+      customAlert('Selección no válida.');
       return;
     }
     const targetFolder = folders[idx];
     if (targetFolder.id === currentFolderId) {
-      alert('El archivo ya está en esa carpeta.');
+      customAlert('El archivo ya está en esa carpeta.');
       return;
     }
     try {
@@ -121,10 +123,10 @@ export default function ProjectDetailPage() {
         body: JSON.stringify({ fileId, newParentId: targetFolder.id, oldParentId: currentFolderId })
       });
       if (!res.ok) throw new Error('Error al mover el archivo');
-      alert(`Archivo movido con éxito a ${targetFolder.name}`);
+      customAlert(`Archivo movido con éxito a ${targetFolder.name}`);
       fetchProject();
     } catch (err: any) {
-      alert(err.message);
+      customAlert(err.message);
     }
   };
 
@@ -163,7 +165,7 @@ export default function ProjectDetailPage() {
       if (!res.ok) throw new Error('Error subiendo archivo');
       await fetchProject(); // Recargar archivos
     } catch (err) {
-      alert('Error subiendo el archivo');
+      customAlert('Error subiendo el archivo');
     } finally {
       setUploadingTo(null);
     }
@@ -221,7 +223,7 @@ export default function ProjectDetailPage() {
                       icon: 'Copy',
                       action: () => {
                         navigator.clipboard.writeText(folder.id);
-                        alert('ID de carpeta copiado');
+                        customAlert('ID de carpeta copiado');
                       }
                     },
                     {
@@ -267,7 +269,7 @@ export default function ProjectDetailPage() {
                           project: { ...data.project, folderStatuses: customStatuses }
                         });
                       } catch (err) {
-                        alert('Error guardando el estado');
+                        customAlert('Error guardando el estado');
                       }
                     }}
                   />
@@ -326,7 +328,7 @@ export default function ProjectDetailPage() {
                           icon: 'Copy',
                           action: () => {
                             navigator.clipboard.writeText(folder.id);
-                            alert('ID de carpeta copiado');
+                            customAlert('ID de carpeta copiado');
                           }
                         },
                         {
