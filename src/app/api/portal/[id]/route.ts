@@ -38,6 +38,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             q: `'${bouncesFolder.id}' in parents and trashed=false and mimeType contains 'audio/'`,
             fields: 'files(id, name, mimeType, webViewLink, createdTime)',
             orderBy: 'createdTime desc',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
           });
           bounces = res.data.files || [];
         }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Loader2, PlayCircle, Music, CheckCircle2, Circle } from 'lucide-react';
-import { AudioPlayer } from '@/components/projects/AudioPlayer';
+import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 
 export default function PortalPage() {
   const params = useParams();
@@ -108,7 +108,7 @@ export default function PortalPage() {
                       ) : (
                         <div className="space-y-3">
                           {project.bounces.map((bounce: any) => (
-                            <AudioPlayer key={bounce.id} fileId={bounce.id} fileName={bounce.name} />
+                            <WaveformPlayer key={bounce.id} fileId={bounce.id} fileName={bounce.name} />
                           ))}
                         </div>
                       )}

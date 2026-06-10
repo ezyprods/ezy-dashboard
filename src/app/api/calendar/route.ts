@@ -54,3 +54,43 @@ export async function GET(request: Request) {
     }, { status: isAuthError ? 403 : 500 });
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { summary, description, startDateTime, endDateTime } = body;
+
+    if (!summary || !startDateTime || !endDateTime) {
+      return NextResponse.json(
+        { error: 'summary, startDateTime and endDateTime are required' },
+        { status: 400 }
+      );
+    }
+
+    const auth = getAuthClient();
+    const calendar = google.calendar({ version: 'v3', auth });
+
+    const response = await calendar.events.insert({
+      calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
+      requestBody: {
+        summary,
+        description: description || undefined,
+        start: { dateTime: startDateTime, timeZone: 'Europe/Madrid' },
+        end: { dateTime: endDateTime, timeZone: 'Europe/Madrid' },
+      },
+    });
+
+    return NextResponse.json({ event: response.data });
+  } catch (error: any) {
+    console.error('Calendar POST Error:', error);
+    const isAuthError =
+      error.code === 401 ||
+      error.code === 403 ||
+      error.message?.includes('invalid_grant') ||
+      error.message?.includes('insufficient');
+    return NextResponse.json(
+      { error: 'Failed to create calendar event', details: error.message, needsAuth: isAuthError },
+      { status: isAuthError ? 403 : 500 }
+    );
+  }
+}

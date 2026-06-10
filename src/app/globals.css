@@ -24,6 +24,7 @@
   --animate-slide-in: slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-fade-in: fade-in 0.2s ease-in-out;
   --animate-skeleton: skeleton 1.5s infinite;
+  --animate-menu-in: menu-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ===== DARK MODE (default) ===== */
@@ -182,6 +183,17 @@ html.light .logo-dark {
   0% { background-color: var(--surface-elevated); }
   50% { background-color: var(--border); }
   100% { background-color: var(--surface-elevated); }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* Focus rings */

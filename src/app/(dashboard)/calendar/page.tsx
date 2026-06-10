@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Calendar as CalendarIcon, Loader2, AlertCircle, Link2, ExternalLink, Play, Clock } from 'lucide-react';
-import { format, isToday, isTomorrow, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
+import { Calendar as CalendarIcon, Loader2, AlertCircle, Link2, ExternalLink, Play, Clock, Plus } from 'lucide-react';
+import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/Button';
 import { authClient } from '@/lib/auth-client';
+import { NewEventModal } from '@/components/calendar/NewEventModal';
 import type { Artist } from '@/types';
 
 interface CalendarEvent {
@@ -24,24 +25,29 @@ export default function CalendarPage() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showNewEvent, setShowNewEvent] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/calendar?days=30').then(res => res.json()),
-      fetch('/api/artists').then(res => res.json())
-    ]).then(([calendarData, artistsData]) => {
+  const fetchEvents = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [calendarData, artistsData] = await Promise.all([
+        fetch('/api/calendar?days=30').then(res => res.json()),
+        fetch('/api/artists').then(res => res.json()),
+      ]);
       if (calendarData.needsAuth || calendarData.error) {
         setError(calendarData.error || 'Autenticación requerida');
       } else {
         setEvents(calendarData.events || []);
       }
       setArtists(artistsData.artists || []);
-      setIsLoading(false);
-    }).catch(err => {
+    } catch (err: any) {
       setError(err.message);
+    } finally {
       setIsLoading(false);
-    });
+    }
   }, []);
+
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
   const formatEventTime = (dateStr: string) => {
     const date = parseISO(dateStr);
@@ -114,12 +120,23 @@ export default function CalendarPage() {
           </h1>
           <p className="text-text-secondary mt-1">Próximos 30 días sincronizados desde Google Calendar.</p>
         </div>
-        <a href="https://calendar.google.com" target="_blank" rel="noreferrer">
-          <Button variant="outline" className="gap-2">
-            <ExternalLink className="w-4 h-4" /> Abrir en Google
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowNewEvent(true)} className="gap-2">
+            <Plus className="w-4 h-4" /> Nuevo Evento
           </Button>
-        </a>
+          <a href="https://calendar.google.com" target="_blank" rel="noreferrer">
+            <Button variant="outline" className="gap-2">
+              <ExternalLink className="w-4 h-4" /> Abrir en Google
+            </Button>
+          </a>
+        </div>
       </div>
+
+      <NewEventModal
+        isOpen={showNewEvent}
+        onClose={() => setShowNewEvent(false)}
+        onCreated={fetchEvents}
+      />
 
       {sortedDates.length === 0 ? (
         <div className="glass p-12 rounded-3xl border border-dashed border-border text-center flex flex-col items-center">

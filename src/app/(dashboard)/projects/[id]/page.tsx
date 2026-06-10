@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones } from "lucide-react";
-import { AudioPlayer } from '@/components/projects/AudioPlayer';
+import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { FlexBoard } from '@/components/projects/FlexBoard';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
@@ -291,7 +291,7 @@ export default function ProjectDetailPage() {
                     }).map((file: any) => {
                       const isAudio = file.mimeType?.startsWith('audio/');
                       return isAudio ? (
-                        <AudioPlayer 
+                        <WaveformPlayer 
                           key={file.id} 
                           fileId={file.id} 
                           fileName={file.name} 
