@@ -2,6 +2,39 @@ import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 import { Readable } from 'stream';
 
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const parentId = searchParams.get('folderId');
+
+    if (!parentId) {
+      return NextResponse.json({ error: 'Missing folderId' }, { status: 400 });
+    }
+
+    const drive = getDriveService();
+    const query = `'${parentId}' in parents and trashed=false`;
+    const response = await drive.files.list({
+      q: query,
+      fields: 'files(id, name, mimeType, size, createdTime, webViewLink, webContentLink)',
+      orderBy: 'folder, name',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      pageSize: 1000,
+    });
+
+    const items = response.data.files || [];
+    const SYSTEM_FILES = ['artist_config.json', 'project_config.json', 'release_config.json', 'notes.json', 'payments.json', 'payments_db.json'];
+    
+    const validItems = items.filter(f => !SYSTEM_FILES.includes(f.name || ''));
+
+    return NextResponse.json({ items: validItems });
+  } catch (error: any) {
+    console.error('API /files GET error:', error);
+    return NextResponse.json({ error: 'Failed to list files', details: error.message }, { status: 500 });
+  }
+}
+
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();

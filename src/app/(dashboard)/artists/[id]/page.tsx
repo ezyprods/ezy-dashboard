@@ -8,6 +8,9 @@ import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loade
 import type { Artist, Project } from '@/types';
 import { PROJECT_TYPE_LABELS, STATUS_CONFIG } from '@/lib/constants';
 import { useProjects } from '@/lib/hooks/useProjects';
+import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
+import { CustomSortModal } from '@/components/projects/CustomSortModal';
+import { DriveExplorer } from '@/components/artists/DriveExplorer';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { NotesEditor } from '@/components/notes/NotesEditor';
 import { getProjectTypeIcon } from '@/lib/utils';
@@ -30,7 +33,7 @@ export default function ArtistDetailPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const [activeTab, setActiveTab] = useState('projects');
+  const [activeTab, setActiveTab] = useState('files');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
 
   const { projects, isLoading: projectsLoading, fetchProjects } = useProjects(artistId);
@@ -389,8 +392,13 @@ export default function ArtistDetailPage() {
         <ArtistPaymentsTab artistId={artistId} />
       )}
 
+      {/* Tab Content: Files (Drive Explorer) */}
+      {activeTab === 'files' && (
+        <DriveExplorer rootFolderId={artist?.driveFolderId || artistId} rootName={artist?.name || 'Archivos'} />
+      )}
+
       {/* Tab Content: Placeholder for others */}
-      {activeTab !== 'projects' && activeTab !== 'notes' && activeTab !== 'matrices' && activeTab !== 'payments' && (
+      {activeTab !== 'projects' && activeTab !== 'notes' && activeTab !== 'matrices' && activeTab !== 'payments' && activeTab !== 'files' && (
         <div className="glass rounded-xl p-12 text-center text-text-secondary border border-border animate-fade-in">
           <h3 className="text-lg font-medium text-text-primary mb-2 capitalize">Módulo de {activeTab}</h3>
           <p className="max-w-md mx-auto">Esta sección se está construyendo actualmente.</p>
