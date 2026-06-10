@@ -21,14 +21,14 @@ export function Modal({ isOpen, onClose, title, description, children, className
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-background/80 backdrop-blur-sm animate-fade-in" 
+        className="fixed inset-0 bg-background/90 animate-fade-in" 
         onClick={onClose}
       />
       
       {/* Content */}
       <div 
         className={cn(
-          "relative z-50 w-full max-w-lg glass rounded-xl shadow-2xl animate-slide-in border border-border/50 max-h-[90vh] flex flex-col",
+          "relative z-50 w-full max-w-lg bg-surface-elevated rounded-xl shadow-2xl animate-slide-in border border-border max-h-[90vh] flex flex-col",
           className
         )}
       >

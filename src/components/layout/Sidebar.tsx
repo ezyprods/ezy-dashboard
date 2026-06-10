@@ -22,22 +22,22 @@ export function Sidebar() {
     <aside className="w-64 border-r border-border bg-surface flex flex-col h-screen sticky top-0">
       <div className="h-28 flex items-center px-4 border-b border-border justify-center md:justify-start">
         <Link href="/dashboard" className="flex items-center w-full justify-center mt-2">
-          {/* Light Mode Logo (Black) */}
+          {/* Light Mode Logo */}
           <Image
-            src="/logo-black.png"
+            src="/logo-black-trimmed.png"
             alt="EZY"
             width={240}
             height={96}
-            className="logo-light h-16 w-auto object-contain scale-[2.5] origin-center"
+            className="logo-light h-14 w-auto object-contain"
             priority
           />
           {/* Dark Mode Logo (White) */}
           <Image
-            src="/logo.png"
+            src="/logo-trimmed.png"
             alt="EZY"
             width={240}
             height={96}
-            className="logo-dark h-16 w-auto object-contain scale-[2.5] origin-center"
+            className="logo-dark h-14 w-auto object-contain"
             priority
           />
         </Link>

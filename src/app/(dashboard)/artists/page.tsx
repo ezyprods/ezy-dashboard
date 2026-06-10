@@ -2,12 +2,13 @@
 
 import { useState } from 'react';
 import { Button } from "@/components/ui/Button";
-import { Plus, Search, LayoutGrid, List as ListIcon, Filter } from "lucide-react";
+import { Plus, Search, LayoutGrid, List as ListIcon, Filter, Share2 } from "lucide-react";
 import { useArtists } from "@/lib/hooks/useArtists";
 import { SERVICE_LABELS } from "@/lib/constants";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
 import { Input } from "@/components/ui/Input";
 import { useRouter } from 'next/navigation';
+import { cn } from "@/lib/utils";
 
 export default function ArtistsPage() {
   const { artists, activeArtists, archivedArtists, isLoading, error } = useArtists();
@@ -114,48 +115,71 @@ export default function ArtistsPage() {
             <div 
               key={artist.id} 
               onClick={() => router.push(`/artists/${artist.id}`)}
+              data-context="artist"
+              data-artist-id={artist.id}
               className={`bg-surface-elevated border border-border card-hover cursor-pointer group rounded-xl overflow-hidden ${
                 viewMode === 'list' ? 'flex items-center p-4 gap-6' : 'p-5 flex flex-col'
               }`}
             >
-              {/* Photo & Main Info */}
-              <div className={`flex ${viewMode === 'grid' ? 'items-start gap-4 mb-4' : 'items-center gap-4 flex-1'}`}>
-                <div className={`rounded-full bg-surface border border-border flex items-center justify-center overflow-hidden shrink-0 ${
-                  viewMode === 'grid' ? 'w-14 h-14' : 'w-10 h-10'
-                }`}>
-                  {artist.photoUrl ? (
-                    <img src={artist.photoUrl} alt={artist.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                  ) : (
-                    <span className="font-bold text-lg text-text-secondary">{artist.name.charAt(0)}</span>
+              {/* Banner background for Grid mode */}
+              {viewMode === 'grid' && (
+                <div className="h-12 w-full bg-gradient-to-r from-accent/20 to-surface-elevated shrink-0" />
+              )}
+              
+              <div className={cn("flex flex-col flex-1", viewMode === 'grid' ? "px-5 pb-5 pt-0" : "p-4 flex-row items-center gap-6")}>
+                {/* Photo & Main Info */}
+                <div className={cn("flex", viewMode === 'grid' ? "flex-col items-start" : "items-center gap-4 flex-1")}>
+                  <div className={cn(
+                    "rounded-full bg-surface border-4 border-surface-elevated flex items-center justify-center overflow-hidden shrink-0 shadow-sm",
+                    viewMode === 'grid' ? "-mt-8 w-16 h-16 mb-3" : "w-10 h-10 border-none"
+                  )}>
+                    {artist.photoUrl ? (
+                      <img src={artist.photoUrl} alt={artist.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                    ) : (
+                      <span className="font-bold text-xl text-text-secondary">{artist.name.charAt(0)}</span>
+                    )}
+                  </div>
+                  
+                  <div className={cn(viewMode === 'grid' ? "w-full" : "")}>
+                    <h3 className="font-bold text-text-primary text-lg leading-tight group-hover:text-accent transition-colors">{artist.name}</h3>
+                    <p className="text-sm text-text-secondary mt-0.5 truncate max-w-[180px]">{artist.activeProject || 'Sin proyecto activo'}</p>
+                  </div>
+                </div>
+
+                {viewMode === 'grid' && <div className="w-full h-px bg-border/50 my-4" />}
+
+                {/* Tags & Services */}
+                <div className={cn("flex flex-wrap items-center gap-2", viewMode === 'list' ? "flex-1 justify-end" : "mt-auto")}>
+                  {(!artist.genre?.length && !artist.services?.length && viewMode === 'grid') && (
+                    <span className="text-[11px] text-text-secondary/60 italic">Sin etiquetas ni servicios</span>
                   )}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-text-primary text-lg leading-tight group-hover:text-accent transition-colors">{artist.name}</h3>
-                  <p className="text-sm text-text-secondary mt-0.5 truncate max-w-[180px]">{artist.activeProject || 'Sin proyecto activo'}</p>
+                  
+                  {artist.genre?.slice(0, 2).map(g => (
+                    <span key={g} className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary bg-surface px-2 py-1 rounded">
+                      {g}
+                    </span>
+                  ))}
+                  
+                  {artist.services?.slice(0, 3).map((service) => (
+                    <span key={service} className="px-2 py-1 rounded-md text-[10px] font-medium bg-accent/10 border border-accent/20 text-accent-light">
+                      {SERVICE_LABELS[service] || service}
+                    </span>
+                  ))}
                 </div>
               </div>
 
-              {/* Tags & Services */}
-              <div className={`flex flex-wrap items-center gap-2 ${viewMode === 'list' ? 'flex-1 justify-end' : 'mt-auto'}`}>
-                {artist.genre?.slice(0, 2).map(g => (
-                  <span key={g} className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary bg-surface px-2 py-1 rounded">
-                    {g}
-                  </span>
-                ))}
-                
-                {viewMode === 'grid' && <div className="w-full h-px bg-border/50 my-2" />}
-
-                {artist.services?.slice(0, 3).map((service) => (
-                  <span key={service} className="px-2 py-1 rounded-md text-[10px] font-medium bg-accent/10 border border-accent/20 text-accent-light">
-                    {SERVICE_LABELS[service] || service}
-                  </span>
-                ))}
-                {artist.services?.length > 3 && (
-                  <span className="px-2 py-1 rounded-md text-[10px] font-medium bg-surface text-text-secondary">
-                    +{artist.services.length - 3}
-                  </span>
-                )}
-              </div>
+              {/* Hover Actions (Grid only) */}
+              {viewMode === 'grid' && (
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`); alert('Enlace de portal copiado'); }}
+                    className="p-1.5 bg-surface-elevated/90 backdrop-blur-sm hover:bg-accent hover:text-white rounded-md text-text-secondary transition-colors"
+                    title="Copiar Portal"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

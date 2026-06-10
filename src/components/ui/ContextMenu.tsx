@@ -18,6 +18,7 @@ import {
   Settings2,
   ExternalLink,
   Eye,
+  UploadCloud,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -39,6 +40,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Settings2,
   ExternalLink,
   Eye,
+  UploadCloud,
 };
 
 function MenuIcon({ name }: { name?: string }) {
@@ -59,12 +61,17 @@ export function GlobalContextMenu() {
       label: 'Nuevo Artista',
       icon: 'Plus',
       action: () => {
-        // Dispatch a custom event that the dashboard can listen to
         window.dispatchEvent(new CustomEvent('ezy:new-artist'));
       },
     },
+    {
+      label: 'Subida Rápida',
+      icon: 'UploadCloud',
+      action: () => window.dispatchEvent(new CustomEvent('ezy:quick-upload')),
+    },
+    { separator: true },
     { label: 'Ir al Dashboard', icon: 'LayoutDashboard', action: () => router.push('/dashboard') },
-    { label: 'Ir a Artistas', icon: 'Users', action: () => router.push('/artists') },
+    { label: 'Directorio Artistas', icon: 'Users', action: () => router.push('/artists') },
     { label: 'Abrir Calendario', icon: 'Calendar', action: () => router.push('/calendar') },
   ], [router]);
 
@@ -184,7 +191,7 @@ export function GlobalContextMenu() {
           <button
             key={i}
             onClick={() => {
-              item.action();
+              if (item.action) item.action();
               hideMenu();
             }}
             className={cn(

@@ -3,9 +3,9 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
 export interface MenuItem {
-  label: string;
+  label?: string;
   icon?: string; // lucide icon name
-  action: () => void;
+  action?: () => void;
   variant?: 'default' | 'danger';
   separator?: boolean;
 }

@@ -50,6 +50,23 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
     let cancelled = false;
     const generate = async () => {
       try {
+        // 1. Check local cache first
+        const cacheKey = `waveform_v1_${fileId}`;
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length === BAR_COUNT) {
+              if (!cancelled) {
+                setWaveformData(parsed);
+                setIsLoadingWaveform(false);
+              }
+              return;
+            }
+          } catch (e) { /* ignore parse error */ }
+        }
+
+        // 2. Not in cache, fetch and decode
         const response = await fetch(`/api/audio/${fileId}`);
         const arrayBuffer = await response.arrayBuffer();
         if (cancelled) return;
@@ -78,6 +95,9 @@ export function WaveformPlayer({ fileId, fileName, artistName, onContextMenu }: 
         if (!cancelled) {
           setWaveformData(normalized);
           setIsLoadingWaveform(false);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(normalized));
+          } catch (e) { /* ignore storage errors */ }
         }
       } catch (e) {
         if (!cancelled) {

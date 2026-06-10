@@ -15,6 +15,8 @@ import { NotesEditor } from '@/components/notes/NotesEditor';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
+
+import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
 import { CustomSortModal } from '@/components/projects/CustomSortModal';
 import { STATUS_CONFIG } from '@/lib/constants';
 
@@ -183,17 +185,16 @@ export default function ProjectDetailPage() {
                     <h3 className="font-bold text-lg">{folder.name}</h3>
                   </div>
                   
-                  <select
-                    className="bg-surface-elevated border border-border rounded-full text-xs px-2 py-1 focus:outline-none focus:border-accent text-text-primary font-medium cursor-pointer"
-                    style={{
-                      backgroundColor: data?.project?.folderStatuses?.[folder.id] ? STATUS_CONFIG[data.project.folderStatuses[folder.id]]?.bgColor : 'transparent',
-                      color: data?.project?.folderStatuses?.[folder.id] ? STATUS_CONFIG[data.project.folderStatuses[folder.id]]?.color : 'inherit',
-                    }}
-                    value={data?.project?.folderStatuses?.[folder.id] || ''}
-                    onChange={async (e) => {
-                      const newStatus = e.target.value;
+                  <FolderStatusPicker
+                    currentStatus={data?.project?.folderStatuses?.[folder.id] || ''}
+                    statusConfig={STATUS_CONFIG}
+                    onStatusChange={async (newStatus) => {
                       const customStatuses = data?.project?.folderStatuses || {};
-                      customStatuses[folder.id] = newStatus;
+                      if (!newStatus) {
+                        delete customStatuses[folder.id];
+                      } else {
+                        customStatuses[folder.id] = newStatus;
+                      }
                       
                       try {
                         const res = await fetch(`/api/projects/${projectId}`, {
@@ -210,12 +211,7 @@ export default function ProjectDetailPage() {
                         alert('Error guardando el estado');
                       }
                     }}
-                  >
-                    <option value="">(Sin estado)</option>
-                    {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>{config.label}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 
                 <div className="flex items-center gap-4">
