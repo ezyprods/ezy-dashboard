@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/Button";
 import { Plus, UploadCloud, AlertCircle, Loader2, Music, Play, TrendingUp, Calendar, LayoutDashboard, ChevronRight, Users } from "lucide-react";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
+import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
 import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
 import { useRouter } from 'next/navigation';
 import type { Artist } from '@/types';
 
 export default function DashboardPage() {
   const [isNewArtistModalOpen, setIsNewArtistModalOpen] = useState(false);
+  const [isQuickUploadOpen, setIsQuickUploadOpen] = useState(false);
   const router = useRouter();
   
   const [pulseData, setPulseData] = useState<{ artists: Artist[], globalStats: any }>({ artists: [], globalStats: null });
@@ -62,6 +64,11 @@ export default function DashboardPage() {
         isOpen={isNewArtistModalOpen} 
         onClose={() => setIsNewArtistModalOpen(false)} 
       />
+      <QuickUploadModal
+        isOpen={isQuickUploadOpen}
+        onClose={() => setIsQuickUploadOpen(false)}
+        artists={artists}
+      />
 
       {/* Action Center (Header) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -102,7 +109,7 @@ export default function DashboardPage() {
               <h3 className="font-semibold text-text-primary">Nuevo Proyecto</h3>
               <p className="text-sm text-text-secondary mt-1">Elige un artista primero</p>
             </div>
-            <div onClick={() => router.push('/artists')} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
+            <div onClick={() => setIsQuickUploadOpen(true)} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <UploadCloud className="w-5 h-5" />
               </div>
