@@ -35,8 +35,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       });
       
       releases.push({
-        id: folder.id!,
         ...config,
+        id: folder.id!,
         tracks: Array(audioRes.data.files?.length || 0).fill({} as any) // Trick to make .length work correctly in the UI
       });
     }

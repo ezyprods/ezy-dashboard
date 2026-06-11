@@ -27,6 +27,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const [items, setItems] = useState<DriveItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const { showMenu } = useContextMenu();
 
   useEffect(() => {
@@ -77,6 +78,72 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       customAlert('Error al subir archivos');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+
+    // If it's an internal drag, we ignore it here
+    const internalItemId = e.dataTransfer.getData('text/plain');
+    if (internalItemId) return;
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    
+    setIsUploading(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const formData = new FormData();
+        formData.append('file', files[i]);
+        formData.append('parentId', currentFolderId);
+        
+        await fetch('/api/files', { method: 'POST', body: formData });
+      }
+      customAlert('Archivos subidos con éxito');
+      fetchItems(currentFolderId);
+    } catch (err) {
+      customAlert('Error al subir archivos');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleItemDragStart = (e: React.DragEvent, itemId: string) => {
+    e.stopPropagation();
+    e.dataTransfer.setData('text/plain', itemId);
+  };
+
+  const handleItemDrop = async (e: React.DragEvent, targetFolderId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    const draggedItemId = e.dataTransfer.getData('text/plain');
+    if (!draggedItemId || draggedItemId === targetFolderId) return;
+
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/files', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId: draggedItemId, newParentId: targetFolderId, oldParentId: currentFolderId }),
+      });
+      if (!res.ok) throw new Error('Error al mover el archivo');
+      fetchItems(currentFolderId);
+    } catch (err: any) { 
+      customAlert(err.message); 
+      setIsLoading(false);
     }
   };
 
@@ -142,7 +209,12 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   });
 
   return (
-    <div className="animate-fade-in space-y-6">
+    <div 
+      className={`animate-fade-in space-y-6 rounded-xl transition-all ${isDraggingOver ? 'ring-2 ring-accent bg-accent/5' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Top Bar: Breadcrumbs & Actions */}
       <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
         <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
@@ -198,6 +270,10 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               return (
                 <div 
                   key={item.id}
+                  draggable
+                  onDragStart={(e) => handleItemDragStart(e, item.id)}
+                  onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
+                  onDrop={isFolder ? (e) => handleItemDrop(e, item.id) : undefined}
                   className="group flex items-center p-3 hover:bg-surface-elevated transition-colors cursor-pointer"
                   onClick={() => isFolder ? navigateTo(item.id, item.name) : window.open(item.webViewLink, '_blank')}
                   onContextMenu={(e) => {
