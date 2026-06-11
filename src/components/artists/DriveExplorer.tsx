@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
@@ -43,9 +43,24 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
-  // Undo Stack
+  // Undo / Redo Stack
   const [actionStack, setActionStack] = useState<ActionHistory[]>([]);
+  const [redoStack, setRedoStack] = useState<ActionHistory[]>([]);
   const [toast, setToast] = useState<{ message: string, action?: ActionHistory } | null>(null);
+
+  const explorerRef = useRef<HTMLDivElement>(null);
+
+  // Clear selection when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (explorerRef.current && !explorerRef.current.contains(e.target as Node)) {
+        setSelectedIds([]);
+        setLastSelectedIndex(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Clear selection when changing folder
   useEffect(() => {
@@ -111,9 +126,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     if (actionStack.length === 0) return;
     const lastAction = actionStack[actionStack.length - 1];
     setActionStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [...prev, lastAction]);
 
     setIsLoading(true);
-    setToast(null);
 
     try {
       if (lastAction.type === 'MOVE' && lastAction.oldParentId) {
@@ -124,7 +139,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             body: JSON.stringify({ fileId: item.id, newParentId: lastAction.oldParentId, oldParentId: lastAction.newParentId }),
           });
         }
-        customAlert(`Deshecho: Se han movido ${lastAction.items.length} elementos de vuelta.`);
+        customAlert(`Deshecho: Se han devuelto ${lastAction.items.length} elementos.`);
       } else if (lastAction.type === 'TRASH') {
         for (const item of lastAction.items) {
           await fetch('/api/files', {
@@ -138,6 +153,38 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       fetchItems(currentFolderId);
     } catch (err: any) {
       customAlert('Error al deshacer: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const redoLastAction = async () => {
+    if (redoStack.length === 0) return;
+    const actionToRedo = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+    setActionStack(prev => [...prev, actionToRedo]);
+
+    setIsLoading(true);
+
+    try {
+      if (actionToRedo.type === 'MOVE' && actionToRedo.newParentId) {
+        for (const item of actionToRedo.items) {
+          await fetch('/api/files', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileId: item.id, newParentId: actionToRedo.newParentId, oldParentId: actionToRedo.oldParentId }),
+          });
+        }
+        customAlert(`Rehecho: Se han movido ${actionToRedo.items.length} elementos nuevamente.`);
+      } else if (actionToRedo.type === 'TRASH') {
+        for (const item of actionToRedo.items) {
+          await fetch(`/api/files?id=${item.id}`, { method: 'DELETE' });
+        }
+        customAlert(`Rehecho: Se han vuelto a eliminar ${actionToRedo.items.length} elementos.`);
+      }
+      fetchItems(currentFolderId);
+    } catch (err: any) {
+      customAlert('Error al rehacer: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -163,12 +210,15 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         undoLastAction();
+      } else if (e.key === 'y' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        redoLastAction();
       }
     };
     
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedIds, items, actionStack]);
+  }, [selectedIds, items, actionStack, redoStack]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -274,6 +324,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         oldParentId: currentFolderId,
         newParentId: targetFolderId
       }]);
+      setRedoStack([]); // Clear redo stack on new action
       
       setSelectedIds([]);
       fetchItems(currentFolderId);
@@ -319,6 +370,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         type: 'TRASH',
         items: trashedItems
       }]);
+      setRedoStack([]); // Clear redo stack on new action
       
       setSelectedIds([]);
       fetchItems(currentFolderId);
@@ -385,26 +437,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
   return (
     <div 
-      className="relative animate-fade-in space-y-6 rounded-xl transition-all"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      ref={explorerRef}
+      className="animate-fade-in space-y-6 transition-all"
     >
-      {/* Drag Overlay */}
-      {isDraggingOver && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-[2px] rounded-xl border-2 border-dashed border-accent m-0" style={{ margin: 0 }}>
-          <div className="bg-surface-elevated p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
-            <div className="w-20 h-20 bg-accent/10 text-accent rounded-full flex items-center justify-center">
-              <UploadCloud className="w-10 h-10 animate-bounce" />
-            </div>
-            <div className="text-center">
-              <h3 className="text-xl font-bold text-text-primary">Suelta los archivos aquí</h3>
-              <p className="text-sm text-text-secondary mt-1">Se subirán automáticamente a esta carpeta de Drive</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Top Bar: Breadcrumbs & Actions */}
       <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
         <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
@@ -453,7 +488,31 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       </div>
 
       {/* Content */}
-      <div className="bg-surface rounded-xl border border-border overflow-hidden">
+      <div 
+        className="relative bg-surface rounded-xl border border-border overflow-hidden min-h-[400px]"
+        onClick={() => {
+          setSelectedIds([]);
+          setLastSelectedIndex(null);
+        }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Drag Overlay */}
+        {isDraggingOver && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/90 backdrop-blur-[2px] rounded-xl border-2 border-dashed border-accent pointer-events-none">
+            <div className="bg-surface-elevated p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 animate-in zoom-in-95 duration-200 max-w-sm w-full mx-4">
+              <div className="w-16 h-16 bg-accent/10 text-accent rounded-full flex items-center justify-center">
+                <UploadCloud className="w-8 h-8 animate-bounce" />
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-text-primary">Suelta los archivos aquí</h3>
+                <p className="text-xs text-text-secondary mt-1">Se subirán automáticamente a esta carpeta</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
         ) : groupedItems.length === 0 ? (

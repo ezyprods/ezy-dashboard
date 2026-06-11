@@ -7,6 +7,7 @@ import { NewArtistModal } from "@/components/artists/NewArtistModal";
 import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
 import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
+import { GlobalMatricesWidget } from "@/components/dashboard/GlobalMatricesWidget";
 import { useRouter } from 'next/navigation';
 import type { Artist } from '@/types';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
@@ -79,6 +80,7 @@ export default function DashboardPage() {
         onClose={() => setIsNewProjectOpen(false)}
         artists={artists}
       />
+
 
       {/* Action Center (Header) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -257,6 +259,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      
+      <GlobalMatricesWidget />
     </div>
   );
 }

@@ -23,6 +23,9 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
       if (res.ok) {
         const data = await res.json();
         setMatrices(data.matrices || []);
+      } else {
+        const err = await res.json();
+        console.error('fetchMatrices error:', err);
       }
     } catch (e) {
       console.error(e);
@@ -42,9 +45,13 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
       });
       if (res.ok) {
         fetchMatrices();
+      } else {
+        const err = await res.json();
+        customAlert(`Error al crear matriz: ${err.error} - ${err.details}`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      customAlert(`Error: ${e.message}`);
     }
   };
 
