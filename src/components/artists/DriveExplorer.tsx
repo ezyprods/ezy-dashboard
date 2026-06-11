@@ -199,14 +199,36 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     return <FileIcon className="w-5 h-5 text-text-secondary" />;
   };
 
-  // Sort: folders first
-  const sortedItems = [...items].sort((a, b) => {
-    const isAFolder = a.mimeType === 'application/vnd.google-apps.folder';
-    const isBFolder = b.mimeType === 'application/vnd.google-apps.folder';
-    if (isAFolder && !isBFolder) return -1;
-    if (!isAFolder && isBFolder) return 1;
-    return a.name.localeCompare(b.name);
-  });
+  // Sort and group
+  const groupedItems = (() => {
+    const audioItems = items.filter(i => i.mimeType.startsWith('audio/'));
+    const nonAudioItems = items.filter(i => !i.mimeType.startsWith('audio/'));
+
+    const audioGroups = new Map<string, typeof items>();
+    audioItems.forEach(item => {
+      const nameWithoutExt = item.name.replace(/\.[^/.]+$/, "");
+      const baseName = nameWithoutExt.replace(/([ _-](v\d+|mix\s*\d+))$/i, '').trim();
+      if (!audioGroups.has(baseName)) audioGroups.set(baseName, []);
+      audioGroups.get(baseName)!.push(item);
+    });
+
+    const finalItems = [...nonAudioItems];
+    audioGroups.forEach((versions, baseName) => {
+      versions.sort((a, b) => a.name.localeCompare(b.name));
+      finalItems.push({
+        ...versions[0],
+        versions: versions.length > 1 ? versions : undefined
+      } as any);
+    });
+
+    return finalItems.sort((a, b) => {
+      const isAFolder = a.mimeType === 'application/vnd.google-apps.folder';
+      const isBFolder = b.mimeType === 'application/vnd.google-apps.folder';
+      if (isAFolder && !isBFolder) return -1;
+      if (!isAFolder && isBFolder) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  })();
 
   return (
     <div 
@@ -256,14 +278,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       <div className="bg-surface rounded-xl border border-border overflow-hidden">
         {isLoading ? (
           <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
-        ) : sortedItems.length === 0 ? (
+        ) : groupedItems.length === 0 ? (
           <div className="p-16 text-center text-text-secondary">
             <Folder className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>La carpeta está vacía.</p>
           </div>
         ) : (
           <div className="divide-y divide-border/50">
-            {sortedItems.map(item => {
+            {groupedItems.map((item: any) => {
               const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
               const isAudio = item.mimeType.startsWith('audio/');
               
@@ -279,34 +301,38 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    showMenu(e.clientX, e.clientY, [
-                      {
-                        label: isFolder ? 'Abrir' : 'Ver en Drive',
-                        icon: isFolder ? 'FolderOpen' : 'ExternalLink',
-                        action: () => isFolder ? navigateTo(item.id, item.name) : window.open(item.webViewLink, '_blank')
-                      },
-                      { separator: true },
-                      {
-                        label: 'Renombrar',
-                        icon: 'Edit3',
-                        action: () => handleRename(item.id, item.name)
-                      },
-                      {
-                        label: 'Copiar Enlace',
-                        icon: 'LinkIcon',
-                        action: () => {
-                          navigator.clipboard.writeText(item.webViewLink || '');
-                          customAlert('Enlace copiado');
-                        }
-                      },
-                      { separator: true },
-                      {
-                        label: 'Eliminar',
-                        icon: 'Trash2',
-                        variant: 'danger',
-                        action: () => handleDelete(item.id, isFolder)
-                      }
-                    ]);
+                    let menuItems: any[] = [];
+                    if (isFolder) {
+                      menuItems = [
+                        { label: 'Abrir Carpeta', icon: 'FolderOpen', action: () => navigateTo(item.id, item.name) },
+                        { separator: true },
+                        { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
+                        { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
+                        { separator: true },
+                        { label: 'Eliminar Carpeta', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, true) }
+                      ];
+                    } else if (isAudio) {
+                      menuItems = [
+                        { label: 'Reproducir / Pausar', icon: 'Play', action: () => window.open(item.webViewLink, '_blank') },
+                        { label: 'Descargar', icon: 'Download', action: () => { const a = document.createElement('a'); a.href = `/api/audio/${item.id}`; a.download = item.name; a.click(); } },
+                        { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
+                        { separator: true },
+                        { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
+                        { separator: true },
+                        { label: 'Eliminar Audio', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false) }
+                      ];
+                    } else {
+                      menuItems = [
+                        { label: 'Ver Archivo', icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
+                        { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
+                        { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
+                        { separator: true },
+                        { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
+                        { separator: true },
+                        { label: 'Eliminar Archivo', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false) }
+                      ];
+                    }
+                    showMenu(e.clientX, e.clientY, menuItems);
                   }}
                 >
                   <div className="w-10 flex justify-center shrink-0">
@@ -325,7 +351,13 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   {/* Waveform for audio files directly in explorer */}
                   {isAudio && (
                     <div className="flex-1 hidden md:block mr-4 opacity-50 group-hover:opacity-100 transition-opacity">
-                      <WaveformPlayer fileId={item.id} fileName={item.name} />
+                      <WaveformPlayer 
+                        fileId={item.id} 
+                        fileName={item.name} 
+                        versions={item.versions}
+                        currentFolderId={currentFolderId}
+                        onRefresh={() => fetchItems(currentFolderId)}
+                      />
                     </div>
                   )}
 

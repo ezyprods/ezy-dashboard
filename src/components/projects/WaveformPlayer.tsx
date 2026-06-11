@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Pause, Play, Download, Trash2, Edit3, FolderInput, ExternalLink, MessageSquare, X } from 'lucide-react';
+import { Pause, Play, Download, Trash2, Edit3, FolderInput, ExternalLink, MessageSquare, X, Loader2 } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -15,6 +15,7 @@ interface WaveformPlayerProps {
   folders?: { id: string; name: string }[];
   onRefresh?: () => void;
   currentFolderId?: string;
+  versions?: { id: string; name: string }[];
 }
 
 const BAR_COUNT = 70; // Fewer, thicker bars for minimalist look
@@ -27,12 +28,17 @@ export function WaveformPlayer({
   onContextMenu,
   folders = [],
   onRefresh,
-  currentFolderId
+  currentFolderId,
+  versions
 }: WaveformPlayerProps) {
   const { currentTrack, isPlaying, duration, currentTime, playTrack, togglePlay, seek } = useAudio();
 
-  const [displayName, setDisplayName] = useState(fileName.replace(/\.[^/.]+$/, ''));
-  const isThisTrackActive = currentTrack?.id === fileId;
+  const [activeVersionId, setActiveVersionId] = useState(fileId);
+  const activeId = versions && versions.length > 0 ? activeVersionId : fileId;
+  const activeName = versions?.find(v => v.id === activeId)?.name || fileName;
+
+  const [displayName, setDisplayName] = useState(activeName.replace(/\.[^/.]+$/, ''));
+  const isThisTrackActive = currentTrack?.id === activeId;
   const isThisTrackPlaying = isThisTrackActive && isPlaying;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,8 +57,9 @@ export function WaveformPlayer({
   const [comments, setComments] = useState<{id: string, time: number, text: string}[]>([]);
 
   useEffect(() => {
-    setDisplayName(fileName.replace(/\.[^/.]+$/, ''));
-  }, [fileName]);
+    setDisplayName(activeName.replace(/\.[^/.]+$/, ''));
+    setWaveformData(null); // Reset waveform when changing version
+  }, [activeName, activeId]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -73,7 +80,7 @@ export function WaveformPlayer({
     let cancelled = false;
     const generate = async () => {
       try {
-        const cacheKey = `waveform_v3_hq_${fileId}`;
+        const cacheKey = `waveform_v3_hq_${activeId}`;
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -88,7 +95,7 @@ export function WaveformPlayer({
           } catch (e) { }
         }
 
-        const response = await fetch(`/api/audio/${fileId}`);
+        const response = await fetch(`/api/audio/${activeId}`);
         const arrayBuffer = await response.arrayBuffer();
         if (cancelled) return;
 
@@ -98,27 +105,21 @@ export function WaveformPlayer({
 
         const channelData = decoded.getChannelData(0);
         const blockSize = Math.floor(channelData.length / BAR_COUNT);
-        const bars: number[] = [];
-
+        const points = [];
         for (let i = 0; i < BAR_COUNT; i++) {
-          let sum = 0;
-          const start = i * blockSize;
+          let max = 0;
           for (let j = 0; j < blockSize; j++) {
-            sum += Math.abs(channelData[start + j]);
+            const val = Math.abs(channelData[i * blockSize + j]);
+            if (val > max) max = val;
           }
-          bars.push(sum / blockSize);
+          points.push(Math.min(max * 1.5, 1));
         }
-
-        const max = Math.max(...bars, 0.001);
-        // Exagerate waveform slightly to make it pop
-        const normalized = bars.map((v) => Math.pow(v / max, 0.8));
-
         if (!cancelled) {
-          setWaveformData(normalized);
-          setIsLoadingWaveform(false);
+          setWaveformData(points);
           try {
-            localStorage.setItem(cacheKey, JSON.stringify(normalized));
+            localStorage.setItem(cacheKey, JSON.stringify(points));
           } catch (e) { }
+          setIsLoadingWaveform(false);
         }
       } catch (e) {
         if (!cancelled) {
@@ -192,7 +193,7 @@ export function WaveformPlayer({
     if (isThisTrackActive) {
       togglePlay();
     } else {
-      playTrack({ id: fileId, name: displayName, url: `/api/audio/${fileId}`, artistName });
+      playTrack({ id: activeId, name: displayName, url: `/api/audio/${activeId}`, artistName });
     }
   };
 
@@ -221,9 +222,9 @@ export function WaveformPlayer({
     if (isThisTrackActive && duration > 0) {
       seek((x / canvasWidth) * duration);
     } else {
-      playTrack({ id: fileId, name: displayName, url: `/api/audio/${fileId}`, artistName });
+      playTrack({ id: activeId, name: displayName, url: `/api/audio/${activeId}`, artistName });
     }
-  }, [isThisTrackActive, duration, canvasWidth, seek, playTrack, fileId, displayName, artistName]);
+  }, [isThisTrackActive, duration, canvasWidth, seek, playTrack, activeId, displayName, artistName]);
 
   const startRename = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -237,7 +238,7 @@ export function WaveformPlayer({
       return;
     }
 
-    const currentExt = fileName.substring(fileName.lastIndexOf('.'));
+    const currentExt = activeName.substring(activeName.lastIndexOf('.'));
     const newName = editNameValue.trim();
 
     setIsUpdating(true);
@@ -245,7 +246,7 @@ export function WaveformPlayer({
       const res = await fetch('/api/files', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, name: newName + currentExt }),
+        body: JSON.stringify({ fileId: activeId, name: newName + currentExt }),
       });
       if (!res.ok) throw new Error('Error al renombrar archivo');
       setDisplayName(newName);
@@ -278,7 +279,7 @@ export function WaveformPlayer({
       const res = await fetch('/api/files', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, newParentId: targetFolder.id, oldParentId: currentFolderId }),
+        body: JSON.stringify({ fileId: activeId, newParentId: targetFolder.id, oldParentId: currentFolderId }),
       });
       if (!res.ok) throw new Error('Error al mover el archivo');
       customAlert(`Archivo movido con éxito a ${targetFolder.name}`);
@@ -288,10 +289,10 @@ export function WaveformPlayer({
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!await customConfirm(`¿Estás seguro de que quieres eliminar el archivo "${fileName}" de forma permanente?`)) return;
+    if (!await customConfirm(`¿Estás seguro de que quieres eliminar el archivo "${activeName}" de forma permanente?`)) return;
     setIsUpdating(true);
     try {
-      const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/files?id=${activeId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el archivo');
       if (onRefresh) onRefresh();
     } catch (err: any) { customAlert(err.message); } finally { setIsUpdating(false); }
@@ -300,7 +301,7 @@ export function WaveformPlayer({
   const startCommenting = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isThisTrackActive) {
-      playTrack({ id: fileId, name: displayName, url: `/api/audio/${fileId}`, artistName });
+      playTrack({ id: activeId, name: displayName, url: `/api/audio/${activeId}`, artistName });
     } else if (isPlaying) {
       togglePlay();
     }
@@ -324,8 +325,7 @@ export function WaveformPlayer({
           'py-2 px-3 rounded-xl border bg-surface-elevated/40 flex items-center justify-between gap-4 transition-all group/audio shadow-sm hover:shadow-md hover:bg-surface-elevated/70',
           isThisTrackActive ? 'border-accent shadow-[0_0_15px_rgba(108,92,231,0.15)] bg-accent/5' : 'border-border/60 hover:border-accent/40'
         )}
-      )}
-    >
+      >
       {/* 1. Play Button & Title */}
       <div className="flex items-center gap-3 min-w-0 flex-1 sm:max-w-[35%]">
         <button
@@ -351,13 +351,30 @@ export function WaveformPlayer({
               className="w-full bg-surface-elevated/50 border border-accent/50 rounded px-2 py-0.5 text-[13px] font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
             />
           ) : (
-            <span 
-              className={cn('text-[13px] font-semibold truncate block transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
-              title={displayName}
-              onDoubleClick={startRename}
-            >
-              {displayName}
-            </span>
+            <div className="flex items-center gap-2">
+              <span 
+                className={cn('text-[13px] font-semibold truncate block transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
+                title={displayName}
+                onDoubleClick={startRename}
+              >
+                {displayName}
+              </span>
+              {versions && versions.length > 1 && (
+                <select 
+                  className="bg-surface-elevated border border-border/50 rounded text-[10px] font-bold px-1 py-0.5 text-text-secondary outline-none hover:text-text-primary hover:border-accent/50 cursor-pointer transition-colors"
+                  value={activeId}
+                  onChange={e => {
+                    e.stopPropagation();
+                    setActiveVersionId(e.target.value);
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {versions.map((v, i) => (
+                    <option key={v.id} value={v.id}>V{i + 1}</option>
+                  ))}
+                </select>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -409,14 +426,13 @@ export function WaveformPlayer({
             <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>
             <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
             <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>
-            <a href={`/api/audio/${fileId}`} download={fileName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
+            <a href={`/api/audio/${activeId}`} download={activeName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
             <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-0 group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
-            <a href={`/api/audio/${fileId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"><ExternalLink className="w-3.5 h-3.5" /></a>
+            <a href={`/api/audio/${activeId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"><ExternalLink className="w-3.5 h-3.5" /></a>
           </>
         )}
       </div>
       </div>
-
       {/* Inline Comment Box */}
       {commentTime !== null && (
         <div className="flex items-center gap-3 bg-surface-elevated border border-border p-3 rounded-lg animate-fade-in shadow-sm ml-12">
