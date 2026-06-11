@@ -105,9 +105,13 @@ export async function DELETE(request: Request) {
     }
 
     const drive = getDriveService();
-    await drive.files.delete({ 
+    // Use update to move to trash instead of permanent delete
+    await drive.files.update({ 
       fileId,
       supportsAllDrives: true,
+      requestBody: {
+        trashed: true
+      }
     });
 
     return NextResponse.json({ success: true });
@@ -120,7 +124,7 @@ export async function DELETE(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { fileId, name, newParentId, oldParentId } = body;
+    const { fileId, name, newParentId, oldParentId, trashed } = body;
 
     if (!fileId) {
       return NextResponse.json({ error: 'Missing fileId' }, { status: 400 });
@@ -135,6 +139,10 @@ export async function PUT(request: Request) {
 
     if (name) {
       updateParams.requestBody.name = name;
+    }
+    
+    if (trashed !== undefined) {
+      updateParams.requestBody.trashed = trashed;
     }
 
     if (newParentId && oldParentId) {
