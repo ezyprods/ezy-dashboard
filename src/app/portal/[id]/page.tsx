@@ -128,8 +128,8 @@ export default function PortalPage() {
                 );
               }
 
-              if (mod.type === 'billing') {
-                if (!data.payments) return null;
+              if (mod.type === 'finances') {
+                if (!data.finances) return null;
                 return (
                   <div key={mod.id} className="glass rounded-2xl border border-border p-5 space-y-4 bg-gradient-to-br from-surface to-surface-elevated">
                     <div className="flex justify-between items-center border-b border-border/50 pb-3">
@@ -139,20 +139,20 @@ export default function PortalPage() {
                     <div className="space-y-3.5">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-text-secondary">Presupuesto Total:</span>
-                        <span className="font-bold text-sm text-text-primary">{data.payments.totalBudget}€</span>
+                        <span className="font-bold text-sm text-text-primary">{data.finances.totalBudget}€</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-text-secondary">Total Abonado:</span>
-                        <span className="font-bold text-sm text-success">{data.payments.totalPaid}€</span>
+                        <span className="font-bold text-sm text-success">{data.finances.totalPaid}€</span>
                       </div>
                       <div className="flex flex-col gap-1 pt-3 border-t border-border/55">
                         <div className="flex justify-between items-center">
                            <span className="text-sm font-semibold text-text-primary">Pendiente de Pago:</span>
-                          <span className={`text-xl font-black ${data.payments.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
-                            {data.payments.pendingPayment}€
+                          <span className={`text-xl font-black ${data.finances.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
+                            {data.finances.pendingPayment}€
                           </span>
                         </div>
-                        {data.payments.pendingPayment > 0 && (
+                        {data.finances.pendingPayment > 0 && (
                           <p className="text-[10px] text-warning mt-1 flex items-center gap-1 bg-warning/10 border border-warning/20 p-2 rounded">
                             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                             <span>Listo para facturación y cobro final.</span>
@@ -204,6 +204,39 @@ export default function PortalPage() {
                       <div className="flex flex-col items-center justify-center py-12 text-center bg-surface-elevated/40 rounded-xl border border-dashed border-border/50">
                         <CheckCircle2 className="w-8 h-8 text-text-secondary opacity-50 mb-2" />
                         <p className="text-xs text-text-secondary italic">No hay tareas o fases configuradas.</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              if (mod.type === 'bounces') {
+                if (!activeProject) return null;
+                const paywallLocked = activeProject.requirePaymentForDownload && data.finances?.pendingPayment > 0;
+
+                return (
+                  <div key={mod.id} className="glass rounded-2xl border border-border p-5 flex flex-col gap-4 lg:col-span-2">
+                    <div className="flex items-center gap-2 border-b border-border/50 pb-3">
+                      <Headphones className="w-4 h-4 text-accent" />
+                      <h4 className="font-bold text-sm text-text-primary uppercase tracking-wider">{mod.title || 'Últimas Mezclas / Audios'}</h4>
+                    </div>
+
+                    {activeProject.bounces && activeProject.bounces.length > 0 ? (
+                      <div className="space-y-4">
+                        {activeProject.bounces.map((file: any) => (
+                          <WaveformPlayer 
+                            key={file.id} 
+                            fileId={file.id}
+                            fileName={file.name}
+                            artistName={data.artist.name}
+                            isPortal={true}
+                            paywallLocked={paywallLocked}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-12 text-center bg-surface-elevated/40 rounded-xl border border-dashed border-border/50">
+                        <Music className="w-8 h-8 text-text-secondary opacity-50 mb-2" />
+                        <p className="text-xs text-text-secondary italic">No hay audios disponibles para este proyecto.</p>
                       </div>
                     )}
                   </div>

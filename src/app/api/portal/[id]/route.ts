@@ -87,6 +87,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           type: projectConfig.type,
           status: projectConfig.status || 'active',
           budget: projectConfig.budget || 0,
+          requirePaymentForDownload: !!projectConfig.requirePaymentForDownload,
           tasks: flatTasks,
           bounces,
         };

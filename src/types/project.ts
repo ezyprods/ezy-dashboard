@@ -108,6 +108,9 @@ export interface Project {
   productionGrid?: ProductionGrid;
   referenceTracks?: ReferenceTrack[];
   workSessions?: WorkSession[];
+  
+  // Paywall
+  requirePaymentForDownload?: boolean;
 }
 
 export interface CreateProjectInput {
