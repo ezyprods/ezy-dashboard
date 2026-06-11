@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, ExternalLink, Edit3, FolderInput, Download, Trash2, Loader2 } from 'lucide-react';
+import { Pause, Play, Download, Trash2, Edit3, FolderInput, ExternalLink, MessageSquare, X } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -44,6 +44,11 @@ export function WaveformPlayer({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
+
+  // Comments
+  const [commentTime, setCommentTime] = useState<number | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [comments, setComments] = useState<{id: string, time: number, text: string}[]>([]);
 
   useEffect(() => {
     setDisplayName(fileName.replace(/\.[^/.]+$/, ''));
@@ -292,12 +297,33 @@ export function WaveformPlayer({
     } catch (err: any) { customAlert(err.message); } finally { setIsUpdating(false); }
   };
 
+  const startCommenting = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isThisTrackActive) {
+      playTrack({ id: fileId, name: displayName, url: `/api/audio/${fileId}`, artistName });
+    } else if (isPlaying) {
+      togglePlay();
+    }
+    setCommentTime(currentTime);
+    setCommentText('');
+  };
+
+  const handleCommentSubmit = () => {
+    if (!commentText.trim() || commentTime === null) return;
+    setComments([...comments, { id: Date.now().toString(), time: commentTime, text: commentText.trim() }]);
+    setCommentTime(null);
+    setCommentText('');
+    customAlert('Comentario añadido');
+  };
+
   return (
-    <div
-      onContextMenu={onContextMenu}
-      className={cn(
-        'py-2 px-3 rounded-xl border bg-surface-elevated/40 flex items-center justify-between gap-4 transition-all group/audio shadow-sm hover:shadow-md hover:bg-surface-elevated/70',
-        isThisTrackActive ? 'border-accent shadow-[0_0_15px_rgba(108,92,231,0.15)] bg-accent/5' : 'border-border/60 hover:border-accent/40'
+    <div className="flex flex-col gap-2">
+      <div
+        onContextMenu={onContextMenu}
+        className={cn(
+          'py-2 px-3 rounded-xl border bg-surface-elevated/40 flex items-center justify-between gap-4 transition-all group/audio shadow-sm hover:shadow-md hover:bg-surface-elevated/70',
+          isThisTrackActive ? 'border-accent shadow-[0_0_15px_rgba(108,92,231,0.15)] bg-accent/5' : 'border-border/60 hover:border-accent/40'
+        )}
       )}
     >
       {/* 1. Play Button & Title */}
@@ -359,6 +385,19 @@ export function WaveformPlayer({
             {getTimeAtX(hoverX)}
           </span>
         )}
+        {/* Comment Markers */}
+        {duration > 0 && comments.map(c => (
+          <div 
+            key={c.id} 
+            className="absolute w-2.5 h-2.5 rounded-full bg-accent cursor-pointer group/comment hover:scale-125 transition-transform shadow-[0_0_8px_rgba(108,92,231,0.6)]"
+            style={{ left: `${(c.time / duration) * 100}%`, bottom: '-4px', transform: 'translateX(-50%)' }}
+            onClick={(e) => { e.stopPropagation(); seek(c.time); }}
+          >
+            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover/comment:block bg-surface border border-border text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-20 text-text-primary">
+              {c.text}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* 3. Action Buttons */}
@@ -367,6 +406,7 @@ export function WaveformPlayer({
           <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
         ) : (
           <>
+            <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>
             <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>
             <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>
             <a href={`/api/audio/${fileId}`} download={fileName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
@@ -375,6 +415,29 @@ export function WaveformPlayer({
           </>
         )}
       </div>
+      </div>
+
+      {/* Inline Comment Box */}
+      {commentTime !== null && (
+        <div className="flex items-center gap-3 bg-surface-elevated border border-border p-3 rounded-lg animate-fade-in shadow-sm ml-12">
+          <span className="text-xs font-mono font-bold bg-accent/10 text-accent px-2 py-1 rounded">
+            {Math.floor(commentTime / 60)}:{Math.floor(commentTime % 60).toString().padStart(2, '0')}
+          </span>
+          <input 
+            type="text" 
+            autoFocus 
+            className="flex-1 bg-transparent text-sm border-none focus:ring-0 p-0 text-text-primary placeholder:text-text-secondary/50" 
+            placeholder="Añade un comentario en este instante..." 
+            value={commentText} 
+            onChange={e => setCommentText(e.target.value)} 
+            onKeyDown={e => e.key === 'Enter' && handleCommentSubmit()}
+          />
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={handleCommentSubmit} className="text-xs font-semibold bg-accent text-white px-3 py-1.5 rounded-md hover:bg-accent-hover transition-colors">Guardar</button>
+            <button onClick={() => setCommentTime(null)} className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface transition-colors"><X className="w-4 h-4" /></button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
