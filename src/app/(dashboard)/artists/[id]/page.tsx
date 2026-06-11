@@ -111,69 +111,69 @@ export default function ArtistDetailPage() {
       </div>
 
       {/* Header Profile */}
-      <div className="glass rounded-xl p-8 border border-border relative overflow-hidden">
+      <div className="glass rounded-xl p-5 border border-border relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[80px] rounded-full pointer-events-none" />
         
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-6 relative z-10">
-          <div className="w-16 h-16 rounded-full bg-surface-elevated border-2 border-border flex items-center justify-center text-2xl font-bold overflow-hidden shadow-xl shrink-0">
-            {artist.photoUrl ? (
-              <img src={artist.photoUrl} alt={artist.name || '?'} className="w-full h-full object-cover" />
-            ) : (
-              (artist.name || '?').charAt(0)
-            )}
-          </div>
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10 w-full">
           
-          <div className="flex-1 space-y-3">
-            <div>
-              <h2 className="text-3xl font-bold text-text-primary">{artist.name}</h2>
-              <div className="flex items-center gap-3 mt-2 text-text-secondary text-sm">
-                {artist.email && <span className="flex items-center gap-1"><Mail className="w-4 h-4" /> {artist.email}</span>}
-                {artist.phone && <span className="flex items-center gap-1"><Phone className="w-4 h-4" /> {artist.phone}</span>}
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              {Array.isArray(artist.genre) ? artist.genre.map(g => (
-                <span key={g} className="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
-                  {g}
-                </span>
-              )) : typeof artist.genre === 'string' && (
-                <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
-                  {artist.genre}
-                </span>
+          {/* Left side: Avatar + Info */}
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-12 h-12 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-xl font-bold overflow-hidden shadow-sm shrink-0">
+              {artist.photoUrl ? (
+                <img src={artist.photoUrl} alt={artist.name || '?'} className="w-full h-full object-cover" />
+              ) : (
+                (artist.name || '?').charAt(0)
               )}
             </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4 mt-6">
-                <div className="flex flex-col items-end gap-2 mt-6 sm:mt-0">
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="border-accent text-accent hover:bg-accent/10"
-                      onClick={() => {
-                        const url = `${window.location.origin}/portal/${artistId}`;
-                        navigator.clipboard.writeText(url);
-                        customAlert('¡Enlace del portal copiado al portapapeles!');
-                      }}
-                    >
-                      Copiar Enlace Portal
-                    </Button>
-                    <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 py-1.5 rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1.5 font-medium h-9">
-                      Ver
-                    </a>
-                    <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-9">
-                      <Headphones className="w-4 h-4 mr-2" /> Gestor Previews
-                    </Button>
-                    <Button size="sm" onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0 h-9">
-                      <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
-                    </Button>
-                  </div>
+            
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-text-primary truncate">{artist.name}</h2>
+                <div className="hidden lg:flex items-center gap-2">
+                  {Array.isArray(artist.genre) ? artist.genre.slice(0, 2).map(g => (
+                    <span key={g} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
+                      {g}
+                    </span>
+                  )) : typeof artist.genre === 'string' && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
+                      {artist.genre}
+                    </span>
+                  )}
                 </div>
+              </div>
+              <div className="flex items-center gap-3 mt-0.5 text-text-secondary text-xs">
+                {artist.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {artist.email}</span>}
+                {artist.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {artist.phone}</span>}
               </div>
             </div>
           </div>
+          
+          {/* Right side: Actions */}
+          <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="border-accent text-accent hover:bg-accent/10 h-8 text-xs px-3"
+              onClick={() => {
+                const url = `${window.location.origin}/portal/${artistId}`;
+                navigator.clipboard.writeText(url);
+                customAlert('¡Enlace del portal copiado al portapapeles!');
+              }}
+            >
+              Copiar Enlace Portal
+            </Button>
+            <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors flex items-center justify-center font-medium h-8">
+              Ver
+            </a>
+            <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-8 text-xs px-3">
+              <Headphones className="w-3.5 h-3.5 mr-1.5" /> Gestor Previews
+            </Button>
+            <Button size="sm" onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0 h-8 text-xs px-3">
+              <FolderPlus className="w-3.5 h-3.5 mr-1.5" /> Nuevo Proyecto
+            </Button>
+          </div>
         </div>
+      </div>
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">

@@ -232,11 +232,26 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
   return (
     <div 
-      className={`animate-fade-in space-y-6 rounded-xl transition-all ${isDraggingOver ? 'ring-2 ring-accent bg-accent/5' : ''}`}
+      className="relative animate-fade-in space-y-6 rounded-xl transition-all"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Drag Overlay */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-[2px] rounded-xl border-2 border-dashed border-accent m-0" style={{ margin: 0 }}>
+          <div className="bg-surface-elevated p-8 rounded-2xl shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+            <div className="w-20 h-20 bg-accent/10 text-accent rounded-full flex items-center justify-center">
+              <UploadCloud className="w-10 h-10 animate-bounce" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-text-primary">Suelta los archivos aquí</h3>
+              <p className="text-sm text-text-secondary mt-1">Se subirán automáticamente a esta carpeta de Drive</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Bar: Breadcrumbs & Actions */}
       <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
         <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
