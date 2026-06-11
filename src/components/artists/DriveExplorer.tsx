@@ -244,12 +244,18 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDraggingOver(true);
+    // Only show overlay if dragging external files
+    if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+      setIsDraggingOver(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDraggingOver(false);
+    // Check if we are really leaving the container
+    if (!explorerRef.current?.contains(e.relatedTarget as Node)) {
+      setIsDraggingOver(false);
+    }
   };
 
   const handleDrop = async (e: React.DragEvent) => {
@@ -500,14 +506,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       >
         {/* Drag Overlay */}
         {isDraggingOver && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/90 backdrop-blur-[2px] rounded-xl border-2 border-dashed border-accent pointer-events-none">
-            <div className="bg-surface-elevated p-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 animate-in zoom-in-95 duration-200 max-w-sm w-full mx-4">
-              <div className="w-16 h-16 bg-accent/10 text-accent rounded-full flex items-center justify-center">
-                <UploadCloud className="w-8 h-8 animate-bounce" />
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-sm rounded-xl border-2 border-dashed border-accent pointer-events-none">
+            <div className="bg-surface-elevated px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-in zoom-in-95 duration-200 border border-border/50">
+              <div className="w-10 h-10 bg-accent/20 text-accent rounded-full flex items-center justify-center">
+                <UploadCloud className="w-5 h-5 animate-bounce" />
               </div>
-              <div className="text-center">
-                <h3 className="text-lg font-bold text-text-primary">Suelta los archivos aquí</h3>
-                <p className="text-xs text-text-secondary mt-1">Se subirán automáticamente a esta carpeta</p>
+              <div className="text-left">
+                <h3 className="text-base font-bold text-text-primary">Suelta los archivos aquí</h3>
+                <p className="text-xs text-text-secondary mt-0.5">Se subirán a esta carpeta</p>
               </div>
             </div>
           </div>
@@ -595,24 +601,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                     showMenu(e.clientX, e.clientY, menuItems);
                   }}
                 >
-                  <div className="w-10 flex justify-center shrink-0">
-                    {getIcon(item.mimeType)}
-                  </div>
-                  
-                  {!isAudio && (
-                    <div className="flex-1 min-w-0 mr-4">
-                      <div className="font-medium text-text-primary truncate">{item.name}</div>
-                      {!isFolder && item.size && (
-                        <div className="text-xs text-text-secondary">
-                          {(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Waveform for audio files directly in explorer */}
-                  {isAudio && (
-                    <div className="flex-1 mr-4">
+                  {isAudio ? (
+                    <div className="flex-1 w-full flex items-center pr-2">
                       <WaveformPlayer 
                         fileId={item.id} 
                         fileName={item.name} 
@@ -621,41 +611,54 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         onRefresh={() => fetchItems(currentFolderId)}
                       />
                     </div>
-                  )}
-
-                  {!isAudio && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRename(item.id, item.name);
-                        }}
-                        title="Renombrar"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(item.webViewLink, '_blank');
-                        }}
-                        title="Ver en Drive"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
-                      <button 
-                        className="p-2 text-text-secondary hover:text-error rounded hover:bg-surface"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(item.id, isFolder);
-                        }}
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                  ) : (
+                    <>
+                      <div className="w-10 flex justify-center shrink-0">
+                        {getIcon(item.mimeType)}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0 mr-4">
+                        <div className="font-medium text-text-primary truncate">{item.name}</div>
+                        {!isFolder && item.size && (
+                          <div className="text-xs text-text-secondary">
+                            {(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRename(item.id, item.name);
+                          }}
+                          title="Renombrar"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(item.webViewLink, '_blank');
+                          }}
+                          title="Ver en Drive"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                        <button 
+                          className="p-2 text-text-secondary hover:text-error rounded hover:bg-surface"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(item.id, isFolder);
+                          }}
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               );
