@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Loader2, AlertCircle } from 'lucide-react';
+import { Calendar, Loader2, AlertCircle, Plus } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { authClient } from '@/lib/auth-client';
@@ -82,11 +82,19 @@ export function CalendarWidget() {
           </Button>
         </div>
       ) : events.length === 0 ? (
-        <div className="flex items-start gap-3 opacity-60 p-4 border border-dashed border-border rounded-lg justify-center text-center">
-          <div>
+        <div className="flex flex-col items-center gap-3 p-6 border border-dashed border-border rounded-lg text-center bg-surface/30">
+          <div className="opacity-60">
             <p className="text-sm font-medium text-text-primary">Agenda libre</p>
             <p className="text-xs text-text-secondary mt-1">No hay eventos próximos esta semana.</p>
           </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => window.open('https://calendar.google.com/calendar/u/0/r/eventedit', '_blank')}
+            className="mt-2 text-xs"
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" /> Añadir Evento
+          </Button>
         </div>
       ) : (
         <div className="space-y-3">

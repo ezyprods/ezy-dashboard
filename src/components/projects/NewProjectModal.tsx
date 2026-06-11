@@ -7,17 +7,21 @@ import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { PROJECT_TYPE_LABELS } from '@/lib/constants';
-import type { ProjectType } from '@/types';
+import type { ProjectType, Artist } from '@/types';
 import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface NewProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  artistId: string;
+  artistId?: string;
+  artists?: Artist[];
 }
 
-export function NewProjectModal({ isOpen, onClose, artistId }: NewProjectModalProps) {
-  const { createProject } = useProjects(artistId);
+export function NewProjectModal({ isOpen, onClose, artistId, artists }: NewProjectModalProps) {
+  const [selectedArtistId, setSelectedArtistId] = useState<string>(artistId || '');
+  const { createProject } = useProjects(selectedArtistId || artistId);
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,9 +37,16 @@ export function NewProjectModal({ isOpen, onClose, artistId }: NewProjectModalPr
     setError(null);
     setIsLoading(true);
 
+    const targetArtistId = artistId || selectedArtistId;
+    if (!targetArtistId) {
+      setError("Debes seleccionar un artista primero.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const result = await createProject({
-        artistId,
+        artistId: targetArtistId,
         title: formData.title,
         type: formData.type,
         releaseDate: formData.releaseDate || undefined,
@@ -45,6 +56,10 @@ export function NewProjectModal({ isOpen, onClose, artistId }: NewProjectModalPr
       if (result.success) {
         onClose();
         setFormData({ title: '', type: 'single', releaseDate: '', deliveryDate: '' });
+        // Si lo creamos desde el dashboard global, ir al proyecto
+        if (!artistId && result.project?.id) {
+          router.push(`/projects/${result.project.id}`);
+        }
       } else {
         setError(result.error || 'Error al crear el proyecto');
       }
@@ -61,6 +76,24 @@ export function NewProjectModal({ isOpen, onClose, artistId }: NewProjectModalPr
         {error && <div className="p-3 bg-error/10 text-error rounded-lg text-sm">{error}</div>}
 
         <div className="space-y-4">
+          {!artistId && artists && (
+            <div className="space-y-2">
+              <Label htmlFor="artistSelect">Artista *</Label>
+              <select
+                id="artistSelect"
+                value={selectedArtistId}
+                onChange={(e) => setSelectedArtistId(e.target.value)}
+                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                required
+              >
+                <option value="" disabled>Selecciona un artista...</option>
+                {artists.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Tipo de Proyecto *</Label>
             <div className="flex gap-2">
@@ -105,7 +138,7 @@ export function NewProjectModal({ isOpen, onClose, artistId }: NewProjectModalPr
 
         <div className="flex justify-end gap-3">
           <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>Cancelar</Button>
-          <Button type="submit" disabled={isLoading || !formData.title}>
+          <Button type="submit" disabled={isLoading || !formData.title || (!artistId && !selectedArtistId)}>
             {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Crear Proyecto
           </Button>
         </div>

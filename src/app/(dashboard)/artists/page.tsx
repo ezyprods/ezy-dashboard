@@ -10,12 +10,14 @@ import { Input } from "@/components/ui/Input";
 import { useRouter } from 'next/navigation';
 import { cn } from "@/lib/utils";
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
 
 export default function ArtistsPage() {
   const { artists, activeArtists, archivedArtists, isLoading, error } = useArtists();
   const [isNewArtistModalOpen, setIsNewArtistModalOpen] = useState(false);
   const router = useRouter();
+  const { showMenu } = useContextMenu();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'name-asc' | 'name-desc'>('recent');
@@ -149,6 +151,17 @@ export default function ArtistsPage() {
                   localStorage.setItem(`accessed_${artist.id}`, Date.now().toString());
                 }
                 router.push(`/artists/${artist.id}`);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                showMenu(e.clientX, e.clientY, [
+                  { label: 'Ver Perfil', icon: 'User', action: () => router.push(`/artists/${artist.id}`) },
+                  { label: 'Portal del Artista', icon: 'ExternalLink', action: () => window.open(`/portal/${artist.id}`, '_blank') },
+                  { label: 'Copiar Enlace Portal', icon: 'Copy', action: () => {
+                    navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`);
+                    customAlert('Enlace copiado');
+                  }},
+                ]);
               }}
               data-context="artist"
               data-artist-id={artist.id}

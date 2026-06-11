@@ -5,14 +5,19 @@ import { Button } from "@/components/ui/Button";
 import { Plus, UploadCloud, AlertCircle, Loader2, Music, Play, TrendingUp, Calendar, LayoutDashboard, ChevronRight, Users } from "lucide-react";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
 import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
+import { NewProjectModal } from "@/components/projects/NewProjectModal";
 import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
 import { useRouter } from 'next/navigation';
 import type { Artist } from '@/types';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
+import { customAlert, customConfirm } from '@/lib/dialog';
 
 export default function DashboardPage() {
   const [isNewArtistModalOpen, setIsNewArtistModalOpen] = useState(false);
   const [isQuickUploadOpen, setIsQuickUploadOpen] = useState(false);
+  const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const router = useRouter();
+  const { showMenu } = useContextMenu();
   
   const [pulseData, setPulseData] = useState<{ artists: Artist[], globalStats: any }>({ artists: [], globalStats: null });
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -69,6 +74,11 @@ export default function DashboardPage() {
         onClose={() => setIsQuickUploadOpen(false)}
         artists={artists}
       />
+      <NewProjectModal
+        isOpen={isNewProjectOpen}
+        onClose={() => setIsNewProjectOpen(false)}
+        artists={artists}
+      />
 
       {/* Action Center (Header) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -102,12 +112,12 @@ export default function DashboardPage() {
           
           {/* Quick Actions */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div onClick={() => router.push('/artists')} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
+            <div onClick={() => setIsNewProjectOpen(true)} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <Music className="w-5 h-5" />
               </div>
               <h3 className="font-semibold text-text-primary">Nuevo Proyecto</h3>
-              <p className="text-sm text-text-secondary mt-1">Elige un artista primero</p>
+              <p className="text-sm text-text-secondary mt-1">Crear en cualquier artista</p>
             </div>
             <div onClick={() => setIsQuickUploadOpen(true)} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -162,6 +172,17 @@ export default function DashboardPage() {
                     <div 
                       key={artist.id}
                       onClick={() => router.push(`/artists/${artist.id}`)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        showMenu(e.clientX, e.clientY, [
+                          { label: 'Ver Perfil', icon: 'User', action: () => router.push(`/artists/${artist.id}`) },
+                          { label: 'Portal del Artista', icon: 'ExternalLink', action: () => window.open(`/portal/${artist.id}`, '_blank') },
+                          { label: 'Copiar Enlace Portal', icon: 'Copy', action: () => {
+                            navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`);
+                            customAlert('Enlace copiado');
+                          }},
+                        ]);
+                      }}
                       className="group flex items-center justify-between p-3 rounded-xl hover:bg-surface-elevated transition-all cursor-pointer border border-transparent hover:border-border/50"
                     >
                       <div className="flex items-center gap-4">
