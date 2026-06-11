@@ -11,7 +11,7 @@ import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 export default function ArtistPreviewsPage() {
   const params = useParams();
   const router = useRouter();
-  const artistId = params.id as string;
+  const artistId = params?.id as string;
 
   const [releases, setReleases] = useState<Release[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -14,8 +14,8 @@ import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 export default function ReleaseEditorPage() {
   const params = useParams();
   const router = useRouter();
-  const artistId = params.id as string;
-  const releaseId = params.releaseId as string;
+  const artistId = params?.id as string;
+  const releaseId = params?.releaseId as string;
 
   const [release, setRelease] = useState<Release | null>(null);
   const [isLoading, setIsLoading] = useState(true);
