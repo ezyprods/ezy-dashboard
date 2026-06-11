@@ -115,7 +115,7 @@ export default function ArtistDetailPage() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[80px] rounded-full pointer-events-none" />
         
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6 relative z-10">
-          <div className="w-24 h-24 rounded-full bg-surface-elevated border-2 border-border flex items-center justify-center text-3xl font-bold overflow-hidden shadow-xl shrink-0">
+          <div className="w-16 h-16 rounded-full bg-surface-elevated border-2 border-border flex items-center justify-center text-2xl font-bold overflow-hidden shadow-xl shrink-0">
             {artist.photoUrl ? (
               <img src={artist.photoUrl} alt={artist.name || '?'} className="w-full h-full object-cover" />
             ) : (
@@ -144,27 +144,7 @@ export default function ArtistDetailPage() {
               )}
             </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setActiveTab('projects')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'projects' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
-                  >
-                    Proyectos
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('notes')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'notes' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
-                  >
-                    Notas
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('files')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'files' ? 'bg-surface-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-surface/50'}`}
-                  >
-                    Archivos Drive
-                  </button>
-                </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-4 mt-6">
                 <div className="flex flex-col items-end gap-2 mt-6 sm:mt-0">
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     <Button 

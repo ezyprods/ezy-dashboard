@@ -147,7 +147,15 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {artists.slice(0, 8).map((artist) => {
+                {[...artists]
+                  .sort((a, b) => {
+                    const aActive = a.pulseStats?.activeProjects?.length || 0;
+                    const bActive = b.pulseStats?.activeProjects?.length || 0;
+                    if (aActive !== bActive) return bActive - aActive;
+                    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+                  })
+                  .slice(0, 8)
+                  .map((artist) => {
                   const pulse = artist.pulseStats;
                   const hasActiveProject = pulse?.activeProjects && pulse.activeProjects.length > 0;
                   return (

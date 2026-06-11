@@ -21,11 +21,31 @@ export async function GET(request: Request) {
       supportsAllDrives: true,
       pageSize: 1000,
     });
-
     const items = response.data.files || [];
-    const SYSTEM_FILES = ['artist_config.json', 'project_config.json', 'release_config.json', 'notes.json', 'payments.json', 'payments_db.json'];
     
-    const validItems = items.filter(f => !SYSTEM_FILES.includes(f.name || ''));
+    const SYSTEM_FILES = [
+      'artist_config.json', 
+      'project_config.json', 
+      'release_config.json', 
+      'notes.json', 
+      'payments.json', 
+      'payments_db.json',
+      'matrices.json',
+      'portal_config.json',
+      'tasks.json'
+    ];
+    
+    const SYSTEM_FOLDERS = [
+      'Images',
+      'images',
+      'Releases',
+      'releases'
+    ];
+    
+    const validItems = items.filter(f => {
+      const name = f.name || '';
+      return !SYSTEM_FILES.includes(name) && !SYSTEM_FOLDERS.includes(name);
+    });
 
     return NextResponse.json({ items: validItems });
   } catch (error: any) {
