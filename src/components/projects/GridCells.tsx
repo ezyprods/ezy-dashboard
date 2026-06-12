@@ -386,36 +386,40 @@ export function CellComponent({
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
               {(cellData.checklist || []).map((item, i) => (
                 <div key={item.id} className="flex flex-col gap-2 bg-surface-elevated p-3 rounded-lg border border-border/80 hover:border-accent/20 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <input type="checkbox" checked={item.done} onChange={e => {
-                      const newC = [...(cellData.checklist||[])];
-                      newC[i].done = e.target.checked;
-                      handleUpdate({ checklist: newC });
-                    }} className="w-4 h-4 accent-accent shrink-0 rounded cursor-pointer" />
-                    
-                    <Input value={item.text} onChange={e => {
-                      const newC = [...(cellData.checklist||[])];
-                      newC[i].text = e.target.value;
-                      handleUpdate({ checklist: newC });
-                    }} className="h-8 text-sm bg-transparent border-none focus-visible:ring-0 p-0 text-text-primary placeholder:text-text-secondary/50 flex-1" />
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <input 
-                        type="date" 
-                        value={item.dueDate || ''} 
-                        onChange={e => {
-                          const newC = [...(cellData.checklist||[])];
-                          newC[i].dueDate = e.target.value || undefined;
-                          handleUpdate({ checklist: newC });
-                        }} 
-                        className="bg-surface text-[10px] text-text-secondary border border-border/50 rounded px-1.5 py-0.5 outline-none max-w-[110px] cursor-pointer"
-                      />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <input type="checkbox" checked={item.done} onChange={e => {
+                        const newC = [...(cellData.checklist||[])];
+                        newC[i].done = e.target.checked;
+                        handleUpdate({ checklist: newC });
+                      }} className="w-4 h-4 accent-accent shrink-0 rounded cursor-pointer" />
+                      
+                      <Input value={item.text} onChange={e => {
+                        const newC = [...(cellData.checklist||[])];
+                        newC[i].text = e.target.value;
+                        handleUpdate({ checklist: newC });
+                      }} className="h-8 text-sm bg-transparent border-none focus-visible:ring-0 p-0 text-text-primary placeholder:text-text-secondary/50 flex-1 min-w-0" />
                     </div>
 
-                    <button onClick={() => {
-                      const newC = (cellData.checklist||[]).filter(c => c.id !== item.id);
-                      handleUpdate({ checklist: newC });
-                    }} className="text-error hover:bg-error/10 p-1.5 rounded transition-colors shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <div className="flex items-center justify-between sm:justify-end gap-2 pl-6 sm:pl-0 shrink-0">
+                      <div className="flex items-center gap-1">
+                        <input 
+                          type="date" 
+                          value={item.dueDate || ''} 
+                          onChange={e => {
+                            const newC = [...(cellData.checklist||[])];
+                            newC[i].dueDate = e.target.value || undefined;
+                            handleUpdate({ checklist: newC });
+                          }} 
+                          className="bg-surface text-[10px] text-text-secondary border border-border/50 rounded px-1.5 py-0.5 outline-none max-w-[110px] cursor-pointer"
+                        />
+                      </div>
+
+                      <button onClick={() => {
+                        const newC = (cellData.checklist||[]).filter(c => c.id !== item.id);
+                        handleUpdate({ checklist: newC });
+                      }} className="text-error hover:bg-error/10 p-1.5 rounded transition-colors shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
                   </div>
 
                   <div className="pl-6 flex items-center justify-between gap-2 border-t border-border/20 pt-2 text-xs">

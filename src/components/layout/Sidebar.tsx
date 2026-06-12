@@ -19,7 +19,7 @@ const navItems = [
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const [isDragOver, setIsDragOver] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
@@ -61,16 +61,24 @@ export function Sidebar() {
   };
 
   return (
-    <aside 
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      className={cn(
-        "w-64 border-r border-border bg-surface flex flex-col h-screen sticky top-0 transition-all duration-300 relative",
-        isDragOver && "ring-2 ring-accent ring-inset border-transparent bg-surface-elevated"
+    <>
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40 md:hidden animate-fade-in"
+          onClick={onClose}
+        />
       )}
-    >
+      <aside 
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={cn(
+          "w-64 border-r border-border bg-surface flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 md:z-auto transition-transform duration-300",
+          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          isDragOver && "ring-2 ring-accent ring-inset border-transparent bg-surface-elevated"
+        )}
+      >
       <div className="h-28 flex items-center px-4 border-b border-border justify-center md:justify-start">
         <Link href="/dashboard" className="flex items-center w-full justify-center mt-2">
           {/* Light Mode Logo */}
@@ -161,5 +169,6 @@ export function Sidebar() {
         />
       )}
     </aside>
+    </>
   );
 }

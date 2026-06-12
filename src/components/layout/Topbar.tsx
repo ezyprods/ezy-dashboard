@@ -182,7 +182,7 @@ function QuickActionsPopover({ onClose }: { onClose: () => void }) {
 
 type ActivePopover = 'timer' | 'bell' | 'plus' | null;
 
-export function Topbar() {
+export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter();
   const [activePopover, setActivePopover] = useState<ActivePopover>(null);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -218,11 +218,11 @@ export function Topbar() {
   return (
     <header
       ref={topbarRef}
-      className="h-16 border-b border-border bg-surface/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-6"
+      className="h-16 border-b border-border bg-surface/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 md:px-6"
     >
       <div className="flex items-center flex-1">
         {/* Mobile menu button */}
-        <Button variant="ghost" size="icon" className="md:hidden mr-2">
+        <Button variant="ghost" size="icon" className="md:hidden mr-2" onClick={onMenuClick}>
           <Menu className="w-5 h-5" />
         </Button>
 

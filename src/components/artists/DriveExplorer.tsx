@@ -79,6 +79,15 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const [threePaneLoading, setThreePaneLoading] = useState(false);
   const [isRightDropZoneDragOver, setIsRightDropZoneDragOver] = useState(false);
   const [isThirdPaneDragOver, setIsThirdPaneDragOver] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<'explorer' | 'recent' | 'parallel'>('explorer');
+
+  useEffect(() => {
+    if (threePaneFolderId) {
+      setActiveMobileTab('parallel');
+    } else if (activeMobileTab === 'parallel') {
+      setActiveMobileTab('explorer');
+    }
+  }, [threePaneFolderId, activeMobileTab]);
 
   const fetchThreePaneItems = useCallback(async (folderId: string) => {
     setThreePaneLoading(true);
@@ -639,13 +648,47 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
   return (
     <div ref={explorerRef} className="animate-fade-in space-y-6 transition-all">
+      {/* Mobile Tabs */}
+      <div className="flex lg:hidden bg-surface-elevated p-1 rounded-lg border border-border">
+        <button
+          onClick={() => setActiveMobileTab('explorer')}
+          className={cn(
+            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors",
+            activeMobileTab === 'explorer' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
+          )}
+        >
+          Explorador
+        </button>
+        <button
+          onClick={() => setActiveMobileTab('recent')}
+          className={cn(
+            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors",
+            activeMobileTab === 'recent' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
+          )}
+        >
+          Recientes
+        </button>
+        {threePaneFolderId && (
+          <button
+            onClick={() => setActiveMobileTab('parallel')}
+            className={cn(
+              "flex-1 py-2 text-xs font-semibold rounded-md transition-colors",
+              activeMobileTab === 'parallel' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
+            )}
+          >
+            Vista Paralela
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* Left Side: Recent Files */}
         <div 
           className={cn(
             "bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px]",
-            threePaneFolderId ? "lg:col-span-3" : "lg:col-span-5"
+            threePaneFolderId ? "lg:col-span-3" : "lg:col-span-5",
+            activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
           <h3 className="text-md font-bold text-text-primary mb-4 flex items-center gap-2">
@@ -787,7 +830,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         <div 
           className={cn(
             "w-full flex gap-4 items-stretch",
-            threePaneFolderId ? "lg:col-span-4 flex-col" : "lg:col-span-7"
+            threePaneFolderId ? "lg:col-span-4 flex-col" : "lg:col-span-7",
+            activeMobileTab === 'explorer' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
           <div className="flex-1 space-y-6">
@@ -1089,7 +1133,12 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
         {/* Column 3: Custom Split Pane (Explorer of the dragged folder) */}
         {threePaneFolderId && (
-          <div className="lg:col-span-5 space-y-6 w-full animate-slide-in">
+          <div 
+            className={cn(
+              "lg:col-span-5 space-y-6 w-full animate-slide-in",
+              activeMobileTab === 'parallel' ? "block" : "hidden lg:block"
+            )}
+          >
             {/* Header: Folder name & Close button */}
             <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
               <div className="flex items-center gap-2 overflow-hidden">
