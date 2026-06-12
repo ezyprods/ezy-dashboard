@@ -535,7 +535,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         <div className="lg:col-span-5 bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px]">
           <h3 className="text-md font-bold text-text-primary mb-4 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
-            Archivos Recientes (Subcarpetas)
+            Archivos Recientes
           </h3>
           
           <div className="flex-1 overflow-y-auto max-h-[550px] pr-2 space-y-2">
