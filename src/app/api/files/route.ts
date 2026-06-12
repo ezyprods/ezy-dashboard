@@ -40,7 +40,7 @@ export async function GET(request: Request) {
         const query = `'${folderId}' in parents and trashed=false`;
         const response = await drive.files.list({
           q: query,
-          fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
+          fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties)',
           orderBy: 'folder, name',
           includeItemsFromAllDrives: true,
           supportsAllDrives: true,
@@ -53,8 +53,20 @@ export async function GET(request: Request) {
           if (SYSTEM_FILES.includes(name) || SYSTEM_FOLDERS.includes(name)) {
             continue;
           }
+
+          // Check expiration
+          const expiresAt = file.appProperties?.expiresAt ? parseInt(file.appProperties.expiresAt, 10) : null;
+          if (expiresAt && expiresAt < Date.now()) {
+            // Delete asynchronously and skip adding to results
+            drive.files.delete({ fileId: file.id!, supportsAllDrives: true }).catch(console.error);
+            continue;
+          }
           
-          allItems.push({ ...file, parentFolderId: folderId });
+          allItems.push({ 
+            ...file, 
+            parentFolderId: folderId,
+            expiresAt 
+          });
           
           if (file.mimeType === 'application/vnd.google-apps.folder' && file.id) {
             await traverse(file.id);
@@ -69,7 +81,7 @@ export async function GET(request: Request) {
     const query = `'${parentId}' in parents and trashed=false`;
     const response = await drive.files.list({
       q: query,
-      fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
+      fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties)',
       orderBy: 'folder, name',
       includeItemsFromAllDrives: true,
       supportsAllDrives: true,
@@ -77,10 +89,25 @@ export async function GET(request: Request) {
     });
     const items = response.data.files || [];
     
-    const validItems = items.filter(f => {
+    const validItems: any[] = [];
+    
+    for (const f of items) {
       const name = f.name || '';
-      return !SYSTEM_FILES.includes(name) && !SYSTEM_FOLDERS.includes(name);
-    });
+      if (SYSTEM_FILES.includes(name) || SYSTEM_FOLDERS.includes(name)) {
+        continue;
+      }
+
+      const expiresAt = f.appProperties?.expiresAt ? parseInt(f.appProperties.expiresAt, 10) : null;
+      if (expiresAt && expiresAt < Date.now()) {
+        drive.files.delete({ fileId: f.id!, supportsAllDrives: true }).catch(console.error);
+        continue;
+      }
+
+      validItems.push({
+        ...f,
+        expiresAt
+      });
+    }
 
     return NextResponse.json({ items: validItems });
   } catch (error: any) {

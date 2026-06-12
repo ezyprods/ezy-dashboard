@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause } from 'lucide-react';
+import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { cn } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
+import { ShareModal } from './ShareModal';
+import { DeleteModal } from './DeleteModal';
 
 interface DriveItem {
   id: string;
@@ -20,6 +22,7 @@ interface DriveItem {
   webContentLink?: string;
   versions?: DriveItem[];
   parentFolderId?: string;
+  expiresAt?: number | null;
 }
 
 interface Breadcrumb {
@@ -55,6 +58,10 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const { showMenu } = useContextMenu();
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+
+  // Modal states
+  const [shareModalFile, setShareModalFile] = useState<DriveItem | null>(null);
+  const [deleteModalFile, setDeleteModalFile] = useState<DriveItem | null>(null);
 
   // Recent files state
   const [recentFiles, setRecentFiles] = useState<DriveItem[]>([]);
@@ -615,8 +622,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       )}
                       
                       <div className="flex-1 min-w-0">
-                        <div className={cn("text-xs font-semibold truncate", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
+                        <div className={cn("text-xs font-semibold truncate flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
                           {item.name}
+                          {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3 h-3 text-accent opacity-70 shrink-0" /></span>}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
                           {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
@@ -637,6 +645,16 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         title="Abrir ubicación de archivo"
                       >
                         <FolderOpen className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShareModalFile(item);
+                        }}
+                        className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                        title="Compartir"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={(e) => {
@@ -673,10 +691,10 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDelete(item.id, false);
+                          setDeleteModalFile(item);
                         }}
                         className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-surface"
-                        title="Eliminar"
+                        title="Opciones de eliminación"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -882,8 +900,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             {getIcon(item.mimeType, item.name)}
                           </div>
                           
-                          <div className="flex-1 min-w-0 mr-4">
-                            <div className="font-medium text-text-primary truncate text-sm">{item.name}</div>
+                          <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
+                            <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
+                              {item.name}
+                              {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
+                            </div>
                             {!isFolder && (
                               <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
                                 {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
@@ -903,6 +924,16 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                               title="Renombrar"
                             >
                               <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              className="p-2 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShareModalFile(item);
+                              }}
+                              title="Compartir"
+                            >
+                              <Share2 className="w-4 h-4" />
                             </button>
                             {!isFolder && (
                               <a 
@@ -931,9 +962,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                               className="p-2 text-text-secondary hover:text-error rounded hover:bg-surface"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(item.id, isFolder);
+                                setDeleteModalFile(item);
                               }}
-                              title="Eliminar"
+                              title="Opciones de eliminación"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -949,6 +980,33 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         </div>
 
       </div>
+
+      {/* Modals */}
+      {shareModalFile && (
+        <ShareModal
+          isOpen={true}
+          onClose={() => setShareModalFile(null)}
+          fileId={shareModalFile.id}
+          fileName={shareModalFile.name}
+          webViewLink={shareModalFile.webViewLink}
+          webContentLink={shareModalFile.webContentLink}
+        />
+      )}
+
+      {deleteModalFile && (
+        <DeleteModal
+          isOpen={true}
+          onClose={() => setDeleteModalFile(null)}
+          fileId={deleteModalFile.id}
+          fileName={deleteModalFile.name}
+          currentExpiration={deleteModalFile.expiresAt}
+          onDeleted={() => {
+            fetchItems(currentFolderId);
+            fetchRecentFiles();
+          }}
+        />
+      )}
+
     </div>
   );
 }

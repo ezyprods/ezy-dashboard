@@ -15,6 +15,17 @@ export interface DriveFile {
   versionTag?: string;
   parentFolderId: string;
   fileType: FileType;
+  expiresAt?: number;
+}
+
+export interface DrivePermission {
+  id: string;
+  type: string;
+  role: string;
+  emailAddress?: string;
+  displayName?: string;
+  photoLink?: string;
+  deleted?: boolean;
 }
 
 export interface DriveFolder {
