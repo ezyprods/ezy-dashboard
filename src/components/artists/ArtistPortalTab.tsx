@@ -76,7 +76,20 @@ export function ArtistPortalTab({ artistId }: { artistId: string }) {
     return <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
   }
 
-  if (!config) return null;
+  if (!config) {
+    return (
+      <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
+        <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border mt-8">
+          <Layout className="w-16 h-16 mb-6 mx-auto opacity-50" />
+          <h2 className="text-xl font-bold text-text-primary mb-2">Portal no inicializado</h2>
+          <p className="mb-6 max-w-md mx-auto">Ha ocurrido un error al cargar o crear la configuración del portal para este artista.</p>
+          <Button onClick={fetchConfig} disabled={isLoading}>
+            {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : 'Reintentar'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const modules = [...(config.modules || [])].sort((a, b) => a.order - b.order);
 

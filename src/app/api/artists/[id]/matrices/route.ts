@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
+import { randomUUID } from 'crypto';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,7 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     
     const data = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
     const newMatrix = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name: body.name || 'Nueva Matriz',
       projectId: body.projectId || null,
       productionGrid: { columns: [], rows: [], mode: 'simple' },

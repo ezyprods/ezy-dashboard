@@ -488,7 +488,18 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     }
   };
 
-  const getIcon = (mimeType: string) => {
+  const getIcon = (mimeType: string, name: string) => {
+    if (name.toLowerCase().endsWith('.flp')) {
+      return (
+        <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0 fill-[#ff793f]" title="FL Studio Project">
+          {/* Leaf / Stem */}
+          <path d="M12 2c1.2 1.5 1.5 3 .5 4.5 1.5-1 2.2-2.5 1.5-4.5z" fill="#2ed573" />
+          {/* Fruit Body */}
+          <path d="M12 5.5c-3.5 0-6 2-6 5.5 0 3.2 2 6.5 6 11 4-4.5 6-7.8 6-11 0-3.5-2.5-5.5-6-5.5z" />
+          <ellipse cx="12" cy="11" rx="1.5" ry="2" fill="#ffa502" opacity="0.7" />
+        </svg>
+      );
+    }
     if (mimeType === 'application/vnd.google-apps.folder') return <Folder className="w-5 h-5 text-accent" />;
     if (mimeType.startsWith('audio/')) return <FileAudio className="w-5 h-5 text-purple-400" />;
     if (mimeType.startsWith('image/')) return <FileImage className="w-5 h-5 text-green-400" />;
@@ -573,7 +584,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                     key={item.id}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
-                      if (item.webViewLink) window.open(item.webViewLink, '_blank');
+                      const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
+                      window.open(openUrl, '_blank');
                     }}
                     className="p-3 bg-surface rounded-lg border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center justify-between gap-3 group cursor-pointer"
                   >
@@ -597,7 +609,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         </button>
                       ) : (
                         <div className="w-7 h-7 rounded-full bg-surface-elevated flex items-center justify-center shrink-0">
-                          {getIcon(item.mimeType)}
+                          {getIcon(item.mimeType, item.name)}
                         </div>
                       )}
                       
@@ -628,7 +640,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          window.open(item.webViewLink, '_blank');
+                          const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
+                          window.open(openUrl, '_blank');
                         }}
                         className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
                         title="Ver en Drive"
@@ -636,7 +649,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                       <a
-                        href={isAudio ? `/api/audio/${item.id}` : (item.webContentLink || item.webViewLink)}
+                        href={`/api/files/${item.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         download={item.name}
@@ -865,7 +878,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       ) : (
                         <>
                           <div className="w-10 flex justify-center shrink-0">
-                            {getIcon(item.mimeType)}
+                            {getIcon(item.mimeType, item.name)}
                           </div>
                           
                           <div className="flex-1 min-w-0 mr-4">
