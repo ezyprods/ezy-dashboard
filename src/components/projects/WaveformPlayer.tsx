@@ -18,10 +18,23 @@ interface WaveformPlayerProps {
   versions?: { id: string; name: string }[];
   isPortal?: boolean;
   paywallLocked?: boolean;
+  modifiedTime?: string;
 }
 
 const BAR_COUNT = 70; // Fewer, thicker bars for minimalist look
 const CANVAS_HEIGHT = 24; // Slimmer height
+
+const formatModificationTime = (timeStr?: string) => {
+  if (!timeStr) return '';
+  const date = new Date(timeStr);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const d = pad(date.getDate());
+  const m = pad(date.getMonth() + 1);
+  const y = date.getFullYear();
+  const h = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  return `${d}/${m}/${y} ${h}:${min}`;
+};
 
 export function WaveformPlayer({ 
   fileId, 
@@ -33,7 +46,8 @@ export function WaveformPlayer({
   currentFolderId,
   versions,
   isPortal = false,
-  paywallLocked = false
+  paywallLocked = false,
+  modifiedTime
 }: WaveformPlayerProps) {
   const { currentTrack, isPlaying, duration, currentTime, playTrack, togglePlay, seek } = useAudio();
 
@@ -363,6 +377,11 @@ export function WaveformPlayer({
               >
                 {displayName}
               </span>
+              {modifiedTime && (
+                <span className="text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0" title="Fecha de modificación">
+                  {formatModificationTime(modifiedTime)}
+                </span>
+              )}
               {versions && versions.length > 1 && (
                 <select 
                   className="bg-surface-elevated border border-border/50 rounded text-[10px] font-bold px-1 py-0.5 text-text-secondary outline-none hover:text-text-primary hover:border-accent/50 cursor-pointer transition-colors"

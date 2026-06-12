@@ -6,22 +6,13 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const parentId = searchParams.get('folderId');
+    const recursive = searchParams.get('recursive') === 'true';
 
     if (!parentId) {
       return NextResponse.json({ error: 'Missing folderId' }, { status: 400 });
     }
 
     const drive = getDriveService();
-    const query = `'${parentId}' in parents and trashed=false`;
-    const response = await drive.files.list({
-      q: query,
-      fields: 'files(id, name, mimeType, size, createdTime, webViewLink, webContentLink)',
-      orderBy: 'folder, name',
-      includeItemsFromAllDrives: true,
-      supportsAllDrives: true,
-      pageSize: 1000,
-    });
-    const items = response.data.files || [];
     
     const SYSTEM_FILES = [
       'artist_config.json', 
@@ -41,6 +32,50 @@ export async function GET(request: Request) {
       'Releases',
       'releases'
     ];
+
+    if (recursive) {
+      const allItems: any[] = [];
+      
+      async function traverse(folderId: string) {
+        const query = `'${folderId}' in parents and trashed=false`;
+        const response = await drive.files.list({
+          q: query,
+          fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
+          orderBy: 'folder, name',
+          includeItemsFromAllDrives: true,
+          supportsAllDrives: true,
+          pageSize: 1000,
+        });
+        const files = response.data.files || [];
+        
+        for (const file of files) {
+          const name = file.name || '';
+          if (SYSTEM_FILES.includes(name) || SYSTEM_FOLDERS.includes(name)) {
+            continue;
+          }
+          
+          allItems.push({ ...file, parentFolderId: folderId });
+          
+          if (file.mimeType === 'application/vnd.google-apps.folder' && file.id) {
+            await traverse(file.id);
+          }
+        }
+      }
+      
+      await traverse(parentId);
+      return NextResponse.json({ items: allItems });
+    }
+
+    const query = `'${parentId}' in parents and trashed=false`;
+    const response = await drive.files.list({
+      q: query,
+      fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink)',
+      orderBy: 'folder, name',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+      pageSize: 1000,
+    });
+    const items = response.data.files || [];
     
     const validItems = items.filter(f => {
       const name = f.name || '';
