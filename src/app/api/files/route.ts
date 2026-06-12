@@ -117,11 +117,52 @@ export async function GET(request: Request) {
 }
 
 
+function cleanString(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/\.[^/.]+$/, "") // Remove extension
+    .replace(/[-_]?(v\d+|final|master|mix|demo|edit|ref|prod)/gi, "") // Remove common versions/suffixes
+    .replace(/[^a-z0-9]/gi, "") // Keep only alphanumeric characters
+    .trim();
+}
+
+function getLevenshteinDistance(s1: string, s2: string): number {
+  const len1 = s1.length;
+  const len2 = s2.length;
+  const d = Array.from({ length: len1 + 1 }, () => Array(len2 + 1).fill(0));
+  for (let i = 0; i <= len1; i++) d[i][0] = i;
+  for (let j = 0; j <= len2; j++) d[0][j] = j;
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(
+        d[i - 1][j] + 1,
+        d[i][j - 1] + 1,
+        d[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return d[len1][len2];
+}
+
+function getSimilarity(s1: string, s2: string): number {
+  const c1 = cleanString(s1);
+  const c2 = cleanString(s2);
+  if (!c1 || !c2) return 0.0;
+  if (c1 === c2) return 1.0;
+  const dist = getLevenshteinDistance(c1, c2);
+  const maxLen = Math.max(c1.length, c2.length);
+  return maxLen === 0 ? 1.0 : 1 - dist / maxLen;
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const parentId = formData.get('parentId') as string | null;
+    const overwrite = formData.get('overwrite') === 'true';
+    const targetFileId = formData.get('targetFileId') as string | null;
+    const skipSimilarity = formData.get('skipSimilarity') === 'true';
 
     if (!file || !parentId) {
       return NextResponse.json({ error: 'Missing file or parentId' }, { status: 400 });
@@ -133,8 +174,66 @@ export async function POST(request: Request) {
     stream.push(null);
 
     const drive = getDriveService();
+
+    // 1. If explicit overwrite is requested
+    if (overwrite && targetFileId) {
+      const response = await drive.files.update({
+        fileId: targetFileId,
+        requestBody: {
+          name: file.name,
+        },
+        media: {
+          mimeType: file.type || 'application/octet-stream',
+          body: stream,
+        },
+        fields: 'id, name, webViewLink, webContentLink',
+      });
+
+      return NextResponse.json({ 
+        success: true, 
+        file: response.data,
+        overwritten: true
+      }, { status: 200 });
+    }
+
+    // 2. Unless skipped, check if there's a file with a similar name in the folder
+    if (!skipSimilarity) {
+      const listResponse = await drive.files.list({
+        q: `'${parentId}' in parents and trashed=false`,
+        fields: 'files(id, name, mimeType, webViewLink, webContentLink)',
+        includeItemsFromAllDrives: true,
+        supportsAllDrives: true,
+        pageSize: 1000,
+      });
+      const existingFiles = listResponse.data.files || [];
+      
+      let bestMatch: any = null;
+      let maxSim = 0;
+
+      for (const f of existingFiles) {
+        if (f.mimeType === 'application/vnd.google-apps.folder') continue;
+        const sim = getSimilarity(file.name, f.name || '');
+        if (sim > maxSim) {
+          maxSim = sim;
+          bestMatch = f;
+        }
+      }
+
+      // If similarity is high (>= 80%), return 409 Conflict with details
+      if (maxSim >= 0.8 && bestMatch) {
+        return NextResponse.json({
+          conflict: true,
+          message: `Se ha encontrado un archivo similar: '${bestMatch.name}'`,
+          similarFile: {
+            id: bestMatch.id,
+            name: bestMatch.name,
+            webViewLink: bestMatch.webViewLink
+          }
+        }, { status: 409 });
+      }
+    }
     
-    // Upload directly to Drive
+    // 3. Otherwise, create a new file
     const response = await drive.files.create({
       requestBody: {
         name: file.name,

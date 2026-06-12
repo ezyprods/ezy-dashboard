@@ -14,6 +14,10 @@ export interface ChecklistItem {
   id: string;
   text: string;
   checked: boolean;
+  done?: boolean;
+  fileId?: string;
+  fileName?: string;
+  dueDate?: string;
 }
 
 export interface Task {
@@ -134,7 +138,7 @@ export interface GridCell {
   fileName?: string;
   dueDate?: string;
   textValue?: string;
-  checklist?: { id: string; text: string; done: boolean }[];
+  checklist?: { id: string; text: string; done: boolean; fileId?: string; fileName?: string; dueDate?: string }[];
 }
 
 export interface ProductionGrid {

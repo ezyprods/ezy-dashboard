@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Circle, Clock, Eye, CheckCircle2, Paperclip, Calendar, MessageSquare, Play, Loader2, X, ListTodo, FileText, AlignLeft, CheckSquare, Plus, Trash2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Circle, Clock, Eye, CheckCircle2, Paperclip, Calendar, MessageSquare, Play, Loader2, X, ListTodo, FileText, AlignLeft, CheckSquare, Plus, Trash2, UploadCloud, Pause } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -54,64 +55,138 @@ function MiniWaveform({ fileId, isPlaying }: { fileId: string; isPlaying: boolea
 function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onStatusChange: (s: FlexTaskStatus) => void }) {
   const [showRadial, setShowRadial] = useState(false);
   const [hovered, setHovered] = useState<FlexTaskStatus | null>(null);
+  const [center, setCenter] = useState({ x: 0, y: 0 });
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.todo;
   const Icon = cfg.icon;
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    e.preventDefault();
-    longPressTimer.current = setTimeout(() => setShowRadial(true), 400);
+    if (e.button !== 0) return;
+    const target = e.currentTarget;
+    longPressTimer.current = setTimeout(() => {
+      const rect = target.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      setCenter({ x: cx, y: cy });
+      setShowRadial(true);
+    }, 450);
   };
-  const handlePointerUp = () => {
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-    if (hovered) onStatusChange(hovered);
-    setShowRadial(false);
-    setHovered(null);
-  };
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!showRadial || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-    const dx = e.clientX - cx, dy = e.clientY - cy;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 12) { setHovered(null); return; }
-    const angle = Math.atan2(dy, dx);
-    const positions: [FlexTaskStatus, number][] = [['in_progress', 0], ['review', -Math.PI / 2], ['done', Math.PI], ['todo', Math.PI / 2]];
-    let closest: FlexTaskStatus = 'todo', minDiff = Infinity;
-    for (const [s, a] of positions) {
-      let diff = Math.abs(angle - a);
-      if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff < minDiff) { minDiff = diff; closest = s; }
-    }
-    setHovered(closest);
-  };
+
+  useEffect(() => {
+    if (!showRadial) return;
+
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      const dx = e.clientX - center.x;
+      const dy = e.clientY - center.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 15) {
+        setHovered(null);
+        return;
+      }
+      const angle = Math.atan2(dy, dx);
+      const positions: [FlexTaskStatus, number][] = [
+        ['in_progress', 0],
+        ['review', -Math.PI / 2],
+        ['done', Math.PI],
+        ['todo', Math.PI / 2]
+      ];
+      let closest: FlexTaskStatus = 'todo';
+      let minDiff = Infinity;
+      for (const [s, a] of positions) {
+        let diff = Math.abs(angle - a);
+        if (diff > Math.PI) diff = 2 * Math.PI - diff;
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = s;
+        }
+      }
+      setHovered(closest);
+    };
+
+    const handleGlobalPointerUp = (e: PointerEvent) => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+      if (hovered) {
+        onStatusChange(hovered);
+      }
+      setShowRadial(false);
+      setHovered(null);
+    };
+
+    window.addEventListener('pointermove', handleGlobalPointerMove);
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+    };
+  }, [showRadial, center, hovered, onStatusChange]);
+
   const handlePointerLeave = () => {
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   };
-  const handleClick = () => { if (!showRadial) onStatusChange(NEXT_STATUS[status] || 'in_progress'); };
+
+  const handleClick = () => {
+    if (!showRadial) {
+      onStatusChange(NEXT_STATUS[status] || 'in_progress');
+    }
+  };
 
   const radialItems: { s: FlexTaskStatus; x: number; y: number }[] = [
-    { s: 'in_progress', x: 44, y: 0 }, { s: 'review', x: 0, y: -44 }, { s: 'done', x: -44, y: 0 }, { s: 'todo', x: 0, y: 44 },
+    { s: 'in_progress', x: 52, y: 0 },
+    { s: 'review', x: 0, y: -52 },
+    { s: 'done', x: -52, y: 0 },
+    { s: 'todo', x: 0, y: 52 },
   ];
 
   return (
-    <div ref={containerRef} className="relative flex items-center justify-center w-full" style={{ userSelect: 'none', touchAction: 'none' }} onPointerDown={handlePointerDown} onPointerUp={handlePointerUp} onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave} onClick={handleClick}>
-      <button className={`w-full py-2 flex justify-center items-center rounded transition-colors ${cfg.bgColor} hover:brightness-110`} title={cfg.label} type="button" style={{ pointerEvents: 'none' }}>
+    <div 
+      ref={containerRef} 
+      className="relative flex items-center justify-center w-full" 
+      style={{ userSelect: 'none', touchAction: 'none' }} 
+      onPointerDown={handlePointerDown} 
+      onPointerLeave={handlePointerLeave} 
+      onClick={handleClick}
+    >
+      <button 
+        className={`w-full py-2 flex justify-center items-center rounded transition-colors ${cfg.bgColor} hover:brightness-110`} 
+        title={cfg.label} 
+        type="button" 
+        style={{ pointerEvents: 'none' }}
+      >
         <Icon className={`w-5 h-5 ${cfg.color}`} />
       </button>
-      {showRadial && (
-        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
+
+      {showRadial && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[999] pointer-events-none flex items-center justify-center">
+          <div 
+            className="absolute w-3 h-3 bg-accent rounded-full animate-ping" 
+            style={{ left: center.x - 6, top: center.y - 6 }}
+          />
           {radialItems.map(({ s, x, y }) => {
             const scfg = STATUS_CONFIG[s];
             const isHov = hovered === s;
             return (
-              <div key={s} className={`absolute flex items-center justify-center rounded-full border-2 transition-all duration-100 ${isHov ? 'w-10 h-10 border-accent shadow-lg shadow-accent/40 bg-surface-elevated scale-110' : 'w-8 h-8 border-border bg-surface'}`} style={{ transform: `translate(${x}px, ${y}px)` }}>
-                <scfg.icon className={`w-4 h-4 ${scfg.color}`} />
+              <div 
+                key={s} 
+                className={`absolute flex items-center justify-center rounded-full border-2 transition-all duration-100 ${
+                  isHov 
+                    ? 'w-12 h-12 border-accent shadow-lg shadow-accent/40 bg-surface-elevated scale-110' 
+                    : 'w-10 h-10 border-border bg-surface shadow-md'
+                }`} 
+                style={{ left: center.x + x - (isHov ? 24 : 20), top: center.y + y - (isHov ? 24 : 20) }}
+              >
+                <scfg.icon className={`w-5 h-5 ${scfg.color}`} />
               </div>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -153,15 +228,19 @@ function FileCellUI({ fileId, fileName, artistName, isUploading, onPlay, isPlayi
   );
 }
 
-function ChecklistCellUI({ checklist = [], onToggle, onOpenManager }: any) {
+function ChecklistCellUI({ checklist = [], onOpenManager }: any) {
   const total = checklist.length;
   const done = checklist.filter((c:any) => c.done).length;
+  const hasFiles = checklist.some((c:any) => c.fileId);
   const progress = total === 0 ? 0 : Math.round((done / total) * 100);
   
   return (
     <div onClick={onOpenManager} className="cursor-pointer group flex flex-col gap-1 w-full p-1.5 rounded bg-surface border border-border hover:border-accent/50 transition-colors">
       <div className="flex justify-between items-center text-[10px] font-bold text-text-secondary group-hover:text-text-primary">
-        <span className="flex items-center gap-1"><ListTodo className="w-3 h-3" /> Tareas</span>
+        <span className="flex items-center gap-1">
+          <ListTodo className="w-3 h-3" /> Tareas
+          {hasFiles && <span title="Tiene archivos adjuntos"><Paperclip className="w-2.5 h-2.5 text-accent opacity-75 animate-pulse" /></span>}
+        </span>
         <span>{done}/{total}</span>
       </div>
       <div className="h-1.5 w-full bg-surface-elevated rounded-full overflow-hidden">
@@ -230,6 +309,46 @@ export function CellComponent({
     finally { setIsUploading(false); }
   };
 
+  const uploadFileForChecklistItem = async (file: File, idx: number, overwrite = false, targetFileId?: string, skipSimilarity = false) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('parentId', uploadTargetId);
+    if (overwrite && targetFileId) {
+      formData.append('overwrite', 'true');
+      formData.append('targetFileId', targetFileId);
+    }
+    if (skipSimilarity) {
+      formData.append('skipSimilarity', 'true');
+    }
+
+    try {
+      const res = await fetch('/api/files', { method: 'POST', body: formData });
+      if (res.status === 409) {
+        const conflictData = await res.json();
+        const choice = window.confirm(
+          `Se ha detectado un archivo similar: "${conflictData.similarFile.name}".\n\n¿Quieres sobrescribir este archivo existente (creando una nueva versión)?\n\nPresiona [Aceptar] para sobrescribir o [Cancelar] para guardarlo por separado.`
+        );
+        if (choice) {
+          await uploadFileForChecklistItem(file, idx, true, conflictData.similarFile.id);
+        } else {
+          await uploadFileForChecklistItem(file, idx, false, undefined, true);
+        }
+        return;
+      }
+
+      if (!res.ok) throw new Error('Error al subir');
+      const json = await res.json();
+      
+      const newC = [...(cellData.checklist || [])];
+      newC[idx].fileId = json.file.id;
+      newC[idx].fileName = json.file.name;
+      handleUpdate({ checklist: newC });
+      customAlert('Archivo adjuntado correctamente');
+    } catch (err) {
+      customAlert('Error subiendo archivo');
+    }
+  };
+
   const handleNativeDrop = (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation();
     const file = e.dataTransfer.files?.[0];
@@ -260,27 +379,135 @@ export function CellComponent({
 
       {isChecklistOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4" onClick={() => setIsChecklistOpen(false)}>
-          <div className="glass rounded-xl border border-border bg-surface w-full max-w-md p-6 shadow-2xl relative animate-fade-in text-left" onClick={e => e.stopPropagation()}>
+          <div className="glass rounded-xl border border-border bg-surface w-full max-w-lg p-6 shadow-2xl relative animate-fade-in text-left" onClick={e => e.stopPropagation()}>
             <button onClick={() => setIsChecklistOpen(false)} className="absolute top-4 right-4 text-text-secondary hover:text-text-primary p-1"><X className="w-5 h-5" /></button>
             <h4 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2"><CheckSquare className="w-5 h-5 text-accent"/> Checklist de Fase</h4>
             
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
               {(cellData.checklist || []).map((item, i) => (
-                <div key={item.id} className="flex items-center gap-2 bg-surface-elevated p-2 rounded border border-border">
-                  <input type="checkbox" checked={item.done} onChange={e => {
-                    const newC = [...(cellData.checklist||[])];
-                    newC[i].done = e.target.checked;
-                    handleUpdate({ checklist: newC });
-                  }} className="w-4 h-4 accent-accent" />
-                  <Input value={item.text} onChange={e => {
-                    const newC = [...(cellData.checklist||[])];
-                    newC[i].text = e.target.value;
-                    handleUpdate({ checklist: newC });
-                  }} className="h-7 text-sm bg-transparent border-none focus-visible:ring-0" />
-                  <button onClick={() => {
-                    const newC = (cellData.checklist||[]).filter(c => c.id !== item.id);
-                    handleUpdate({ checklist: newC });
-                  }} className="text-error hover:bg-error/10 p-1 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                <div key={item.id} className="flex flex-col gap-2 bg-surface-elevated p-3 rounded-lg border border-border/80 hover:border-accent/20 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={item.done} onChange={e => {
+                      const newC = [...(cellData.checklist||[])];
+                      newC[i].done = e.target.checked;
+                      handleUpdate({ checklist: newC });
+                    }} className="w-4 h-4 accent-accent shrink-0 rounded cursor-pointer" />
+                    
+                    <Input value={item.text} onChange={e => {
+                      const newC = [...(cellData.checklist||[])];
+                      newC[i].text = e.target.value;
+                      handleUpdate({ checklist: newC });
+                    }} className="h-8 text-sm bg-transparent border-none focus-visible:ring-0 p-0 text-text-primary placeholder:text-text-secondary/50 flex-1" />
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input 
+                        type="date" 
+                        value={item.dueDate || ''} 
+                        onChange={e => {
+                          const newC = [...(cellData.checklist||[])];
+                          newC[i].dueDate = e.target.value || undefined;
+                          handleUpdate({ checklist: newC });
+                        }} 
+                        className="bg-surface text-[10px] text-text-secondary border border-border/50 rounded px-1.5 py-0.5 outline-none max-w-[110px] cursor-pointer"
+                      />
+                    </div>
+
+                    <button onClick={() => {
+                      const newC = (cellData.checklist||[]).filter(c => c.id !== item.id);
+                      handleUpdate({ checklist: newC });
+                    }} className="text-error hover:bg-error/10 p-1.5 rounded transition-colors shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+
+                  <div className="pl-6 flex items-center justify-between gap-2 border-t border-border/20 pt-2 text-xs">
+                    {item.fileId ? (
+                      <div className="flex items-center justify-between w-full bg-surface/40 px-2 py-1 rounded border border-border/50">
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          <Paperclip className="w-3 h-3 text-text-secondary shrink-0" />
+                          <a 
+                            href={`https://drive.google.com/file/d/${item.fileId}/view`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-accent hover:underline truncate max-w-[180px]"
+                          >
+                            {item.fileName}
+                          </a>
+                          
+                          {item.fileName?.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-6 h-6 rounded-full bg-accent/10 text-accent hover:bg-accent/20 flex items-center justify-center p-0 ml-1 shrink-0"
+                              onClick={() => {
+                                const isCurrent = currentTrack?.id === item.fileId;
+                                if (isCurrent) togglePlay();
+                                else playTrack({ id: item.fileId!, name: item.fileName!.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.fileId}`, artistName });
+                              }}
+                            >
+                              {isPlaying && currentTrack?.id === item.fileId ? (
+                                <Pause className="w-2.5 h-2.5 fill-current" />
+                              ) : (
+                                <Play className="w-2.5 h-2.5 fill-current ml-0.5" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        
+                        <button 
+                          onClick={() => {
+                            const newC = [...(cellData.checklist || [])];
+                            delete newC[i].fileId;
+                            delete newC[i].fileName;
+                            handleUpdate({ checklist: newC });
+                          }}
+                          className="text-text-secondary hover:text-error text-[10px]"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 w-full">
+                        <span className="text-[10px] text-text-secondary">Adjuntar:</span>
+                        
+                        <label className="text-[10px] text-accent hover:underline cursor-pointer flex items-center gap-0.5">
+                          <UploadCloud className="w-3 h-3" /> Subir local
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            onChange={e => {
+                              const f = e.target.files?.[0];
+                              if (f) uploadFileForChecklistItem(f, i);
+                            }}
+                          />
+                        </label>
+                        
+                        {files && files.length > 0 && (
+                          <div className="relative">
+                            <select
+                              onChange={e => {
+                                if (e.target.value) {
+                                  const selectedFile = files.find(f => f.id === e.target.value);
+                                  if (selectedFile) {
+                                    const newC = [...(cellData.checklist || [])];
+                                    newC[i].fileId = selectedFile.id;
+                                    newC[i].fileName = selectedFile.name;
+                                    handleUpdate({ checklist: newC });
+                                  }
+                                  e.target.value = '';
+                                }
+                              }}
+                              className="bg-surface text-[10px] text-text-secondary border border-border/50 rounded outline-none py-0.5 px-1 cursor-pointer max-w-[140px]"
+                              defaultValue=""
+                            >
+                              <option value="" disabled>Elegir de Drive...</option>
+                              {files.map(f => (
+                                <option key={f.id} value={f.id}>{f.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
               <Button variant="outline" className="w-full mt-2 border-dashed" onClick={() => {
