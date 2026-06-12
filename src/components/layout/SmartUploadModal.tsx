@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { formatFileSize } from '@/lib/utils';
 import type { Artist } from '@/types';
+import { FOLDER_NAME_MAP } from '@/lib/constants';
 
 interface SmartUploadModalProps {
   isOpen: boolean;
@@ -149,7 +150,11 @@ export function SmartUploadModal({ isOpen, onClose, initialFiles, artists }: Sma
     if (!folders || folders.length === 0) return;
 
     // Filter projects (ignore standard items like Images, Contracts, etc.)
-    const ignoreList = ['Images', 'Documents', 'Contracts', 'Stems', 'Bounces', 'Mix', 'Master', 'Sessions', 'Other'];
+    const ignoreList = [
+      'Images', 'Documents', 'Contracts', 'Stems', 'Bounces', 'Mix', 'Master', 'Sessions', 'Other',
+      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos',
+      '01_Sesiones_y_DAW', '02_Bounces_y_Grabaciones', '03_Revisiones_y_Mezclas', '04_Masters_Finales', '05_Referencias_y_Otros'
+    ];
     const projects = folders.filter(f => !ignoreList.includes(f.name));
 
     if (projects.length > 0 && !activeFile.projectId) {
@@ -182,9 +187,10 @@ export function SmartUploadModal({ isOpen, onClose, initialFiles, artists }: Sma
     if (!f || f.status === 'uploading' || f.status === 'success') return;
 
     // Set target folder ID
+    const mappedFolderName = FOLDER_NAME_MAP[f.folderType] || f.folderType;
     const targetFolderId = f.projectId 
-      ? (projectSubfolders[f.projectId]?.find(sf => sf.name.toLowerCase() === f.folderType.toLowerCase())?.id || f.projectId)
-      : (artistFolders[f.artistId]?.find(sf => sf.name.toLowerCase() === f.folderType.toLowerCase())?.id || f.artistId);
+      ? (projectSubfolders[f.projectId]?.find(sf => sf.name.toLowerCase() === f.folderType.toLowerCase() || sf.name === mappedFolderName)?.id || f.projectId)
+      : (artistFolders[f.artistId]?.find(sf => sf.name.toLowerCase() === f.folderType.toLowerCase() || sf.name === mappedFolderName)?.id || f.artistId);
 
     if (!targetFolderId) {
       setFiles(prev => prev.map((item, i) => i === index ? { 
@@ -284,7 +290,11 @@ export function SmartUploadModal({ isOpen, onClose, initialFiles, artists }: Sma
 
   const currentArtistFolders = activeFile ? (artistFolders[activeFile.artistId] || []) : [];
   const projectList = currentArtistFolders.filter(f => {
-    const ignoreList = ['Images', 'Documents', 'Contracts', 'Stems', 'Bounces', 'Mix', 'Master', 'Sessions', 'Other'];
+    const ignoreList = [
+      'Images', 'Documents', 'Contracts', 'Stems', 'Bounces', 'Mix', 'Master', 'Sessions', 'Other',
+      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos',
+      '01_Sesiones_y_DAW', '02_Bounces_y_Grabaciones', '03_Revisiones_y_Mezclas', '04_Masters_Finales', '05_Referencias_y_Otros'
+    ];
     return !ignoreList.includes(f.name);
   });
 

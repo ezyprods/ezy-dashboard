@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -17,6 +17,19 @@ export default function MatricesPage() {
   const [newMatrixName, setNewMatrixName] = useState('');
   const [selectedArtistId, setSelectedArtistId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isArtistDropdownOpen, setIsArtistDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsArtistDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -240,19 +253,79 @@ export default function MatricesPage() {
                 <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
                   Asignar a Artista
                 </label>
-                <select 
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                  value={selectedArtistId}
-                  onChange={(e) => setSelectedArtistId(e.target.value)}
-                  disabled={isSubmitting}
-                >
-                  <option value="">-- Selecciona un artista --</option>
-                  {artists.map((artist) => (
-                    <option key={artist.id} value={artist.id}>
-                      {artist.name}
-                    </option>
-                  ))}
-                </select>
+                
+                {/* Searchable Combobox */}
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => !isSubmitting && setIsArtistDropdownOpen(!isArtistDropdownOpen)}
+                    disabled={isSubmitting}
+                    className="w-full flex items-center justify-between bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all text-left"
+                  >
+                    {selectedArtistId ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-[10px] font-bold">
+                          {artists.find(a => a.id === selectedArtistId)?.name.substring(0, 2).toUpperCase() || 'A'}
+                        </span>
+                        {artists.find(a => a.id === selectedArtistId)?.name}
+                      </span>
+                    ) : (
+                      <span className="text-text-secondary">Selecciona un artista...</span>
+                    )}
+                    <ChevronDown className="w-4 h-4 text-text-secondary ml-2" />
+                  </button>
+
+                  {isArtistDropdownOpen && (
+                    <div className="absolute top-full left-0 z-50 mt-1 w-full bg-surface-elevated border border-border rounded-xl shadow-2xl p-2 animate-fade-in max-h-60 flex flex-col">
+                      <div className="flex items-center gap-2 border-b border-border/40 pb-2 mb-2 px-1">
+                        <Search className="w-4 h-4 text-text-secondary shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Buscar artista..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full bg-transparent border-none text-xs text-text-primary placeholder:text-text-secondary focus:outline-none"
+                        />
+                      </div>
+                      
+                      <div className="overflow-y-auto flex-1 space-y-0.5 max-h-40">
+                        {artists.filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
+                          <p className="text-[11px] text-text-secondary text-center py-2">No se encontraron artistas</p>
+                        ) : (
+                          artists
+                            .filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .map((artist) => {
+                              const isSelected = selectedArtistId === artist.id;
+                              return (
+                                <button
+                                  key={artist.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedArtistId(artist.id);
+                                    setIsArtistDropdownOpen(false);
+                                    setSearchTerm('');
+                                  }}
+                                  className={`w-full flex items-center justify-between p-2 rounded-lg text-xs transition-colors text-left ${
+                                    isSelected 
+                                      ? 'bg-accent/10 text-accent-light font-medium' 
+                                      : 'text-text-primary hover:bg-surface hover:text-white'
+                                  }`}
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <span className="w-4 h-4 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-[8px] font-bold">
+                                      {artist.name.substring(0, 2).toUpperCase()}
+                                    </span>
+                                    {artist.name}
+                                  </span>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-accent-light" />}
+                                </button>
+                              );
+                            })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -263,6 +336,8 @@ export default function MatricesPage() {
                     setIsModalOpen(false);
                     setNewMatrixName('');
                     setSelectedArtistId('');
+                    setSearchTerm('');
+                    setIsArtistDropdownOpen(false);
                   }}
                   disabled={isSubmitting}
                 >

@@ -7,18 +7,28 @@ export const DRIVE_ROOT_FOLDER_ID = process.env.DRIVE_ROOT_FOLDER_ID || '';
 
 // Drive folder structure template for new artists
 export const ARTIST_FOLDER_STRUCTURE = [
-  'Images',
+  '01_Legal_y_Contratos',
+  '02_Diseño_y_Media',
+  '03_Lanzamientos_y_Proyectos',
 ] as const;
 
 // Drive folder structure template for new projects
 export const PROJECT_FOLDER_STRUCTURE = [
-  'Sessions',
-  'Bounces',
-  'Mix',
-  'Master',
-  'References',
-  'Other',
+  '01_Sesiones_y_DAW',
+  '02_Bounces_y_Grabaciones',
+  '03_Revisiones_y_Mezclas',
+  '04_Masters_Finales',
+  '05_Referencias_y_Otros',
 ] as const;
+
+export const FOLDER_NAME_MAP: Record<string, string> = {
+  Sessions: '01_Sesiones_y_DAW',
+  Bounces: '02_Bounces_y_Grabaciones',
+  Mix: '03_Revisiones_y_Mezclas',
+  Master: '04_Masters_Finales',
+  References: '05_Referencias_y_Otros',
+  Other: '05_Referencias_y_Otros',
+};
 
 // Service types with Spanish labels
 export const SERVICE_LABELS: Record<string, string> = {

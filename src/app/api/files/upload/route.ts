@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getDriveService, listFolders } from '@/lib/drive';
 import { Readable } from 'stream';
 
+import { FOLDER_NAME_MAP } from '@/lib/constants';
+
 // POST /api/files/upload
 // Body: FormData with fields: artistId, folderType, file (repeatable)
 export async function POST(request: Request) {
@@ -21,17 +23,11 @@ export async function POST(request: Request) {
     const drive = getDriveService();
 
     // 1. List project folders under artist folder
-    // The folder structure is: Artist folder > Project folders > (Bounces, Mix, etc.)
-    // For quick upload, we look directly under artist folder for the named subfolder
-    // OR we look for a matching folder name in any project.
-    // Strategy: find any folder named `folderType` that is a direct child of a project
-    // inside the artist folder. We find all project subfolders and pick the first match.
-
-    // Simpler approach: the artist folder itself may have the folder types directly,
-    // or inside project subfolders. We'll search for all subfolders of the artist,
-    // then for each subfolder find the matching folder type.
     const projectFolders = await listFolders(artistId);
-    const ignoreFolders = ['Images', 'Documents', 'Contracts', 'Stems'];
+    const ignoreFolders = [
+      'Images', 'Documents', 'Contracts', 'Stems',
+      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos'
+    ];
     const projects = projectFolders.filter(
       (f) => !ignoreFolders.includes(f.name || '')
     );
@@ -39,10 +35,11 @@ export async function POST(request: Request) {
     // Find target folder across all projects – use the first project found, or
     // if no projects, look for the folder directly in artist folder.
     let targetFolderId: string | null = null;
+    const mappedFolderName = (FOLDER_NAME_MAP as any)[folderType || ''] || folderType;
 
     for (const project of projects) {
       const subfolders = await listFolders(project.id!);
-      const match = subfolders.find((f) => f.name === folderType);
+      const match = subfolders.find((f) => f.name === folderType || f.name === mappedFolderName);
       if (match) {
         targetFolderId = match.id!;
         break;
@@ -51,7 +48,7 @@ export async function POST(request: Request) {
 
     // Fallback: look directly inside the artist folder for the named folder
     if (!targetFolderId) {
-      const directChild = projectFolders.find((f) => f.name === folderType);
+      const directChild = projectFolders.find((f) => f.name === folderType || f.name === mappedFolderName);
       if (directChild) targetFolderId = directChild.id!;
     }
 

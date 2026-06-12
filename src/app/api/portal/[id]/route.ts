@@ -66,7 +66,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         
         // Obtener subcarpetas del proyecto (Bounces)
         const subfolders = await listFolders(projectFolder.id!);
-        const bouncesFolder = subfolders.find(f => f.name === 'Bounces');
+        const bouncesFolder = subfolders.find(f => f.name === 'Bounces' || f.name === '02_Bounces_y_Grabaciones');
         
         let bounces: any[] = [];
         if (bouncesFolder) {
