@@ -23,54 +23,58 @@ export function GlobalMatricesWidget() {
 
   if (isLoading) {
     return (
-      <div className="glass rounded-xl border border-border p-6 mt-8 flex flex-col items-center justify-center min-h-[150px]">
-        <Loader2 className="w-6 h-6 animate-spin text-accent" />
-        <p className="text-sm text-text-secondary mt-2">Cargando matrices...</p>
-      </div>
-    );
-  }
-
-  if (matrices.length === 0) {
-    return (
-      <div className="glass rounded-xl border border-border p-6 mt-8 text-center text-text-secondary">
-        <Table2 className="w-8 h-8 mx-auto mb-3 opacity-50" />
-        <p>No hay matrices abiertas en ningún proyecto.</p>
+      <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl animate-pulse">
+        <div className="p-4 border-b border-border/50 bg-surface/50 flex items-center gap-2">
+          <Table2 className="w-4 h-4 text-accent" />
+          <h3 className="font-semibold text-sm">Matrices Activas</h3>
+        </div>
+        <div className="p-6 flex flex-col items-center justify-center min-h-[150px]">
+          <Loader2 className="w-5 h-5 animate-spin text-accent" />
+          <p className="text-xs text-text-secondary mt-2">Cargando matrices...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mt-8 space-y-4">
-      <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
-        <Table2 className="w-5 h-5 text-accent" />
-        Matrices Activas
-      </h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {matrices.map(m => (
-          <Link 
-            key={`${m.artistId}-${m.id}`} 
-            href={`/artists/${m.artistId}`}
-            className="glass rounded-xl p-5 border border-border hover:border-accent/50 hover:bg-surface-elevated/50 transition-all group block"
-          >
-            <div className="flex justify-between items-start mb-2">
-              <h4 className="font-bold text-text-primary truncate">{m.name}</h4>
-              <ChevronRight className="w-4 h-4 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
+    <div className="relative">
+      <div className="absolute -inset-0.5 bg-gradient-to-b from-accent/20 to-transparent rounded-[20px] blur opacity-50" />
+      <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl">
+        <div className="p-4 border-b border-border/50 bg-surface/50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Table2 className="w-4 h-4 text-accent" />
+            <h3 className="font-semibold text-sm">Matrices Activas</h3>
+          </div>
+          <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold">
+            {matrices.length}
+          </span>
+        </div>
+        
+        <div className="p-3 max-h-[380px] overflow-y-auto space-y-2 custom-scrollbar">
+          {matrices.length === 0 ? (
+            <div className="text-center py-8 text-xs text-text-secondary">
+              <Table2 className="w-6 h-6 mx-auto mb-2 opacity-30" />
+              <p>No hay matrices abiertas.</p>
             </div>
-            
-            <div className="flex items-center gap-2 text-xs text-text-secondary">
-              <User className="w-3.5 h-3.5" />
-              <span className="truncate">{m.artistName}</span>
-            </div>
-            
-            {m.productionGrid && (
-              <div className="mt-4 pt-4 border-t border-border/50 text-xs text-text-secondary flex justify-between">
-                <span>{m.productionGrid.rows?.length || 0} filas</span>
-                <span>{m.productionGrid.columns?.length || 0} columnas</span>
-              </div>
-            )}
-          </Link>
-        ))}
+          ) : (
+            matrices.map(m => (
+              <Link 
+                key={`${m.artistId}-${m.id}`} 
+                href={`/artists/${m.artistId}`}
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-surface border border-transparent hover:border-border/50 transition-all group block"
+              >
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-xs text-text-primary group-hover:text-accent transition-colors truncate">{m.name}</h4>
+                  <div className="flex items-center gap-1.5 text-[10px] text-text-secondary mt-0.5">
+                    <User className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{m.artistName}</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0" />
+              </Link>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

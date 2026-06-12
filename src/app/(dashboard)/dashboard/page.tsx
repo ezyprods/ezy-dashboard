@@ -226,6 +226,8 @@ export default function DashboardPage() {
 
         {/* Right Column (Widgets) */}
         <div className="space-y-6">
+          <GlobalMatricesWidget />
+
           <div className="relative">
             <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/20 to-transparent rounded-[20px] blur opacity-50" />
             <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl">
@@ -259,8 +261,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      
-      <GlobalMatricesWidget />
     </div>
   );
 }
