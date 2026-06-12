@@ -10,6 +10,7 @@ import { PROJECT_TYPE_LABELS } from '@/lib/constants';
 import type { ProjectType, Artist } from '@/types';
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { DatePicker } from '@/components/ui/DatePicker';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -125,13 +126,19 @@ export function NewProjectModal({ isOpen, onClose, artistId, artists }: NewProje
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="delivery">Fecha de Entrega (Interna)</Label>
-              <Input id="delivery" type="date" value={formData.deliveryDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))} />
+              <DatePicker
+                id="delivery"
+                value={formData.deliveryDate}
+                onChange={(val) => setFormData(prev => ({ ...prev, deliveryDate: val }))}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="release">Fecha de Lanzamiento</Label>
-              <Input id="release" type="date" value={formData.releaseDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, releaseDate: e.target.value }))} />
+              <DatePicker
+                id="release"
+                value={formData.releaseDate}
+                onChange={(val) => setFormData(prev => ({ ...prev, releaseDate: val }))}
+              />
             </div>
           </div>
         </div>

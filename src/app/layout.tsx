@@ -7,7 +7,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EZY Studio — Producer Dashboard",
+  title: "Ezy",
   description: "Plataforma de gestión de producción musical para productores independientes.",
 };
 

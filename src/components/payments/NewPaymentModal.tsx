@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/Label';
 import { usePayments } from '@/lib/hooks/usePayments';
 import { PAYMENT_METHOD_LABELS } from '@/lib/constants';
 import { Loader2 } from 'lucide-react';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { useArtists } from '@/lib/hooks/useArtists';
 
 export function NewPaymentModal({ 
@@ -91,7 +92,7 @@ export function NewPaymentModal({
                 onChange={(e) => setFormData(prev => ({ ...prev, artistId: e.target.value }))}
               >
                 <option value="">Selecciona un artista</option>
-                {activeArtists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {activeArtists.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
           )}
@@ -110,8 +111,12 @@ export function NewPaymentModal({
             </div>
             <div className="space-y-2">
               <Label htmlFor="date">Fecha *</Label>
-              <Input id="date" type="date" required value={formData.date}
-                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))} />
+              <DatePicker
+                id="date"
+                required
+                value={formData.date}
+                onChange={(val) => setFormData(prev => ({ ...prev, date: val }))}
+              />
             </div>
           </div>
 

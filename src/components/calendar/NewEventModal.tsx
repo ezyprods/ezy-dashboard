@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { CalendarPlus, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Button } from '@/components/ui/Button';
 
 interface CalendarEvent {
@@ -186,12 +187,10 @@ export function NewEventModal({ isOpen, onClose, onCreated, initialDate, editEve
           <label className="block text-xs font-medium text-text-secondary mb-1.5">
             Fecha <span className="text-error">*</span>
           </label>
-          <input
-            type="date"
-            required
+          <DatePicker
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className={inputCls}
+            onChange={(val) => setDate(val)}
+            required
           />
         </div>
 

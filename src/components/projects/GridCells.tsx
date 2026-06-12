@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Circle, Clock, Eye, CheckCircle2, Paperclip, Calendar, MessageSquare, Play, Loader2, X, ListTodo, FileText, AlignLeft, CheckSquare, Plus, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { DatePicker } from '@/components/ui/DatePicker';
 import type { GridCell, FlexTaskStatus, ColumnType } from '@/types';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { customAlert } from '@/lib/dialog';
@@ -184,11 +185,10 @@ function TextCellUI({ textValue, onUpdate }: any) {
 function DateCellUI({ dueDate, status, onUpdate }: any) {
   const isOverdue = dueDate && new Date(dueDate) < new Date() && status !== 'done';
   return (
-    <Input 
-      type="date" 
-      value={dueDate || ''} 
-      onChange={e => onUpdate({ dueDate: e.target.value || undefined })} 
-      className={`h-8 text-xs bg-surface text-center ${isOverdue ? 'border-error/50 text-error' : 'border-border'}`} 
+    <DatePicker
+      value={dueDate || ''}
+      onChange={val => onUpdate({ dueDate: val || undefined })}
+      className={isOverdue ? 'border-error/50 text-error' : 'border-border'}
     />
   );
 }
