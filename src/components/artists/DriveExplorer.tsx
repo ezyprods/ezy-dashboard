@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer } from 'lucide-react';
+import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer, X } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -72,11 +72,39 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
+  // Split screen (Third Pane) states
+  const [threePaneFolderId, setThreePaneFolderId] = useState<string | null>(null);
+  const [threePaneFolderName, setThreePaneFolderName] = useState<string | null>(null);
+  const [threePaneItems, setThreePaneItems] = useState<DriveItem[]>([]);
+  const [threePaneLoading, setThreePaneLoading] = useState(false);
+  const [isRightDropZoneDragOver, setIsRightDropZoneDragOver] = useState(false);
+  const [isThirdPaneDragOver, setIsThirdPaneDragOver] = useState(false);
+
+  const fetchThreePaneItems = useCallback(async (folderId: string) => {
+    setThreePaneLoading(true);
+    try {
+      const res = await fetch(`/api/files?folderId=${folderId}`);
+      if (!res.ok) throw new Error('Error al cargar elementos del panel secundario');
+      const data = await res.json();
+      setThreePaneItems(data.items || []);
+    } catch (err) {
+      console.error('Error fetching three pane items:', err);
+    } finally {
+      setThreePaneLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (threePaneFolderId) {
+      fetchThreePaneItems(threePaneFolderId);
+    }
+  }, [threePaneFolderId, fetchThreePaneItems]);
+
+  const explorerRef = useRef<HTMLDivElement>(null);
+  
   // Undo / Redo Stack
   const [actionStack, setActionStack] = useState<ActionHistory[]>([]);
   const [redoStack, setRedoStack] = useState<ActionHistory[]>([]);
-
-  const explorerRef = useRef<HTMLDivElement>(null);
 
   // Clear selection when clicking outside
   useEffect(() => {
@@ -378,14 +406,52 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       setIsUploading(false);
     }
   };
-
   const handleItemDragStart = (e: React.DragEvent, itemId: string) => {
     e.stopPropagation();
     const idsToDrag = selectedIds.includes(itemId) ? selectedIds : [itemId];
     e.dataTransfer.setData('text/plain', JSON.stringify(idsToDrag));
   };
 
-  const handleItemDrop = async (e: React.DragEvent, targetFolderId: string) => {
+  const handleMoveItems = async (draggedItemIds: string[], targetFolderId: string, sourceFolderId: string) => {
+    const validIdsToMove = draggedItemIds.filter(id => id !== targetFolderId);
+    if (validIdsToMove.length === 0) return;
+
+    setIsLoading(true);
+    if (threePaneFolderId) setThreePaneLoading(true);
+    
+    try {
+      const movedItems = items.filter(i => validIdsToMove.includes(i.id))
+        .concat(threePaneItems.filter(i => validIdsToMove.includes(i.id)));
+
+      for (const fileId of validIdsToMove) {
+        await fetch('/api/files', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId, newParentId: targetFolderId, oldParentId: sourceFolderId }),
+        });
+      }
+      
+      setActionStack(prev => [...prev, {
+        type: 'MOVE',
+        items: movedItems,
+        oldParentId: sourceFolderId,
+        newParentId: targetFolderId
+      }]);
+      setRedoStack([]);
+      
+      setSelectedIds([]);
+      fetchItems(currentFolderId);
+      if (threePaneFolderId) fetchThreePaneItems(threePaneFolderId);
+      fetchRecentFiles();
+    } catch (err: any) {
+      customAlert(err.message);
+    } finally {
+      setIsLoading(false);
+      setThreePaneLoading(false);
+    }
+  };
+
+  const handleItemDrop = (e: React.DragEvent, targetFolderId: string, sourceFolderId: string) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
@@ -401,34 +467,42 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         draggedItemIds = [draggedData];
       }
       
-      const validIdsToMove = draggedItemIds.filter(id => id !== targetFolderId);
-      if (validIdsToMove.length === 0) return;
+      handleMoveItems(draggedItemIds, targetFolderId, sourceFolderId);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-      setIsLoading(true);
-      const movedItems = items.filter(i => validIdsToMove.includes(i.id));
+  const handleRightDropZoneDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsRightDropZoneDragOver(false);
 
-      for (const fileId of validIdsToMove) {
-        await fetch('/api/files', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileId, newParentId: targetFolderId, oldParentId: currentFolderId }),
-        });
+    try {
+      const draggedData = e.dataTransfer.getData('text/plain');
+      if (!draggedData) return;
+
+      let draggedItemIds: string[] = [];
+      try {
+        draggedItemIds = JSON.parse(draggedData);
+      } catch {
+        draggedItemIds = [draggedData];
       }
-      
-      setActionStack(prev => [...prev, {
-        type: 'MOVE',
-        items: movedItems,
-        oldParentId: currentFolderId,
-        newParentId: targetFolderId
-      }]);
-      setRedoStack([]);
-      
-      setSelectedIds([]);
-      fetchItems(currentFolderId);
-      fetchRecentFiles();
-    } catch (err: any) { 
-      customAlert(err.message); 
-      setIsLoading(false);
+
+      if (draggedItemIds.length === 1) {
+        const folderId = draggedItemIds[0];
+        const item = items.find(i => i.id === folderId) || recentFiles.find(i => i.id === folderId);
+        if (item && item.mimeType === 'application/vnd.google-apps.folder') {
+          setThreePaneFolderId(folderId);
+          setThreePaneFolderName(item.name);
+        } else {
+          customAlert('Arrastra una carpeta a esta zona para abrir la vista en paralelo.');
+        }
+      } else {
+        customAlert('Solo puedes abrir una carpeta a la vez en paralelo.');
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -568,7 +642,12 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* Left Side: Recent Files */}
-        <div className="lg:col-span-5 bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px]">
+        <div 
+          className={cn(
+            "bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px]",
+            threePaneFolderId ? "lg:col-span-3" : "lg:col-span-5"
+          )}
+        >
           <h3 className="text-md font-bold text-text-primary mb-4 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
             Archivos Recientes
@@ -704,279 +783,478 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               })
             )}
           </div>
+                {/* Right Side: Explorer (and Split Target if not split) */}
+        <div 
+          className={cn(
+            "w-full flex gap-4 items-stretch",
+            threePaneFolderId ? "lg:col-span-4 flex-col" : "lg:col-span-7"
+          )}
+        >
+          <div className="flex-1 space-y-6">
+            {/* Top Bar: Breadcrumbs & Actions */}
+            <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
+              <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+                {breadcrumbs.map((crumb, idx) => (
+                  <div 
+                    key={crumb.id} 
+                    className="flex items-center gap-2"
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      if (idx < breadcrumbs.length - 1) {
+                        handleItemDrop(e, crumb.id, currentFolderId);
+                      }
+                    }}
+                  >
+                    <button 
+                      onClick={() => navigateUp(idx)}
+                      className={`hover:text-accent transition-colors px-2 py-1 rounded ${idx === breadcrumbs.length - 1 ? 'text-text-primary font-medium' : 'text-text-secondary hover:bg-surface'}`}
+                    >
+                      {crumb.name}
+                    </button>
+                    {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary" />}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex items-center gap-2 shrink-0">
+                <Button variant="secondary" size="sm" onClick={handleCreateFolder}>
+                  <FolderPlus className="w-4 h-4 mr-2" />
+                  Carpeta
+                </Button>
+                <div className="relative">
+                  <input 
+                    type="file" 
+                    multiple 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                    onChange={handleFileUpload} 
+                    disabled={isUploading}
+                  />
+                  <Button size="sm" disabled={isUploading}>
+                    {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-2" />}
+                    Subir
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div 
+              className="relative bg-surface rounded-xl border border-border overflow-hidden min-h-[420px]"
+              onClick={() => {
+                setSelectedIds([]);
+                setLastSelectedIndex(null);
+              }}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {/* Drag Overlay */}
+              {isDraggingOver && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-sm rounded-xl border-2 border-dashed border-accent pointer-events-none">
+                  <div className="bg-surface-elevated px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-in zoom-in-95 duration-200 border border-border/50">
+                    <div className="w-10 h-10 bg-accent/20 text-accent rounded-full flex items-center justify-center">
+                      <UploadCloud className="w-5 h-5 animate-bounce" />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="text-base font-bold text-text-primary">Suelta los archivos aquí</h3>
+                      <p className="text-xs text-text-secondary mt-0.5">Se subirán a esta carpeta</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {isLoading ? (
+                <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
+              ) : groupedItems.length === 0 ? (
+                <div className="p-16 text-center text-text-secondary">
+                  <Folder className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>La carpeta está vacía.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {groupedItems.map((item: any) => {
+                    const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+                    const isAudio = item.mimeType.startsWith('audio/');
+                    
+                    return (
+                      <div 
+                        key={item.id}
+                        draggable
+                        onDragStart={(e) => handleItemDragStart(e, item.id)}
+                        onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
+                        onDrop={isFolder ? (e) => handleItemDrop(e, item.id, currentFolderId) : undefined}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (isFolder) {
+                            navigateTo(item.id, item.name);
+                          } else if (item.webViewLink) {
+                            window.open(item.webViewLink, '_blank');
+                          }
+                        }}
+                        className={cn(
+                          "group flex items-center p-3 transition-colors cursor-pointer border-l-2",
+                          selectedIds.includes(item.id) 
+                            ? "bg-accent/10 border-accent" 
+                            : "border-transparent hover:bg-surface-elevated"
+                        )}
+                        onClick={(e) => handleItemClick(e, groupedItems.indexOf(item), item, groupedItems)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          let activeIds = selectedIds;
+                          if (!selectedIds.includes(item.id)) {
+                            setSelectedIds([item.id]);
+                            setLastSelectedIndex(groupedItems.indexOf(item));
+                            activeIds = [item.id];
+                          }
+
+                          const multiple = activeIds.length > 1;
+                          
+                          let menuItems: any[] = [];
+                          if (multiple) {
+                             menuItems = [
+                               { label: `Mover ${activeIds.length} elementos...`, icon: 'FolderOpen', action: () => customAlert('Arrastra los elementos a una carpeta para moverlos.') },
+                               { separator: true },
+                               { label: `Eliminar ${activeIds.length} elementos`, icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
+                             ];
+                          } else if (isFolder) {
+                            menuItems = [
+                              { label: 'Abrir Carpeta', icon: 'FolderOpen', action: () => navigateTo(item.id, item.name) },
+                              { separator: true },
+                              { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
+                              { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
+                              { separator: true },
+                              { label: 'Eliminar Carpeta', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, true) }
+                            ];
+                          } else if (isAudio) {
+                            menuItems = [
+                              { label: 'Reproducir / Pausar', icon: 'Play', action: () => window.open(item.webViewLink, '_blank') },
+                              { label: 'Ver Archivo', icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
+                              { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
+                              { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
+                              { separator: true },
+                              { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
+                              { separator: true },
+                              { label: 'Eliminar Audio', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
+                            ];
+                          } else {
+                            const isImage = item.mimeType.startsWith('image/');
+                            const isPDF = item.mimeType.includes('pdf');
+                            const isVideo = item.mimeType.startsWith('video/');
+                            const isDoc = item.mimeType.includes('document') || item.mimeType.includes('sheet') || item.mimeType.includes('presentation') || item.mimeType.startsWith('text/') || item.mimeType.includes('google-apps');
+
+                            let openLabel = 'Ver Archivo';
+                            if (isImage) openLabel = 'Abrir Imagen (Drive)';
+                            else if (isPDF) openLabel = 'Abrir PDF (Drive)';
+                            else if (isVideo) openLabel = 'Reproducir Video (Drive)';
+                            else if (isDoc) openLabel = 'Abrir Documento (Drive)';
+
+                            menuItems = [
+                              { label: openLabel, icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
+                              { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
+                              { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
+                              { separator: true },
+                              { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
+                              { separator: true },
+                              { label: 'Eliminar Archivo', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
+                            ];
+                          }
+                          showMenu(e.clientX, e.clientY, menuItems);
+                        }}
+                      >
+                        {isAudio ? (
+                          <div className="flex-1 w-full flex items-center pr-2">
+                            <WaveformPlayer 
+                              fileId={item.id} 
+                              fileName={item.name} 
+                              versions={item.versions}
+                              currentFolderId={currentFolderId}
+                              onRefresh={() => {
+                                fetchItems(currentFolderId);
+                                fetchRecentFiles();
+                              }}
+                              modifiedTime={item.modifiedTime || item.createdTime}
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="w-10 flex justify-center shrink-0">
+                              {getIcon(item.mimeType, item.name)}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
+                              <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
+                                {item.name}
+                                {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
+                              </div>
+                              {!isFolder && (
+                                <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                  {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
+                                  {item.size && <span>•</span>}
+                                  <span className="font-mono bg-surface px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                             <div className="flex items-center gap-1 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                              <button 
+                                className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRename(item.id, item.name);
+                                }}
+                                title="Renombrar"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                className="p-2 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShareModalFile(item);
+                                }}
+                                title="Compartir"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
+                              {!isFolder && (
+                                <a 
+                                  href={item.webContentLink || item.webViewLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={item.name}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                                  title="Descargar"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </a>
+                              )}
+                              <button 
+                                className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(item.webViewLink, '_blank');
+                                }}
+                                title="Ver en Drive"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </button>
+                              <button 
+                                className="p-2 text-text-secondary hover:text-error rounded hover:bg-surface"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteModalFile(item);
+                                }}
+                                title="Opciones de eliminación"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Dotted Vertical Split Dropzone: shown only when not already split */}
+          {!threePaneFolderId && (
+            <div
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsRightDropZoneDragOver(true); }}
+              onDragLeave={() => setIsRightDropZoneDragOver(false)}
+              onDrop={handleRightDropZoneDrop}
+              className={cn(
+                "w-12 flex flex-col items-center justify-center gap-4 border border-dashed rounded-xl transition-all duration-300 cursor-pointer select-none py-12 shrink-0 group text-center",
+                isRightDropZoneDragOver 
+                  ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 scale-[1.02]" 
+                  : "bg-surface-elevated/20 border-border/60 hover:bg-surface-elevated/50 hover:border-accent/40 text-text-secondary hover:text-accent"
+              )}
+              title="Arrastra una carpeta aquí para abrir en vista dividida (3 columnas)"
+            >
+              <FolderOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <div 
+                className="text-[9px] font-bold uppercase tracking-widest text-center mt-2 flex flex-col gap-1.5"
+                style={{ writingMode: 'vertical-lr' }}
+              >
+                VISTA PARALELA
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right Side: Explorer */}
-        <div className="lg:col-span-7 space-y-6 w-full">
-          {/* Top Bar: Breadcrumbs & Actions */}
-          <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
-            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
-              {breadcrumbs.map((crumb, idx) => (
-                <div 
-                  key={crumb.id} 
-                  className="flex items-center gap-2"
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  onDrop={(e) => {
-                    if (idx < breadcrumbs.length - 1) {
-                      handleItemDrop(e, crumb.id);
-                    }
-                  }}
-                >
-                  <button 
-                    onClick={() => navigateUp(idx)}
-                    className={`hover:text-accent transition-colors px-2 py-1 rounded ${idx === breadcrumbs.length - 1 ? 'text-text-primary font-medium' : 'text-text-secondary hover:bg-surface'}`}
-                  >
-                    {crumb.name}
-                  </button>
-                  {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary" />}
-                </div>
-              ))}
+        {/* Column 3: Custom Split Pane (Explorer of the dragged folder) */}
+        {threePaneFolderId && (
+          <div className="lg:col-span-5 space-y-6 w-full animate-slide-in">
+            {/* Header: Folder name & Close button */}
+            <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <Folder className="w-5 h-5 text-accent shrink-0 animate-pulse" />
+                <span className="font-bold text-text-primary truncate text-sm">
+                  {threePaneFolderName}
+                </span>
+              </div>
+              <button
+                onClick={() => setThreePaneFolderId(null)}
+                className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface transition-colors"
+                title="Cerrar vista paralela"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="secondary" size="sm" onClick={handleCreateFolder}>
-                <FolderPlus className="w-4 h-4 mr-2" />
-                Carpeta
-              </Button>
-              <div className="relative">
-                <input 
-                  type="file" 
-                  multiple 
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-                  onChange={handleFileUpload} 
-                  disabled={isUploading}
-                />
-                <Button size="sm" disabled={isUploading}>
-                  {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-2" />}
-                  Subir
-                </Button>
-              </div>
-            </div>
-          </div>
 
-          {/* Content */}
-          <div 
-            className="relative bg-surface rounded-xl border border-border overflow-hidden min-h-[420px]"
-            onClick={() => {
-              setSelectedIds([]);
-              setLastSelectedIndex(null);
-            }}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {/* Drag Overlay */}
-            {isDraggingOver && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-sm rounded-xl border-2 border-dashed border-accent pointer-events-none">
-                <div className="bg-surface-elevated px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-in zoom-in-95 duration-200 border border-border/50">
-                  <div className="w-10 h-10 bg-accent/20 text-accent rounded-full flex items-center justify-center">
-                    <UploadCloud className="w-5 h-5 animate-bounce" />
-                  </div>
-                  <div className="text-left">
-                    <h3 className="text-base font-bold text-text-primary">Suelta los archivos aquí</h3>
-                    <p className="text-xs text-text-secondary mt-0.5">Se subirán a esta carpeta</p>
-                  </div>
+            {/* Split Content drop zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsThirdPaneDragOver(true); }}
+              onDragLeave={() => setIsThirdPaneDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsThirdPaneDragOver(false);
+                try {
+                  const draggedData = e.dataTransfer.getData('text/plain');
+                  if (!draggedData) return;
+                  let draggedItemIds: string[] = [];
+                  try {
+                    draggedItemIds = JSON.parse(draggedData);
+                  } catch {
+                    draggedItemIds = [draggedData];
+                  }
+                  handleMoveItems(draggedItemIds, threePaneFolderId, currentFolderId);
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+              className={cn(
+                "relative bg-surface rounded-xl border overflow-hidden min-h-[420px] transition-all duration-200",
+                isThirdPaneDragOver ? "border-accent bg-accent/5 ring-2 ring-accent/20" : "border-border"
+              )}
+            >
+              {threePaneLoading ? (
+                <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
+              ) : threePaneItems.length === 0 ? (
+                <div className="p-16 text-center text-text-secondary text-sm">
+                  <Folder className="w-12 h-12 mx-auto mb-4 opacity-40" />
+                  <p>La carpeta está vacía.</p>
+                  <p className="text-[10px] mt-1 text-text-secondary/70">Arrastra archivos aquí para moverlos a esta carpeta.</p>
                 </div>
-              </div>
-            )}
-
-            {isLoading ? (
-              <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
-            ) : groupedItems.length === 0 ? (
-              <div className="p-16 text-center text-text-secondary">
-                <Folder className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>La carpeta está vacía.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border/50">
-                {groupedItems.map((item: any) => {
-                  const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
-                  const isAudio = item.mimeType.startsWith('audio/');
-                  
-                  return (
-                    <div 
-                      key={item.id}
-                      draggable
-                      onDragStart={(e) => handleItemDragStart(e, item.id)}
-                      onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
-                      onDrop={isFolder ? (e) => handleItemDrop(e, item.id) : undefined}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        if (isFolder) {
-                          navigateTo(item.id, item.name);
-                        } else if (item.webViewLink) {
-                          window.open(item.webViewLink, '_blank');
-                        }
-                      }}
-                      className={cn(
-                        "group flex items-center p-3 transition-colors cursor-pointer border-l-2",
-                        selectedIds.includes(item.id) 
-                          ? "bg-accent/10 border-accent" 
-                          : "border-transparent hover:bg-surface-elevated"
-                      )}
-                      onClick={(e) => handleItemClick(e, groupedItems.indexOf(item), item, groupedItems)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        
-                        let activeIds = selectedIds;
-                        if (!selectedIds.includes(item.id)) {
-                          setSelectedIds([item.id]);
-                          setLastSelectedIndex(groupedItems.indexOf(item));
-                          activeIds = [item.id];
-                        }
-
-                        const multiple = activeIds.length > 1;
-                        
-                        let menuItems: any[] = [];
-                        if (multiple) {
-                           menuItems = [
-                             { label: `Mover ${activeIds.length} elementos...`, icon: 'FolderOpen', action: () => customAlert('Arrastra los elementos a una carpeta para moverlos.') },
-                             { separator: true },
-                             { label: `Eliminar ${activeIds.length} elementos`, icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
-                           ];
-                        } else if (isFolder) {
-                          menuItems = [
-                            { label: 'Abrir Carpeta', icon: 'FolderOpen', action: () => navigateTo(item.id, item.name) },
-                            { separator: true },
-                            { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
-                            { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
-                            { separator: true },
-                            { label: 'Eliminar Carpeta', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, true) }
-                          ];
-                        } else if (isAudio) {
-                          menuItems = [
-                            { label: 'Reproducir / Pausar', icon: 'Play', action: () => window.open(item.webViewLink, '_blank') },
-                            { label: 'Ver Archivo', icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
-                            { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
-                            { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
-                            { separator: true },
-                            { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
-                            { separator: true },
-                            { label: 'Eliminar Audio', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
-                          ];
-                        } else {
-                          const isImage = item.mimeType.startsWith('image/');
-                          const isPDF = item.mimeType.includes('pdf');
-                          const isVideo = item.mimeType.startsWith('video/');
-                          const isDoc = item.mimeType.includes('document') || item.mimeType.includes('sheet') || item.mimeType.includes('presentation') || item.mimeType.startsWith('text/') || item.mimeType.includes('google-apps');
-
-                          let openLabel = 'Ver Archivo';
-                          if (isImage) openLabel = 'Abrir Imagen (Drive)';
-                          else if (isPDF) openLabel = 'Abrir PDF (Drive)';
-                          else if (isVideo) openLabel = 'Reproducir Video (Drive)';
-                          else if (isDoc) openLabel = 'Abrir Documento (Drive)';
-
-                          menuItems = [
-                            { label: openLabel, icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
-                            { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
-                            { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
-                            { separator: true },
-                            { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
-                            { separator: true },
-                            { label: 'Eliminar Archivo', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
-                          ];
-                        }
-                        showMenu(e.clientX, e.clientY, menuItems);
-                      }}
-                    >
-                      {isAudio ? (
-                        <div className="flex-1 w-full flex items-center pr-2">
-                          <WaveformPlayer 
-                            fileId={item.id} 
-                            fileName={item.name} 
-                            versions={item.versions}
-                            currentFolderId={currentFolderId}
-                            onRefresh={() => {
-                              fetchItems(currentFolderId);
-                              fetchRecentFiles();
-                            }}
-                            modifiedTime={item.modifiedTime || item.createdTime}
-                          />
-                        </div>
-                      ) : (
-                        <>
-                          <div className="w-10 flex justify-center shrink-0">
-                            {getIcon(item.mimeType, item.name)}
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {threePaneItems.map((item: any) => {
+                    const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+                    const isAudio = item.mimeType.startsWith('audio/');
+                    
+                    return (
+                      <div
+                        key={item.id}
+                        draggable
+                        onDragStart={(e) => handleItemDragStart(e, item.id)}
+                        onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
+                        onDrop={isFolder ? (e) => handleItemDrop(e, item.id, threePaneFolderId) : undefined}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (isFolder) {
+                            setThreePaneFolderId(item.id);
+                            setThreePaneFolderName(item.name);
+                          } else if (item.webViewLink) {
+                            window.open(item.webViewLink, '_blank');
+                          }
+                        }}
+                        className="group flex items-center p-3 transition-colors cursor-pointer hover:bg-surface-elevated/60"
+                      >
+                        {isAudio ? (
+                          <div className="flex-1 w-full flex items-center pr-2">
+                            <WaveformPlayer 
+                              fileId={item.id} 
+                              fileName={item.name} 
+                              versions={item.versions}
+                              currentFolderId={threePaneFolderId}
+                              onRefresh={() => {
+                                fetchThreePaneItems(threePaneFolderId);
+                                fetchItems(currentFolderId);
+                                fetchRecentFiles();
+                              }}
+                              modifiedTime={item.modifiedTime || item.createdTime}
+                            />
                           </div>
-                          
-                          <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
-                            <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
-                              {item.name}
-                              {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
+                        ) : (
+                          <>
+                            <div className="w-10 flex justify-center shrink-0">
+                              {getIcon(item.mimeType, item.name)}
                             </div>
-                            {!isFolder && (
-                              <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
-                                {item.size && <span>•</span>}
-                                <span className="font-mono bg-surface px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                            
+                            <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
+                              <div className="font-medium text-text-primary truncate text-xs flex items-center gap-2">
+                                {item.name}
+                                {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
                               </div>
-                            )}
-                          </div>
-                          
-                           <div className="flex items-center gap-1 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                            <button 
-                              className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRename(item.id, item.name);
-                              }}
-                              title="Renombrar"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button 
-                              className="p-2 text-text-secondary hover:text-accent rounded hover:bg-surface"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShareModalFile(item);
-                              }}
-                              title="Compartir"
-                            >
-                              <Share2 className="w-4 h-4" />
-                            </button>
-                            {!isFolder && (
-                              <a 
-                                href={item.webContentLink || item.webViewLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                download={item.name}
-                                onClick={(e) => e.stopPropagation()}
-                                className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                                title="Descargar"
+                              {!isFolder && (
+                                <div className="text-[9px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                  {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
+                                  {item.size && <span>•</span>}
+                                  <span className="font-mono bg-surface px-1 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex items-center gap-1 shrink-0 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                              <button 
+                                className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRename(item.id, item.name).then(() => fetchThreePaneItems(threePaneFolderId));
+                                }}
+                                title="Renombrar"
                               >
-                                <Download className="w-4 h-4" />
-                              </a>
-                            )}
-                            <button 
-                              className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(item.webViewLink, '_blank');
-                              }}
-                              title="Ver en Drive"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </button>
-                            <button 
-                              className="p-2 text-text-secondary hover:text-error rounded hover:bg-surface"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteModalFile(item);
-                              }}
-                              title="Opciones de eliminación"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShareModalFile(item);
+                                }}
+                                title="Compartir"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                              {!isFolder && (
+                                <a 
+                                  href={item.webContentLink || item.webViewLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={item.name}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                                  title="Descargar"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </a>
+                              )}
+                              <button 
+                                className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-surface"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteModalFile(item);
+                                }}
+                                title="Opciones de eliminación"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
+        )}
         </div>
 
       </div>
