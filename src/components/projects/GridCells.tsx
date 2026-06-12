@@ -51,26 +51,48 @@ function MiniWaveform({ fileId, isPlaying }: { fileId: string; isPlaying: boolea
 }
 
 // --- Specialized Cells ---
-
 function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onStatusChange: (s: FlexTaskStatus) => void }) {
   const [showRadial, setShowRadial] = useState(false);
   const [hovered, setHovered] = useState<FlexTaskStatus | null>(null);
   const [center, setCenter] = useState({ x: 0, y: 0 });
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const startPos = useRef({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
+  const startTime = useRef(0);
+  
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.todo;
   const Icon = cfg.icon;
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     const target = e.currentTarget;
+    startPos.current = { x: e.clientX, y: e.clientY };
+    hasMoved.current = false;
+    startTime.current = Date.now();
+
     longPressTimer.current = setTimeout(() => {
-      const rect = target.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      setCenter({ x: cx, y: cy });
-      setShowRadial(true);
+      if (!hasMoved.current) {
+        const rect = target.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        setCenter({ x: cx, y: cy });
+        setShowRadial(true);
+      }
     }, 450);
+  };
+
+  const handleLocalPointerMove = (e: React.PointerEvent) => {
+    if (showRadial) return;
+    const dx = e.clientX - startPos.current.x;
+    const dy = e.clientY - startPos.current.y;
+    if (Math.sqrt(dx * dx + dy * dy) > 5) {
+      hasMoved.current = true;
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    }
   };
 
   useEffect(() => {
@@ -129,9 +151,24 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+    hasMoved.current = true;
   };
 
-  const handleClick = () => {
+  const handlePointerCancel = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    hasMoved.current = true;
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    const elapsed = Date.now() - startTime.current;
+    if (hasMoved.current || elapsed > 300) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (!showRadial) {
       onStatusChange(NEXT_STATUS[status] || 'in_progress');
     }
@@ -148,9 +185,11 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
     <div 
       ref={containerRef} 
       className="relative flex items-center justify-center w-full" 
-      style={{ userSelect: 'none', touchAction: 'none' }} 
+      style={{ userSelect: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }} 
       onPointerDown={handlePointerDown} 
+      onPointerMove={handleLocalPointerMove}
       onPointerLeave={handlePointerLeave} 
+      onPointerCancel={handlePointerCancel}
       onClick={handleClick}
     >
       <button 

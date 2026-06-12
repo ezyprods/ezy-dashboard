@@ -68,6 +68,23 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
     }
   };
 
+  const togglePortalSharing = async (matrixId: string, shared: boolean) => {
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sharedInPortal: shared })
+      });
+      if (res.ok) {
+        fetchMatrices();
+      } else {
+        customAlert('Error al actualizar el estado de compartir');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
   }
@@ -128,6 +145,19 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
               <div className="flex items-center gap-4 text-xs text-text-secondary mb-6">
                 <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Sinc. Google Calendar</span>
                 <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Fases Personalizables</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-text-secondary border-t border-border/30 pt-3 mt-3 mb-4">
+                <span className="font-medium">Compartir en Portal</span>
+                <input 
+                  type="checkbox" 
+                  checked={m.sharedInPortal || false} 
+                  onChange={async (e) => {
+                    const checked = e.target.checked;
+                    await togglePortalSharing(m.id, checked);
+                  }}
+                  className="w-4 h-4 accent-accent cursor-pointer rounded"
+                />
               </div>
 
               <Button className="w-full" variant="secondary" onClick={() => setActiveMatrixId(m.id)}>

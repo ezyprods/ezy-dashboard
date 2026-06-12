@@ -246,6 +246,77 @@ export default function PortalPage() {
               return null;
             })}
           </div>
+
+          {/* Shared Matrices */}
+          {data.sharedMatrices && data.sharedMatrices.length > 0 && (
+            <div className="space-y-4 mt-8 animate-fade-in">
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-accent animate-pulse" />
+                Estado de la Producción
+              </h2>
+              <div className="space-y-6">
+                {data.sharedMatrices.map((matrix: any) => (
+                  <div key={matrix.id} className="glass rounded-2xl border border-border p-5 overflow-hidden">
+                    <h3 className="text-sm font-bold text-text-secondary uppercase tracking-widest mb-4">{matrix.name}</h3>
+                    
+                    <div className="overflow-x-auto bg-surface/30 rounded-xl border border-border/50">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-border bg-surface-elevated/40">
+                            <th className="p-3 text-text-secondary font-bold">Canción / Track</th>
+                            {matrix.productionGrid?.columns?.map((col: any) => (
+                              <th key={col.id} className="p-3 text-text-secondary font-bold text-center">
+                                {col.name}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {matrix.productionGrid?.rows?.map((row: any) => (
+                            <tr key={row.id} className="border-b border-border/20 hover:bg-surface-elevated/10 transition-colors">
+                              <td className="p-3 font-semibold text-text-primary">{row.name}</td>
+                              {matrix.productionGrid?.columns?.map((col: any) => {
+                                const cell = row.cells?.[col.id] || {};
+                                const status = cell.status || 'todo';
+                                
+                                const statusLabels: Record<string, string> = {
+                                  todo: 'Pendiente',
+                                  in_progress: 'En progreso',
+                                  review: 'Revisión',
+                                  done: 'Hecho'
+                                };
+                                const statusColors: Record<string, string> = {
+                                  todo: 'bg-surface border-border text-text-secondary',
+                                  in_progress: 'bg-accent/10 border-accent/30 text-accent-light',
+                                  review: 'bg-warning/10 border-warning/30 text-warning',
+                                  done: 'bg-success/10 border-success/30 text-success'
+                                };
+
+                                return (
+                                  <td key={col.id} className="p-3 text-center">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${statusColors[status] || statusColors.todo}`}>
+                                        {statusLabels[status] || 'Pendiente'}
+                                      </span>
+                                      {cell.fileName && (
+                                        <span className="text-[9px] text-text-secondary/70 truncate max-w-[120px]" title={cell.fileName}>
+                                          📎 {cell.fileName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>

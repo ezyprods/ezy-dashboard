@@ -39,7 +39,6 @@ function SortableColHeader({ col, onDelete, onRename }: { col: { id: string; nam
         <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity shrink-0">
           <GripVertical className="w-3.5 h-3.5" />
         </button>
-        <Icon className="w-3 h-3 text-accent shrink-0" />
         <input 
           value={localName} 
           onChange={e => setLocalName(e.target.value)}
@@ -95,7 +94,7 @@ function SortableRow({
             className="font-medium text-sm bg-transparent border-none outline-none flex-1 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors" 
             title={localName}
           />
-          <button onClick={() => onDelete(row.id)} className="opacity-0 group-hover/row:opacity-100 text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(row.id)} className="opacity-0 group-hover/row:opacity-100 text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0 mr-1.5"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </td>
       {columns.map(col => (
@@ -279,24 +278,24 @@ export function ProductionGridBoard({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-4">
         <div>
           <h3 className="text-xl font-bold">{matrixName}</h3>
           <p className="text-sm text-text-secondary">Trackeo modular por canción y fase.</p>
         </div>
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex items-center gap-2 bg-surface-elevated px-3 py-1.5 rounded-lg border border-border">
-            <span className="text-xs font-bold text-text-secondary uppercase">Proyecto:</span>
+        <div className="w-full sm:w-auto flex flex-col sm:items-end items-start gap-3">
+          <div className="w-full sm:w-auto flex items-center gap-2 bg-surface-elevated px-3 py-1.5 rounded-lg border border-border">
+            <span className="text-xs font-bold text-text-secondary uppercase shrink-0">Proyecto:</span>
             <select 
               value={linkedProjectId} 
               onChange={(e) => handleLinkProject(e.target.value)}
-              className="bg-transparent text-sm font-medium outline-none text-accent"
+              className="bg-transparent text-sm font-medium outline-none text-accent w-full sm:w-auto"
             >
               <option value="">-- Sin Proyecto Vinculado --</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 w-full justify-between sm:justify-end">
             <div className="text-sm font-bold text-text-secondary">{progress}% Completado</div>
             {isSaving && <Loader2 className="w-4 h-4 animate-spin text-accent" />}
           </div>

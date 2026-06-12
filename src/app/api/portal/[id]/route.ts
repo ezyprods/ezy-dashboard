@@ -111,6 +111,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const pendingPayment = Math.max(0, totalBudget - totalPaid);
 
+    // 4.5 Obtener las matrices compartidas
+    const matricesData = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
+    const sharedMatrices = (matricesData.matrices || [])
+      .filter((m: any) => m.sharedInPortal === true)
+      .map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        productionGrid: m.productionGrid
+      }));
+
     return NextResponse.json({ 
       artist: {
         id: artistConfig.id,
@@ -124,6 +134,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         totalPaid,
         pendingPayment,
       },
+      sharedMatrices,
       config: portalConfig
     });
   } catch (error: any) {

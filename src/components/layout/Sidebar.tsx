@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -25,6 +25,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const { activeArtists } = useArtists();
   const dragCounter = useRef(0);
+
+  useEffect(() => {
+    if (isOpen && onClose) {
+      onClose();
+    }
+  }, [pathname]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
