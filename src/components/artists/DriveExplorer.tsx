@@ -17,6 +17,7 @@ interface DriveItem {
   createdTime?: string;
   modifiedTime?: string;
   webViewLink?: string;
+  webContentLink?: string;
   versions?: DriveItem[];
   parentFolderId?: string;
 }
@@ -493,6 +494,22 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     if (mimeType.startsWith('image/')) return <FileImage className="w-5 h-5 text-green-400" />;
     if (mimeType.startsWith('video/')) return <Film className="w-5 h-5 text-red-400" />;
     if (mimeType.includes('pdf')) return <FileText className="w-5 h-5 text-orange-400" />;
+    if (
+      mimeType.includes('document') || 
+      mimeType.includes('word') || 
+      mimeType === 'application/vnd.google-apps.document'
+    ) return <FileText className="w-5 h-5 text-blue-400" />;
+    if (
+      mimeType.includes('sheet') || 
+      mimeType.includes('excel') || 
+      mimeType === 'application/vnd.google-apps.spreadsheet'
+    ) return <FileText className="w-5 h-5 text-emerald-400" />;
+    if (
+      mimeType.includes('presentation') || 
+      mimeType.includes('powerpoint') || 
+      mimeType === 'application/vnd.google-apps.presentation'
+    ) return <FileText className="w-5 h-5 text-yellow-500" />;
+    if (mimeType === 'text/plain') return <FileText className="w-5 h-5 text-gray-300" />;
     return <FileIcon className="w-5 h-5 text-text-secondary" />;
   };
 
@@ -554,7 +571,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                 return (
                   <div 
                     key={item.id}
-                    className="p-3 bg-surface rounded-lg border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center justify-between gap-3 group"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      if (item.webViewLink) window.open(item.webViewLink, '_blank');
+                    }}
+                    className="p-3 bg-surface rounded-lg border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center justify-between gap-3 group cursor-pointer"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {isAudio ? (
@@ -593,7 +614,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                     </div>
                     
                     {/* Action buttons */}
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 shrink-0 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -615,7 +636,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         <ExternalLink className="w-3.5 h-3.5" />
                       </button>
                       <a
-                        href={`/api/audio/${item.id}`}
+                        href={isAudio ? `/api/audio/${item.id}` : (item.webContentLink || item.webViewLink)}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         download={item.name}
                         onClick={(e) => e.stopPropagation()}
                         className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
@@ -745,6 +768,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       onDragStart={(e) => handleItemDragStart(e, item.id)}
                       onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
                       onDrop={isFolder ? (e) => handleItemDrop(e, item.id) : undefined}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        if (isFolder) {
+                          navigateTo(item.id, item.name);
+                        } else if (item.webViewLink) {
+                          window.open(item.webViewLink, '_blank');
+                        }
+                      }}
                       className={cn(
                         "group flex items-center p-3 transition-colors cursor-pointer border-l-2",
                         selectedIds.includes(item.id) 
@@ -793,8 +824,19 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             { label: 'Eliminar Audio', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
                           ];
                         } else {
+                          const isImage = item.mimeType.startsWith('image/');
+                          const isPDF = item.mimeType.includes('pdf');
+                          const isVideo = item.mimeType.startsWith('video/');
+                          const isDoc = item.mimeType.includes('document') || item.mimeType.includes('sheet') || item.mimeType.includes('presentation') || item.mimeType.startsWith('text/') || item.mimeType.includes('google-apps');
+
+                          let openLabel = 'Ver Archivo';
+                          if (isImage) openLabel = 'Abrir Imagen (Drive)';
+                          else if (isPDF) openLabel = 'Abrir PDF (Drive)';
+                          else if (isVideo) openLabel = 'Reproducir Video (Drive)';
+                          else if (isDoc) openLabel = 'Abrir Documento (Drive)';
+
                           menuItems = [
-                            { label: 'Ver Archivo', icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
+                            { label: openLabel, icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
                             { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
                             { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
                             { separator: true },
@@ -837,7 +879,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                           <div className="flex items-center gap-1 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                             <button 
                               className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
                               onClick={(e) => {
@@ -848,6 +890,19 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
+                            {!isFolder && (
+                              <a 
+                                href={item.webContentLink || item.webViewLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={item.name}
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                                title="Descargar"
+                              >
+                                <Download className="w-4 h-4" />
+                              </a>
+                            )}
                             <button 
                               className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
                               onClick={(e) => {

@@ -446,17 +446,17 @@ export function WaveformPlayer({
           <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
         ) : (
           <>
-            {!isPortal && <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>}
-            {!isPortal && <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>}
-            {!isPortal && <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>}
+            {!isPortal && <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>}
+            {!isPortal && <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>}
+            {!isPortal && <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>}
             
             {paywallLocked ? (
-              <button onClick={(e) => { e.stopPropagation(); customAlert('Descarga bloqueada. Tienes pagos pendientes.'); }} className="p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 opacity-0 group-hover/audio:opacity-100 transition-all" title="Pago pendiente"><Lock className="w-3.5 h-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); customAlert('Descarga bloqueada. Tienes pagos pendientes.'); }} className="p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all" title="Pago pendiente"><Lock className="w-3.5 h-3.5" /></button>
             ) : (
-              <a href={`/api/audio/${activeId}`} download={activeName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-0 group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
+              <a href={`/api/audio/${activeId}`} download={activeName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
             )}
             
-            {!isPortal && <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-0 group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
+            {!isPortal && <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
             <a href={`/api/audio/${activeId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"><ExternalLink className="w-3.5 h-3.5" /></a>
           </>
         )}

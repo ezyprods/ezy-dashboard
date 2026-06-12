@@ -90,7 +90,7 @@ export default function PortalPage() {
           {/* Main Grid for Modules */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {data.config?.modules?.map((mod: any) => {
-              if (!mod.visible) return null;
+              if (mod.isVisible === false) return null;
 
               if (mod.type === 'projects') {
                 return (

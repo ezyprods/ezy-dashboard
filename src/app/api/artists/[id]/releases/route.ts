@@ -3,46 +3,56 @@ import { getDriveService, listFolders, createFolder, saveJsonFile, findAndReadJs
 import { Release } from '@/types';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const drive = getDriveService();
-  
-  // Find 'Releases' folder inside the artist folder
-  const query = `mimeType='application/vnd.google-apps.folder' and name='Releases' and '${id}' in parents and trashed=false`;
-  const response = await drive.files.list({ q: query, fields: 'files(id)' });
-  const files = response.data.files || [];
-  
-  if (files.length === 0) {
-    return NextResponse.json([]); // No releases folder yet
-  }
-  
-  const releasesFolderId = files[0].id!;
-  
-  // List all folders inside 'Releases'
-  const releaseFolders = await listFolders(releasesFolderId);
-  
-  const releases: Release[] = [];
-  
-  for (const folder of releaseFolders) {
-    const config = await findAndReadJsonFile<Release>('release_config.json', folder.id!);
-    if (config) {
-      // Dynamic count of audio files
-      const audioQuery = `mimeType contains 'audio/' and '${folder.id}' in parents and trashed=false`;
-      const audioRes = await drive.files.list({ 
-        q: audioQuery, 
-        fields: 'files(id)',
-        includeItemsFromAllDrives: true,
-        supportsAllDrives: true,
-      });
-      
-      releases.push({
-        ...config,
-        id: folder.id!,
-        tracks: Array(audioRes.data.files?.length || 0).fill({} as any) // Trick to make .length work correctly in the UI
-      });
+  try {
+    const { id } = await params;
+    const drive = getDriveService();
+    
+    // Find 'Releases' folder inside the artist folder
+    const query = `mimeType='application/vnd.google-apps.folder' and name='Releases' and '${id}' in parents and trashed=false`;
+    const response = await drive.files.list({ 
+      q: query, 
+      fields: 'files(id)',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true
+    });
+    const files = response.data.files || [];
+    
+    if (files.length === 0) {
+      return NextResponse.json({ releases: [] });
     }
+    
+    const releasesFolderId = files[0].id!;
+    
+    // List all folders inside 'Releases'
+    const releaseFolders = await listFolders(releasesFolderId);
+    
+    const releases: Release[] = [];
+    
+    for (const folder of releaseFolders) {
+      const config = await findAndReadJsonFile<Release>('release_config.json', folder.id!);
+      if (config) {
+        // Dynamic count of audio files
+        const audioQuery = `mimeType contains 'audio/' and '${folder.id}' in parents and trashed=false`;
+        const audioRes = await drive.files.list({ 
+          q: audioQuery, 
+          fields: 'files(id)',
+          includeItemsFromAllDrives: true,
+          supportsAllDrives: true,
+        });
+        
+        releases.push({
+          ...config,
+          id: folder.id!,
+          tracks: Array(audioRes.data.files?.length || 0).fill({} as any) // Trick to make .length work correctly in the UI
+        });
+      }
+    }
+    
+    return NextResponse.json({ releases });
+  } catch (error: any) {
+    console.error('API /api/artists/[id]/releases GET error:', error);
+    return NextResponse.json({ releases: [], error: 'Failed to fetch releases', details: error.message }, { status: 500 });
   }
-  
-  return NextResponse.json(releases);
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -53,7 +63,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     
     // Find Releases folder
     const query = `mimeType='application/vnd.google-apps.folder' and name='Releases' and '${id}' in parents and trashed=false`;
-    const response = await drive.files.list({ q: query, fields: 'files(id)' });
+    const response = await drive.files.list({ 
+      q: query, 
+      fields: 'files(id)',
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true
+    });
     const files = response.data.files || [];
     
     let releasesFolderId = '';
