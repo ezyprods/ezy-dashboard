@@ -491,7 +491,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const getIcon = (mimeType: string, name: string) => {
     if (name.toLowerCase().endsWith('.flp')) {
       return (
-        <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0 fill-[#ff793f]" title="FL Studio Project">
+        <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0 fill-[#ff793f]">
+          <title>FL Studio Project</title>
           {/* Leaf / Stem */}
           <path d="M12 2c1.2 1.5 1.5 3 .5 4.5 1.5-1 2.2-2.5 1.5-4.5z" fill="#2ed573" />
           {/* Fruit Body */}
