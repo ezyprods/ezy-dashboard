@@ -15,16 +15,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // 1.5 Obtener configuración del portal
     let portalConfig = await findAndReadJsonFile<any>('portal_config.json', id);
+    const defaultModules = [
+      { id: 'projects', type: 'projects', isVisible: true, order: 0, title: 'Proyectos Activos' },
+      { id: 'bounces', type: 'bounces', isVisible: true, order: 1, title: 'Últimas Mezclas / Audios' },
+      { id: 'releases', type: 'releases', isVisible: true, order: 2, title: 'Previews y Lanzamientos' },
+      { id: 'finances', type: 'finances', isVisible: true, order: 3, title: 'Resumen Financiero' },
+      { id: 'tasks', type: 'tasks', isVisible: true, order: 4, title: 'Estado del Trabajo' },
+    ];
     if (!portalConfig) {
-      portalConfig = {
-        modules: [
-          { id: 'projects', type: 'projects', isVisible: true, order: 0, title: 'Proyectos Activos' },
-          { id: 'bounces', type: 'bounces', isVisible: true, order: 1, title: 'Últimas Mezclas / Audios' },
-          { id: 'releases', type: 'releases', isVisible: true, order: 2, title: 'Previews y Lanzamientos' },
-          { id: 'finances', type: 'finances', isVisible: true, order: 3, title: 'Resumen Financiero' },
-          { id: 'tasks', type: 'tasks', isVisible: true, order: 4, title: 'Estado del Trabajo' },
-        ]
-      };
+      portalConfig = { modules: defaultModules };
+    } else if (portalConfig.modules) {
+      const existingTypes = new Set(portalConfig.modules.map((m: any) => m.type));
+      defaultModules.forEach(defMod => {
+        if (!existingTypes.has(defMod.type)) {
+          portalConfig.modules.push({ ...defMod, order: portalConfig.modules.length });
+        }
+      });
+    } else {
+      portalConfig.modules = defaultModules;
     }
 
     // 2. Obtener los proyectos del artista

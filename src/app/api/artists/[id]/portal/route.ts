@@ -25,9 +25,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         modules: DEFAULT_MODULES as any
       };
       await saveJsonFile('portal_config.json', config, id);
-    } else if (!config.modules) {
-      config.modules = DEFAULT_MODULES as any;
-      await saveJsonFile('portal_config.json', config, id);
+    } else {
+      let changed = false;
+      if (!config.modules) {
+        config.modules = DEFAULT_MODULES as any;
+        changed = true;
+      } else {
+        const existingTypes = new Set(config.modules.map((m: any) => m.type));
+        DEFAULT_MODULES.forEach(defMod => {
+          if (!existingTypes.has(defMod.type)) {
+            config!.modules!.push({ ...defMod, order: config!.modules!.length } as any);
+            changed = true;
+          }
+        });
+      }
+      if (changed) {
+        await saveJsonFile('portal_config.json', config, id);
+      }
     }
     
     return NextResponse.json({ config });
