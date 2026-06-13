@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
-import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus, ExternalLink, Headphones } from "lucide-react";
+import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus, ExternalLink, Headphones, Copy } from "lucide-react";
 import type { Artist, Project } from '@/types';
 import { PROJECT_TYPE_LABELS, STATUS_CONFIG } from '@/lib/constants';
 import { useProjects } from '@/lib/hooks/useProjects';
@@ -156,6 +156,16 @@ export default function ArtistDetailPage() {
           {/* Right side: Actions */}
           <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
             <div className="flex items-center h-8 rounded-md border border-accent/30 bg-accent/5 overflow-hidden shrink-0">
+              <a
+                href={`/portal/${artistId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 h-full flex items-center text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors"
+                title="Ver Portal"
+              >
+                Portal Artista
+              </a>
+              <div className="w-[1px] h-4 bg-accent/20" />
               <button
                 onClick={() => {
                   const url = `${window.location.origin}/portal/${artistId}`;
@@ -165,18 +175,8 @@ export default function ArtistDetailPage() {
                 className="px-3 h-full flex items-center text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors"
                 title="Copiar Enlace Portal"
               >
-                Portal Artista
+                <Copy className="w-3.5 h-3.5" />
               </button>
-              <div className="w-[1px] h-4 bg-accent/20" />
-              <a
-                href={`/portal/${artistId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 h-full flex items-center text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors"
-                title="Ver Portal"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
             </div>
             <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-8 text-xs px-3">
               <Headphones className="w-3.5 h-3.5 mr-1.5" /> Gestor Previews

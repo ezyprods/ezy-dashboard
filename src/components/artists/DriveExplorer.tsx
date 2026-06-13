@@ -350,8 +350,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         e.preventDefault();
         setSelectedIds(items.map(i => i.id));
       } else if (e.key === 'Escape') {
-        setSelectedIds([]);
-        setLastSelectedIndex(null);
+        if (selectedIds.length > 0) {
+          e.preventDefault();
+          setSelectedIds([]);
+          setLastSelectedIndex(null);
+        }
       } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         undoLastAction();
