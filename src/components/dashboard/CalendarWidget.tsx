@@ -88,12 +88,14 @@ export function CalendarWidget() {
             <p className="text-xs text-text-secondary mt-1">No hay eventos próximos esta semana.</p>
           </div>
           <Button 
+            asChild
             variant="outline" 
             size="sm" 
-            onClick={() => window.open('https://calendar.google.com/calendar/u/0/r/eventedit', '_blank')}
             className="mt-2 text-xs"
           >
-            <Plus className="w-3.5 h-3.5 mr-1" /> Añadir Evento
+            <a href="https://calendar.google.com/calendar/u/0/r/eventedit" target="_blank" rel="noopener noreferrer">
+              <Plus className="w-3.5 h-3.5 mr-1" /> Añadir Evento
+            </a>
           </Button>
         </div>
       ) : (
