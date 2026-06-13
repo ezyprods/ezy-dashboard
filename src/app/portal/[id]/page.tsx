@@ -188,6 +188,20 @@ export default function PortalPage() {
   const [activeSection, setActiveSection] = useState<'overview' | 'releases'>('overview');
 
   useEffect(() => {
+    // Force light theme for portal page
+    const html = document.documentElement;
+    const isDark = html.classList.contains('dark');
+    html.classList.remove('dark');
+    html.classList.add('light');
+    return () => {
+      if (isDark) {
+        html.classList.remove('light');
+        html.classList.add('dark');
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const fetchPortal = async () => {
       try {
         const res = await fetch(`/api/portal/${params.id}`);
@@ -245,6 +259,308 @@ export default function PortalPage() {
 
   const visibleModules = (data.config?.modules || []).filter((m: any) => m.isVisible !== false).sort((a: any, b: any) => a.order - b.order);
 
+  const hasReleases = data.releases && data.releases.length > 0;
+  const hasFinances = data.finances;
+  const showSidebar = (hasReleases && visibleModules.some((m: any) => m.type === 'releases')) ||
+                      (hasFinances && visibleModules.some((m: any) => m.type === 'finances'));
+
+  const renderBounces = () => {
+    const mod = visibleModules.find((m: any) => m.type === 'bounces');
+    if (!mod || !activeProject) return null;
+    return (
+      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-6 flex flex-col gap-4 shadow-sm">
+        <div className="flex items-center justify-between pb-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Headphones className="w-5 h-5 text-accent" />
+            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Últimas Mezclas / Audios'}</h3>
+          </div>
+          {paywallLocked && (
+            <div className="flex items-center gap-1.5 text-[10px] text-warning bg-[#fdcb6e]/10 border border-[#fdcb6e]/20 px-2.5 py-1 rounded-full font-semibold">
+              <Lock className="w-3 h-3" /> Descarga bloqueada
+            </div>
+          )}
+        </div>
+
+        {activeProject.bounces && activeProject.bounces.length > 0 ? (
+          <div className="space-y-4">
+            {activeProject.bounces.map((file: any) => (
+              <WaveformPlayer
+                key={file.id}
+                fileId={file.id}
+                fileName={file.name}
+                artistName={data.artist.name}
+                isPortal={true}
+                paywallLocked={paywallLocked}
+                modifiedTime={file.modifiedTime}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 text-center bg-white/2 rounded-xl border border-dashed border-border">
+            <Music className="w-10 h-10 text-text-secondary opacity-40 mb-2" />
+            <p className="text-sm text-text-secondary italic">No hay audios disponibles para este proyecto.</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTasks = () => {
+    const mod = visibleModules.find((m: any) => m.type === 'tasks');
+    if (!mod) return null;
+
+    const matrices = data.sharedMatrices || [];
+    const projectTasks = activeProject?.tasks || [];
+
+    let totalMatrixTasks = 0;
+    let completedMatrixTasks = 0;
+    matrices.forEach((matrix: any) => {
+      const columns = matrix.productionGrid?.columns || [];
+      const rows = matrix.productionGrid?.rows || [];
+      totalMatrixTasks += columns.length * rows.length;
+      rows.forEach((row: any) => {
+        columns.forEach((col: any) => {
+          if (row.cells?.[col.id]?.status === 'done') {
+            completedMatrixTasks++;
+          }
+        });
+      });
+    });
+
+    const hasProjectTasks = projectTasks.length > 0;
+    const hasMatrices = matrices.length > 0;
+
+    if (!hasProjectTasks && !hasMatrices) {
+      return (
+        <div key={mod.id} className="bg-surface rounded-2xl border border-border p-6 flex flex-col gap-4 shadow-sm">
+          <div className="flex items-center gap-2 pb-3 border-b border-border">
+            <CheckCircle2 className="w-5 h-5 text-accent" />
+            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Estado del Trabajo'}</h3>
+          </div>
+          <div className="flex flex-col items-center justify-center py-16 text-center bg-white/2 rounded-xl border border-dashed border-border">
+            <CheckCircle2 className="w-10 h-10 text-text-secondary opacity-40 mb-2" />
+            <p className="text-sm text-text-secondary italic">No hay tareas ni matrices asignadas para este proyecto.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-6 flex flex-col gap-5 shadow-sm">
+        <div className="flex items-center gap-2 pb-3 border-b border-border">
+          <CheckCircle2 className="w-5 h-5 text-accent" />
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Estado del Trabajo'}</h3>
+        </div>
+
+        {hasProjectTasks && (
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-widest">Tareas del Proyecto</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {projectTasks.map((t: any) => (
+                <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-surface-elevated/40">
+                  {t.status === 'completed' ? (
+                    <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                  ) : (
+                    <Circle className="w-4 h-4 text-text-secondary/50 shrink-0" />
+                  )}
+                  <span className={`text-xs font-medium ${t.status === 'completed' ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                    {t.title}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {hasMatrices && (
+          <div className="space-y-6">
+            {totalMatrixTasks > 0 && (
+              <div className="flex items-center gap-4 bg-surface-elevated/30 p-4 rounded-xl border border-border/50">
+                <div className="relative w-14 h-14 shrink-0">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 56 56">
+                    <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="6" />
+                    <circle
+                      cx="28" cy="28" r="22" fill="none"
+                      stroke="url(#progressGradTasks)" strokeWidth="6"
+                      strokeLinecap="round"
+                      strokeDasharray={`${2 * Math.PI * 22}`}
+                      strokeDashoffset={`${2 * Math.PI * 22 * (1 - (totalMatrixTasks > 0 ? Math.round((completedMatrixTasks / totalMatrixTasks) * 100) : 0) / 100)}`}
+                      className="transition-all duration-1000"
+                    />
+                    <defs>
+                      <linearGradient id="progressGradTasks" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#6c5ce7" />
+                        <stop offset="100%" stopColor="#a29bfe" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-text-primary">
+                    {totalMatrixTasks > 0 ? Math.round((completedMatrixTasks / totalMatrixTasks) * 100) : 0}%
+                  </span>
+                </div>
+                <div>
+                  <p className="text-text-primary font-bold text-sm">Seguimiento de Producción</p>
+                  <p className="text-xs text-text-secondary">{completedMatrixTasks} de {totalMatrixTasks} tareas de la matriz completadas</p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {matrices.map((matrix: any) => (
+                <div key={matrix.id} className="bg-background rounded-xl border border-border overflow-hidden">
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest p-4 pb-2 bg-surface-elevated/40 border-b border-border/40">{matrix.name}</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-border bg-surface-elevated/20">
+                          <th className="p-3 text-text-secondary font-bold">Elemento</th>
+                          {matrix.productionGrid?.columns?.map((col: any) => (
+                            <th key={col.id} className="p-3 text-text-secondary font-bold text-center">{col.name}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {matrix.productionGrid?.rows?.map((row: any) => (
+                          <tr key={row.id} className="border-b border-border hover:bg-surface-elevated/10 transition-colors">
+                            <td className="p-3 font-semibold text-text-primary">{row.name}</td>
+                            {matrix.productionGrid?.columns?.map((col: any) => {
+                              const cell = row.cells?.[col.id] || {};
+                              const status = cell.status || 'todo';
+                              const statusStyles: Record<string, string> = {
+                                todo: 'border-border bg-surface text-text-secondary',
+                                in_progress: 'border-accent/25 bg-accent/5 text-accent-light',
+                                review: 'border-warning/25 bg-warning/5 text-warning',
+                                done: 'border-success/25 bg-success/5 text-success'
+                              };
+                              const statusLabels: Record<string, string> = {
+                                todo: 'Pendiente', in_progress: 'En progreso',
+                                review: 'Revisión', done: 'Hecho'
+                              };
+                              const IconMap: Record<string, any> = {
+                                todo: Circle,
+                                in_progress: Clock,
+                                review: Eye,
+                                done: CheckCircle2
+                              };
+                              const StatusIcon = IconMap[status] || Circle;
+
+                              return (
+                                <td key={col.id} className="p-3 text-center">
+                                  <span className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold w-28 text-center transition-all ${statusStyles[status] || statusStyles.todo}`}>
+                                    <StatusIcon className="w-3.5 h-3.5 shrink-0" />
+                                    {statusLabels[status] || 'Pendiente'}
+                                  </span>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderFinances = () => {
+    const mod = visibleModules.find((m: any) => m.type === 'finances');
+    if (!mod || !data.finances) return null;
+    const pct = data.finances.totalBudget > 0
+      ? Math.round((data.finances.totalPaid / data.finances.totalBudget) * 100)
+      : 0;
+    return (
+      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 space-y-4 shadow-sm">
+        <div className="flex items-center gap-2 pb-3 border-b border-border">
+          <CreditCard className="w-5 h-5 text-accent" />
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Resumen Financiero'}</h3>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-text-secondary font-medium">Presupuesto Total</span>
+            <span className="font-bold text-sm text-text-primary">{data.finances.totalBudget}€</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-text-secondary font-medium">Total Abonado</span>
+            <span className="font-bold text-sm text-success">{data.finances.totalPaid}€</span>
+          </div>
+
+          <div className="pt-1">
+            <div className="h-2 bg-surface-elevated rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-success to-emerald-400 rounded-full transition-all duration-1000"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-text-secondary mt-1 text-right font-medium">{pct}% liquidado</p>
+          </div>
+
+          <div className="flex justify-between items-center pt-3 border-t border-border">
+            <span className="text-xs font-semibold text-text-primary">Pendiente</span>
+            <span className={`text-lg font-black ${data.finances.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
+              {data.finances.pendingPayment}€
+            </span>
+          </div>
+          {data.finances.pendingPayment > 0 && (
+            <p className="text-[10px] text-warning flex items-center gap-1.5 bg-[#fdcb6e]/8 border border-[#fdcb6e]/15 p-2.5 rounded-xl">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              Listo para facturación y cobro final.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderReleases = () => {
+    const mod = visibleModules.find((m: any) => m.type === 'releases');
+    if (!mod || !data.releases || data.releases.length === 0) return null;
+    return (
+      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 space-y-4 shadow-sm">
+        <div className="flex items-center justify-between pb-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Disc className="w-5 h-5 text-accent" />
+            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Previews'}</h3>
+          </div>
+          <button
+            onClick={() => setActiveSection('releases')}
+            className="text-[10px] text-accent hover:text-accent-light font-bold flex items-center gap-0.5 transition-colors"
+          >
+            Ver todas <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+        <div className="space-y-2.5">
+          {data.releases.slice(0, 3).map((r: any) => (
+            <button
+              key={r.id}
+              onClick={() => { setActiveReleaseId(r.id); setActiveSection('releases'); }}
+              className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:border-accent/30 hover:bg-accent/5 transition-all text-left group"
+            >
+              <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
+                {r.coverArtId
+                  ? <img src={`/api/audio/${r.coverArtId}`} alt="" className="w-full h-full object-cover" />
+                  : <Disc className="w-5 h-5 text-text-secondary/40" />
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-text-primary truncate">{r.title}</p>
+                <p className="text-[10px] text-text-secondary">{r.tracks?.length || 0} canciones</p>
+              </div>
+              <Play className="w-4 h-4 text-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const mainModules = visibleModules.filter((m: any) => m.type === 'bounces' || m.type === 'tasks');
+
   return (
     <div className="min-h-screen bg-background text-text-primary font-sans antialiased selection:bg-accent/30">
       {/* Ambient glow */}
@@ -253,7 +569,7 @@ export default function PortalPage() {
 
       {/* Header */}
       <header className="border-b border-border bg-surface/90 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-5 py-3.5 flex justify-between items-center">
+        <div className="max-w-[1600px] w-[95%] mx-auto px-5 py-3.5 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center border border-[#6c5ce7]/25">
               <Sparkles className="w-4.5 h-4.5 text-accent-light" />
@@ -275,7 +591,7 @@ export default function PortalPage() {
                 onClick={() => setActiveSection(key as any)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   activeSection === key
-                    ? 'bg-accent text-text-primary shadow-lg shadow-[#6c5ce7]/20'
+                    ? 'bg-accent text-white shadow-lg shadow-[#6c5ce7]/20'
                     : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
@@ -292,32 +608,32 @@ export default function PortalPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-5 py-8 relative z-10">
+      <main className="max-w-[1600px] w-[95%] mx-auto px-5 py-8 relative z-10">
 
         {/* ── OVERVIEW SECTION ── */}
         {activeSection === 'overview' && (
           <div className="space-y-6 animate-fade-in">
             {/* Stats row */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-surface border border-border rounded-2xl p-4">
-                <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><Music className="w-3.5 h-3.5" /> Proyectos</p>
+              <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
+                <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><Music className="w-3.5 h-3.5 text-accent" /> Proyectos</p>
                 <p className="text-2xl font-black text-text-primary">{data.projects.length}</p>
                 <p className="text-[10px] text-text-secondary mt-0.5">activos</p>
               </div>
-              <div className="bg-surface border border-border rounded-2xl p-4">
-                <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5" /> Progreso</p>
+              <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
+                <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-accent" /> Progreso</p>
                 <p className="text-2xl font-black text-accent-light">{progressPercent}%</p>
                 <p className="text-[10px] text-text-secondary mt-0.5">{completedTasks}/{totalTasks} tareas</p>
               </div>
               {data.finances && visibleModules.some((m: any) => m.type === 'finances') && (
                 <>
-                  <div className="bg-surface border border-border rounded-2xl p-4">
-                    <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" /> Pagado</p>
+                  <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
+                    <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-accent" /> Pagado</p>
                     <p className="text-2xl font-black text-success">{data.finances.totalPaid}€</p>
                     <p className="text-[10px] text-text-secondary mt-0.5">de {data.finances.totalBudget}€</p>
                   </div>
-                  <div className="bg-surface border border-border rounded-2xl p-4">
-                    <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> Pendiente</p>
+                  <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
+                    <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5 text-accent" /> Pendiente</p>
                     <p className={`text-2xl font-black ${data.finances.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
                       {data.finances.pendingPayment}€
                     </p>
@@ -326,260 +642,50 @@ export default function PortalPage() {
                 </>
               )}
             </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-              {visibleModules.map((mod: any) => {
-                // ─── Tasks module ──────────────────────────────────────────
-                if (mod.type === 'tasks') {
-                  const matrices = data.sharedMatrices || [];
-                  if (matrices.length === 0) return null;
 
-                  // Calculate overall progress
-                  let totalMatrixTasks = 0;
-                  let completedMatrixTasks = 0;
-                  matrices.forEach((matrix: any) => {
-                    const columns = matrix.productionGrid?.columns || [];
-                    const rows = matrix.productionGrid?.rows || [];
-                    totalMatrixTasks += columns.length * rows.length;
-                    rows.forEach((row: any) => {
-                      columns.forEach((col: any) => {
-                        if (row.cells?.[col.id]?.status === 'done') {
-                          completedMatrixTasks++;
-                        }
-                      });
-                    });
-                  });
-                  const matrixProgressPercent = totalMatrixTasks > 0 ? Math.round((completedMatrixTasks / totalMatrixTasks) * 100) : 0;
+            {/* Project Selector tabs */}
+            {data.projects.length > 1 && (
+              <div className="bg-surface border border-border rounded-2xl p-4 flex flex-wrap gap-2 items-center shadow-sm">
+                <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-2">Proyecto Activo:</span>
+                {data.projects.map((proj: any) => (
+                  <button
+                    key={proj.id}
+                    onClick={() => setSelectedProjectId(proj.id)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      selectedProjectId === proj.id
+                        ? 'bg-accent text-white shadow-lg shadow-accent/20'
+                        : 'bg-surface-elevated border border-border hover:bg-surface-elevated/80 text-text-secondary hover:text-text-primary'
+                    }`}
+                  >
+                    {proj.title}
+                  </button>
+                ))}
+              </div>
+            )}
 
-                  return (
-                    <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 flex flex-col gap-4 lg:col-span-3">
-                      <div className="flex items-center gap-2 pb-3 border-b border-border">
-                        <CheckCircle2 className="w-4 h-4 text-accent-light" />
-                        <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">{mod.title || 'Estado del Trabajo'}</h3>
-                      </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 items-start">
+              {/* Main Column */}
+              <div className={`space-y-6 ${showSidebar ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
+                {mainModules.map((mod: any) => {
+                  if (mod.type === 'bounces') return renderBounces();
+                  if (mod.type === 'tasks') return renderTasks();
+                  return null;
+                })}
+              </div>
 
-                      {/* Progress ring */}
-                      {totalMatrixTasks > 0 && (
-                        <div className="flex items-center gap-4 mb-1">
-                          <div className="relative w-14 h-14 shrink-0">
-                            <svg className="w-full h-full -rotate-90" viewBox="0 0 56 56">
-                              <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
-                              <circle
-                                cx="28" cy="28" r="22" fill="none"
-                                stroke="url(#progressGradTasks)" strokeWidth="6"
-                                strokeLinecap="round"
-                                strokeDasharray={`${2 * Math.PI * 22}`}
-                                strokeDashoffset={`${2 * Math.PI * 22 * (1 - matrixProgressPercent / 100)}`}
-                                className="transition-all duration-1000"
-                              />
-                              <defs>
-                                <linearGradient id="progressGradTasks" x1="0%" y1="0%" x2="100%" y2="0%">
-                                  <stop offset="0%" stopColor="#6c5ce7" />
-                                  <stop offset="100%" stopColor="#a29bfe" />
-                                </linearGradient>
-                              </defs>
-                            </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-text-primary">{matrixProgressPercent}%</span>
-                          </div>
-                          <div>
-                            <p className="text-text-primary font-bold">{completedMatrixTasks} tareas completadas</p>
-                            <p className="text-xs text-text-secondary">{totalMatrixTasks - completedMatrixTasks} pendientes</p>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-5">
-                        {matrices.map((matrix: any) => (
-                          <div key={matrix.id} className="bg-background rounded-xl border border-border overflow-hidden">
-                            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest p-4 pb-2">{matrix.name}</h3>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-left border-collapse text-xs">
-                                <thead>
-                                  <tr className="border-b border-border bg-white/3">
-                                    <th className="p-3 text-text-secondary font-bold">Elemento</th>
-                                    {matrix.productionGrid?.columns?.map((col: any) => (
-                                      <th key={col.id} className="p-3 text-text-secondary font-bold text-center">{col.name}</th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {matrix.productionGrid?.rows?.map((row: any) => (
-                                    <tr key={row.id} className="border-b border-border hover:bg-white/2 transition-colors">
-                                      <td className="p-3 font-semibold text-text-primary">{row.name}</td>
-                                      {matrix.productionGrid?.columns?.map((col: any) => {
-                                        const cell = row.cells?.[col.id] || {};
-                                        const status = cell.status || 'todo';
-                                        const statusStyles: Record<string, string> = {
-                                          todo: 'bg-surface-elevated border-border text-text-secondary',
-                                          in_progress: 'bg-accent/15 border-[#6c5ce7]/30 text-accent-light',
-                                          review: 'bg-[#fdcb6e]/15 border-[#fdcb6e]/30 text-warning',
-                                          done: 'bg-success/15 border-[#00b894]/30 text-success'
-                                        };
-                                        const statusLabels: Record<string, string> = {
-                                          todo: 'Pendiente', in_progress: 'En progreso',
-                                          review: 'Revisión', done: 'Hecho'
-                                        };
-                                        return (
-                                          <td key={col.id} className="p-3 text-center">
-                                            <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${statusStyles[status] || statusStyles.todo}`}>
-                                              {statusLabels[status] || 'Pendiente'}
-                                            </span>
-                                          </td>
-                                        );
-                                      })}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }
-
-                // ─── Bounces / Audios module ───────────────────────────────
-                if (mod.type === 'bounces') {
-                  if (!activeProject) return null;
-                  return (
-                    <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 flex flex-col gap-4 lg:col-span-2">
-                      <div className="flex items-center justify-between pb-3 border-b border-border">
-                        <div className="flex items-center gap-2">
-                          <Headphones className="w-4 h-4 text-accent-light" />
-                          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">{mod.title || 'Últimas Mezclas / Audios'}</h3>
-                        </div>
-                        {paywallLocked && (
-                          <div className="flex items-center gap-1.5 text-[10px] text-warning bg-[#fdcb6e]/10 border border-[#fdcb6e]/20 px-2.5 py-1 rounded-full font-semibold">
-                            <Lock className="w-3 h-3" /> Descarga bloqueada
-                          </div>
-                        )}
-                      </div>
-
-                      {activeProject.bounces && activeProject.bounces.length > 0 ? (
-                        <div className="space-y-3">
-                          {activeProject.bounces.map((file: any) => (
-                            <WaveformPlayer
-                              key={file.id}
-                              fileId={file.id}
-                              fileName={file.name}
-                              artistName={data.artist.name}
-                              isPortal={true}
-                              paywallLocked={paywallLocked}
-                              modifiedTime={file.modifiedTime}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-12 text-center bg-white/2 rounded-xl border border-dashed border-border">
-                          <Music className="w-8 h-8 text-text-secondary opacity-40 mb-2" />
-                          <p className="text-xs text-text-secondary italic">No hay audios disponibles para este proyecto.</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-
-                // ─── Finances module ───────────────────────────────────────
-                if (mod.type === 'finances') {
-                  if (!data.finances) return null;
-                  const pct = data.finances.totalBudget > 0
-                    ? Math.round((data.finances.totalPaid / data.finances.totalBudget) * 100)
-                    : 0;
-                  return (
-                    <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 space-y-4">
-                      <div className="flex items-center justify-between pb-3 border-b border-border">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-accent-light" />
-                          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">{mod.title || 'Resumen Financiero'}</h3>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-text-secondary">Presupuesto Total</span>
-                          <span className="font-bold text-sm text-text-primary">{data.finances.totalBudget}€</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-text-secondary">Total Abonado</span>
-                          <span className="font-bold text-sm text-success">{data.finances.totalPaid}€</span>
-                        </div>
-
-                        {/* Payment progress bar */}
-                        <div className="pt-1">
-                          <div className="h-2 bg-surface-elevated rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-[#00b894] to-[#00cec9] rounded-full transition-all duration-1000"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <p className="text-[10px] text-text-secondary mt-1 text-right">{pct}% liquidado</p>
-                        </div>
-
-                        <div className={`flex justify-between items-center pt-3 border-t border-border ${data.finances.pendingPayment > 0 ? '' : ''}`}>
-                          <span className="text-sm font-semibold text-text-primary">Pendiente</span>
-                          <span className={`text-xl font-black ${data.finances.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
-                            {data.finances.pendingPayment}€
-                          </span>
-                        </div>
-                        {data.finances.pendingPayment > 0 && (
-                          <p className="text-[10px] text-warning flex items-center gap-1.5 bg-[#fdcb6e]/8 border border-[#fdcb6e]/15 p-2.5 rounded-xl">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            Listo para facturación y cobro final.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-
-                // ─── Releases module (quick preview) ──────────────────────
-                if (mod.type === 'releases') {
-                  if (!data.releases || data.releases.length === 0) return null;
-                  return (
-                    <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 space-y-3">
-                      <div className="flex items-center justify-between pb-3 border-b border-border">
-                        <div className="flex items-center gap-2">
-                          <Disc className="w-4 h-4 text-accent-light" />
-                          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">{mod.title || 'Previews'}</h3>
-                        </div>
-                        <button
-                          onClick={() => setActiveSection('releases')}
-                          className="text-[10px] text-accent hover:text-accent-light font-semibold flex items-center gap-1 transition-colors"
-                        >
-                          Ver todas <ChevronRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div className="space-y-2">
-                        {data.releases.slice(0, 3).map((r: any) => (
-                          <button
-                            key={r.id}
-                            onClick={() => { setActiveReleaseId(r.id); setActiveSection('releases'); }}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:border-[#6c5ce7]/30 hover:bg-accent/5 transition-all text-left group"
-                          >
-                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
-                              {r.coverArtId
-                                ? <img src={`/api/audio/${r.coverArtId}`} alt="" className="w-full h-full object-cover" />
-                                : <Disc className="w-5 h-5 text-text-secondary/40" />
-                              }
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-text-primary truncate">{r.title}</p>
-                              <p className="text-[10px] text-text-secondary">{r.tracks?.length || 0} canciones</p>
-                            </div>
-                            <Play className="w-4 h-4 text-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }
-
-                return null;
-              })}
+              {/* Sidebar Column */}
+              {showSidebar && (
+                <div className="lg:col-span-4 space-y-6">
+                  {visibleModules
+                    .filter((m: any) => m.type === 'releases' || m.type === 'finances')
+                    .map((mod: any) => {
+                      if (mod.type === 'releases') return renderReleases();
+                      if (mod.type === 'finances') return renderFinances();
+                      return null;
+                    })}
+                </div>
+              )}
             </div>
-
-            {/* Shared Matrices moved to Tasks Module */}
           </div>
         )}
 

@@ -117,7 +117,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // 4.5 Obtener las matrices compartidas
     const matricesData = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
     const sharedMatrices = (matricesData.matrices || [])
-      .filter((m: any) => m.sharedInPortal === true)
       .map((m: any) => ({
         id: m.id,
         name: m.name,

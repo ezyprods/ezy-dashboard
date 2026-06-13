@@ -94,7 +94,7 @@ function SortableRow({
             className="font-medium text-sm bg-transparent border-none outline-none flex-1 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors" 
             title={localName}
           />
-          <button onClick={() => onDelete(row.id)} className="opacity-0 group-hover/row:opacity-100 text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0 mr-1.5"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button onClick={() => onDelete(row.id)} className="opacity-0 group-hover/row:opacity-100 text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0 mr-3.5"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </td>
       {columns.map(col => (
