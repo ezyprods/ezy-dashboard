@@ -25,7 +25,7 @@ export async function GET(request: Request) {
       try {
         const config = await findAndReadJsonFile<Project>('project_config.json', folder.id!);
         if (config) {
-          return { ...config, driveFolderId: folder.id! };
+          return { ...config, driveFolderId: folder.id!, driveUrl: folder.webViewLink };
         } else {
           // Es una subcarpeta antigua que no fue creada por la app. Auto-inicializar como proyecto.
           const now = new Date().toISOString();
@@ -39,6 +39,7 @@ export async function GET(request: Request) {
             createdAt: now,
             updatedAt: now,
             driveFolderId: folder.id!,
+            driveUrl: folder.webViewLink,
           };
           
           // Guardar

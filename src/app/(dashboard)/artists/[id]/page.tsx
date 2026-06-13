@@ -241,6 +241,18 @@ export default function ArtistDetailPage() {
                           action: () => router.push(`/projects/${project.id}`)
                         },
                         {
+                          label: 'Descargar carpeta completa',
+                          icon: 'Download',
+                          action: () => {
+                            if (project.driveUrl) {
+                              window.open(project.driveUrl, '_blank');
+                              customAlert('Se abrirá Drive. Haz clic en "Descargar" arriba a la derecha.');
+                            } else {
+                              customAlert('El enlace no está disponible. Sincroniza el artista.');
+                            }
+                          }
+                        },
+                        {
                           label: 'Copiar ID de carpeta',
                           icon: 'Copy',
                           action: () => {
@@ -303,6 +315,18 @@ export default function ArtistDetailPage() {
                                 label: 'Abrir proyecto',
                                 icon: 'FolderOpen',
                                 action: () => router.push(`/projects/${project.id}`)
+                              },
+                              {
+                                label: 'Descargar carpeta completa',
+                                icon: 'Download',
+                                action: () => {
+                                  if (project.driveUrl) {
+                                    window.open(project.driveUrl, '_blank');
+                                    customAlert('Se abrirá Drive. Haz clic en "Descargar" arriba a la derecha.');
+                                  } else {
+                                    customAlert('El enlace no está disponible. Sincroniza el artista.');
+                                  }
+                                }
                               },
                               {
                                 label: 'Copiar ID de carpeta',

@@ -148,7 +148,7 @@ export async function listFolders(parentId: string = DRIVE_ROOT_FOLDER_ID) {
   do {
     const response: any = await drive.files.list({
       q: query,
-      fields: 'nextPageToken, files(id, name, createdTime)',
+      fields: 'nextPageToken, files(id, name, createdTime, webViewLink)',
       orderBy: 'name',
       includeItemsFromAllDrives: true,
       supportsAllDrives: true,

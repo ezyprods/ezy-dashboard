@@ -91,6 +91,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           status: projectConfig.status || 'active',
           budget: projectConfig.budget || 0,
           requirePaymentForDownload: !!projectConfig.requirePaymentForDownload,
+          driveUrl: projectFolder.webViewLink,
           tasks: flatTasks,
           bounces,
         };

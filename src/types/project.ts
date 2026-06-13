@@ -105,6 +105,7 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   driveFolderId: string;
+  driveUrl?: string;
   
   // Pro Tools Extensions
   folderStatuses?: Record<string, string>;

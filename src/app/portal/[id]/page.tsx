@@ -643,23 +643,46 @@ export default function PortalPage() {
               )}
             </div>
 
-            {/* Project Selector tabs */}
-            {data.projects.length > 1 && (
-              <div className="bg-surface border border-border rounded-2xl p-4 flex flex-wrap gap-2 items-center shadow-sm">
-                <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-2">Proyecto:</span>
-                {data.projects.map((proj: any) => (
-                  <button
-                    key={proj.id}
-                    onClick={() => setSelectedProjectId(proj.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                      selectedProjectId === proj.id
-                        ? 'bg-accent text-white shadow-lg shadow-accent/20'
-                        : 'bg-surface-elevated border border-border hover:bg-surface-elevated/80 text-text-secondary hover:text-text-primary'
-                    }`}
+            {/* Project Header / Selector */}
+            {data.projects.length > 0 && (
+              <div className="bg-surface border border-border rounded-2xl p-4 flex flex-wrap justify-between items-center shadow-sm gap-4">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-2">
+                    {data.projects.length > 1 ? 'Proyecto:' : 'Proyecto Activo:'}
+                  </span>
+                  {data.projects.length > 1 ? (
+                    data.projects.map((proj: any) => (
+                      <button
+                        key={proj.id}
+                        onClick={() => setSelectedProjectId(proj.id)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                          selectedProjectId === proj.id
+                            ? 'bg-accent text-white shadow-lg shadow-accent/20'
+                            : 'bg-surface-elevated border border-border hover:bg-surface-elevated/80 text-text-secondary hover:text-text-primary'
+                        }`}
+                      >
+                        {proj.title}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white shadow-lg shadow-accent/20">
+                      {activeProject?.title}
+                    </span>
+                  )}
+                </div>
+                
+                {activeProject?.driveUrl && (
+                  <button 
+                    onClick={() => {
+                       window.open(activeProject.driveUrl, '_blank');
+                       alert('Se abrirá Google Drive. Haz clic en el botón "Descargar" arriba a la derecha para descargar toda la carpeta.');
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-elevated border border-border hover:bg-accent hover:text-white hover:border-accent text-text-secondary transition-colors text-xs font-bold"
                   >
-                    {proj.title}
+                    <Download className="w-4 h-4" />
+                    Descargar Carpeta
                   </button>
-                ))}
+                )}
               </div>
             )}
 
