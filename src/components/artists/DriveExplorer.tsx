@@ -72,42 +72,47 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
-  // Split screen (Third Pane) states
-  const [threePaneFolderId, setThreePaneFolderId] = useState<string | null>(null);
-  const [threePaneFolderName, setThreePaneFolderName] = useState<string | null>(null);
-  const [threePaneItems, setThreePaneItems] = useState<DriveItem[]>([]);
-  const [threePaneLoading, setThreePaneLoading] = useState(false);
+  // Split screen (Extra Panes) states
+  interface FolderPane {
+    folderId: string;
+    folderName: string;
+    items: DriveItem[];
+    isLoading: boolean;
+    isDragOver: boolean;
+  }
+  const [extraPanes, setExtraPanes] = useState<FolderPane[]>([]);
   const [isRightDropZoneDragOver, setIsRightDropZoneDragOver] = useState(false);
-  const [isThirdPaneDragOver, setIsThirdPaneDragOver] = useState(false);
-  const [activeMobileTab, setActiveMobileTab] = useState<'explorer' | 'recent' | 'parallel'>('explorer');
+  const [activeMobileTab, setActiveMobileTab] = useState<'explorer' | 'recent' | 'parallel-0' | 'parallel-1'>('explorer');
 
   useEffect(() => {
-    if (threePaneFolderId) {
-      setActiveMobileTab('parallel');
-    } else if (activeMobileTab === 'parallel') {
+    if (extraPanes.length > 0) {
+      if (!activeMobileTab.startsWith('parallel')) {
+        setActiveMobileTab('parallel-0');
+      }
+    } else if (activeMobileTab.startsWith('parallel')) {
       setActiveMobileTab('explorer');
     }
-  }, [threePaneFolderId, activeMobileTab]);
+  }, [extraPanes.length, activeMobileTab]);
 
-  const fetchThreePaneItems = useCallback(async (folderId: string) => {
-    setThreePaneLoading(true);
+  const fetchPaneItems = useCallback(async (folderId: string) => {
     try {
       const res = await fetch(`/api/files?folderId=${folderId}`);
       if (!res.ok) throw new Error('Error al cargar elementos del panel secundario');
       const data = await res.json();
-      setThreePaneItems(data.items || []);
+      setExtraPanes(prev => prev.map(p => p.folderId === folderId ? { ...p, items: data.items || [], isLoading: false } : p));
     } catch (err) {
-      console.error('Error fetching three pane items:', err);
-    } finally {
-      setThreePaneLoading(false);
+      console.error('Error fetching pane items:', err);
+      setExtraPanes(prev => prev.map(p => p.folderId === folderId ? { ...p, isLoading: false } : p));
     }
   }, []);
 
   useEffect(() => {
-    if (threePaneFolderId) {
-      fetchThreePaneItems(threePaneFolderId);
-    }
-  }, [threePaneFolderId, fetchThreePaneItems]);
+    extraPanes.forEach(pane => {
+      if (pane.isLoading && pane.items.length === 0) {
+        fetchPaneItems(pane.folderId);
+      }
+    });
+  }, [extraPanes, fetchPaneItems]);
 
   const explorerRef = useRef<HTMLDivElement>(null);
   
@@ -350,8 +355,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [selectedIds, items, actionStack, redoStack]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const uploadFiles = async (files: FileList | File[], targetFolderId: string) => {
     if (!files || files.length === 0) return;
     
     setIsUploading(true);
@@ -359,17 +363,25 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       for (let i = 0; i < files.length; i++) {
         const formData = new FormData();
         formData.append('file', files[i]);
-        formData.append('parentId', currentFolderId);
+        formData.append('parentId', targetFolderId);
         
         await fetch('/api/files', { method: 'POST', body: formData });
       }
       customAlert('Archivos subidos con éxito');
       fetchItems(currentFolderId);
       fetchRecentFiles();
+      extraPanes.forEach(pane => fetchPaneItems(pane.folderId));
     } catch (err) {
       customAlert('Error al subir archivos');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      await uploadFiles(files, currentFolderId);
     }
   };
 
@@ -395,24 +407,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     if (internalItemId) return;
 
     const files = e.dataTransfer.files;
-    if (!files || files.length === 0) return;
-    
-    setIsUploading(true);
-    try {
-      for (let i = 0; i < files.length; i++) {
-        const formData = new FormData();
-        formData.append('file', files[i]);
-        formData.append('parentId', currentFolderId);
-        
-        await fetch('/api/files', { method: 'POST', body: formData });
-      }
-      customAlert('Archivos subidos con éxito');
-      fetchItems(currentFolderId);
-      fetchRecentFiles();
-    } catch (err) {
-      customAlert('Error al subir archivos');
-    } finally {
-      setIsUploading(false);
+    if (files) {
+      await uploadFiles(files, currentFolderId);
     }
   };
   const handleItemDragStart = (e: React.DragEvent, itemId: string) => {
@@ -426,11 +422,17 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     if (validIdsToMove.length === 0) return;
 
     setIsLoading(true);
-    if (threePaneFolderId) setThreePaneLoading(true);
+    setExtraPanes(prev => prev.map(p => ({ ...p, isLoading: true })));
     
     try {
+      let paneItemsAll: DriveItem[] = [];
+      extraPanes.forEach(pane => {
+        paneItemsAll = paneItemsAll.concat(pane.items);
+      });
+
       const movedItems = items.filter(i => validIdsToMove.includes(i.id))
-        .concat(threePaneItems.filter(i => validIdsToMove.includes(i.id)));
+        .concat(recentFiles.filter(i => validIdsToMove.includes(i.id)))
+        .concat(paneItemsAll.filter(i => validIdsToMove.includes(i.id)));
 
       for (const fileId of validIdsToMove) {
         await fetch('/api/files', {
@@ -450,13 +452,13 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       
       setSelectedIds([]);
       fetchItems(currentFolderId);
-      if (threePaneFolderId) fetchThreePaneItems(threePaneFolderId);
+      extraPanes.forEach(pane => fetchPaneItems(pane.folderId));
       fetchRecentFiles();
     } catch (err: any) {
       customAlert(err.message);
     } finally {
       setIsLoading(false);
-      setThreePaneLoading(false);
+      setExtraPanes(prev => prev.map(p => ({ ...p, isLoading: false })));
     }
   };
 
@@ -500,10 +502,35 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
       if (draggedItemIds.length === 1) {
         const folderId = draggedItemIds[0];
-        const item = items.find(i => i.id === folderId) || recentFiles.find(i => i.id === folderId);
-        if (item && item.mimeType === 'application/vnd.google-apps.folder') {
-          setThreePaneFolderId(folderId);
-          setThreePaneFolderName(item.name);
+        
+        let folderItem = items.find(i => i.id === folderId) || recentFiles.find(i => i.id === folderId);
+        if (!folderItem) {
+          for (const pane of extraPanes) {
+            const found = pane.items.find(i => i.id === folderId);
+            if (found) {
+              folderItem = found;
+              break;
+            }
+          }
+        }
+
+        if (folderItem && folderItem.mimeType === 'application/vnd.google-apps.folder') {
+          if (extraPanes.length >= 2) {
+            customAlert('El número máximo de paneles paralelos es 2 (4 paneles en pantalla en total).');
+            return;
+          }
+          if (extraPanes.some(p => p.folderId === folderId)) {
+            customAlert('Esta carpeta ya está abierta en un panel paralelo.');
+            return;
+          }
+          const newPane: FolderPane = {
+            folderId,
+            folderName: folderItem.name,
+            items: [],
+            isLoading: true,
+            isDragOver: false
+          };
+          setExtraPanes(prev => [...prev, newPane]);
         } else {
           customAlert('Arrastra una carpeta a esta zona para abrir la vista en paralelo.');
         }
@@ -646,14 +673,22 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     });
   })();
 
+  const navigatePaneTo = (paneIndex: number, folderId: string, folderName: string) => {
+    setExtraPanes(prev => prev.map((p, idx) => idx === paneIndex ? { ...p, folderId, folderName, isLoading: true, items: [] } : p));
+  };
+
+  const closePane = (paneIndex: number) => {
+    setExtraPanes(prev => prev.filter((_, idx) => idx !== paneIndex));
+  };
+
   return (
     <div ref={explorerRef} className="animate-fade-in space-y-6 transition-all">
       {/* Mobile Tabs */}
-      <div className="flex lg:hidden bg-surface-elevated p-1 rounded-lg border border-border">
+      <div className="flex lg:hidden bg-surface-elevated p-1 rounded-lg border border-border overflow-x-auto gap-1">
         <button
           onClick={() => setActiveMobileTab('explorer')}
           className={cn(
-            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors",
+            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap px-3",
             activeMobileTab === 'explorer' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
           )}
         >
@@ -662,32 +697,33 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         <button
           onClick={() => setActiveMobileTab('recent')}
           className={cn(
-            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors",
+            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap px-3",
             activeMobileTab === 'recent' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
           )}
         >
           Recientes
         </button>
-        {threePaneFolderId && (
+        {extraPanes.map((pane, idx) => (
           <button
-            onClick={() => setActiveMobileTab('parallel')}
+            key={pane.folderId}
+            onClick={() => setActiveMobileTab(`parallel-${idx}` as any)}
             className={cn(
-              "flex-1 py-2 text-xs font-semibold rounded-md transition-colors",
-              activeMobileTab === 'parallel' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
+              "flex-1 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap px-3",
+              activeMobileTab === `parallel-${idx}` ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
             )}
           >
-            Vista Paralela
+            {pane.folderName}
           </button>
-        )}
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch w-full overflow-x-auto pb-4">
         
         {/* Left Side: Recent Files */}
         <div 
           className={cn(
-            "bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px]",
-            threePaneFolderId ? "lg:col-span-3" : "lg:col-span-5",
+            "bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px] shrink-0",
+            extraPanes.length > 0 ? "w-full lg:w-[280px]" : "w-full lg:w-[380px]",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
@@ -826,11 +862,13 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               })
             )}
           </div>
-                {/* Right Side: Explorer (and Split Target if not split) */}
+        </div>
+
+        {/* Right Side: Explorer (and Split Target if not split) */}
         <div 
           className={cn(
-            "w-full flex gap-4 items-stretch",
-            threePaneFolderId ? "lg:col-span-4 flex-col" : "lg:col-span-7",
+            "flex gap-4 items-stretch shrink-0",
+            extraPanes.length > 0 ? "w-full lg:flex-[2] lg:min-w-[320px]" : "w-full lg:flex-[3] lg:min-w-[480px]",
             activeMobileTab === 'explorer' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
@@ -861,67 +899,96 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               </div>
               
               <div className="flex items-center gap-2 shrink-0">
-                <Button variant="secondary" size="sm" onClick={handleCreateFolder}>
-                  <FolderPlus className="w-4 h-4 mr-2" />
-                  Carpeta
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleCreateFolder}
+                  className="h-8 text-xs gap-1.5"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                  Nueva carpeta
                 </Button>
-                <div className="relative">
+                
+                <label className="cursor-pointer shrink-0">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white hover:bg-accent/90 text-xs font-semibold transition-colors shadow-md shadow-accent/10 h-8">
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    Subir archivo
+                  </span>
                   <input 
                     type="file" 
                     multiple 
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-                    onChange={handleFileUpload} 
-                    disabled={isUploading}
+                    className="hidden" 
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        uploadFiles(Array.from(e.target.files), currentFolderId);
+                      }
+                    }}
                   />
-                  <Button size="sm" disabled={isUploading}>
-                    {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-2" />}
-                    Subir
-                  </Button>
-                </div>
+                </label>
               </div>
             </div>
 
-            {/* Content */}
-            <div 
-              className="relative bg-surface rounded-xl border border-border overflow-hidden min-h-[420px]"
-              onClick={() => {
-                setSelectedIds([]);
-                setLastSelectedIndex(null);
+            {/* Drag & Drop Main Explorer Window */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); }}
+              onDragLeave={() => setIsDraggingOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDraggingOver(false);
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                  uploadFiles(Array.from(e.dataTransfer.files), currentFolderId);
+                } else {
+                  // Reorder / move files in drive
+                  try {
+                    const draggedData = e.dataTransfer.getData('text/plain');
+                    if (!draggedData) return;
+                    let draggedItemIds: string[] = [];
+                    try {
+                      draggedItemIds = JSON.parse(draggedData);
+                    } catch {
+                      draggedItemIds = [draggedData];
+                    }
+                    // Drop directly in explorer root means moving to parent folder (breadcrumbs[breadcrumbs.length-2])
+                    if (breadcrumbs.length > 1) {
+                      const parentFolder = breadcrumbs[breadcrumbs.length - 2];
+                      handleMoveItems(draggedItemIds, parentFolder.id, currentFolderId);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                  }
+                }
               }}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              className={cn(
+                "relative bg-surface-elevated rounded-2xl border transition-all duration-300 min-h-[450px] overflow-hidden",
+                isDraggingOver ? "border-accent bg-accent/5 ring-2 ring-accent/15 scale-[0.995]" : "border-border"
+              )}
             >
-              {/* Drag Overlay */}
-              {isDraggingOver && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-sm rounded-xl border-2 border-dashed border-accent pointer-events-none">
-                  <div className="bg-surface-elevated px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 animate-in zoom-in-95 duration-200 border border-border/50">
-                    <div className="w-10 h-10 bg-accent/20 text-accent rounded-full flex items-center justify-center">
-                      <UploadCloud className="w-5 h-5 animate-bounce" />
-                    </div>
-                    <div className="text-left">
-                      <h3 className="text-base font-bold text-text-primary">Suelta los archivos aquí</h3>
-                      <p className="text-xs text-text-secondary mt-0.5">Se subirán a esta carpeta</p>
-                    </div>
+              {isUploading && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-55 flex flex-col items-center justify-center p-4 text-center">
+                  <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
+                    <Loader2 className="w-6 h-6 animate-spin text-accent" />
                   </div>
+                  <h3 className="font-bold text-text-primary text-sm">Subiendo archivos a Google Drive</h3>
+                  <p className="text-xs text-text-secondary mt-1">Este proceso puede tardar unos segundos...</p>
                 </div>
               )}
 
               {isLoading ? (
-                <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
-              ) : groupedItems.length === 0 ? (
-                <div className="p-16 text-center text-text-secondary">
-                  <Folder className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>La carpeta está vacía.</p>
+                <div className="p-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
+              ) : items.length === 0 ? (
+                <div className="p-20 text-center text-text-secondary">
+                  <Folder className="w-12 h-12 mx-auto mb-4 opacity-40 text-accent" />
+                  <p className="font-medium text-sm text-text-primary">Esta carpeta está vacía</p>
+                  <p className="text-xs text-text-secondary mt-1">Arrastra archivos aquí o haz clic en "Subir archivo" para comenzar.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-border/50">
-                  {groupedItems.map((item: any) => {
+                <div className="divide-y divide-border/40">
+                  {groupedItems.map((item: any, idx) => {
                     const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                     const isAudio = item.mimeType.startsWith('audio/');
                     
                     return (
-                      <div 
+                      <div
                         key={item.id}
                         draggable
                         onDragStart={(e) => handleItemDragStart(e, item.id)}
@@ -936,76 +1003,10 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                           }
                         }}
                         className={cn(
-                          "group flex items-center p-3 transition-colors cursor-pointer border-l-2",
-                          selectedIds.includes(item.id) 
-                            ? "bg-accent/10 border-accent" 
-                            : "border-transparent hover:bg-surface-elevated"
+                          "group flex items-center p-3 transition-colors cursor-pointer hover:bg-surface/60",
+                          selectedIds.includes(item.id) && "bg-accent/5 hover:bg-accent/10"
                         )}
-                        onClick={(e) => handleItemClick(e, groupedItems.indexOf(item), item, groupedItems)}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          
-                          let activeIds = selectedIds;
-                          if (!selectedIds.includes(item.id)) {
-                            setSelectedIds([item.id]);
-                            setLastSelectedIndex(groupedItems.indexOf(item));
-                            activeIds = [item.id];
-                          }
-
-                          const multiple = activeIds.length > 1;
-                          
-                          let menuItems: any[] = [];
-                          if (multiple) {
-                             menuItems = [
-                               { label: `Mover ${activeIds.length} elementos...`, icon: 'FolderOpen', action: () => customAlert('Arrastra los elementos a una carpeta para moverlos.') },
-                               { separator: true },
-                               { label: `Eliminar ${activeIds.length} elementos`, icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
-                             ];
-                          } else if (isFolder) {
-                            menuItems = [
-                              { label: 'Abrir Carpeta', icon: 'FolderOpen', action: () => navigateTo(item.id, item.name) },
-                              { separator: true },
-                              { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
-                              { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
-                              { separator: true },
-                              { label: 'Eliminar Carpeta', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, true) }
-                            ];
-                          } else if (isAudio) {
-                            menuItems = [
-                              { label: 'Reproducir / Pausar', icon: 'Play', action: () => window.open(item.webViewLink, '_blank') },
-                              { label: 'Ver Archivo', icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
-                              { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
-                              { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
-                              { separator: true },
-                              { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
-                              { separator: true },
-                              { label: 'Eliminar Audio', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
-                            ];
-                          } else {
-                            const isImage = item.mimeType.startsWith('image/');
-                            const isPDF = item.mimeType.includes('pdf');
-                            const isVideo = item.mimeType.startsWith('video/');
-                            const isDoc = item.mimeType.includes('document') || item.mimeType.includes('sheet') || item.mimeType.includes('presentation') || item.mimeType.startsWith('text/') || item.mimeType.includes('google-apps');
-
-                            let openLabel = 'Ver Archivo';
-                            if (isImage) openLabel = 'Abrir Imagen (Drive)';
-                            else if (isPDF) openLabel = 'Abrir PDF (Drive)';
-                            else if (isVideo) openLabel = 'Reproducir Video (Drive)';
-                            else if (isDoc) openLabel = 'Abrir Documento (Drive)';
-
-                            menuItems = [
-                              { label: openLabel, icon: 'ExternalLink', action: () => window.open(item.webViewLink, '_blank') },
-                              { label: 'Descargar', icon: 'Download', action: () => { window.open(item.webViewLink, '_blank'); } },
-                              { label: 'Copiar Enlace', icon: 'Link', action: () => { navigator.clipboard.writeText(item.webViewLink || ''); customAlert('Enlace copiado'); } },
-                              { separator: true },
-                              { label: 'Renombrar', icon: 'Edit3', action: () => handleRename(item.id, item.name) },
-                              { separator: true },
-                              { label: 'Eliminar Archivo', icon: 'Trash2', variant: 'danger', action: () => handleDelete(item.id, false, activeIds) }
-                            ];
-                          }
-                          showMenu(e.clientX, e.clientY, menuItems);
-                        }}
+                        onClick={(e) => handleItemClick(e, idx, item, groupedItems)}
                       >
                         {isAudio ? (
                           <div className="flex-1 w-full flex items-center pr-2">
@@ -1076,16 +1077,6 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                                 </a>
                               )}
                               <button 
-                                className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.open(item.webViewLink, '_blank');
-                                }}
-                                title="Ver en Drive"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </button>
-                              <button 
                                 className="p-2 text-text-secondary hover:text-error rounded hover:bg-surface"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1107,7 +1098,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           </div>
 
           {/* Dotted Vertical Split Dropzone: shown only when not already split */}
-          {!threePaneFolderId && (
+          {extraPanes.length < 2 && (
             <div
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsRightDropZoneDragOver(true); }}
               onDragLeave={() => setIsRightDropZoneDragOver(false)}
@@ -1118,7 +1109,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 scale-[1.02]" 
                   : "bg-surface-elevated/20 border-border/60 hover:bg-surface-elevated/50 hover:border-accent/40 text-text-secondary hover:text-accent"
               )}
-              title="Arrastra una carpeta aquí para abrir en vista dividida (3 columnas)"
+              title="Arrastra una carpeta aquí para abrir en vista dividida (hasta 4 columnas)"
             >
               <FolderOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
               <div 
@@ -1131,12 +1122,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           )}
         </div>
 
-        {/* Column 3: Custom Split Pane (Explorer of the dragged folder) */}
-        {threePaneFolderId && (
+        {/* Dynamic Parallel Panels (Column 3 & 4) */}
+        {extraPanes.map((pane, idx) => (
           <div 
+            key={pane.folderId}
             className={cn(
-              "lg:col-span-5 space-y-6 w-full animate-slide-in",
-              activeMobileTab === 'parallel' ? "block" : "hidden lg:block"
+              "space-y-6 w-full shrink-0 animate-slide-in",
+              extraPanes.length > 1 ? "lg:w-[320px]" : "lg:w-[420px]",
+              activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:block"
             )}
           >
             {/* Header: Folder name & Close button */}
@@ -1144,11 +1137,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               <div className="flex items-center gap-2 overflow-hidden">
                 <Folder className="w-5 h-5 text-accent shrink-0 animate-pulse" />
                 <span className="font-bold text-text-primary truncate text-sm">
-                  {threePaneFolderName}
+                  {pane.folderName}
                 </span>
               </div>
               <button
-                onClick={() => setThreePaneFolderId(null)}
+                onClick={() => closePane(idx)}
                 className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface transition-colors"
                 title="Cerrar vista paralela"
               >
@@ -1158,11 +1151,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
             {/* Split Content drop zone */}
             <div
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsThirdPaneDragOver(true); }}
-              onDragLeave={() => setIsThirdPaneDragOver(false)}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setExtraPanes(prev => prev.map((p, i) => i === idx ? { ...p, isDragOver: true } : p)); }}
+              onDragLeave={() => setExtraPanes(prev => prev.map((p, i) => i === idx ? { ...p, isDragOver: false } : p))}
               onDrop={(e) => {
                 e.preventDefault();
-                setIsThirdPaneDragOver(false);
+                setExtraPanes(prev => prev.map((p, i) => i === idx ? { ...p, isDragOver: false } : p));
                 try {
                   const draggedData = e.dataTransfer.getData('text/plain');
                   if (!draggedData) return;
@@ -1172,19 +1165,19 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   } catch {
                     draggedItemIds = [draggedData];
                   }
-                  handleMoveItems(draggedItemIds, threePaneFolderId, currentFolderId);
+                  handleMoveItems(draggedItemIds, pane.folderId, currentFolderId);
                 } catch (err) {
                   console.error(err);
                 }
               }}
               className={cn(
                 "relative bg-surface rounded-xl border overflow-hidden min-h-[420px] transition-all duration-200",
-                isThirdPaneDragOver ? "border-accent bg-accent/5 ring-2 ring-accent/20" : "border-border"
+                pane.isDragOver ? "border-accent bg-accent/5 ring-2 ring-accent/20" : "border-border"
               )}
             >
-              {threePaneLoading ? (
+              {pane.isLoading ? (
                 <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
-              ) : threePaneItems.length === 0 ? (
+              ) : pane.items.length === 0 ? (
                 <div className="p-16 text-center text-text-secondary text-sm">
                   <Folder className="w-12 h-12 mx-auto mb-4 opacity-40" />
                   <p>La carpeta está vacía.</p>
@@ -1192,7 +1185,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                 </div>
               ) : (
                 <div className="divide-y divide-border/50">
-                  {threePaneItems.map((item: any) => {
+                  {pane.items.map((item: any) => {
                     const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                     const isAudio = item.mimeType.startsWith('audio/');
                     
@@ -1202,12 +1195,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         draggable
                         onDragStart={(e) => handleItemDragStart(e, item.id)}
                         onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
-                        onDrop={isFolder ? (e) => handleItemDrop(e, item.id, threePaneFolderId) : undefined}
+                        onDrop={isFolder ? (e) => handleItemDrop(e, item.id, pane.folderId) : undefined}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           if (isFolder) {
-                            setThreePaneFolderId(item.id);
-                            setThreePaneFolderName(item.name);
+                            navigatePaneTo(idx, item.id, item.name);
                           } else if (item.webViewLink) {
                             window.open(item.webViewLink, '_blank');
                           }
@@ -1220,9 +1212,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                               fileId={item.id} 
                               fileName={item.name} 
                               versions={item.versions}
-                              currentFolderId={threePaneFolderId}
+                              currentFolderId={pane.folderId}
                               onRefresh={() => {
-                                fetchThreePaneItems(threePaneFolderId);
+                                fetchPaneItems(pane.folderId);
                                 fetchItems(currentFolderId);
                                 fetchRecentFiles();
                               }}
@@ -1254,7 +1246,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                                 className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleRename(item.id, item.name).then(() => fetchThreePaneItems(threePaneFolderId));
+                                  handleRename(item.id, item.name).then(() => fetchPaneItems(pane.folderId));
                                 }}
                                 title="Renombrar"
                               >
@@ -1303,9 +1295,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               )}
             </div>
           </div>
-        )}
-        </div>
-
+        ))}
       </div>
 
       {/* Modals */}
