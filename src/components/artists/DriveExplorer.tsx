@@ -726,8 +726,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         {/* ── Column 1: Archivos Recientes (fixed width, shrink-0) ── */}
         <div
           className={cn(
-            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] shrink-0 transition-all duration-300 w-full",
-            extraPanes.length >= 2 ? "lg:w-[230px]" : extraPanes.length === 1 ? "lg:w-[260px]" : "lg:w-[290px]",
+            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] transition-all duration-300 w-full",
+            "flex-1 min-w-0",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
@@ -783,9 +783,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         </div>
                       )}
 
-                      <div className="flex-1 min-w-0 pr-20">
-                        <div className={cn("text-xs font-bold truncate flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
-                          {item.name}
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
+                          <span className="truncate block">{item.name}</span>
                           {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3 h-3 text-accent opacity-70 shrink-0" /></span>}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
@@ -1049,8 +1049,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           <div
             key={pane.folderId}
             className={cn(
-              "shrink-0 space-y-4 animate-slide-in transition-all duration-300 w-full",
-              extraPanes.length >= 2 ? "lg:w-[270px]" : "lg:w-[300px]",
+              "space-y-4 animate-slide-in transition-all duration-300 w-full",
+              "flex-1 min-w-0",
               activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:block"
             )}
           >
