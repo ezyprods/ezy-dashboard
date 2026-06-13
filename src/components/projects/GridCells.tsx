@@ -216,7 +216,7 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
     <div 
       ref={containerRef} 
       className="relative flex items-center justify-center w-full cursor-context-menu" 
-      style={{ userSelect: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }} 
+      style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }} 
       onPointerDown={handlePointerDown} 
       onPointerMove={handleLocalPointerMove}
       onPointerLeave={handlePointerLeave} 
@@ -428,7 +428,7 @@ export function CellComponent({
 
   return (
     <td 
-      className="p-2 border-b border-r border-border text-center relative group/cell min-w-[160px] max-w-[240px] align-middle"
+      className="p-1 sm:p-2 border-b border-r border-border text-center relative group/cell min-w-[120px] sm:min-w-[160px] max-w-[240px] align-middle"
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onDrop={handleNativeDrop}
     >

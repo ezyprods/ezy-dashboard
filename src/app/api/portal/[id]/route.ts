@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { findAndReadJsonFile, getDriveService, listFolders, saveJsonFile } from '@/lib/drive';
+import { findAndReadJsonFile, getDriveService, listFolders, saveJsonFile, fetchFoldersRecursively } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -114,12 +114,68 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // 4.5 Obtener las matrices compartidas
     const matricesData = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
-    const sharedMatrices = (matricesData.matrices || [])
-      .map((m: any) => ({
+    const sharedMatrices = await Promise.all((matricesData.matrices || []).map(async (m: any) => {
+      let grid = m.productionGrid;
+      if (m.projectId && grid) {
+        try {
+          const drive = getDriveService();
+          const { folders: foldersWithFiles, files: rootFiles } = await fetchFoldersRecursively(drive, m.projectId);
+          const allFiles = [
+            ...rootFiles,
+            ...foldersWithFiles.flatMap(f => f.files)
+          ];
+          const audioFiles = allFiles.filter((f: any) => f.mimeType?.includes('audio/'));
+
+          const normalize = (s: string) => {
+            if (!s) return '';
+            return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+          };
+
+          const newRows = grid.rows.map((row: any) => {
+            const rowNameNorm = normalize(row.name);
+            if (!rowNameNorm) return row;
+            
+            const newCells = { ...row.cells };
+            let rowModified = false;
+
+            for (const col of grid.columns) {
+              if (col.type === 'file') {
+                const cell = newCells[col.id] || { status: 'todo' };
+                if (!cell.fileId) {
+                  let bestMatch = null;
+                  let bestScore = 0;
+                  for (const file of audioFiles) {
+                    const fileNameNorm = normalize(file.name);
+                    if (fileNameNorm.includes(rowNameNorm)) {
+                      const score = 1000 - (fileNameNorm.length - rowNameNorm.length);
+                      if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = file;
+                      }
+                    }
+                  }
+                  if (bestMatch) {
+                    newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
+                    rowModified = true;
+                  }
+                }
+              }
+            }
+            return rowModified ? { ...row, cells: newCells } : row;
+          });
+          
+          grid = { ...grid, rows: newRows };
+        } catch (e) {
+          console.error(`Error auto-matching files for matrix ${m.id}:`, e);
+        }
+      }
+
+      return {
         id: m.id,
         name: m.name,
-        productionGrid: m.productionGrid
-      }));
+        productionGrid: grid
+      };
+    }));
 
     // 5. Obtener releases públicas del artista
     let releases: any[] = [];

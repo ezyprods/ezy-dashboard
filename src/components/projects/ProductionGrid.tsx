@@ -33,7 +33,7 @@ function SortableColHeader({ col, onDelete, onRename }: { col: { id: string; nam
     <th
       ref={setNodeRef}
       style={style}
-      className="p-3 border-b border-r border-border bg-surface/50 min-w-[150px] group relative"
+      className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 min-w-[120px] sm:min-w-[150px] group relative"
     >
       <div className="flex items-center justify-center gap-1.5">
         <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity shrink-0">
@@ -83,7 +83,7 @@ function SortableRow({
 
   return (
     <tr ref={setNodeRef} style={style} className={`group/row transition-colors ${isDragging ? 'bg-surface-elevated shadow-lg' : 'hover:bg-surface/30'}`}>
-      <td className="p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 max-w-[200px]">
+      <td className="p-1.5 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 max-w-[140px] sm:max-w-[200px]">
         <div className="flex items-center gap-2">
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
           <input 
@@ -181,6 +181,72 @@ export function ProductionGridBoard({
           ...(data.folders ? data.folders.flatMap((f: any) => f.files) : [])
         ];
         setFiles(allFiles);
+
+        // Intelligent Auto-Match Logic
+        setGrid(prevGrid => {
+          let hasChanges = false;
+          const audioFiles = allFiles.filter((f: any) => f.mimeType?.includes('audio/'));
+          
+          const normalize = (s: string) => {
+            if (!s) return '';
+            return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+          };
+
+          const newRows = prevGrid.rows.map(row => {
+            const rowNameNorm = normalize(row.name);
+            if (!rowNameNorm) return row;
+
+            let rowModified = false;
+            const newCells = { ...row.cells };
+
+            for (const col of prevGrid.columns) {
+              if (col.type === 'file') {
+                const cell = newCells[col.id] || { status: 'todo' };
+                if (!cell.fileId) {
+                  let bestMatch = null;
+                  let bestScore = 0;
+
+                  for (const file of audioFiles) {
+                    const fileNameNorm = normalize(file.name);
+                    if (fileNameNorm.includes(rowNameNorm)) {
+                      // Higher score for files that have less extra characters (tighter match)
+                      const score = 1000 - (fileNameNorm.length - rowNameNorm.length);
+                      if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = file;
+                      }
+                    }
+                  }
+
+                  if (bestMatch) {
+                    newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
+                    rowModified = true;
+                  }
+                }
+              }
+            }
+
+            if (rowModified) {
+              hasChanges = true;
+              return { ...row, cells: newCells };
+            }
+            return row;
+          });
+
+          if (hasChanges) {
+            const updatedGrid = { ...prevGrid, rows: newRows };
+            fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                productionGrid: updatedGrid,
+                projectId: projId 
+              })
+            }).catch(console.error);
+            return updatedGrid;
+          }
+          return prevGrid;
+        });
       }
     } catch (e) { console.error(e); }
   };
@@ -307,7 +373,7 @@ export function ProductionGridBoard({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr>
-                <th className="p-3 border-b border-r border-border bg-surface/50 w-64 min-w-[200px]">
+                <th className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 w-32 sm:w-64 min-w-[120px] sm:min-w-[200px]">
                   <div className="flex items-center gap-1">
                     <Input placeholder="Nueva fila..." value={newRowName} onChange={e => setNewRowName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addRow()} className="h-7 text-xs bg-transparent w-full" />
                     <Button size="sm" variant="ghost" onClick={addRow} disabled={!newRowName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>
@@ -318,7 +384,7 @@ export function ProductionGridBoard({
                   {grid.columns.map(col => <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} onRename={renameColumn} />)}
                 </SortableContext>
 
-                <th className="p-2 border-b border-border bg-surface/50 min-w-[200px] max-w-[240px]">
+                <th className="p-1.5 sm:p-2 border-b border-border bg-surface/50 min-w-[180px] sm:min-w-[200px] max-w-[240px]">
                   <div className="flex items-center gap-1">
                     <select 
                       value={newColType} 

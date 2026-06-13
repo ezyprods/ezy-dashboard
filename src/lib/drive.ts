@@ -166,6 +166,68 @@ export async function listFolders(parentId: string = DRIVE_ROOT_FOLDER_ID) {
 }
 
 /**
+ * Función recursiva para obtener todas las carpetas y sus archivos
+ */
+export async function fetchFoldersRecursively(drive: any, parentId: string, parentPath: string = ''): Promise<{folders: any[], files: any[]}> {
+  let allFolders: any[] = [];
+  let rootFiles: any[] = [];
+  let items: any[] = [];
+  let pageToken: string | undefined = undefined;
+
+  do {
+    const response: any = await drive.files.list({
+      q: `'${parentId}' in parents and trashed=false`,
+      fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)',
+      orderBy: 'folder, name',
+      pageSize: 1000,
+      pageToken: pageToken,
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
+    });
+    
+    if (response.data.files) {
+      items = items.concat(response.data.files);
+    }
+    pageToken = response.data.nextPageToken || undefined;
+  } while (pageToken);
+  
+  // Archivos directos en este parent (ocultamos los de sistema)
+  const SYSTEM_FILES = ['tasks.json', 'project_config.json', 'release_config.json', 'notes.json', 'payments.json', 'payments_db.json'];
+  const files = items.filter((f: any) => 
+    f.mimeType !== 'application/vnd.google-apps.folder' && 
+    !SYSTEM_FILES.includes(f.name)
+  );
+  rootFiles = files;
+
+  // Carpetas directas
+  const folders = items.filter((f: any) => f.mimeType === 'application/vnd.google-apps.folder');
+
+  const folderPromises = folders.map(async (folder: any) => {
+    const currentPath = parentPath ? `${parentPath} / ${folder.name}` : folder.name;
+    const { folders: subFolders, files: subFiles } = await fetchFoldersRecursively(drive, folder.id, currentPath);
+    return {
+      folderId: folder.id,
+      name: currentPath,
+      files: subFiles,
+      subFolders,
+    };
+  });
+
+  const results = await Promise.all(folderPromises);
+
+  for (const res of results) {
+    allFolders.push({
+      id: res.folderId,
+      name: res.name,
+      files: res.files,
+    });
+    allFolders = allFolders.concat(res.subFolders);
+  }
+
+  return { folders: allFolders, files: rootFiles };
+}
+
+/**
  * Lista todos los archivos (no carpetas) de una carpeta
  */
 export async function listFiles(parentId: string): Promise<DriveFile[]> {
