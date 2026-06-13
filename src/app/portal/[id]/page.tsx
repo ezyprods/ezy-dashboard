@@ -323,7 +323,13 @@ export default function PortalPage() {
                     </p>
                     <p className="text-[10px] text-text-secondary mt-0.5">{data.finances.pendingPayment > 0 ? 'por liquidar' : '¡al día!'}</p>
                   </div>
-                   // ─── Tasks module ──────────────────────────────────────────
+                </>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+              {visibleModules.map((mod: any) => {
+                // ─── Tasks module ──────────────────────────────────────────
                 if (mod.type === 'tasks') {
                   const matrices = data.sharedMatrices || [];
                   if (matrices.length === 0) return null;
