@@ -966,7 +966,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       onClick={(e) => handleItemClick(e, idx, item, groupedItems)}
                     >
                       {isAudio ? (
-                        <div className="flex-1 w-full flex items-center pr-2">
+                        <div className="flex-1 min-w-0 w-full flex items-center pr-2">
                           <WaveformPlayer
                             fileId={item.id}
                             fileName={item.name}
@@ -1129,7 +1129,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         className="group relative flex items-center p-3 transition-colors cursor-pointer hover:bg-surface-elevated/80"
                       >
                         {isAudio ? (
-                          <div className="flex-1 w-full flex items-center pr-2">
+                          <div className="flex-1 min-w-0 w-full flex items-center pr-2">
                             <WaveformPlayer
                               fileId={item.id}
                               fileName={item.name}
