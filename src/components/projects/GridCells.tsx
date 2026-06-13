@@ -9,6 +9,7 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import type { GridCell, FlexTaskStatus, ColumnType } from '@/types';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { customAlert } from '@/lib/dialog';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
 export const STATUS_CONFIG: Record<FlexTaskStatus, { label: string; icon: typeof Circle; color: string; bgColor: string }> = {
   todo: { label: 'Pendiente', icon: Circle, color: 'text-text-secondary', bgColor: 'bg-surface' },
@@ -181,16 +182,47 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
     { s: 'todo', x: 0, y: 52 },
   ];
 
+  const { showMenu } = useContextMenu();
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    showMenu(e.clientX, e.clientY, [
+      {
+        label: 'Pendiente',
+        icon: 'Circle',
+        action: () => onStatusChange('todo')
+      },
+      {
+        label: 'En progreso',
+        icon: 'Clock',
+        action: () => onStatusChange('in_progress')
+      },
+      {
+        label: 'Revisión',
+        icon: 'Eye',
+        action: () => onStatusChange('review')
+      },
+      {
+        label: 'Hecho',
+        icon: 'CheckCircle2',
+        action: () => onStatusChange('done')
+      }
+    ]);
+  };
+
   return (
     <div 
       ref={containerRef} 
-      className="relative flex items-center justify-center w-full" 
+      className="relative flex items-center justify-center w-full cursor-context-menu" 
       style={{ userSelect: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }} 
       onPointerDown={handlePointerDown} 
       onPointerMove={handleLocalPointerMove}
       onPointerLeave={handlePointerLeave} 
       onPointerCancel={handlePointerCancel}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
     >
       <button 
         className={`w-full py-2 flex justify-center items-center rounded transition-colors ${cfg.bgColor} hover:brightness-110`} 
