@@ -113,7 +113,7 @@ export function WaveformPlayer({
           } catch (e) { }
         }
 
-        const response = await fetch(`/api/audio/${activeId}`);
+        const response = await fetch(`https://drive.google.com/uc?export=download&id=${activeId}`);
         const arrayBuffer = await response.arrayBuffer();
         if (cancelled) return;
 

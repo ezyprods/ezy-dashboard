@@ -84,7 +84,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     // New track
     setCurrentTrack(track);
-    audioRef.current.src = track.url;
+    
+    // Bypass Vercel API for instant loading & zero quota usage
+    let finalUrl = track.url;
+    if (finalUrl.startsWith('/api/audio/')) {
+      const fileId = finalUrl.split('/').pop();
+      finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+    
+    audioRef.current.src = finalUrl;
     audioRef.current.load();
     setIsPlaying(true);
   };
