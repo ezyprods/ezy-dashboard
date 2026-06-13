@@ -437,6 +437,7 @@ export default function PortalPage() {
                       </div>
                     </div>
                   );
+                }
 
                 // ─── Bounces / Audios module ───────────────────────────────
                 if (mod.type === 'bounces') {
