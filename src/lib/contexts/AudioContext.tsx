@@ -73,7 +73,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isPlaying]);
 
-  const playTrack = (track: AudioTrack) => {
+  const playTrack = async (track: AudioTrack) => {
     if (!audioRef.current) return;
     
     // If it's the same track, just toggle play
@@ -85,15 +85,27 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     // New track
     setCurrentTrack(track);
     
-    // Bypass Vercel API for instant loading & zero quota usage
+    // Resolve direct streaming URL for Google Drive to preserve Range headers
     let finalUrl = track.url;
     if (finalUrl.startsWith('/api/audio/')) {
       const fileId = finalUrl.split('/').pop();
-      finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      try {
+        const res = await fetch(`/api/audio/${fileId}/resolve`);
+        if (res.ok) {
+          const data = await res.json();
+          finalUrl = data.url;
+        } else {
+          finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+        }
+      } catch (e) {
+        finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+      }
     }
     
-    audioRef.current.src = finalUrl;
-    audioRef.current.load();
+    if (audioRef.current.src !== finalUrl) {
+      audioRef.current.src = finalUrl;
+      audioRef.current.load();
+    }
     setIsPlaying(true);
   };
 
