@@ -682,14 +682,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   };
 
   return (
-    <div ref={explorerRef} className="animate-fade-in space-y-6 transition-all">
+    <div ref={explorerRef} className="animate-fade-in space-y-6 transition-all w-full">
       {/* Mobile Tabs */}
-      <div className="flex lg:hidden bg-surface-elevated p-1 rounded-lg border border-border overflow-x-auto gap-1">
+      <div className="flex lg:hidden bg-surface-elevated p-1.5 rounded-xl border border-border overflow-x-auto gap-1 shadow-sm">
         <button
           onClick={() => setActiveMobileTab('explorer')}
           className={cn(
-            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap px-3",
-            activeMobileTab === 'explorer' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
+            "flex-1 py-2.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap px-4",
+            activeMobileTab === 'explorer' ? "bg-accent text-white shadow-md" : "text-text-secondary hover:bg-surface hover:text-text-primary"
           )}
         >
           Explorador
@@ -697,8 +697,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         <button
           onClick={() => setActiveMobileTab('recent')}
           className={cn(
-            "flex-1 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap px-3",
-            activeMobileTab === 'recent' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
+            "flex-1 py-2.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap px-4",
+            activeMobileTab === 'recent' ? "bg-accent text-white shadow-md" : "text-text-secondary hover:bg-surface hover:text-text-primary"
           )}
         >
           Recientes
@@ -708,8 +708,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             key={pane.folderId}
             onClick={() => setActiveMobileTab(`parallel-${idx}` as any)}
             className={cn(
-              "flex-1 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap px-3",
-              activeMobileTab === `parallel-${idx}` ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary"
+              "flex-1 py-2.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap px-4",
+              activeMobileTab === `parallel-${idx}` ? "bg-accent text-white shadow-md" : "text-text-secondary hover:bg-surface hover:text-text-primary"
             )}
           >
             {pane.folderName}
@@ -717,13 +717,13 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         ))}
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 items-stretch w-full overflow-x-auto pb-4">
+      <div className="flex flex-col lg:flex-row lg:flex-nowrap gap-6 items-start w-full overflow-x-auto pb-6 px-1" style={{ scrollbarWidth: 'thin' }}>
         
         {/* Left Side: Recent Files */}
         <div 
           className={cn(
-            "bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px] shrink-0",
-            extraPanes.length > 0 ? "w-full lg:w-[340px]" : "w-full lg:w-[380px]",
+            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] shrink-0 transition-all duration-300",
+            extraPanes.length > 0 ? "w-full lg:w-[300px]" : "w-full lg:w-[340px]",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
@@ -753,13 +753,13 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
                       window.open(openUrl, '_blank');
                     }}
-                    className="p-3 bg-surface rounded-lg border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center justify-between gap-3 group cursor-pointer"
+                    className="relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-all flex items-center gap-3 group cursor-pointer overflow-hidden"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {isAudio ? (
                         <button
                           className={cn(
-                            'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm',
+                            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm',
                             isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
                           )}
                           onClick={(e) => {
@@ -771,88 +771,45 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             }
                           }}
                         >
-                          {isThisTrackPlaying ? <Pause className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current ml-0.5" />}
+                          {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
                         </button>
                       ) : (
-                        <div className="w-7 h-7 rounded-full bg-surface-elevated flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50">
                           {getIcon(item.mimeType, item.name)}
                         </div>
                       )}
                       
-                      <div className="flex-1 min-w-0">
-                        <div className={cn("text-xs font-semibold truncate flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
+                      <div className="flex-1 min-w-0 pr-20">
+                        <div className={cn("text-xs font-bold truncate flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
                           {item.name}
                           {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3 h-3 text-accent opacity-70 shrink-0" /></span>}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
-                          {item.size && <span>•</span>}
                           <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
                         </div>
                       </div>
                     </div>
                     
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-1 shrink-0 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    {/* Action buttons - Absolute positioned on hover to avoid squishing the text */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenFileLocation(item.parentFolderId);
-                        }}
-                        className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
-                        title="Abrir ubicación de archivo"
+                        onClick={(e) => { e.stopPropagation(); handleOpenFileLocation(item.parentFolderId); }}
+                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
+                        title="Abrir ubicación"
                       >
                         <FolderOpen className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShareModalFile(item);
-                        }}
-                        className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                        onClick={(e) => { e.stopPropagation(); setShareModalFile(item); }}
+                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
                         title="Compartir"
                       >
                         <Share2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
-                          window.open(openUrl, '_blank');
-                        }}
-                        className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
-                        title="Ver en Drive"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
-                      <a
-                        href={`/api/files/${item.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={item.name}
-                        onClick={(e) => e.stopPropagation()}
-                        className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
-                        title="Descargar"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </a>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRename(item.id, item.name);
-                        }}
-                        className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
-                        title="Renombrar"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteModalFile(item);
-                        }}
-                        className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-surface"
-                        title="Opciones de eliminación"
+                        onClick={(e) => { e.stopPropagation(); setDeleteModalFile(item); }}
+                        className="p-1.5 text-text-secondary hover:text-error hover:bg-surface rounded-md transition-colors"
+                        title="Eliminar"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -865,8 +822,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               {/* Middle Column: Explorer */}
         <div 
           className={cn(
-            "space-y-6 w-full shrink-0 flex-1 min-w-[360px]",
-            extraPanes.length > 0 ? "lg:w-[420px]" : "lg:w-[500px]",
+            "space-y-4 w-full shrink-0 transition-all duration-300",
+            extraPanes.length > 0 ? "lg:w-[460px] lg:flex-none" : "lg:max-w-[700px] lg:flex-1",
             activeMobileTab === 'explorer' ? "block" : "hidden lg:block"
           )}
         >
@@ -1039,19 +996,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-1 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                             <button 
-                              className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRename(item.id, item.name);
-                              }}
-                              title="Renombrar"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button 
-                              className="p-2 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                              className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setShareModalFile(item);
@@ -1064,27 +1011,27 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                               <a 
                                 href={item.webContentLink || item.webViewLink}
                                 target="_blank"
-                                  rel="noopener noreferrer"
-                                  download={item.name}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                                  title="Descargar"
-                                >
-                                  <Download className="w-4 h-4" />
-                                </a>
-                              )}
-                              <button 
-                                className="p-2 text-text-secondary hover:text-error rounded hover:bg-surface"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteModalFile(item);
-                                }}
-                                title="Opciones de eliminación"
+                                rel="noopener noreferrer"
+                                download={item.name}
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface transition-colors"
+                                title="Descargar"
                               >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </>
+                                <Download className="w-4 h-4" />
+                              </a>
+                            )}
+                            <button 
+                              className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-surface transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteModalFile(item);
+                              }}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </>
                         )}
                       </div>
                     );
@@ -1100,22 +1047,22 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           <div 
             key={pane.folderId}
             className={cn(
-              "space-y-6 w-full shrink-0 animate-slide-in",
-              extraPanes.length > 1 ? "lg:w-[320px]" : "lg:w-[420px]",
+              "space-y-4 w-full shrink-0 animate-slide-in flex-none transition-all duration-300",
+              extraPanes.length > 1 ? "lg:w-[360px]" : "lg:w-[420px]",
               activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:block"
             )}
           >
             {/* Header: Folder name & Close button */}
-            <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
+            <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border shadow-sm">
               <div className="flex items-center gap-2 overflow-hidden">
-                <Folder className="w-5 h-5 text-accent shrink-0 animate-pulse" />
+                <Folder className="w-5 h-5 text-accent shrink-0" />
                 <span className="font-bold text-text-primary truncate text-sm">
                   {pane.folderName}
                 </span>
               </div>
               <button
                 onClick={() => closePane(idx)}
-                className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface transition-colors"
+                className="p-1.5 text-text-secondary hover:bg-error/10 hover:text-error rounded-md transition-colors"
                 title="Cerrar vista paralela"
               >
                 <X className="w-4 h-4" />
@@ -1144,7 +1091,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                 }
               }}
               className={cn(
-                "relative bg-surface rounded-xl border overflow-hidden min-h-[420px] transition-all duration-200",
+                "relative bg-surface rounded-2xl border overflow-hidden min-h-[450px] transition-all duration-200",
                 pane.isDragOver ? "border-accent bg-accent/5 ring-2 ring-accent/20" : "border-border"
               )}
             >
@@ -1152,9 +1099,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                 <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
               ) : pane.items.length === 0 ? (
                 <div className="p-16 text-center text-text-secondary text-sm">
-                  <Folder className="w-12 h-12 mx-auto mb-4 opacity-40" />
-                  <p>La carpeta está vacía.</p>
-                  <p className="text-[10px] mt-1 text-text-secondary/70">Arrastra archivos aquí para moverlos a esta carpeta.</p>
+                  <Folder className="w-12 h-12 mx-auto mb-4 opacity-40 text-accent" />
+                  <p className="font-medium">La carpeta está vacía.</p>
+                  <p className="text-xs mt-1 text-text-secondary/70">Arrastra archivos aquí.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/50">
@@ -1177,7 +1124,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             window.open(item.webViewLink, '_blank');
                           }
                         }}
-                        className="group flex items-center p-3 transition-colors cursor-pointer hover:bg-surface-elevated/60"
+                        className="group relative flex items-center p-3 transition-colors cursor-pointer hover:bg-surface-elevated/80"
                       >
                         {isAudio ? (
                           <div className="flex-1 w-full flex items-center pr-2">
@@ -1207,26 +1154,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                               </div>
                               {!isFolder && (
                                 <div className="text-[9px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                  {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
-                                  {item.size && <span>•</span>}
                                   <span className="font-mono bg-surface px-1 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
                                 </div>
                               )}
                             </div>
                             
-                            <div className="flex items-center gap-1 shrink-0 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0">
                               <button 
-                                className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRename(item.id, item.name).then(() => fetchPaneItems(pane.folderId));
-                                }}
-                                title="Renombrar"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button 
-                                className="p-1.5 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                                className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setShareModalFile(item);
@@ -1242,19 +1177,19 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                                   rel="noopener noreferrer"
                                   download={item.name}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface"
                                   title="Descargar"
                                 >
                                   <Download className="w-3.5 h-3.5" />
                                 </a>
                               )}
                               <button 
-                                className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-surface"
+                                className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-surface"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeleteModalFile(item);
                                 }}
-                                title="Opciones de eliminación"
+                                title="Eliminar"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1277,16 +1212,17 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             onDragLeave={() => setIsRightDropZoneDragOver(false)}
             onDrop={handleRightDropZoneDrop}
             className={cn(
-              "w-12 flex flex-col items-center justify-center gap-4 border border-dashed rounded-xl transition-all duration-300 cursor-pointer select-none py-12 shrink-0 group text-center min-h-[500px]",
+              "w-full lg:w-16 flex lg:flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl transition-all duration-300 cursor-pointer select-none py-8 lg:py-12 shrink-0 group text-center lg:min-h-[550px]",
               isRightDropZoneDragOver 
-                ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 scale-[1.02]" 
-                : "bg-surface-elevated/20 border-border/60 hover:bg-surface-elevated/50 hover:border-accent/40 text-text-secondary hover:text-accent"
+                ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 lg:scale-[1.02]" 
+                : "bg-surface-elevated/30 border-border/60 hover:bg-surface-elevated/60 hover:border-accent/40 text-text-secondary hover:text-accent",
+              !activeMobileTab.startsWith('parallel') && activeMobileTab !== 'explorer' ? "hidden lg:flex" : "flex"
             )}
             title="Arrastra una carpeta aquí para abrir en vista dividida (hasta 4 columnas)"
           >
-            <FolderOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <FolderOpen className="w-6 h-6 group-hover:scale-110 transition-transform" />
             <div 
-              className="text-[9px] font-bold uppercase tracking-widest text-center mt-2 flex flex-col gap-1.5"
+              className="text-[10px] font-bold uppercase tracking-widest text-center mt-0 lg:mt-2 flex flex-col gap-1.5"
               style={{ writingMode: 'vertical-lr' }}
             >
               VISTA PARALELA
