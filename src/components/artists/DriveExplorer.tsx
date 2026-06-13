@@ -723,7 +723,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         <div 
           className={cn(
             "bg-surface-elevated rounded-xl border border-border p-5 flex flex-col min-h-[500px] shrink-0",
-            extraPanes.length > 0 ? "w-full lg:w-[280px]" : "w-full lg:w-[380px]",
+            extraPanes.length > 0 ? "w-full lg:w-[340px]" : "w-full lg:w-[380px]",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
@@ -862,211 +862,208 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               })
             )}
           </div>
-        </div>
-
-        {/* Right Side: Explorer (and Split Target if not split) */}
+              {/* Middle Column: Explorer */}
         <div 
           className={cn(
-            "flex gap-4 items-stretch shrink-0",
-            extraPanes.length > 0 ? "w-full lg:flex-[2] lg:min-w-[320px]" : "w-full lg:flex-[3] lg:min-w-[480px]",
-            activeMobileTab === 'explorer' ? "flex animate-fade-in" : "hidden lg:flex"
+            "space-y-6 w-full shrink-0 flex-1 min-w-[360px]",
+            extraPanes.length > 0 ? "lg:w-[420px]" : "lg:w-[500px]",
+            activeMobileTab === 'explorer' ? "block" : "hidden lg:block"
           )}
         >
-          <div className="flex-1 space-y-6">
-            {/* Top Bar: Breadcrumbs & Actions */}
-            <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
-              <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
-                {breadcrumbs.map((crumb, idx) => (
-                  <div 
-                    key={crumb.id} 
-                    className="flex items-center gap-2"
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                    onDrop={(e) => {
-                      if (idx < breadcrumbs.length - 1) {
-                        handleItemDrop(e, crumb.id, currentFolderId);
-                      }
-                    }}
-                  >
-                    <button 
-                      onClick={() => navigateUp(idx)}
-                      className={`hover:text-accent transition-colors px-2 py-1 rounded ${idx === breadcrumbs.length - 1 ? 'text-text-primary font-medium' : 'text-text-secondary hover:bg-surface'}`}
-                    >
-                      {crumb.name}
-                    </button>
-                    {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary" />}
-                  </div>
-                ))}
-              </div>
-              
-              <div className="flex items-center gap-2 shrink-0">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleCreateFolder}
-                  className="h-8 text-xs gap-1.5"
+          {/* Top Bar: Breadcrumbs & Actions */}
+          <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
+            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+              {breadcrumbs.map((crumb, idx) => (
+                <div 
+                  key={crumb.id} 
+                  className="flex items-center gap-2"
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    if (idx < breadcrumbs.length - 1) {
+                      handleItemDrop(e, crumb.id, currentFolderId);
+                    }
+                  }}
                 >
-                  <FolderPlus className="w-3.5 h-3.5" />
-                  Nueva carpeta
-                </Button>
-                
-                <label className="cursor-pointer shrink-0">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white hover:bg-accent/90 text-xs font-semibold transition-colors shadow-md shadow-accent/10 h-8">
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    Subir archivo
-                  </span>
-                  <input 
-                    type="file" 
-                    multiple 
-                    className="hidden" 
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        uploadFiles(Array.from(e.target.files), currentFolderId);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
+                  <button 
+                    onClick={() => navigateUp(idx)}
+                    className={`hover:text-accent transition-colors px-2 py-1 rounded ${idx === breadcrumbs.length - 1 ? 'text-text-primary font-medium' : 'text-text-secondary hover:bg-surface'}`}
+                  >
+                    {crumb.name}
+                  </button>
+                  {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary" />}
+                </div>
+              ))}
             </div>
+            
+            <div className="flex items-center gap-2 shrink-0">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleCreateFolder}
+                className="h-8 text-xs gap-1.5"
+              >
+                <FolderPlus className="w-3.5 h-3.5" />
+                Nueva carpeta
+              </Button>
+              
+              <label className="cursor-pointer shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white hover:bg-accent/90 text-xs font-semibold transition-colors shadow-md shadow-accent/10 h-8">
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  Subir archivo
+                </span>
+                <input 
+                  type="file" 
+                  multiple 
+                  className="hidden" 
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      uploadFiles(Array.from(e.target.files), currentFolderId);
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
 
-            {/* Drag & Drop Main Explorer Window */}
-            <div
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); }}
-              onDragLeave={() => setIsDraggingOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDraggingOver(false);
-                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                  uploadFiles(Array.from(e.dataTransfer.files), currentFolderId);
-                } else {
-                  // Reorder / move files in drive
+          {/* Drag & Drop Main Explorer Window */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingOver(true); }}
+            onDragLeave={() => setIsDraggingOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingOver(false);
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                uploadFiles(Array.from(e.dataTransfer.files), currentFolderId);
+              } else {
+                // Reorder / move files in drive
+                try {
+                  const draggedData = e.dataTransfer.getData('text/plain');
+                  if (!draggedData) return;
+                  let draggedItemIds: string[] = [];
                   try {
-                    const draggedData = e.dataTransfer.getData('text/plain');
-                    if (!draggedData) return;
-                    let draggedItemIds: string[] = [];
-                    try {
-                      draggedItemIds = JSON.parse(draggedData);
-                    } catch {
-                      draggedItemIds = [draggedData];
-                    }
-                    // Drop directly in explorer root means moving to parent folder (breadcrumbs[breadcrumbs.length-2])
-                    if (breadcrumbs.length > 1) {
-                      const parentFolder = breadcrumbs[breadcrumbs.length - 2];
-                      handleMoveItems(draggedItemIds, parentFolder.id, currentFolderId);
-                    }
-                  } catch (err) {
-                    console.error(err);
+                    draggedItemIds = JSON.parse(draggedData);
+                  } catch {
+                    draggedItemIds = [draggedData];
                   }
+                  // Drop directly in explorer root means moving to parent folder (breadcrumbs[breadcrumbs.length-2])
+                  if (breadcrumbs.length > 1) {
+                    const parentFolder = breadcrumbs[breadcrumbs.length - 2];
+                    handleMoveItems(draggedItemIds, parentFolder.id, currentFolderId);
+                  }
+                } catch (err) {
+                  console.error(err);
                 }
-              }}
-              className={cn(
-                "relative bg-surface-elevated rounded-2xl border transition-all duration-300 min-h-[450px] overflow-hidden",
-                isDraggingOver ? "border-accent bg-accent/5 ring-2 ring-accent/15 scale-[0.995]" : "border-border"
-              )}
-            >
-              {isUploading && (
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-55 flex flex-col items-center justify-center p-4 text-center">
-                  <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-                    <Loader2 className="w-6 h-6 animate-spin text-accent" />
-                  </div>
-                  <h3 className="font-bold text-text-primary text-sm">Subiendo archivos a Google Drive</h3>
-                  <p className="text-xs text-text-secondary mt-1">Este proceso puede tardar unos segundos...</p>
+              }
+            }}
+            className={cn(
+              "relative bg-surface-elevated rounded-2xl border transition-all duration-300 min-h-[450px] overflow-hidden",
+              isDraggingOver ? "border-accent bg-accent/5 ring-2 ring-accent/15 scale-[0.995]" : "border-border"
+            )}
+          >
+            {isUploading && (
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-55 flex flex-col items-center justify-center p-4 text-center">
+                <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
+                  <Loader2 className="w-6 h-6 animate-spin text-accent" />
                 </div>
-              )}
+                <h3 className="font-bold text-text-primary text-sm">Subiendo archivos a Google Drive</h3>
+                <p className="text-xs text-text-secondary mt-1">Este proceso puede tardar unos segundos...</p>
+              </div>
+            )}
 
-              {isLoading ? (
-                <div className="p-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
-              ) : items.length === 0 ? (
-                <div className="p-20 text-center text-text-secondary">
-                  <Folder className="w-12 h-12 mx-auto mb-4 opacity-40 text-accent" />
-                  <p className="font-medium text-sm text-text-primary">Esta carpeta está vacía</p>
-                  <p className="text-xs text-text-secondary mt-1">Arrastra archivos aquí o haz clic en "Subir archivo" para comenzar.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-border/40">
-                  {groupedItems.map((item: any, idx) => {
-                    const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
-                    const isAudio = item.mimeType.startsWith('audio/');
-                    
-                    return (
-                      <div
-                        key={item.id}
-                        draggable
-                        onDragStart={(e) => handleItemDragStart(e, item.id)}
-                        onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
-                        onDrop={isFolder ? (e) => handleItemDrop(e, item.id, currentFolderId) : undefined}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          if (isFolder) {
-                            navigateTo(item.id, item.name);
-                          } else if (item.webViewLink) {
-                            window.open(item.webViewLink, '_blank');
-                          }
-                        }}
-                        className={cn(
-                          "group flex items-center p-3 transition-colors cursor-pointer hover:bg-surface/60",
-                          selectedIds.includes(item.id) && "bg-accent/5 hover:bg-accent/10"
-                        )}
-                        onClick={(e) => handleItemClick(e, idx, item, groupedItems)}
-                      >
-                        {isAudio ? (
-                          <div className="flex-1 w-full flex items-center pr-2">
-                            <WaveformPlayer 
-                              fileId={item.id} 
-                              fileName={item.name} 
-                              versions={item.versions}
-                              currentFolderId={currentFolderId}
-                              onRefresh={() => {
-                                fetchItems(currentFolderId);
-                                fetchRecentFiles();
-                              }}
-                              modifiedTime={item.modifiedTime || item.createdTime}
-                            />
+            {isLoading ? (
+              <div className="p-16 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
+            ) : items.length === 0 ? (
+              <div className="p-20 text-center text-text-secondary">
+                <Folder className="w-12 h-12 mx-auto mb-4 opacity-40 text-accent" />
+                <p className="font-medium text-sm text-text-primary">Esta carpeta está vacía</p>
+                <p className="text-xs text-text-secondary mt-1">Arrastra archivos aquí o haz clic en "Subir archivo" para comenzar.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border/40">
+                {groupedItems.map((item: any, idx) => {
+                  const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+                  const isAudio = item.mimeType.startsWith('audio/');
+                  
+                  return (
+                    <div
+                      key={item.id}
+                      draggable
+                      onDragStart={(e) => handleItemDragStart(e, item.id)}
+                      onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
+                      onDrop={isFolder ? (e) => handleItemDrop(e, item.id, currentFolderId) : undefined}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        if (isFolder) {
+                          navigateTo(item.id, item.name);
+                        } else if (item.webViewLink) {
+                          window.open(item.webViewLink, '_blank');
+                        }
+                      }}
+                      className={cn(
+                        "group flex items-center p-3 transition-colors cursor-pointer hover:bg-surface/60",
+                        selectedIds.includes(item.id) && "bg-accent/5 hover:bg-accent/10"
+                      )}
+                      onClick={(e) => handleItemClick(e, idx, item, groupedItems)}
+                    >
+                      {isAudio ? (
+                        <div className="flex-1 w-full flex items-center pr-2">
+                          <WaveformPlayer 
+                            fileId={item.id} 
+                            fileName={item.name} 
+                            versions={item.versions}
+                            currentFolderId={currentFolderId}
+                            onRefresh={() => {
+                              fetchItems(currentFolderId);
+                              fetchRecentFiles();
+                            }}
+                            modifiedTime={item.modifiedTime || item.createdTime}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="w-10 flex justify-center shrink-0">
+                            {getIcon(item.mimeType, item.name)}
                           </div>
-                        ) : (
-                          <>
-                            <div className="w-10 flex justify-center shrink-0">
-                              {getIcon(item.mimeType, item.name)}
+                          
+                          <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
+                            <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
+                              {item.name}
+                              {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
                             </div>
-                            
-                            <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
-                              <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
-                                {item.name}
-                                {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
+                            {!isFolder && (
+                              <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
+                                {item.size && <span>•</span>}
+                                <span className="font-mono bg-surface px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
                               </div>
-                              {!isFolder && (
-                                <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                  {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
-                                  {item.size && <span>•</span>}
-                                  <span className="font-mono bg-surface px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
-                                </div>
-                              )}
-                            </div>
-                            
-                             <div className="flex items-center gap-1 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              <button 
-                                className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRename(item.id, item.name);
-                                }}
-                                title="Renombrar"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button 
-                                className="p-2 text-text-secondary hover:text-accent rounded hover:bg-surface"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShareModalFile(item);
-                                }}
-                                title="Compartir"
-                              >
-                                <Share2 className="w-4 h-4" />
-                              </button>
-                              {!isFolder && (
-                                <a 
-                                  href={item.webContentLink || item.webViewLink}
-                                  target="_blank"
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center gap-1 opacity-60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                            <button 
+                              className="p-2 text-text-secondary hover:text-text-primary rounded hover:bg-surface"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRename(item.id, item.name);
+                              }}
+                              title="Renombrar"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button 
+                              className="p-2 text-text-secondary hover:text-accent rounded hover:bg-surface"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShareModalFile(item);
+                              }}
+                              title="Compartir"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                            {!isFolder && (
+                              <a 
+                                href={item.webContentLink || item.webViewLink}
+                                target="_blank"
                                   rel="noopener noreferrer"
                                   download={item.name}
                                   onClick={(e) => e.stopPropagation()}
@@ -1096,30 +1093,6 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               )}
             </div>
           </div>
-
-          {/* Dotted Vertical Split Dropzone: shown only when not already split */}
-          {extraPanes.length < 2 && (
-            <div
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsRightDropZoneDragOver(true); }}
-              onDragLeave={() => setIsRightDropZoneDragOver(false)}
-              onDrop={handleRightDropZoneDrop}
-              className={cn(
-                "w-12 flex flex-col items-center justify-center gap-4 border border-dashed rounded-xl transition-all duration-300 cursor-pointer select-none py-12 shrink-0 group text-center",
-                isRightDropZoneDragOver 
-                  ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 scale-[1.02]" 
-                  : "bg-surface-elevated/20 border-border/60 hover:bg-surface-elevated/50 hover:border-accent/40 text-text-secondary hover:text-accent"
-              )}
-              title="Arrastra una carpeta aquí para abrir en vista dividida (hasta 4 columnas)"
-            >
-              <FolderOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <div 
-                className="text-[9px] font-bold uppercase tracking-widest text-center mt-2 flex flex-col gap-1.5"
-                style={{ writingMode: 'vertical-lr' }}
-              >
-                VISTA PARALELA
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Dynamic Parallel Panels (Column 3 & 4) */}
@@ -1296,6 +1269,30 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             </div>
           </div>
         ))}
+
+        {/* Dotted Vertical Split Dropzone: always at the far right */}
+        {extraPanes.length < 2 && (
+          <div
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsRightDropZoneDragOver(true); }}
+            onDragLeave={() => setIsRightDropZoneDragOver(false)}
+            onDrop={handleRightDropZoneDrop}
+            className={cn(
+              "w-12 flex flex-col items-center justify-center gap-4 border border-dashed rounded-xl transition-all duration-300 cursor-pointer select-none py-12 shrink-0 group text-center min-h-[500px]",
+              isRightDropZoneDragOver 
+                ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 scale-[1.02]" 
+                : "bg-surface-elevated/20 border-border/60 hover:bg-surface-elevated/50 hover:border-accent/40 text-text-secondary hover:text-accent"
+            )}
+            title="Arrastra una carpeta aquí para abrir en vista dividida (hasta 4 columnas)"
+          >
+            <FolderOpen className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <div 
+              className="text-[9px] font-bold uppercase tracking-widest text-center mt-2 flex flex-col gap-1.5"
+              style={{ writingMode: 'vertical-lr' }}
+            >
+              VISTA PARALELA
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modals */}
