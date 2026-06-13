@@ -309,7 +309,7 @@ export default function PortalPage() {
                 <p className="text-2xl font-black text-accent-light">{progressPercent}%</p>
                 <p className="text-[10px] text-text-secondary mt-0.5">{completedTasks}/{totalTasks} tareas</p>
               </div>
-              {data.finances && (
+              {data.finances && visibleModules.some((m: any) => m.type === 'finances') && (
                 <>
                   <div className="bg-surface border border-border rounded-2xl p-4">
                     <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" /> Pagado</p>
@@ -323,87 +323,114 @@ export default function PortalPage() {
                     </p>
                     <p className="text-[10px] text-text-secondary mt-0.5">{data.finances.pendingPayment > 0 ? 'por liquidar' : '¡al día!'}</p>
                   </div>
-                </>
-              )}
-            </div>
-
-            {/* Main grid of modules */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {visibleModules.map((mod: any) => {
-                // ─── Tasks module ──────────────────────────────────────────
+                   // ─── Tasks module ──────────────────────────────────────────
                 if (mod.type === 'tasks') {
-                  if (!activeProject) return null;
+                  const matrices = data.sharedMatrices || [];
+                  if (matrices.length === 0) return null;
+
+                  // Calculate overall progress
+                  let totalMatrixTasks = 0;
+                  let completedMatrixTasks = 0;
+                  matrices.forEach((matrix: any) => {
+                    const columns = matrix.productionGrid?.columns || [];
+                    const rows = matrix.productionGrid?.rows || [];
+                    totalMatrixTasks += columns.length * rows.length;
+                    rows.forEach((row: any) => {
+                      columns.forEach((col: any) => {
+                        if (row.cells?.[col.id]?.status === 'done') {
+                          completedMatrixTasks++;
+                        }
+                      });
+                    });
+                  });
+                  const matrixProgressPercent = totalMatrixTasks > 0 ? Math.round((completedMatrixTasks / totalMatrixTasks) * 100) : 0;
+
                   return (
-                    <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 flex flex-col gap-4">
+                    <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 flex flex-col gap-4 lg:col-span-3">
                       <div className="flex items-center gap-2 pb-3 border-b border-border">
                         <CheckCircle2 className="w-4 h-4 text-accent-light" />
                         <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">{mod.title || 'Estado del Trabajo'}</h3>
                       </div>
 
                       {/* Progress ring */}
-                      {totalTasks > 0 && (
+                      {totalMatrixTasks > 0 && (
                         <div className="flex items-center gap-4 mb-1">
                           <div className="relative w-14 h-14 shrink-0">
                             <svg className="w-full h-full -rotate-90" viewBox="0 0 56 56">
                               <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
                               <circle
                                 cx="28" cy="28" r="22" fill="none"
-                                stroke="url(#progressGrad)" strokeWidth="6"
+                                stroke="url(#progressGradTasks)" strokeWidth="6"
                                 strokeLinecap="round"
                                 strokeDasharray={`${2 * Math.PI * 22}`}
-                                strokeDashoffset={`${2 * Math.PI * 22 * (1 - progressPercent / 100)}`}
+                                strokeDashoffset={`${2 * Math.PI * 22 * (1 - matrixProgressPercent / 100)}`}
                                 className="transition-all duration-1000"
                               />
                               <defs>
-                                <linearGradient id="progressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <linearGradient id="progressGradTasks" x1="0%" y1="0%" x2="100%" y2="0%">
                                   <stop offset="0%" stopColor="#6c5ce7" />
                                   <stop offset="100%" stopColor="#a29bfe" />
                                 </linearGradient>
                               </defs>
                             </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-text-primary">{progressPercent}%</span>
+                            <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-text-primary">{matrixProgressPercent}%</span>
                           </div>
                           <div>
-                            <p className="text-text-primary font-bold">{completedTasks} completadas</p>
-                            <p className="text-xs text-text-secondary">{totalTasks - completedTasks} pendientes</p>
+                            <p className="text-text-primary font-bold">{completedMatrixTasks} tareas completadas</p>
+                            <p className="text-xs text-text-secondary">{totalMatrixTasks - completedMatrixTasks} pendientes</p>
                           </div>
                         </div>
                       )}
 
-                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                        {activeProject.tasks && activeProject.tasks.length > 0 ? (
-                          activeProject.tasks.map((task: any) => {
-                            const isCompleted = task.status === 'completed';
-                            return (
-                              <div
-                                key={task.id}
-                                className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors ${
-                                  isCompleted
-                                    ? 'bg-success/8 border-[#00b894]/15 text-text-secondary'
-                                    : 'bg-white/3 border-border text-text-primary'
-                                }`}
-                              >
-                                <div className="shrink-0">
-                                  {isCompleted
-                                    ? <CheckCircle2 className="w-4 h-4 text-success" />
-                                    : <Circle className="w-4 h-4 text-text-secondary/40" />
-                                  }
-                                </div>
-                                <span className={`text-xs font-semibold leading-normal ${isCompleted ? 'line-through opacity-60' : ''}`}>
-                                  {task.title}
-                                </span>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div className="py-8 text-center">
-                            <p className="text-xs text-text-secondary italic">No hay tareas configuradas.</p>
+                      <div className="space-y-5">
+                        {matrices.map((matrix: any) => (
+                          <div key={matrix.id} className="bg-background rounded-xl border border-border overflow-hidden">
+                            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest p-4 pb-2">{matrix.name}</h3>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse text-xs">
+                                <thead>
+                                  <tr className="border-b border-border bg-white/3">
+                                    <th className="p-3 text-text-secondary font-bold">Elemento</th>
+                                    {matrix.productionGrid?.columns?.map((col: any) => (
+                                      <th key={col.id} className="p-3 text-text-secondary font-bold text-center">{col.name}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {matrix.productionGrid?.rows?.map((row: any) => (
+                                    <tr key={row.id} className="border-b border-border hover:bg-white/2 transition-colors">
+                                      <td className="p-3 font-semibold text-text-primary">{row.name}</td>
+                                      {matrix.productionGrid?.columns?.map((col: any) => {
+                                        const cell = row.cells?.[col.id] || {};
+                                        const status = cell.status || 'todo';
+                                        const statusStyles: Record<string, string> = {
+                                          todo: 'bg-surface-elevated border-border text-text-secondary',
+                                          in_progress: 'bg-accent/15 border-[#6c5ce7]/30 text-accent-light',
+                                          review: 'bg-[#fdcb6e]/15 border-[#fdcb6e]/30 text-warning',
+                                          done: 'bg-success/15 border-[#00b894]/30 text-success'
+                                        };
+                                        const statusLabels: Record<string, string> = {
+                                          todo: 'Pendiente', in_progress: 'En progreso',
+                                          review: 'Revisión', done: 'Hecho'
+                                        };
+                                        return (
+                                          <td key={col.id} className="p-3 text-center">
+                                            <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${statusStyles[status] || statusStyles.todo}`}>
+                                              {statusLabels[status] || 'Pendiente'}
+                                            </span>
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        )}
+                        ))}
                       </div>
                     </div>
                   );
-                }
 
                 // ─── Bounces / Audios module ───────────────────────────────
                 if (mod.type === 'bounces') {
@@ -545,62 +572,7 @@ export default function PortalPage() {
               })}
             </div>
 
-            {/* Shared Matrices */}
-            {data.sharedMatrices && data.sharedMatrices.length > 0 && (
-              <div className="space-y-4 mt-2">
-                <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-accent-light" />
-                  Estado de la Producción
-                </h2>
-                <div className="space-y-5">
-                  {data.sharedMatrices.map((matrix: any) => (
-                    <div key={matrix.id} className="bg-surface rounded-2xl border border-border p-5 overflow-hidden">
-                      <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-4">{matrix.name}</h3>
-                      <div className="overflow-x-auto bg-white/2 rounded-xl border border-border">
-                        <table className="w-full text-left border-collapse text-xs">
-                          <thead>
-                            <tr className="border-b border-border bg-white/3">
-                              <th className="p-3 text-text-secondary font-bold">Canción / Track</th>
-                              {matrix.productionGrid?.columns?.map((col: any) => (
-                                <th key={col.id} className="p-3 text-text-secondary font-bold text-center">{col.name}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {matrix.productionGrid?.rows?.map((row: any) => (
-                              <tr key={row.id} className="border-b border-border hover:bg-white/2 transition-colors">
-                                <td className="p-3 font-semibold text-text-primary">{row.name}</td>
-                                {matrix.productionGrid?.columns?.map((col: any) => {
-                                  const cell = row.cells?.[col.id] || {};
-                                  const status = cell.status || 'todo';
-                                  const statusStyles: Record<string, string> = {
-                                    todo: 'bg-surface-elevated border-border text-text-secondary',
-                                    in_progress: 'bg-accent/15 border-[#6c5ce7]/30 text-accent-light',
-                                    review: 'bg-[#fdcb6e]/15 border-[#fdcb6e]/30 text-warning',
-                                    done: 'bg-success/15 border-[#00b894]/30 text-success'
-                                  };
-                                  const statusLabels: Record<string, string> = {
-                                    todo: 'Pendiente', in_progress: 'En progreso',
-                                    review: 'Revisión', done: 'Hecho'
-                                  };
-                                  return (
-                                    <td key={col.id} className="p-3 text-center">
-                                      <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${statusStyles[status] || statusStyles.todo}`}>
-                                        {statusLabels[status] || 'Pendiente'}
-                                      </span>
-                                    </td>
-                                  );
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Shared Matrices moved to Tasks Module */}
           </div>
         )}
 
@@ -668,12 +640,8 @@ export default function PortalPage() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-border py-6">
+      <footer className="mt-16 py-6">
         <div className="max-w-6xl mx-auto px-5 flex items-center justify-between">
-          <p className="text-xs text-text-secondary">
-            Portal seguro por <span className="text-accent font-semibold">{data.producerName || 'EZY Studio'}</span>
-          </p>
-          <p className="text-xs text-text-secondary/50">Powered by EZY Dashboard</p>
         </div>
       </footer>
     </div>

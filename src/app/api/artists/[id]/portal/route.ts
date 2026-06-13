@@ -3,11 +3,10 @@ import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import type { PortalConfig } from '@/types';
 
 const DEFAULT_MODULES = [
-  { id: 'projects', type: 'projects', isVisible: true, order: 0, title: 'Proyectos Activos' },
-  { id: 'bounces', type: 'bounces', isVisible: true, order: 1, title: 'Últimas Mezclas / Audios' },
-  { id: 'finances', type: 'finances', isVisible: true, order: 2, title: 'Resumen Financiero' },
-  { id: 'tasks', type: 'tasks', isVisible: true, order: 3, title: 'Estado del Trabajo' },
-  { id: 'releases', type: 'releases', isVisible: true, order: 4, title: 'Releases / Previews' }
+  { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas Mezclas / Audios' },
+  { id: 'finances', type: 'finances', isVisible: false, order: 1, title: 'Resumen Financiero' },
+  { id: 'tasks', type: 'tasks', isVisible: true, order: 2, title: 'Estado del Trabajo' },
+  { id: 'releases', type: 'releases', isVisible: true, order: 3, title: 'Releases / Previews' }
 ];
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
