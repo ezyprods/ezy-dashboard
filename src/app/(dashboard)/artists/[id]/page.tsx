@@ -380,7 +380,7 @@ export default function ArtistDetailPage() {
 
       {/* Tab Content: Portal */}
       {activeTab === 'portal' && (
-        <ArtistPortalTab artistId={artistId} />
+        <ArtistPortalTab artistId={artistId} artistName={artist?.name} />
       )}
 
       {/* Tab Content: Placeholder for others */}

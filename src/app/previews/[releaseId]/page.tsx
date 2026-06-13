@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2, Play, Pause, SkipForward, SkipBack, Disc, Share2, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import {
+  Loader2, Play, Pause, SkipForward, SkipBack,
+  Disc, Share2, AlertCircle, Music, Volume2, VolumeX
+} from 'lucide-react';
 
-
-// Un visor público simplificado para los lanzamientos
 export default function PublicPreviewPage() {
   const params = useParams();
   const releaseId = params.releaseId as string;
@@ -16,10 +15,15 @@ export default function PublicPreviewPage() {
   const [release, setRelease] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     fetchRelease();
@@ -31,13 +35,6 @@ export default function PublicPreviewPage() {
       const res = await fetch(`/api/releases/${releaseId}`);
       if (!res.ok) throw new Error('Preview no encontrado o privado');
       const data = await res.json();
-      
-      // Comprobar si es público. Si no lo es, mostrar error (a menos que estemos logueados, pero para simplificar, 
-      // confiaremos en que la API devuelva 403 si es privado y no estamos logueados).
-      if (!data.release.isPublic) {
-        // Podríamos comprobar sesión aquí, pero la API debería bloquearlo si no eres dueño
-      }
-      
       setRelease(data.release);
     } catch (err: any) {
       setError(err.message);
@@ -49,174 +46,305 @@ export default function PublicPreviewPage() {
   const currentTrack = release?.tracks?.[currentTrackIndex];
 
   useEffect(() => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.play().catch(() => setIsPlaying(false));
-      } else {
-        audioRef.current.pause();
-      }
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) {
+      audio.play().catch(() => setIsPlaying(false));
+    } else {
+      audio.pause();
     }
   }, [isPlaying, currentTrackIndex]);
 
-  const handleTimeUpdate = () => {
+  useEffect(() => {
     if (audioRef.current) {
-      setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+      audioRef.current.volume = isMuted ? 0 : volume;
     }
+  }, [volume, isMuted]);
+
+  const handleTimeUpdate = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const dur = audio.duration || 1;
+    setProgress((audio.currentTime / dur) * 100);
+    setCurrentTime(audio.currentTime);
+    setDuration(audio.duration || 0);
   };
 
   const handleTrackEnd = () => {
     if (release && currentTrackIndex < release.tracks.length - 1) {
       setCurrentTrackIndex(prev => prev + 1);
+      setProgress(0);
+      setCurrentTime(0);
     } else {
       setIsPlaying(false);
       setProgress(0);
+      setCurrentTime(0);
     }
   };
 
   const playTrack = (index: number) => {
     if (currentTrackIndex === index) {
-      setIsPlaying(!isPlaying);
+      setIsPlaying(prev => !prev);
     } else {
       setCurrentTrackIndex(index);
       setIsPlaying(true);
       setProgress(0);
+      setCurrentTime(0);
     }
   };
 
-  if (isLoading) return <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
-  
+  const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    audio.currentTime = pos * duration;
+  };
+
+  const formatTime = (sec: number) => {
+    if (!sec || isNaN(sec)) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-[#6c5ce7]/10 border border-[#6c5ce7]/20 flex items-center justify-center mx-auto">
+            <Music className="w-8 h-8 text-[#6c5ce7] animate-pulse" />
+          </div>
+          <p className="text-xs text-[#8888a0] font-medium tracking-widest uppercase">Cargando Preview...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (error || !release) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center p-4">
-        <div className="glass p-8 rounded-2xl text-center max-w-md w-full border-white/10">
-          <AlertCircle className="w-12 h-12 text-warning mx-auto mb-4" />
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4">
+        <div className="backdrop-blur-xl bg-white/5 border border-white/10 p-8 rounded-2xl text-center max-w-md w-full">
+          <AlertCircle className="w-12 h-12 text-[#fdcb6e] mx-auto mb-4" />
           <h2 className="text-xl font-bold text-white mb-2">Acceso Denegado</h2>
-          <p className="text-gray-400">Esta preview es privada o no existe.</p>
+          <p className="text-[#8888a0]">Esta preview es privada o no existe.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white selection:bg-accent/30 flex flex-col md:flex-row">
-      {/* Reproductor oculto */}
+    <div className="min-h-screen bg-[#0a0a0f] text-white selection:bg-[#6c5ce7]/30">
+      {/* Ambient */}
+      <div className="fixed inset-0 pointer-events-none">
+        {release.coverArtId && (
+          <div
+            className="absolute inset-0 opacity-10 bg-cover bg-center blur-[120px] scale-110"
+            style={{ backgroundImage: `url(/api/audio/${release.coverArtId})` }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0f]/60 to-[#0a0a0f]" />
+      </div>
+
+      {/* Hidden audio */}
       {currentTrack && (
         <audio
           ref={audioRef}
-          src={`/api/audio/${currentTrack.fileId}`}
+          src={`/api/audio/${currentTrack.newFileId}`}
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleTrackEnd}
-          autoPlay={isPlaying}
+          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
         />
       )}
 
-      {/* Panel Izquierdo: Portada y Reproductor */}
-      <div className="w-full md:w-[450px] lg:w-[550px] p-8 md:p-12 lg:p-16 flex flex-col justify-center items-center relative z-10 border-r border-white/10 bg-[#111]">
-        <div className="w-full max-w-sm aspect-square bg-[#1A1A1A] rounded-2xl shadow-2xl mb-8 flex items-center justify-center overflow-hidden relative group">
-          {release.coverArtId ? (
-            <img src={`/api/audio/${release.coverArtId}`} alt="Cover" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-          ) : (
-            <Disc className="w-32 h-32 text-white/10" />
-          )}
-        </div>
-
-        <div className="w-full max-w-sm text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2 tracking-tight">{release.title}</h1>
-          <p className="text-accent font-medium tracking-wide uppercase text-sm">Escucha Exclusiva</p>
-        </div>
-
-        {/* Player Controls */}
-        <div className="w-full max-w-sm">
-          {currentTrack ? (
-            <>
-              <div className="text-center mb-6">
-                <h3 className="font-semibold text-lg truncate">{currentTrack.title}</h3>
-                <p className="text-sm text-gray-500 font-mono mt-1">Pista {currentTrackIndex + 1} de {release.tracks.length}</p>
+      <div className="relative z-10 min-h-screen flex flex-col md:flex-row">
+        {/* ── Left panel: Cover + Player ── */}
+        <div className="w-full md:w-[420px] lg:w-[500px] flex flex-col justify-center items-center p-8 md:p-12 lg:p-16 border-b md:border-b-0 md:border-r border-white/8">
+          {/* Cover */}
+          <div className="w-full max-w-xs aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 relative group">
+            {release.coverArtId ? (
+              <img
+                src={`/api/audio/${release.coverArtId}`}
+                alt="Cover"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            ) : (
+              <div className="w-full h-full bg-[#13131a] border border-white/8 flex items-center justify-center">
+                <Disc className="w-24 h-24 text-white/10" />
               </div>
-
-              {/* Progress Bar */}
-              <div className="h-1.5 w-full bg-white/10 rounded-full mb-8 overflow-hidden cursor-pointer" onClick={(e) => {
-                if (audioRef.current) {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const pos = (e.clientX - rect.left) / rect.width;
-                  audioRef.current.currentTime = pos * audioRef.current.duration;
-                }
-              }}>
-                <div className="h-full bg-accent transition-all duration-100 ease-linear" style={{ width: `${progress}%` }} />
-              </div>
-
-              <div className="flex items-center justify-center gap-6">
-                <button 
-                  onClick={() => currentTrackIndex > 0 && playTrack(currentTrackIndex - 1)}
-                  className={`p-3 rounded-full hover:bg-white/10 transition-colors ${currentTrackIndex === 0 ? 'opacity-30 cursor-not-allowed' : ''}`}
-                >
-                  <SkipBack className="w-6 h-6" />
-                </button>
-                <button 
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className="w-16 h-16 flex items-center justify-center bg-white text-black rounded-full hover:scale-105 transition-transform"
-                >
-                  {isPlaying ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 ml-1" />}
-                </button>
-                <button 
-                  onClick={() => currentTrackIndex < release.tracks.length - 1 && playTrack(currentTrackIndex + 1)}
-                  className={`p-3 rounded-full hover:bg-white/10 transition-colors ${currentTrackIndex === release.tracks.length - 1 ? 'opacity-30 cursor-not-allowed' : ''}`}
-                >
-                  <SkipForward className="w-6 h-6" />
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="text-center text-gray-500">No hay canciones disponibles</div>
-          )}
-        </div>
-      </div>
-
-      {/* Panel Derecho: Tracklist */}
-      <div className="flex-1 p-8 md:p-12 lg:p-16 overflow-y-auto">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-8">
-            <h2 className="text-xl font-semibold text-gray-300 uppercase tracking-widest text-sm">Tracklist</h2>
-            <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white" onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
-              customAlert('Enlace copiado');
-            }}>
-              <Share2 className="w-4 h-4 mr-2" /> Compartir
-            </Button>
+            )}
+            {/* Shine overlay */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-transparent to-white/5 pointer-events-none" />
           </div>
 
-          <div className="space-y-2">
-            {release.tracks.map((track: any, index: number) => (
-              <div 
-                key={track.id}
-                onClick={() => playTrack(index)}
-                className={`flex items-center p-4 rounded-xl cursor-pointer transition-all group ${
-                  currentTrackIndex === index 
-                    ? 'bg-white/10 border border-white/20 shadow-lg' 
-                    : 'hover:bg-white/5 border border-transparent'
+          {/* Track info */}
+          <div className="w-full max-w-xs text-center mb-6">
+            <h1 className="text-2xl md:text-3xl font-bold mb-1 tracking-tight">{release.title}</h1>
+            {currentTrack && (
+              <div className="mt-2">
+                <p className="font-semibold text-white/90">{currentTrack.title}</p>
+                <p className="text-xs text-[#8888a0] font-mono mt-1">
+                  Pista {currentTrackIndex + 1} de {release.tracks.length}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="w-full max-w-xs space-y-4">
+            {/* Progress */}
+            <div>
+              <div
+                className="h-1.5 bg-white/10 rounded-full cursor-pointer overflow-hidden group"
+                onClick={seekTo}
+              >
+                <div
+                  className="h-full bg-gradient-to-r from-[#6c5ce7] to-[#a29bfe] rounded-full transition-all duration-100 group-hover:opacity-90"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs font-mono text-[#8888a0] mt-1.5">
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex items-center justify-center gap-6">
+              <button
+                onClick={() => currentTrackIndex > 0 && playTrack(currentTrackIndex - 1)}
+                className={`p-2.5 rounded-full transition-all ${
+                  currentTrackIndex === 0
+                    ? 'opacity-25 cursor-not-allowed'
+                    : 'hover:bg-white/10 text-[#8888a0] hover:text-white'
                 }`}
               >
-                <div className="w-8 text-center text-gray-500 font-mono text-sm group-hover:text-white transition-colors">
-                  {currentTrackIndex === index && isPlaying ? (
-                    <div className="flex items-center justify-center gap-1 h-4">
-                      <div className="w-1 bg-accent h-3 animate-[bounce_1s_infinite]" />
-                      <div className="w-1 bg-accent h-4 animate-[bounce_1s_infinite_100ms]" />
-                      <div className="w-1 bg-accent h-2 animate-[bounce_1s_infinite_200ms]" />
-                    </div>
-                  ) : (
-                    index + 1
-                  )}
+                <SkipBack className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={() => setIsPlaying(prev => !prev)}
+                className="w-14 h-14 flex items-center justify-center bg-white text-black rounded-full shadow-xl hover:scale-105 active:scale-95 transition-all"
+              >
+                {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+              </button>
+
+              <button
+                onClick={() => currentTrackIndex < release.tracks.length - 1 && playTrack(currentTrackIndex + 1)}
+                className={`p-2.5 rounded-full transition-all ${
+                  currentTrackIndex === release.tracks.length - 1
+                    ? 'opacity-25 cursor-not-allowed'
+                    : 'hover:bg-white/10 text-[#8888a0] hover:text-white'
+                }`}
+              >
+                <SkipForward className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Volume */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsMuted(prev => !prev)}
+                className="text-[#8888a0] hover:text-white transition-colors shrink-0"
+              >
+                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={isMuted ? 0 : volume}
+                onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
+                className="flex-1 accent-[#6c5ce7] h-1 cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right panel: Tracklist ── */}
+        <div className="flex-1 flex flex-col p-8 md:p-10 lg:p-14 overflow-y-auto">
+          <div className="max-w-2xl mx-auto w-full">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xs font-bold text-[#8888a0] uppercase tracking-[0.2em]">Tracklist</h2>
+              <button
+                onClick={handleShare}
+                className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-full border transition-all ${
+                  shareCopied
+                    ? 'bg-[#00b894]/20 text-[#00b894] border-[#00b894]/30'
+                    : 'bg-white/5 text-[#8888a0] border-white/10 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                {shareCopied ? 'Enlace copiado' : 'Compartir'}
+              </button>
+            </div>
+
+            {/* Tracks */}
+            <div className="space-y-1.5">
+              {release.tracks.map((track: any, index: number) => (
+                <div
+                  key={track.id}
+                  onClick={() => playTrack(index)}
+                  className={`flex items-center gap-4 px-4 py-3.5 rounded-xl cursor-pointer transition-all group ${
+                    currentTrackIndex === index
+                      ? 'bg-white/10 border border-white/15 shadow-lg'
+                      : 'hover:bg-white/5 border border-transparent hover:border-white/8'
+                  }`}
+                >
+                  {/* Track number / equalizer */}
+                  <div className="w-7 text-center shrink-0">
+                    {currentTrackIndex === index && isPlaying ? (
+                      <div className="flex items-end justify-center gap-0.5 h-4">
+                        <div className="w-0.5 bg-[#a29bfe] h-3 animate-[bounce_0.7s_ease-in-out_infinite]" />
+                        <div className="w-0.5 bg-[#a29bfe] h-4 animate-[bounce_0.7s_ease-in-out_infinite_100ms]" />
+                        <div className="w-0.5 bg-[#a29bfe] h-2 animate-[bounce_0.7s_ease-in-out_infinite_200ms]" />
+                        <div className="w-0.5 bg-[#a29bfe] h-3.5 animate-[bounce_0.7s_ease-in-out_infinite_50ms]" />
+                      </div>
+                    ) : (
+                      <span className={`text-sm font-mono ${
+                        currentTrackIndex === index ? 'text-[#a29bfe] font-bold' : 'text-[#8888a0] group-hover:text-white/60'
+                      } transition-colors`}>
+                        {index + 1}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Title */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className={`font-semibold truncate transition-colors ${
+                      currentTrackIndex === index ? 'text-white' : 'text-white/80 group-hover:text-white'
+                    }`}>
+                      {track.title}
+                    </h4>
+                  </div>
+
+                  {/* Play icon on hover */}
+                  <div className={`shrink-0 transition-opacity ${
+                    currentTrackIndex === index ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
+                  }`}>
+                    {currentTrackIndex === index && isPlaying
+                      ? <Pause className="w-4 h-4 text-[#a29bfe]" />
+                      : <Play className="w-4 h-4 text-white" />
+                    }
+                  </div>
                 </div>
-                <div className="flex-1 px-4">
-                  <h4 className={`font-medium ${currentTrackIndex === index ? 'text-white' : 'text-gray-300 group-hover:text-white transition-colors'}`}>
-                    {track.title}
-                  </h4>
-                </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Play className="w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-12 pt-8 border-t border-white/8 text-center">
+              <p className="text-xs text-[#8888a0]">
+                Pre-escucha exclusiva · <span className="text-[#6c5ce7]">EZY Dashboard</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
