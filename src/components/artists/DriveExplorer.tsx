@@ -246,12 +246,22 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       );
       setLastSelectedIndex(index);
     } else {
-      // Single click - just select this one, or open if folder
+      // Single click - select and open/play
       if (item.mimeType === 'application/vnd.google-apps.folder') {
         navigateTo(item.id, item.name);
       } else {
         setSelectedIds([item.id]);
         setLastSelectedIndex(index);
+        
+        if (item.mimeType.startsWith('audio/')) {
+          if (currentTrack?.id === item.id) {
+            togglePlay();
+          } else {
+            playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}` });
+          }
+        } else if (item.webViewLink) {
+          window.open(item.webViewLink, '_blank');
+        }
       }
     }
   };

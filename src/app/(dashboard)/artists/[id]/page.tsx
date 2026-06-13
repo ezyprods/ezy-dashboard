@@ -52,6 +52,11 @@ export default function ArtistDetailPage() {
   };
 
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const tab = searchParams.get('tab');
+    if (tab && ['files', 'projects', 'matrices', 'notes', 'payments', 'portal'].includes(tab)) {
+      setActiveTab(tab);
+    }
     fetchArtist();
   }, [artistId]);
 
