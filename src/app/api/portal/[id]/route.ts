@@ -70,14 +70,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         let bounces: any[] = [];
         try {
           const drive = getDriveService();
-          const res = await drive.files.list({
-            q: `'${projectFolder.id}' in parents and trashed=false and mimeType contains 'audio/'`,
-            fields: 'files(id, name, mimeType, webViewLink, createdTime, modifiedTime)',
-            orderBy: 'createdTime desc',
-            supportsAllDrives: true,
-            includeItemsFromAllDrives: true,
-          });
-          bounces = res.data.files || [];
+          const { folders: foldersWithFiles, files: rootFiles } = await fetchFoldersRecursively(drive, projectFolder.id!);
+          const allFiles = [
+            ...rootFiles,
+            ...foldersWithFiles.flatMap(f => f.files)
+          ];
+          
+          bounces = allFiles
+            .filter((f: any) => f.mimeType?.includes('audio/'))
+            .sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+            
         } catch (e) {
           console.error('Error fetching project audios:', e);
         }
