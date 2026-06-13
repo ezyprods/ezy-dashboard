@@ -115,7 +115,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   }, [extraPanes, fetchPaneItems]);
 
   const explorerRef = useRef<HTMLDivElement>(null);
-  
+
   // Undo / Redo Stack
   const [actionStack, setActionStack] = useState<ActionHistory[]>([]);
   const [redoStack, setRedoStack] = useState<ActionHistory[]>([]);
@@ -152,9 +152,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       const res = await fetch(`/api/files?folderId=${rootFolderId}&recursive=true`);
       if (!res.ok) throw new Error('Error al cargar archivos recientes');
       const data = await res.json();
-      
+
       const allItems = data.items || [];
-      
+
       // Build folder map
       const foldersOnly = allItems.filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
       const map: Record<string, { name: string, parentId: string | null }> = {
@@ -182,11 +182,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
   const handleOpenFileLocation = (parentFolderId?: string) => {
     const targetFolderId = parentFolderId || rootFolderId;
-    
+
     // Rebuild breadcrumbs
     const crumbs: Breadcrumb[] = [];
     let currentId = targetFolderId;
-    
+
     while (currentId) {
       const folder = folderMap[currentId] || (currentId === rootFolderId ? { name: rootName, parentId: null } : null);
       if (folder) {
@@ -197,11 +197,11 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         break;
       }
     }
-    
+
     if (crumbs.length === 0 || crumbs[0].id !== rootFolderId) {
       crumbs.unshift({ id: rootFolderId, name: rootName });
     }
-    
+
     setBreadcrumbs(crumbs);
     setCurrentFolderId(targetFolderId);
   };
@@ -241,7 +241,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       setSelectedIds(prev => Array.from(new Set([...prev, ...newSelectedIds])));
     } else if (e.ctrlKey || e.metaKey) {
       // Toggle individual
-      setSelectedIds(prev => 
+      setSelectedIds(prev =>
         prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
       );
       setLastSelectedIndex(index);
@@ -330,7 +330,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedIds.length > 0) {
           e.preventDefault();
@@ -350,21 +350,21 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         redoLastAction();
       }
     };
-    
+
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [selectedIds, items, actionStack, redoStack]);
 
   const uploadFiles = async (files: FileList | File[], targetFolderId: string) => {
     if (!files || files.length === 0) return;
-    
+
     setIsUploading(true);
     try {
       for (let i = 0; i < files.length; i++) {
         const formData = new FormData();
         formData.append('file', files[i]);
         formData.append('parentId', targetFolderId);
-        
+
         await fetch('/api/files', { method: 'POST', body: formData });
       }
       customAlert('Archivos subidos con éxito');
@@ -411,6 +411,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       await uploadFiles(files, currentFolderId);
     }
   };
+
   const handleItemDragStart = (e: React.DragEvent, itemId: string) => {
     e.stopPropagation();
     const idsToDrag = selectedIds.includes(itemId) ? selectedIds : [itemId];
@@ -423,7 +424,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
     setIsLoading(true);
     setExtraPanes(prev => prev.map(p => ({ ...p, isLoading: true })));
-    
+
     try {
       let paneItemsAll: DriveItem[] = [];
       extraPanes.forEach(pane => {
@@ -441,7 +442,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           body: JSON.stringify({ fileId, newParentId: targetFolderId, oldParentId: sourceFolderId }),
         });
       }
-      
+
       setActionStack(prev => [...prev, {
         type: 'MOVE',
         items: movedItems,
@@ -449,7 +450,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         newParentId: targetFolderId
       }]);
       setRedoStack([]);
-      
+
       setSelectedIds([]);
       fetchItems(currentFolderId);
       extraPanes.forEach(pane => fetchPaneItems(pane.folderId));
@@ -466,18 +467,18 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
-    
+
     try {
       const draggedData = e.dataTransfer.getData('text/plain');
       if (!draggedData) return;
-      
+
       let draggedItemIds: string[] = [];
       try {
         draggedItemIds = JSON.parse(draggedData);
       } catch {
         draggedItemIds = [draggedData];
       }
-      
+
       handleMoveItems(draggedItemIds, targetFolderId, sourceFolderId);
     } catch (err) {
       console.error(err);
@@ -502,7 +503,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
       if (draggedItemIds.length === 1) {
         const folderId = draggedItemIds[0];
-        
+
         let folderItem = items.find(i => i.id === folderId) || recentFiles.find(i => i.id === folderId);
         if (!folderItem) {
           for (const pane of extraPanes) {
@@ -545,7 +546,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   const handleCreateFolder = async () => {
     const name = await customPrompt('Nombre de la nueva carpeta:');
     if (!name) return;
-    
+
     try {
       const res = await fetch('/api/folders', {
         method: 'POST',
@@ -562,10 +563,10 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
   const handleDelete = async (itemId: string, isFolder: boolean, multipleIds?: string[]) => {
     const idsToDelete = multipleIds && multipleIds.length > 0 ? multipleIds : [itemId];
-    const message = idsToDelete.length > 1 
-      ? `¿Enviar ${idsToDelete.length} elementos a la papelera?` 
+    const message = idsToDelete.length > 1
+      ? `¿Enviar ${idsToDelete.length} elementos a la papelera?`
       : `¿Enviar a la papelera?`;
-      
+
     if (!await customConfirm(message)) return;
     setIsLoading(true);
     try {
@@ -573,13 +574,13 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       for (const id of idsToDelete) {
         await fetch(`/api/files?id=${id}`, { method: 'DELETE' });
       }
-      
+
       setActionStack(prev => [...prev, {
         type: 'TRASH',
         items: trashedItems
       }]);
       setRedoStack([]);
-      
+
       setSelectedIds([]);
       fetchItems(currentFolderId);
       fetchRecentFiles();
@@ -624,18 +625,18 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     if (mimeType.startsWith('video/')) return <Film className="w-5 h-5 text-red-400" />;
     if (mimeType.includes('pdf')) return <FileText className="w-5 h-5 text-orange-400" />;
     if (
-      mimeType.includes('document') || 
-      mimeType.includes('word') || 
+      mimeType.includes('document') ||
+      mimeType.includes('word') ||
       mimeType === 'application/vnd.google-apps.document'
     ) return <FileText className="w-5 h-5 text-blue-400" />;
     if (
-      mimeType.includes('sheet') || 
-      mimeType.includes('excel') || 
+      mimeType.includes('sheet') ||
+      mimeType.includes('excel') ||
       mimeType === 'application/vnd.google-apps.spreadsheet'
     ) return <FileText className="w-5 h-5 text-emerald-400" />;
     if (
-      mimeType.includes('presentation') || 
-      mimeType.includes('powerpoint') || 
+      mimeType.includes('presentation') ||
+      mimeType.includes('powerpoint') ||
       mimeType === 'application/vnd.google-apps.presentation'
     ) return <FileText className="w-5 h-5 text-yellow-500" />;
     if (mimeType === 'text/plain') return <FileText className="w-5 h-5 text-gray-300" />;
@@ -717,22 +718,25 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         ))}
       </div>
 
-      <div className="flex flex-col lg:flex-row lg:flex-nowrap gap-6 items-start w-full overflow-x-auto pb-6 px-1" style={{ scrollbarWidth: 'thin' }}>
-        
-        {/* Left Side: Recent Files */}
-        <div 
+      {/* ── Desktop: all panels in a single flex row ── */}
+      <div
+        className="flex flex-col lg:flex-row lg:flex-nowrap gap-4 items-start w-full overflow-x-auto pb-4 px-1"
+        style={{ scrollbarWidth: 'thin' }}
+      >
+        {/* ── Column 1: Archivos Recientes (fixed width, shrink-0) ── */}
+        <div
           className={cn(
-            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] shrink-0 transition-all duration-300",
-            extraPanes.length > 0 ? "w-full lg:w-[300px]" : "w-full lg:w-[340px]",
+            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] shrink-0 transition-all duration-300 w-full",
+            extraPanes.length >= 2 ? "lg:w-[230px]" : extraPanes.length === 1 ? "lg:w-[260px]" : "lg:w-[290px]",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
-          <h3 className="text-md font-bold text-text-primary mb-4 flex items-center gap-2">
+          <h3 className="text-md font-bold text-text-primary mb-4 flex items-center gap-2 shrink-0">
             <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
             Archivos Recientes
           </h3>
-          
-          <div className="flex-1 overflow-y-auto max-h-[550px] pr-2 space-y-2">
+
+          <div className="flex-1 overflow-y-auto max-h-[510px] pr-1 space-y-2">
             {isRecentLoading ? (
               <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
             ) : recentFiles.length === 0 ? (
@@ -744,9 +748,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                 const isAudio = item.mimeType.startsWith('audio/');
                 const isThisTrackActive = currentTrack?.id === item.id;
                 const isThisTrackPlaying = isThisTrackActive && isPlaying;
-                
+
                 return (
-                  <div 
+                  <div
                     key={item.id}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
@@ -778,7 +782,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                           {getIcon(item.mimeType, item.name)}
                         </div>
                       )}
-                      
+
                       <div className="flex-1 min-w-0 pr-20">
                         <div className={cn("text-xs font-bold truncate flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
                           {item.name}
@@ -789,8 +793,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                         </div>
                       </div>
                     </div>
-                    
-                    {/* Action buttons - Absolute positioned on hover to avoid squishing the text */}
+
+                    {/* Action buttons on hover */}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleOpenFileLocation(item.parentFolderId); }}
@@ -819,20 +823,21 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               })
             )}
           </div>
-              {/* Middle Column: Explorer */}
-        <div 
+        </div>
+
+        {/* ── Column 2: Main Explorer (flex-1, elastic – takes all remaining space) ── */}
+        <div
           className={cn(
-            "space-y-4 w-full shrink-0 transition-all duration-300",
-            extraPanes.length > 0 ? "lg:w-[420px] lg:flex-none" : "lg:flex-1",
+            "flex-1 min-w-0 space-y-4 transition-all duration-300",
             activeMobileTab === 'explorer' ? "block" : "hidden lg:block"
           )}
         >
           {/* Top Bar: Breadcrumbs & Actions */}
-          <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border">
-            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+          <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-1 min-w-0">
               {breadcrumbs.map((crumb, idx) => (
-                <div 
-                  key={crumb.id} 
+                <div
+                  key={crumb.id}
                   className="flex items-center gap-2"
                   onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                   onDrop={(e) => {
@@ -841,37 +846,37 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                     }
                   }}
                 >
-                  <button 
+                  <button
                     onClick={() => navigateUp(idx)}
                     className={`hover:text-accent transition-colors px-2 py-1 rounded ${idx === breadcrumbs.length - 1 ? 'text-text-primary font-medium' : 'text-text-secondary hover:bg-surface'}`}
                   >
                     {crumb.name}
                   </button>
-                  {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary" />}
+                  {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary shrink-0" />}
                 </div>
               ))}
             </div>
-            
+
             <div className="flex items-center gap-2 shrink-0">
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleCreateFolder}
                 className="h-8 text-xs gap-1.5"
               >
                 <FolderPlus className="w-3.5 h-3.5" />
                 Nueva carpeta
               </Button>
-              
+
               <label className="cursor-pointer shrink-0">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white hover:bg-accent/90 text-xs font-semibold transition-colors shadow-md shadow-accent/10 h-8">
                   <UploadCloud className="w-3.5 h-3.5" />
                   Subir archivo
                 </span>
-                <input 
-                  type="file" 
-                  multiple 
-                  className="hidden" 
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
                   onChange={(e) => {
                     if (e.target.files && e.target.files.length > 0) {
                       uploadFiles(Array.from(e.target.files), currentFolderId);
@@ -892,7 +897,6 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 uploadFiles(Array.from(e.dataTransfer.files), currentFolderId);
               } else {
-                // Reorder / move files in drive
                 try {
                   const draggedData = e.dataTransfer.getData('text/plain');
                   if (!draggedData) return;
@@ -902,7 +906,6 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   } catch {
                     draggedItemIds = [draggedData];
                   }
-                  // Drop directly in explorer root means moving to parent folder (breadcrumbs[breadcrumbs.length-2])
                   if (breadcrumbs.length > 1) {
                     const parentFolder = breadcrumbs[breadcrumbs.length - 2];
                     handleMoveItems(draggedItemIds, parentFolder.id, currentFolderId);
@@ -913,7 +916,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               }
             }}
             className={cn(
-              "relative bg-surface-elevated rounded-2xl border transition-all duration-300 min-h-[450px] overflow-hidden",
+              "relative bg-surface-elevated rounded-2xl border transition-all duration-300 min-h-[470px] overflow-hidden",
               isDraggingOver ? "border-accent bg-accent/5 ring-2 ring-accent/15 scale-[0.995]" : "border-border"
             )}
           >
@@ -940,7 +943,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                 {groupedItems.map((item: any, idx) => {
                   const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                   const isAudio = item.mimeType.startsWith('audio/');
-                  
+
                   return (
                     <div
                       key={item.id}
@@ -964,9 +967,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                     >
                       {isAudio ? (
                         <div className="flex-1 w-full flex items-center pr-2">
-                          <WaveformPlayer 
-                            fileId={item.id} 
-                            fileName={item.name} 
+                          <WaveformPlayer
+                            fileId={item.id}
+                            fileName={item.name}
                             versions={item.versions}
                             currentFolderId={currentFolderId}
                             onRefresh={() => {
@@ -981,7 +984,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                           <div className="w-10 flex justify-center shrink-0">
                             {getIcon(item.mimeType, item.name)}
                           </div>
-                          
+
                           <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
                             <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
                               {item.name}
@@ -995,9 +998,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                               </div>
                             )}
                           </div>
-                          
-                          <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                            <button 
+
+                          <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0">
+                            <button
                               className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1008,7 +1011,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                               <Share2 className="w-4 h-4" />
                             </button>
                             {!isFolder && (
-                              <a 
+                              <a
                                 href={item.webContentLink || item.webViewLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -1020,7 +1023,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                                 <Download className="w-4 h-4" />
                               </a>
                             )}
-                            <button 
+                            <button
                               className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-surface transition-colors"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1032,27 +1035,26 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             </button>
                           </div>
                         </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Dynamic Parallel Panels (Column 3 & 4) */}
+        {/* ── Columns 3 & 4: Dynamic Parallel Panels (extra panes) ── */}
         {extraPanes.map((pane, idx) => (
-          <div 
+          <div
             key={pane.folderId}
             className={cn(
-              "space-y-4 w-full shrink-0 animate-slide-in flex-none transition-all duration-300",
-              extraPanes.length > 1 ? "lg:w-[340px]" : "lg:w-[420px]",
+              "shrink-0 space-y-4 animate-slide-in transition-all duration-300 w-full",
+              extraPanes.length >= 2 ? "lg:w-[270px]" : "lg:w-[300px]",
               activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:block"
             )}
           >
-            {/* Header: Folder name & Close button */}
+            {/* Header: Folder name & Close */}
             <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border shadow-sm">
               <div className="flex items-center gap-2 overflow-hidden">
                 <Folder className="w-5 h-5 text-accent shrink-0" />
@@ -1062,14 +1064,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
               </div>
               <button
                 onClick={() => closePane(idx)}
-                className="p-1.5 text-text-secondary hover:bg-error/10 hover:text-error rounded-md transition-colors"
+                className="p-1.5 text-text-secondary hover:bg-error/10 hover:text-error rounded-md transition-colors shrink-0"
                 title="Cerrar vista paralela"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Split Content drop zone */}
+            {/* Pane content */}
             <div
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setExtraPanes(prev => prev.map((p, i) => i === idx ? { ...p, isDragOver: true } : p)); }}
               onDragLeave={() => setExtraPanes(prev => prev.map((p, i) => i === idx ? { ...p, isDragOver: false } : p))}
@@ -1091,7 +1093,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                 }
               }}
               className={cn(
-                "relative bg-surface rounded-2xl border overflow-hidden min-h-[450px] transition-all duration-200",
+                "relative bg-surface rounded-2xl border overflow-hidden min-h-[470px] transition-all duration-200",
                 pane.isDragOver ? "border-accent bg-accent/5 ring-2 ring-accent/20" : "border-border"
               )}
             >
@@ -1108,7 +1110,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                   {pane.items.map((item: any) => {
                     const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                     const isAudio = item.mimeType.startsWith('audio/');
-                    
+
                     return (
                       <div
                         key={item.id}
@@ -1128,9 +1130,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       >
                         {isAudio ? (
                           <div className="flex-1 w-full flex items-center pr-2">
-                            <WaveformPlayer 
-                              fileId={item.id} 
-                              fileName={item.name} 
+                            <WaveformPlayer
+                              fileId={item.id}
+                              fileName={item.name}
                               versions={item.versions}
                               currentFolderId={pane.folderId}
                               onRefresh={() => {
@@ -1146,8 +1148,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             <div className="w-10 flex justify-center shrink-0">
                               {getIcon(item.mimeType, item.name)}
                             </div>
-                            
-                            <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
+
+                            <div className="flex-1 min-w-0 mr-14 flex flex-col justify-center">
                               <div className="font-medium text-text-primary truncate text-xs flex items-center gap-2">
                                 {item.name}
                                 {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
@@ -1158,9 +1160,9 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                                 </div>
                               )}
                             </div>
-                            
+
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0">
-                              <button 
+                              <button
                                 className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1171,7 +1173,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                                 <Share2 className="w-3.5 h-3.5" />
                               </button>
                               {!isFolder && (
-                                <a 
+                                <a
                                   href={item.webContentLink || item.webViewLink}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -1183,7 +1185,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                                   <Download className="w-3.5 h-3.5" />
                                 </a>
                               )}
-                              <button 
+                              <button
                                 className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-surface"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1205,24 +1207,23 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           </div>
         ))}
 
-        {/* Dotted Vertical Split Dropzone: always at the far right */}
+        {/* ── Vista Paralela drop zone: always anchored to the far right, hidden at max 4 panels ── */}
         {extraPanes.length < 2 && (
           <div
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsRightDropZoneDragOver(true); }}
             onDragLeave={() => setIsRightDropZoneDragOver(false)}
             onDrop={handleRightDropZoneDrop}
             className={cn(
-              "w-full lg:w-16 lg:ml-auto flex lg:flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl transition-all duration-300 cursor-pointer select-none py-8 lg:py-12 shrink-0 group text-center lg:min-h-[550px]",
-              isRightDropZoneDragOver 
-                ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 lg:scale-[1.02]" 
-                : "bg-surface-elevated/30 border-border/60 hover:bg-surface-elevated/60 hover:border-accent/40 text-text-secondary hover:text-accent",
-              !activeMobileTab.startsWith('parallel') && activeMobileTab !== 'explorer' ? "hidden lg:flex" : "flex"
+              "hidden lg:flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl transition-all duration-300 cursor-pointer select-none shrink-0 group lg:min-h-[550px] lg:w-14",
+              isRightDropZoneDragOver
+                ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 scale-[1.02]"
+                : "bg-surface-elevated/30 border-border/60 hover:bg-surface-elevated/60 hover:border-accent/40 text-text-secondary hover:text-accent"
             )}
             title="Arrastra una carpeta aquí para abrir en vista dividida (hasta 4 columnas)"
           >
-            <FolderOpen className="w-6 h-6 group-hover:scale-110 transition-transform" />
-            <div 
-              className="text-[10px] font-bold uppercase tracking-widest text-center mt-0 lg:mt-2 flex flex-col gap-1.5"
+            <FolderOpen className="w-5 h-5 group-hover:scale-110 transition-transform shrink-0" />
+            <div
+              className="text-[9px] font-bold uppercase tracking-widest text-center"
               style={{ writingMode: 'vertical-lr' }}
             >
               VISTA PARALELA
