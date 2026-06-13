@@ -767,6 +767,19 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                       const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
                       window.open(openUrl, '_blank');
                     }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isAudio) {
+                        if (isThisTrackActive) {
+                          togglePlay();
+                        } else {
+                          playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}` });
+                        }
+                      } else {
+                        const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
+                        window.open(openUrl, '_blank');
+                      }
+                    }}
                     className="relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-all flex items-center gap-3 group cursor-pointer overflow-hidden"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
