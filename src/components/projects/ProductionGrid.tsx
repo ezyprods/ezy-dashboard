@@ -177,7 +177,7 @@ export function ProductionGridBoard({
       if (res.ok) {
         const data = await res.json();
         const allFiles = [
-          ...(data.project?.rootFiles || []),
+          ...(data.rootFiles || []),
           ...(data.folders ? data.folders.flatMap((f: any) => f.files) : [])
         ];
         setFiles(allFiles);

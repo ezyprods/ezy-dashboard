@@ -85,21 +85,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     // New track
     setCurrentTrack(track);
     
-    // Resolve direct streaming URL for Google Drive to preserve Range headers
+    // Play through our secure API proxy
     let finalUrl = track.url;
-    if (finalUrl.startsWith('/api/audio/')) {
-      const fileId = finalUrl.split('/').pop();
-      try {
-        const res = await fetch(`/api/audio/${fileId}/resolve`);
-        if (res.ok) {
-          const data = await res.json();
-          finalUrl = data.url;
-        } else {
-          finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
-        }
-      } catch (e) {
-        finalUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
-      }
+    if (!finalUrl.startsWith('/api/audio/')) {
+       finalUrl = `/api/audio/${track.id}`;
     }
     
     if (audioRef.current.src !== finalUrl) {
