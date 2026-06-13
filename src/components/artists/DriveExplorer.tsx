@@ -823,7 +823,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
         <div 
           className={cn(
             "space-y-4 w-full shrink-0 transition-all duration-300",
-            extraPanes.length > 0 ? "lg:w-[460px] lg:flex-none" : "lg:max-w-[700px] lg:flex-1",
+            extraPanes.length > 0 ? "lg:w-[420px] lg:flex-none" : "lg:flex-1",
             activeMobileTab === 'explorer' ? "block" : "hidden lg:block"
           )}
         >
@@ -1048,7 +1048,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             key={pane.folderId}
             className={cn(
               "space-y-4 w-full shrink-0 animate-slide-in flex-none transition-all duration-300",
-              extraPanes.length > 1 ? "lg:w-[360px]" : "lg:w-[420px]",
+              extraPanes.length > 1 ? "lg:w-[340px]" : "lg:w-[420px]",
               activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:block"
             )}
           >
@@ -1212,7 +1212,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             onDragLeave={() => setIsRightDropZoneDragOver(false)}
             onDrop={handleRightDropZoneDrop}
             className={cn(
-              "w-full lg:w-16 flex lg:flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl transition-all duration-300 cursor-pointer select-none py-8 lg:py-12 shrink-0 group text-center lg:min-h-[550px]",
+              "w-full lg:w-16 lg:ml-auto flex lg:flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl transition-all duration-300 cursor-pointer select-none py-8 lg:py-12 shrink-0 group text-center lg:min-h-[550px]",
               isRightDropZoneDragOver 
                 ? "bg-accent/15 border-accent text-accent shadow-lg shadow-accent/10 lg:scale-[1.02]" 
                 : "bg-surface-elevated/30 border-border/60 hover:bg-surface-elevated/60 hover:border-accent/40 text-text-secondary hover:text-accent",
