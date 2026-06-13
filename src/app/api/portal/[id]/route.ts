@@ -77,7 +77,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           ];
           
           bounces = allFiles
-            .filter((f: any) => f.mimeType?.includes('audio/'))
+            .filter((f: any) => f.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || ''))
             .sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
             
         } catch (e) {
@@ -127,7 +127,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             ...rootFiles,
             ...foldersWithFiles.flatMap(f => f.files)
           ];
-          const audioFiles = allFiles.filter((f: any) => f.mimeType?.includes('audio/'));
+          const audioFiles = allFiles.filter((f: any) => 
+            f.mimeType?.includes('audio/') || 
+            /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || '')
+          );
 
           const normalize = (s: string) => {
             if (!s) return '';

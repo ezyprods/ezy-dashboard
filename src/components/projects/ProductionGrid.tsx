@@ -185,7 +185,10 @@ export function ProductionGridBoard({
         // Intelligent Auto-Match Logic
         setGrid(prevGrid => {
           let hasChanges = false;
-          const audioFiles = allFiles.filter((f: any) => f.mimeType?.includes('audio/'));
+          const audioFiles = allFiles.filter((f: any) => 
+            f.mimeType?.includes('audio/') || 
+            /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || '')
+          );
           
           const normalize = (s: string) => {
             if (!s) return '';
