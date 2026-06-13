@@ -155,21 +155,29 @@ export default function ArtistDetailPage() {
           
           {/* Right side: Actions */}
           <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="border-accent text-accent hover:bg-accent/10 h-8 text-xs px-3"
-              onClick={() => {
-                const url = `${window.location.origin}/portal/${artistId}`;
-                navigator.clipboard.writeText(url);
-                customAlert('¡Enlace del portal copiado al portapapeles!');
-              }}
-            >
-              Copiar Enlace Portal
-            </Button>
-            <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="text-xs px-3 rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors flex items-center justify-center font-medium h-8">
-              Ver
-            </a>
+            <div className="flex items-center h-8 rounded-md border border-accent/30 bg-accent/5 overflow-hidden shrink-0">
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/portal/${artistId}`;
+                  navigator.clipboard.writeText(url);
+                  customAlert('¡Enlace del portal copiado al portapapeles!');
+                }}
+                className="px-3 h-full flex items-center text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors"
+                title="Copiar Enlace Portal"
+              >
+                Portal Artista
+              </button>
+              <div className="w-[1px] h-4 bg-accent/20" />
+              <a
+                href={`/portal/${artistId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 h-full flex items-center text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors"
+                title="Ver Portal"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
             <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-8 text-xs px-3">
               <Headphones className="w-3.5 h-3.5 mr-1.5" /> Gestor Previews
             </Button>
