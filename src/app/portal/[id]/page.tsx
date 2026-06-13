@@ -646,7 +646,7 @@ export default function PortalPage() {
             {/* Project Selector tabs */}
             {data.projects.length > 1 && (
               <div className="bg-surface border border-border rounded-2xl p-4 flex flex-wrap gap-2 items-center shadow-sm">
-                <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-2">Proyecto Activo:</span>
+                <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-2">Proyecto:</span>
                 {data.projects.map((proj: any) => (
                   <button
                     key={proj.id}

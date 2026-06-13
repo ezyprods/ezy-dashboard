@@ -67,21 +67,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           });
         }
 
-        // Obtener subcarpetas del proyecto (Bounces)
-        const subfolders = await listFolders(projectFolder.id!);
-        const bouncesFolder = subfolders.find(f => f.name === 'Bounces' || f.name === '02_Bounces_y_Grabaciones');
-
         let bounces: any[] = [];
-        if (bouncesFolder) {
+        try {
           const drive = getDriveService();
           const res = await drive.files.list({
-            q: `'${bouncesFolder.id}' in parents and trashed=false and mimeType contains 'audio/'`,
+            q: `'${projectFolder.id}' in parents and trashed=false and mimeType contains 'audio/'`,
             fields: 'files(id, name, mimeType, webViewLink, createdTime, modifiedTime)',
             orderBy: 'createdTime desc',
             supportsAllDrives: true,
             includeItemsFromAllDrives: true,
           });
           bounces = res.data.files || [];
+        } catch (e) {
+          console.error('Error fetching project audios:', e);
         }
 
         return {
