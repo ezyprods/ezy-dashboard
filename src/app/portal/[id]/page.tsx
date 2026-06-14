@@ -9,6 +9,7 @@ import {
   Star, Clock, TrendingUp, ListMusic, Eye
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
+import { useAudio } from '@/lib/contexts/AudioContext';
 
 // ─── Mini audio player for releases ──────────────────────────────────────────
 function ReleasePlayer({ release }: { release: any }) {
@@ -181,6 +182,7 @@ function ReleasePlayer({ release }: { release: any }) {
 // ─── Main Portal Page ─────────────────────────────────────────────────────────
 export default function PortalPage() {
   const params = useParams();
+  const { playTrack } = useAudio();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -422,7 +424,30 @@ export default function PortalPage() {
                       <tbody>
                         {matrix.productionGrid?.rows?.map((row: any) => (
                           <tr key={row.id} className="border-b border-border hover:bg-surface-elevated/10 transition-colors">
-                            <td className="p-3 font-semibold text-text-primary">{row.name}</td>
+                            <td className="p-3 font-semibold text-text-primary">
+                              <div className="flex items-center gap-2">
+                                {row.linkedFile && (
+                                  <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1.5 py-0.5 rounded border border-border/50">
+                                    {(row.linkedFile.mimeType?.includes('audio/') || /\\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
+                                      <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile.id, name: row.name || row.linkedFile.name, url: row.linkedFile.webContentLink || '', artistName: data?.artistConfig?.artistName || 'Artista' }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
+                                        <Play className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                    {row.linkedFile.webViewLink && (
+                                      <a href={row.linkedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Abrir en Drive">
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                      </a>
+                                    )}
+                                    {row.linkedFile.webContentLink && (
+                                      <a href={row.linkedFile.webContentLink} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar archivo">
+                                        <Download className="w-3.5 h-3.5" />
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                                <span className="truncate">{row.name}</span>
+                              </div>
+                            </td>
                             {matrix.productionGrid?.columns?.map((col: any) => {
                               const cell = row.cells?.[col.id] || {};
                               const status = cell.status || 'todo';

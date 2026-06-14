@@ -144,7 +144,7 @@ export interface GridCell {
 
 export interface ProductionGrid {
   columns: { id: string; name: string; type?: ColumnType }[];
-  rows: { id: string; name: string; cells: Record<string, GridCell> }[];
+  rows: { id: string; name: string; cells: Record<string, GridCell>; linkedFile?: { id: string; name: string; webViewLink?: string; webContentLink?: string; mimeType?: string } }[];
   mode?: 'simple' | 'interconnected';
 }
 

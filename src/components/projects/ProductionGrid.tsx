@@ -75,6 +75,7 @@ function SortableRow({
   files: any[];
   uploadTargetId: string;
 }) {
+  const { playTrack } = useAudio();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 1 };
 
@@ -86,6 +87,25 @@ function SortableRow({
       <td className="p-1.5 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 max-w-[140px] sm:max-w-[200px]">
         <div className="flex items-center gap-2">
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
+          {row.linkedFile && (
+            <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1 py-0.5 rounded border border-border/50">
+              {(row.linkedFile.mimeType?.includes('audio/') || /\\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
+                <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile!.id, name: row.name || row.linkedFile!.name, url: row.linkedFile!.webContentLink || '', artistName }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
+                  <Play className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {row.linkedFile.webViewLink && (
+                <a href={row.linkedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Abrir en Drive">
+                  <Link className="w-3.5 h-3.5" />
+                </a>
+              )}
+              {row.linkedFile.webContentLink && (
+                <a href={row.linkedFile.webContentLink} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar archivo">
+                  <Download className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+          )}
           <input 
             value={localName} 
             onChange={e => setLocalName(e.target.value)}
@@ -224,9 +244,33 @@ export function ProductionGridBoard({
                   if (bestMatch) {
                     newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
                     rowModified = true;
+                    // Also attach it globally to the row
+                    if (!row.linkedFile) {
+                      row.linkedFile = { id: bestMatch.id, name: bestMatch.name, webViewLink: bestMatch.webViewLink || bestMatch.webContentLink, webContentLink: bestMatch.webContentLink, mimeType: bestMatch.mimeType };
+                    }
                   }
                 }
               }
+            }
+
+            // Also check if we should attach linkedFile even if there are no file columns, or if cell was already filled
+            if (!row.linkedFile) {
+               let bestMatch = null;
+               let bestScore = 0;
+               for (const file of audioFiles) {
+                  const fileNameNorm = normalize(file.name);
+                  if (fileNameNorm.includes(rowNameNorm)) {
+                     const score = 1000 - (fileNameNorm.length - rowNameNorm.length);
+                     if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = file;
+                     }
+                  }
+               }
+               if (bestMatch) {
+                  row.linkedFile = { id: bestMatch.id, name: bestMatch.name, webViewLink: bestMatch.webViewLink || bestMatch.webContentLink, webContentLink: bestMatch.webContentLink, mimeType: bestMatch.mimeType };
+                  rowModified = true;
+               }
             }
 
             if (rowModified) {
