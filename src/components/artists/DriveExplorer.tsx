@@ -372,20 +372,48 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
+    let uploadedCount = 0;
     try {
       for (let i = 0; i < files.length; i++) {
         const formData = new FormData();
         formData.append('file', files[i]);
         formData.append('parentId', targetFolderId);
 
-        await fetch('/api/files', { method: 'POST', body: formData });
+        let res = await fetch('/api/files', { method: 'POST', body: formData });
+        
+        if (res.status === 409) {
+          const json = await res.json();
+          const replace = await customConfirm(`Se encontró un archivo similar: "${json.similarFile.name}".\n\nPresiona 'Aceptar' para REEMPLAZARLO.\nPresiona 'Cancelar' para decidir si quieres subirlo como archivo NUEVO.`);
+          
+          if (replace) {
+            formData.append('overwrite', 'true');
+            formData.append('targetFileId', json.similarFile.id);
+            res = await fetch('/api/files', { method: 'POST', body: formData });
+          } else {
+            const uploadAsNew = await customConfirm(`¿Deseas subir "${files[i].name}" como un archivo nuevo independiente?`);
+            if (uploadAsNew) {
+              formData.append('skipSimilarity', 'true');
+              res = await fetch('/api/files', { method: 'POST', body: formData });
+            } else {
+              continue;
+            }
+          }
+        }
+        
+        if (!res.ok) {
+           const errJson = await res.json().catch(() => null);
+           throw new Error(errJson?.error || 'Error al subir el archivo');
+        }
+        uploadedCount++;
       }
-      customAlert('Archivos subidos con éxito');
-      fetchItems(currentFolderId);
-      fetchRecentFiles();
-      extraPanes.forEach(pane => fetchPaneItems(pane.folderId));
-    } catch (err) {
-      customAlert('Error al subir archivos');
+      if (uploadedCount > 0) {
+        customAlert('Archivos subidos con éxito');
+        fetchItems(currentFolderId);
+        fetchRecentFiles();
+        extraPanes.forEach(pane => fetchPaneItems(pane.folderId));
+      }
+    } catch (err: any) {
+      customAlert(err.message || 'Error al subir archivos');
     } finally {
       setIsUploading(false);
     }
@@ -416,13 +444,14 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     e.preventDefault();
     setIsDraggingOver(false);
 
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await uploadFiles(files, currentFolderId);
+      return;
+    }
+
     const internalItemId = e.dataTransfer.getData('text/plain');
     if (internalItemId) return;
-
-    const files = e.dataTransfer.files;
-    if (files) {
-      await uploadFiles(files, currentFolderId);
-    }
   };
 
   const handleItemDragStart = (e: React.DragEvent, itemId: string) => {
@@ -476,10 +505,16 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     }
   };
 
-  const handleItemDrop = (e: React.DragEvent, targetFolderId: string, sourceFolderId: string) => {
+  const handleItemDrop = async (e: React.DragEvent, targetFolderId: string, sourceFolderId: string) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await uploadFiles(files, targetFolderId);
+      return;
+    }
 
     try {
       const draggedData = e.dataTransfer.getData('text/plain');

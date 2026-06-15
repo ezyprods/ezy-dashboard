@@ -174,14 +174,38 @@ export default function ProjectDetailPage() {
     formData.append('parentId', folderId);
 
     try {
-      const res = await fetch('/api/files', {
+      let res = await fetch('/api/files', {
         method: 'POST',
         body: formData,
       });
-      if (!res.ok) throw new Error('Error subiendo archivo');
+
+      if (res.status === 409) {
+        const json = await res.json();
+        const replace = await customConfirm(`Se encontró un archivo similar: "${json.similarFile.name}".\n\nPresiona 'Aceptar' para REEMPLAZARLO.\nPresiona 'Cancelar' para decidir si quieres subirlo como archivo NUEVO.`);
+        
+        if (replace) {
+          formData.append('overwrite', 'true');
+          formData.append('targetFileId', json.similarFile.id);
+          res = await fetch('/api/files', { method: 'POST', body: formData });
+        } else {
+          const uploadAsNew = await customConfirm(`¿Deseas subir "${file.name}" como un archivo nuevo independiente?`);
+          if (uploadAsNew) {
+            formData.append('skipSimilarity', 'true');
+            res = await fetch('/api/files', { method: 'POST', body: formData });
+          } else {
+            return;
+          }
+        }
+      }
+
+      if (!res.ok) {
+         const errJson = await res.json().catch(() => null);
+         throw new Error(errJson?.error || 'Error al subir el archivo');
+      }
       await fetchProject(); // Recargar archivos
-    } catch (err) {
-      customAlert('Error subiendo el archivo');
+      customAlert('Archivo subido con éxito');
+    } catch (err: any) {
+      customAlert(err.message || 'Error subiendo el archivo');
     } finally {
       setUploadingTo(null);
     }
