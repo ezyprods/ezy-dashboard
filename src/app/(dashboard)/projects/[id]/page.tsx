@@ -29,6 +29,7 @@ export default function ProjectDetailPage() {
   const [uploadingTo, setUploadingTo] = useState<string | null>(null);
   const [sortConfig, setSortConfig] = useState<{key: 'name'|'date'|'size'|'custom', direction: 'asc'|'desc'}>({key: 'name', direction: 'asc'});
   const [sortModalFolder, setSortModalFolder] = useState<any | null>(null);
+  const [linkedMatrix, setLinkedMatrix] = useState<any | null>(null);
 
   const handleSaveCustomOrder = async (orderedFileIds: string[]) => {
     if (!sortModalFolder || !data?.project) return;
@@ -145,6 +146,17 @@ export default function ProjectDetailPage() {
       if (!res.ok) throw new Error('Error cargando el proyecto');
       const json = await res.json();
       setData(json);
+      
+      if (json.project?.artistId) {
+        const matRes = await fetch(`/api/artists/${json.project.artistId}/matrices`);
+        if (matRes.ok) {
+          const matJson = await matRes.json();
+          const linked = matJson.matrices?.find((m: any) => m.projectId === projectId);
+          if (linked) {
+            setLinkedMatrix(linked);
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -210,6 +222,18 @@ export default function ProjectDetailPage() {
             <h1 className="text-2xl font-bold text-text-primary">{project.title}</h1>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-text-secondary text-sm uppercase tracking-widest">{project.type}</span>
+              {linkedMatrix && (
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="h-6 text-xs px-2 ml-2"
+                  onClick={() => router.push(`/artists/${project.artistId}?tab=matrices`)}
+                  title={`Abrir matriz: ${linkedMatrix.name}`}
+                >
+                  <ExternalLinkIcon className="w-3 h-3 mr-1.5" />
+                  Abrir Matriz Relacionada
+                </Button>
+              )}
             </div>
           </div>
         </div>
