@@ -66,7 +66,7 @@ function SortableRow({
   files,
   uploadTargetId,
 }: {
-  row: { id: string; name: string; cells: Record<string, GridCell> };
+  row: { id: string; name: string; cells: Record<string, GridCell>; linkedFile?: { id: string; name: string; webViewLink?: string; webContentLink?: string; mimeType?: string } };
   columns: { id: string; name: string; type?: ColumnType }[];
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
