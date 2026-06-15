@@ -210,32 +210,6 @@ export default function ProjectDetailPage() {
             <h1 className="text-2xl font-bold text-text-primary">{project.title}</h1>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-text-secondary text-sm uppercase tracking-widest">{project.type}</span>
-              <div className="flex items-center gap-2 bg-surface border border-border px-3 py-1 rounded-full">
-                <input
-                  type="checkbox"
-                  id="paywall"
-                  checked={!!project.requirePaymentForDownload}
-                  onChange={async (e) => {
-                    const newValue = e.target.checked;
-                    try {
-                      const res = await fetch(`/api/projects/${projectId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ requirePaymentForDownload: newValue })
-                      });
-                      if (!res.ok) throw new Error('Error al actualizar');
-                      setData({ ...data, project: { ...data.project, requirePaymentForDownload: newValue }});
-                      customAlert(newValue ? 'Muro de pago activado' : 'Muro de pago desactivado');
-                    } catch (err) {
-                      customAlert('Error al guardar la configuración del muro de pago');
-                    }
-                  }}
-                  className="accent-accent w-4 h-4"
-                />
-                <label htmlFor="paywall" className="text-xs font-medium text-text-primary cursor-pointer select-none">
-                  Requerir Pago para Descargas en Portal
-                </label>
-              </div>
             </div>
           </div>
         </div>
