@@ -22,13 +22,11 @@ export default function MatricesPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsArtistDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsModalOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -79,11 +77,23 @@ export default function MatricesPage() {
       });
       
       if (res.ok) {
+        const result = await res.json();
         setNewMatrixName('');
         setSelectedArtistId('');
+        setSearchTerm('');
         setIsModalOpen(false);
         await fetchData();
         customAlert('Matriz creada y asignada con éxito');
+        
+        if (result.matrix) {
+          const matchedArtist = artists.find(a => a.id === selectedArtistId);
+          setActiveMatrix({
+            id: result.matrix.id,
+            name: result.matrix.name,
+            artistId: selectedArtistId,
+            artistName: matchedArtist?.name || 'Desconocido'
+          });
+        }
       } else {
         const err = await res.json();
         customAlert(`Error al crear la matriz: ${err.error || 'Inténtalo de nuevo'}`);
@@ -227,8 +237,14 @@ export default function MatricesPage() {
 
       {/* Modal Nueva Matriz */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="glass w-full max-w-md rounded-xl border border-border p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div 
+            className="glass w-full max-w-md rounded-xl border border-border p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
               <Table2 className="w-5 h-5 text-accent" />
               Crear Nueva Matriz
@@ -254,78 +270,26 @@ export default function MatricesPage() {
                   Asignar a Artista
                 </label>
                 
-                {/* Searchable Combobox */}
-                <div className="relative" ref={dropdownRef}>
-                  <button
-                    type="button"
-                    onClick={() => !isSubmitting && setIsArtistDropdownOpen(!isArtistDropdownOpen)}
-                    disabled={isSubmitting}
-                    className="w-full flex items-center justify-between bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all text-left"
-                  >
-                    {selectedArtistId ? (
-                      <span className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-[10px] font-bold">
-                          {artists.find(a => a.id === selectedArtistId)?.name.substring(0, 2).toUpperCase() || 'A'}
-                        </span>
-                        {artists.find(a => a.id === selectedArtistId)?.name}
-                      </span>
-                    ) : (
-                      <span className="text-text-secondary">Selecciona un artista...</span>
-                    )}
-                    <ChevronDown className="w-4 h-4 text-text-secondary ml-2" />
-                  </button>
-
-                  {isArtistDropdownOpen && (
-                    <div className="absolute top-full left-0 z-50 mt-1 w-full bg-surface-elevated border border-border rounded-xl shadow-2xl p-2 animate-fade-in max-h-60 flex flex-col">
-                      <div className="flex items-center gap-2 border-b border-border/40 pb-2 mb-2 px-1">
-                        <Search className="w-4 h-4 text-text-secondary shrink-0" />
-                        <input
-                          type="text"
-                          placeholder="Buscar artista..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="w-full bg-transparent border-none text-xs text-text-primary placeholder:text-text-secondary focus:outline-none"
-                        />
-                      </div>
-                      
-                      <div className="overflow-y-auto flex-1 space-y-0.5 max-h-40">
-                        {artists.filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
-                          <p className="text-[11px] text-text-secondary text-center py-2">No se encontraron artistas</p>
-                        ) : (
-                          artists
-                            .filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                            .map((artist) => {
-                              const isSelected = selectedArtistId === artist.id;
-                              return (
-                                <button
-                                  key={artist.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedArtistId(artist.id);
-                                    setIsArtistDropdownOpen(false);
-                                    setSearchTerm('');
-                                  }}
-                                  className={`w-full flex items-center justify-between p-2 rounded-lg text-xs transition-colors text-left ${
-                                    isSelected 
-                                      ? 'bg-accent/10 text-accent-light font-medium' 
-                                      : 'text-text-primary hover:bg-surface hover:text-white'
-                                  }`}
-                                >
-                                  <span className="flex items-center gap-2">
-                                    <span className="w-4 h-4 rounded-full bg-accent/20 text-accent-light flex items-center justify-center text-[8px] font-bold">
-                                      {artist.name.substring(0, 2).toUpperCase()}
-                                    </span>
-                                    {artist.name}
-                                  </span>
-                                  {isSelected && <Check className="w-3.5 h-3.5 text-accent-light" />}
-                                </button>
-                              );
-                            })
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Native Searchable Combobox using Datalist */}
+                <input 
+                  list="artists-list"
+                  type="text" 
+                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="Buscar y seleccionar artista..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    const match = artists.find(a => a.name === e.target.value);
+                    if (match) setSelectedArtistId(match.id);
+                    else setSelectedArtistId('');
+                  }}
+                  disabled={isSubmitting}
+                />
+                <datalist id="artists-list">
+                  {artists.map(a => (
+                    <option key={a.id} value={a.name} />
+                  ))}
+                </datalist>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

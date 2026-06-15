@@ -12,6 +12,18 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
   const [isLoading, setIsLoading] = useState(true);
   const [activeMatrixId, setActiveMatrixId] = useState<string | null>(null);
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newMatrixName, setNewMatrixName] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsModalOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   useEffect(() => {
     fetchMatrices();
   }, [artistId]);
@@ -34,17 +46,29 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
     }
   };
 
-  const createMatrix = async () => {
-    const name = await customPrompt('Nombre de la nueva matriz (ej: Álbum 2024):');
-    if (!name) return;
+  const createMatrix = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMatrixName.trim()) {
+      customAlert('Por favor, escribe un nombre para la matriz');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name: newMatrixName.trim() })
       });
       if (res.ok) {
+        const result = await res.json();
+        setNewMatrixName('');
+        setIsModalOpen(false);
         fetchMatrices();
+        customAlert('Matriz creada con éxito');
+        if (result.matrix) {
+          setActiveMatrixId(result.matrix.id);
+        }
       } else {
         const err = await res.json();
         customAlert(`Error al crear matriz: ${err.error} - ${err.details}`);
@@ -52,6 +76,8 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
     } catch (e: any) {
       console.error(e);
       customAlert(`Error: ${e.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -120,7 +146,7 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
           <h3 className="text-xl font-bold text-text-primary">Matrices de Producción</h3>
           <p className="text-sm text-text-secondary">Trackea tus proyectos, canciones y fases.</p>
         </div>
-        <Button onClick={createMatrix}><Plus className="w-4 h-4 mr-2" /> Nueva Matriz</Button>
+        <Button onClick={() => setIsModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Nueva Matriz</Button>
       </div>
 
       {matrices.length === 0 ? (
@@ -165,6 +191,56 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
               </Button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Modal Nueva Matriz */}
+      {isModalOpen && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div 
+            className="glass w-full max-w-md rounded-xl border border-border p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
+              <Table2 className="w-5 h-5 text-accent" />
+              Crear Nueva Matriz
+            </h2>
+            
+            <form onSubmit={createMatrix} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                  Nombre de la Matriz
+                </label>
+                <input 
+                  autoFocus
+                  type="text" 
+                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                  placeholder="Ej: Álbum 2026, Single de Verano..."
+                  value={newMatrixName}
+                  onChange={(e) => setNewMatrixName(e.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={() => setIsModalOpen(false)}
+                  disabled={isSubmitting}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Table2 className="w-4 h-4 mr-2" />}
+                  Crear Matriz
+                </Button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
