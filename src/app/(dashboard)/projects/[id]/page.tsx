@@ -102,16 +102,20 @@ export default function ProjectDetailPage() {
   };
 
   const handleMoveFile = async (fileId: string, currentFolderId: string) => {
-    if (!folders || !folders.length) return;
-    const options = folders.map((f: any, i: number) => `${i + 1}. ${f.name}`).join('\n');
+    const allFolders = [...(data?.folders || [])];
+    if (data?.rootFiles?.length > 0) {
+      allFolders.unshift({ id: data.project.driveFolderId || projectId, name: 'Archivos del Proyecto' });
+    }
+    if (!allFolders || !allFolders.length) return;
+    const options = allFolders.map((f: any, i: number) => `${i + 1}. ${f.name}`).join('\n');
     const choice = await customPrompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
     if (!choice) return;
     const idx = parseInt(choice, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= folders.length) {
+    if (isNaN(idx) || idx < 0 || idx >= allFolders.length) {
       customAlert('Selección no válida.');
       return;
     }
-    const targetFolder = folders[idx];
+    const targetFolder = allFolders[idx];
     if (targetFolder.id === currentFolderId) {
       customAlert('El archivo ya está en esa carpeta.');
       return;
@@ -185,7 +189,15 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const { project, folders } = data;
+  const { project, folders, rootFiles } = data;
+  const displayFolders = [...(folders || [])];
+  if (rootFiles && rootFiles.length > 0) {
+    displayFolders.unshift({
+      id: project.driveFolderId || projectId,
+      name: 'Archivos del Proyecto',
+      files: rootFiles
+    });
+  }
 
   return (
     <div className="space-y-6 animate-fade-in pb-20">
@@ -239,7 +251,7 @@ export default function ProjectDetailPage() {
           <h3 className="text-xl font-bold text-text-primary">Archivos de Google Drive</h3>
         </div>
         <div className="space-y-8 animate-fade-in">
-          {folders.map((folder: any) => (
+          {displayFolders.map((folder: any) => (
             <div key={folder.id} className="glass rounded-xl border border-border overflow-hidden">
               <div 
                 className="flex justify-between items-center p-4 border-b border-border bg-surface/50"

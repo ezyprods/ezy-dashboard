@@ -371,7 +371,7 @@ export function WaveformPlayer({
           ) : (
             <div className="flex items-center gap-2">
               <span 
-                className={cn('text-[13px] font-semibold truncate block transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
+                className={cn('text-[13px] font-semibold break-words transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
                 title={displayName}
                 onDoubleClick={startRename}
               >

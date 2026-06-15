@@ -1176,8 +1176,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
                             </div>
 
                             <div className="flex-1 min-w-0 mr-14 flex flex-col justify-center">
-                              <div className="font-medium text-text-primary truncate text-xs flex items-center gap-2">
-                                {item.name}
+                              <div className="font-medium text-text-primary text-xs flex items-start gap-2 flex-wrap">
+                                <span className="break-words w-full">{item.name}</span>
                                 {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
                               </div>
                               {!isFolder && (
