@@ -344,122 +344,116 @@ export function WaveformPlayer({
           isThisTrackActive ? 'border-accent shadow-[0_0_15px_rgba(108,92,231,0.15)] bg-accent/5' : 'border-border/60 hover:border-accent/40'
         )}
       >
-      {/* 1. Play Button & Title */}
-      <div className="flex items-center gap-3 min-w-0 flex-1 sm:max-w-[35%]">
-        <button
-          className={cn(
-            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm hover:scale-105',
-            isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
-          )}
-          onClick={handlePlayClick}
-        >
-          {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
-        </button>
-
-        <div className="flex-1 min-w-0">
-          {isEditingName ? (
-            <input
-              autoFocus
-              type="text"
-              value={editNameValue}
-              onChange={(e) => setEditNameValue(e.target.value)}
-              onKeyDown={handleRenameKeyDown}
-              onBlur={handleRenameSubmit}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full bg-surface-elevated/50 border border-accent/50 rounded px-2 py-0.5 text-[13px] font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <span 
-                className={cn('text-[13px] font-semibold break-words transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
-                title={displayName}
-                onDoubleClick={startRename}
-              >
-                {displayName}
-              </span>
-              {modifiedTime && (
-                <span className="text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0" title="Fecha de modificación">
-                  {formatModificationTime(modifiedTime)}
-                </span>
-              )}
-              {versions && versions.length > 1 && (
-                <select 
-                  className="bg-surface-elevated border border-border/50 rounded text-[10px] font-bold px-1 py-0.5 text-text-secondary outline-none hover:text-text-primary hover:border-accent/50 cursor-pointer transition-colors"
-                  value={activeId}
-                  onChange={e => {
-                    e.stopPropagation();
-                    setActiveVersionId(e.target.value);
-                  }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  {versions.map((v, i) => (
-                    <option key={v.id} value={v.id}>V{i + 1}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. Waveform canvas */}
-      <div ref={containerRef} className="relative flex-1 hidden md:flex items-end max-w-[45%]" style={{ height: CANVAS_HEIGHT * 1.3 }}>
-        {isLoadingWaveform && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-full h-1/2 bg-surface rounded-full animate-pulse opacity-50" />
-          </div>
-        )}
-        <canvas
-          ref={canvasRef}
-          className="w-full cursor-pointer"
-          style={{ display: isLoadingWaveform ? 'none' : 'block' }}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
-          onClick={handleCanvasClick}
-        />
-        {hoverX !== null && !isLoadingWaveform && (
-          <span
-            className="absolute top-0 bg-surface-elevated border border-border text-text-primary text-[10px] font-mono px-1.5 py-0.5 rounded pointer-events-none z-10 shadow-lg"
-            style={{ left: Math.min(hoverX + 4, canvasWidth - 40), transform: 'translateY(-50%)' }}
-          >
-            {getTimeAtX(hoverX)}
-          </span>
-        )}
-        {/* Comment Markers */}
-        {duration > 0 && comments.map(c => (
-          <div 
-            key={c.id} 
-            className="absolute w-2.5 h-2.5 rounded-full bg-accent cursor-pointer group/comment hover:scale-125 transition-transform shadow-[0_0_8px_rgba(108,92,231,0.6)]"
-            style={{ left: `${(c.time / duration) * 100}%`, bottom: '-4px', transform: 'translateX(-50%)' }}
-            onClick={(e) => { e.stopPropagation(); seek(c.time); }}
-          >
-            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover/comment:block bg-surface border border-border text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-20 text-text-primary">
-              {c.text}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 3. Action Buttons */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        {isUpdating ? (
-          <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
-        ) : (
-          <>
-            {!isPortal && <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>}
-            {!isPortal && <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>}
-            {!isPortal && <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>}
-            
-            {paywallLocked ? (
-              <button onClick={(e) => { e.stopPropagation(); customAlert('Descarga bloqueada. Tienes pagos pendientes.'); }} className="p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all" title="Pago pendiente"><Lock className="w-3.5 h-3.5" /></button>
-            ) : (
-              <a href={`/api/audio/${activeId}`} download={activeName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
+      {/* Main Content Area */}
+      <div className="flex flex-col w-full gap-2">
+        <div className="flex items-center gap-3 w-full">
+          <button
+            className={cn(
+              'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm hover:scale-105',
+              isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
             )}
-            
-            {!isPortal && <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
-            <a href={`/api/audio/${activeId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"><ExternalLink className="w-3.5 h-3.5" /></a>
-          </>
-        )}
+            onClick={handlePlayClick}
+          >
+            {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+          </button>
+
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            {isEditingName ? (
+              <input
+                autoFocus
+                type="text"
+                value={editNameValue}
+                onChange={(e) => setEditNameValue(e.target.value)}
+                onKeyDown={handleRenameKeyDown}
+                onBlur={handleRenameSubmit}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-surface-elevated/50 border border-accent/50 rounded px-2 py-0.5 text-[13px] font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                <span 
+                  className={cn('text-[13px] font-semibold truncate transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
+                  title={displayName}
+                  onDoubleClick={startRename}
+                >
+                  {displayName}
+                </span>
+                {modifiedTime && (
+                  <span className="text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0" title="Fecha de modificación">
+                    {formatModificationTime(modifiedTime)}
+                  </span>
+                )}
+                {versions && versions.length > 1 && (
+                  <select 
+                    className="bg-surface-elevated border border-border/50 rounded text-[10px] font-bold px-1 py-0.5 text-text-secondary outline-none hover:text-text-primary hover:border-accent/50 cursor-pointer transition-colors"
+                    value={activeId}
+                    onChange={e => {
+                      e.stopPropagation();
+                      setActiveVersionId(e.target.value);
+                    }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {versions.map((v, i) => (
+                      <option key={v.id} value={v.id}>V{i + 1}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+          </div>
+        
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isUpdating ? (
+              <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
+            ) : (
+              <>
+                {!isPortal && <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>}
+                {!isPortal && <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>}
+                {!isPortal && <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>}
+                
+                {paywallLocked ? (
+                  <button onClick={(e) => { e.stopPropagation(); customAlert('Descarga bloqueada. Tienes pagos pendientes.'); }} className="p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all" title="Pago pendiente"><Lock className="w-3.5 h-3.5" /></button>
+                ) : (
+                  <a href={`/api/audio/${activeId}`} download={activeName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
+                )}
+                
+                {!isPortal && <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
+                <a href={`/api/audio/${activeId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"><ExternalLink className="w-3.5 h-3.5" /></a>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Thin Progress Bar */}
+        <div 
+          className="w-full h-1 bg-border/40 rounded-full cursor-pointer relative overflow-hidden group/progress"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isThisTrackActive || duration === 0) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            seek((x / rect.width) * duration);
+          }}
+        >
+          <div 
+            className={cn("h-full transition-all duration-100 rounded-full", isThisTrackActive ? "bg-accent" : "bg-text-secondary/30")}
+            style={{ width: isThisTrackActive && duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+          />
+          {/* Comment Markers */}
+          {duration > 0 && comments.map(c => (
+            <div 
+              key={c.id} 
+              className="absolute w-2 h-2 rounded-full bg-accent cursor-pointer group/comment hover:scale-125 transition-transform shadow-[0_0_8px_rgba(108,92,231,0.6)]"
+              style={{ left: `${(c.time / duration) * 100}%`, top: '50%', transform: 'translate(-50%, -50%)' }}
+              onClick={(e) => { e.stopPropagation(); seek(c.time); }}
+            >
+              <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover/comment:block bg-surface border border-border text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-20 text-text-primary pointer-events-none">
+                {c.text}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       </div>
       {/* Inline Comment Box */}
