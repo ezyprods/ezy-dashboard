@@ -273,10 +273,9 @@ export function SmartUploadModal({
 
     updateItem(item.id, { uploadStatus: 'uploading', uploadProgress: 5 });
 
-    const renamedBlob = item.file.slice(0, item.file.size, item.file.type);
-    const renamedFile = new File([renamedBlob], item.customName);
     const formData = new FormData();
-    formData.append('file', renamedFile);
+    // Append as blob with custom name - avoids File constructor TypeScript issues
+    formData.append('file', item.file.slice(0, item.file.size, item.file.type), item.customName);
     formData.append('parentId', item.folderId);
     if (overwriteId) {
       formData.append('overwrite', 'true');
