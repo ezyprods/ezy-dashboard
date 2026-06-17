@@ -44,6 +44,8 @@ export async function convertWavToMp3(file: File, onProgress?: (percent: number)
   let offset = 0;
   
   return new Promise((resolve) => {
+    let lastPercent = -1;
+
     function processChunk() {
       if (offset < totalLength) {
         let blockSize = sampleBlockSize;
@@ -60,8 +62,13 @@ export async function convertWavToMp3(file: File, onProgress?: (percent: number)
         }
         
         offset += blockSize;
+        
         if (onProgress) {
-          onProgress(Math.floor((offset / totalLength) * 100));
+          const percent = Math.floor((offset / totalLength) * 100);
+          if (percent !== lastPercent) {
+             onProgress(percent);
+             lastPercent = percent;
+          }
         }
         
         // Ceder el hilo principal para permitir repintados en la UI (animaciones, barra de progreso)

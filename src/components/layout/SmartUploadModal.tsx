@@ -503,7 +503,7 @@ export function SmartUploadModal({
             });
             if (!res.ok) throw new Error('Failed to create folder');
             const data = await res.json();
-            finalFolderId = data.id;
+            finalFolderId = data.folderId || data.id; // Support both just in case
             newlyCreatedFolders.set(cacheKey, finalFolderId);
           } catch (err) {
              updateItem(item.id, { uploadStatus: 'error', uploadError: `Error al crear la subcarpeta: ${fName}` });
