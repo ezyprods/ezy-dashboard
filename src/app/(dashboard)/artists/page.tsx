@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
+import { EditArtistModal } from "@/components/artists/EditArtistModal";
+import { MoreVertical } from "lucide-react";
 
 
 export default function ArtistsPage() {
@@ -25,6 +27,7 @@ export default function ArtistsPage() {
   const [hoveredArtistId, setHoveredArtistId] = useState<string | null>(null);
   const dragCounters = useRef<Record<string, number>>({});
   const { isDraggingFiles, triggerUploadForArtist } = useGlobalDragDrop();
+  const [editingArtist, setEditingArtist] = useState<any | null>(null);
 
   const handleArtistDragEnter = (e: React.DragEvent, artistId: string) => {
     e.preventDefault();
@@ -80,6 +83,13 @@ export default function ArtistsPage() {
         isOpen={isNewArtistModalOpen} 
         onClose={() => setIsNewArtistModalOpen(false)} 
       />
+      {editingArtist && (
+        <EditArtistModal
+          isOpen={!!editingArtist}
+          onClose={() => setEditingArtist(null)}
+          artist={editingArtist}
+        />
+      )}
 
       {/* Header section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -198,6 +208,7 @@ export default function ArtistsPage() {
                 e.preventDefault();
                 showMenu(e.clientX, e.clientY, [
                   { label: 'Ver Perfil', icon: 'User', action: () => router.push(`/artists/${artist.id}`) },
+                  { label: 'Editar Perfil', icon: 'Edit3', action: () => setEditingArtist(artist) },
                   { label: 'Portal del Artista', icon: 'ExternalLink', action: () => window.open(`/portal/${artist.id}`, '_blank') },
                   { label: 'Copiar Enlace Portal', icon: 'Copy', action: () => {
                     navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`);
@@ -263,7 +274,7 @@ export default function ArtistsPage() {
 
               {/* Hover Actions (Grid only) */}
               {viewMode === 'grid' && (
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-20">
                   <button 
                     onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`); customAlert('Enlace de portal copiado'); }}
                     className="p-1.5 bg-surface-elevated/90 backdrop-blur-sm hover:bg-accent hover:text-white rounded-md text-text-secondary transition-colors shadow-sm"
@@ -271,6 +282,22 @@ export default function ArtistsPage() {
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
+                  <div 
+                    className="cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      showMenu(rect.left, rect.bottom + 5, [
+                        { label: 'Ver Perfil', icon: 'User', action: () => router.push(`/artists/${artist.id}`) },
+                        { label: 'Editar Perfil', icon: 'Edit3', action: () => setEditingArtist(artist) },
+                        { label: 'Portal del Artista', icon: 'ExternalLink', action: () => window.open(`/portal/${artist.id}`, '_blank') },
+                      ]);
+                    }}
+                  >
+                    <button className="p-1.5 rounded-md hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors bg-surface-elevated/90 backdrop-blur-sm border border-transparent hover:border-border shadow-sm">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

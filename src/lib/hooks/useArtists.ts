@@ -59,12 +59,35 @@ export function useArtists() {
     }
   };
 
+  const updateArtist = async (id: string, data: Partial<CreateArtistInput>) => {
+    try {
+      const res = await fetch(`/api/artists/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update artist');
+      }
+      
+      const { artist: updatedArtist } = await res.json();
+      setArtists(prev => prev.map(a => a.id === id ? updatedArtist : a));
+      return { success: true, artist: updatedArtist };
+    } catch (err: any) {
+      console.error('Error updating artist:', err);
+      return { success: false, error: err.message };
+    }
+  };
+
   return {
     artists,
     isLoading,
     error,
     fetchArtists,
     createArtist,
+    updateArtist,
     // Add computed properties
     activeArtists: artists.filter(a => a.status === 'active'),
     archivedArtists: artists.filter(a => a.status === 'archived'),

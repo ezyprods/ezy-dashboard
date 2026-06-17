@@ -18,6 +18,7 @@ import { getProjectTypeIcon } from '@/lib/utils';
 import { ArtistReleasesTab } from '@/components/artists/ArtistReleasesTab';
 import { ArtistMatricesTab } from '@/components/artists/ArtistMatricesTab';
 import { ArtistPaymentsTab } from '@/components/artists/ArtistPaymentsTab';
+import { EditArtistModal } from "@/components/artists/EditArtistModal";
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import * as LucideIcons from 'lucide-react';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -36,6 +37,7 @@ export default function ArtistDetailPage() {
   
   const [activeTab, setActiveTab] = useState('files');
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isEditArtistModalOpen, setIsEditArtistModalOpen] = useState(false);
 
   const { projects, isLoading: projectsLoading, fetchProjects } = useProjects(artistId);
 
@@ -107,6 +109,16 @@ export default function ArtistDetailPage() {
   return (
     <div className="space-y-6 animate-fade-in pb-20">
       <NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} artistId={artistId} />
+      {artist && (
+        <EditArtistModal
+          isOpen={isEditArtistModalOpen}
+          onClose={() => {
+            setIsEditArtistModalOpen(false);
+            fetchArtist();
+          }}
+          artist={artist}
+        />
+      )}
 
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.push('/artists')} className="text-text-secondary hover:text-text-primary">
@@ -155,6 +167,10 @@ export default function ArtistDetailPage() {
           
           {/* Right side: Actions */}
           <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
+            <Button variant="outline" size="sm" onClick={() => setIsEditArtistModalOpen(true)} className="h-8 text-xs shrink-0">
+              <LucideIcons.Edit3 className="w-3.5 h-3.5 mr-1.5" />
+              Editar Perfil
+            </Button>
             <div className="flex items-center h-8 rounded-md border border-accent/30 bg-accent/5 overflow-hidden shrink-0">
               <a
                 href={`/portal/${artistId}`}
