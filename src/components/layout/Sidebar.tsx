@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid, UploadCloud } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useArtists } from '@/lib/hooks/useArtists';
-import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
 
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -21,50 +19,12 @@ const navItems = [
 
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
-  const { activeArtists } = useArtists();
-  const dragCounter = useRef(0);
 
   useEffect(() => {
     if (isOpen && onClose) {
       onClose();
     }
   }, [pathname]);
-
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current++;
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-      setIsDragOver(true);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current--;
-    if (dragCounter.current === 0) {
-      setIsDragOver(false);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    dragCounter.current = 0;
-    
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setDroppedFiles(Array.from(e.dataTransfer.files));
-    }
-  };
 
   return (
     <>
@@ -75,106 +35,84 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         />
       )}
       <aside 
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
         className={cn(
           "w-64 border-r border-border bg-surface flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 md:z-auto transition-transform duration-300",
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
-          isDragOver && "ring-2 ring-accent ring-inset border-transparent bg-surface-elevated"
         )}
       >
-      <div className="h-28 flex items-center px-4 border-b border-border justify-center md:justify-start">
-        <Link href="/dashboard" className="flex items-center w-full justify-center mt-2">
-          {/* Light Mode Logo */}
-          <Image
-            src="/logo-black-trimmed.png"
-            alt="EZY"
-            width={240}
-            height={96}
-            className="logo-light h-14 w-auto object-contain"
-            priority
-          />
-          {/* Dark Mode Logo (White) */}
-          <Image
-            src="/logo-trimmed.png"
-            alt="EZY"
-            width={240}
-            height={96}
-            className="logo-dark h-14 w-auto object-contain"
-            priority
-          />
-        </Link>
-      </div>
+        <div className="h-28 flex items-center px-4 border-b border-border justify-center md:justify-start">
+          <Link href="/dashboard" className="flex items-center w-full justify-center mt-2">
+            {/* Light Mode Logo */}
+            <Image
+              src="/logo-black-trimmed.png"
+              alt="EZY"
+              width={240}
+              height={96}
+              className="logo-light h-14 w-auto object-contain"
+              priority
+            />
+            {/* Dark Mode Logo (White) */}
+            <Image
+              src="/logo-trimmed.png"
+              alt="EZY"
+              width={240}
+              height={96}
+              className="logo-dark h-14 w-auto object-contain"
+              priority
+            />
+          </Link>
+        </div>
 
-      <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-        {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          const Icon = item.icon;
-          
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative overflow-hidden",
-                isActive 
-                  ? "text-white bg-accent/10" 
-                  : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
-              )}
-            >
-              {isActive && (
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent rounded-r-full" />
-              )}
-              <Icon className={cn(
-                "w-5 h-5 transition-colors",
-                isActive ? "text-accent-light" : "text-text-secondary group-hover:text-text-primary"
-              )} />
-              {item.name}
-            </Link>
-          );
-        })}
-      </nav>
+        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname.startsWith(item.href);
+            const Icon = item.icon;
+            
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative overflow-hidden",
+                  isActive 
+                    ? "text-white bg-accent/10" 
+                    : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
+                )}
+              >
+                {isActive && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent rounded-r-full" />
+                )}
+                <Icon className={cn(
+                  "w-5 h-5 transition-colors",
+                  isActive ? "text-accent-light" : "text-text-secondary group-hover:text-text-primary"
+                )} />
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
 
-      <div className="p-4 border-t border-border mt-auto">
-        <div className="glass rounded-xl p-4 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-text-secondary">Conectado a Google Drive</p>
-            <a 
-              href="https://drive.google.com/drive/folders/182uxxUjN7KJJDm1vAZ_AEyKvAwwcTPxY?usp=drive_link" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-text-secondary hover:text-accent transition-colors p-1 rounded hover:bg-surface-elevated"
-              title="Abrir Google Drive"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-success">
-            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            <span>Sincronizado</span>
+        <div className="p-4 border-t border-border mt-auto">
+          <div className="glass rounded-xl p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-text-secondary">Conectado a Google Drive</p>
+              <a 
+                href="https://drive.google.com/drive/folders/182uxxUjN7KJJDm1vAZ_AEyKvAwwcTPxY?usp=drive_link" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-text-secondary hover:text-accent transition-colors p-1 rounded hover:bg-surface-elevated"
+                title="Abrir Google Drive"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-success">
+              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+              <span>Sincronizado</span>
+            </div>
           </div>
         </div>
-      </div>
-
-      {isDragOver && (
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 text-center border-2 border-dashed border-accent m-2 rounded-xl animate-fade-in pointer-events-none select-none">
-          <UploadCloud className="w-12 h-12 text-accent mb-3 animate-bounce" />
-          <h3 className="text-sm font-bold text-text-primary">Subida Rápida</h3>
-          <p className="text-xs text-text-secondary mt-1">Suelta los archivos aquí para configurarlos</p>
-        </div>
-      )}
-
-      {droppedFiles.length > 0 && (
-        <SmartUploadModal
-          isOpen={true}
-          onClose={() => setDroppedFiles([])}
-          initialFiles={droppedFiles}
-          artists={activeArtists}
-        />
-      )}
-    </aside>
+      </aside>
     </>
   );
 }

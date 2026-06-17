@@ -17,6 +17,7 @@ interface SmartUploadModalProps {
   onClose: () => void;
   initialFiles: File[];
   artists: Artist[];
+  preselectedArtistId?: string;
 }
 
 interface FileToUpload {
@@ -34,7 +35,7 @@ interface FileToUpload {
   resultLink?: string;
 }
 
-export function SmartUploadModal({ isOpen, onClose, initialFiles, artists }: SmartUploadModalProps) {
+export function SmartUploadModal({ isOpen, onClose, initialFiles, artists, preselectedArtistId }: SmartUploadModalProps) {
   const [files, setFiles] = React.useState<FileToUpload[]>([]);
   const [activeFileIndex, setActiveFileIndex] = React.useState<number>(0);
   const [artistFolders, setArtistFolders] = React.useState<Record<string, any[]>>({});
@@ -48,14 +49,19 @@ export function SmartUploadModal({ isOpen, onClose, initialFiles, artists }: Sma
     const initialized = initialFiles.map(file => {
       const nameLower = file.name.toLowerCase();
       
-      // Auto-detect Artist
+      // If a preselected artist was provided (e.g. dropped on artist card), use it
       let detectedArtistId = '';
-      for (const artist of artists) {
-        const artistNameClean = artist.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const fileClean = nameLower.replace(/[^a-z0-9]/g, '');
-        if (fileClean.includes(artistNameClean) || nameLower.includes(artist.name.toLowerCase())) {
-          detectedArtistId = artist.id; // Artist's Drive folder ID
-          break;
+      if (preselectedArtistId) {
+        detectedArtistId = preselectedArtistId;
+      } else {
+        // Auto-detect Artist from filename
+        for (const artist of artists) {
+          const artistNameClean = artist.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const fileClean = nameLower.replace(/[^a-z0-9]/g, '');
+          if (fileClean.includes(artistNameClean) || nameLower.includes(artist.name.toLowerCase())) {
+            detectedArtistId = artist.id;
+            break;
+          }
         }
       }
 
