@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { ShareModal } from './ShareModal';
 import { DeleteModal } from './DeleteModal';
+import { SmartUploadModal } from './SmartUploadModal';
 
 interface DriveItem {
   id: string;
@@ -62,6 +63,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
   // Modal states
   const [shareModalFile, setShareModalFile] = useState<DriveItem | null>(null);
   const [deleteModalFile, setDeleteModalFile] = useState<DriveItem | null>(null);
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<{files: File[], targetFolderId: string} | null>(null);
 
   // Recent files state
   const [recentFiles, setRecentFiles] = useState<DriveItem[]>([]);
@@ -368,20 +370,25 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [selectedIds, items, actionStack, redoStack]);
 
-  const uploadFiles = async (files: FileList | File[], targetFolderId: string) => {
-    if (!files || files.length === 0) return;
-
+  const executeSmartUpload = async (processedFiles: { file: File; folderId: string; customName: string; overwriteId?: string }[]) => {
     setIsUploading(true);
     let uploadedCount = 0;
     try {
-      for (let i = 0; i < files.length; i++) {
+      for (const item of processedFiles) {
         const formData = new FormData();
-        formData.append('file', files[i]);
-        formData.append('parentId', targetFolderId);
+        const renamedFile = new File([item.file], item.customName, { type: item.file.type });
+        formData.append('file', renamedFile);
+        formData.append('parentId', item.folderId);
+        
+        if (item.overwriteId) {
+          formData.append('overwrite', 'true');
+          formData.append('targetFileId', item.overwriteId);
+          formData.append('skipSimilarity', 'true');
+        }
 
         let res = await fetch('/api/files', { method: 'POST', body: formData });
         
-        if (res.status === 409) {
+        if (res.status === 409 && !item.overwriteId) {
           const json = await res.json();
           const replace = await customConfirm(`Se encontró un archivo similar: "${json.similarFile.name}".\n\nPresiona 'Aceptar' para REEMPLAZARLO.\nPresiona 'Cancelar' para decidir si quieres subirlo como archivo NUEVO.`);
           
@@ -390,7 +397,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             formData.append('targetFileId', json.similarFile.id);
             res = await fetch('/api/files', { method: 'POST', body: formData });
           } else {
-            const uploadAsNew = await customConfirm(`¿Deseas subir "${files[i].name}" como un archivo nuevo independiente?`);
+            const uploadAsNew = await customConfirm(`¿Deseas subir "${renamedFile.name}" como un archivo nuevo independiente?`);
             if (uploadAsNew) {
               formData.append('skipSimilarity', 'true');
               res = await fetch('/api/files', { method: 'POST', body: formData });
@@ -416,14 +423,21 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
       customAlert(err.message || 'Error al subir archivos');
     } finally {
       setIsUploading(false);
+      setPendingUploadFiles(null);
     }
+  };
+
+  const uploadFiles = async (files: FileList | File[], targetFolderId: string) => {
+    if (!files || files.length === 0) return;
+    setPendingUploadFiles({ files: Array.from(files), targetFolderId });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files) {
-      await uploadFiles(files, currentFolderId);
+    if (files && files.length > 0) {
+      setPendingUploadFiles({ files: Array.from(files), targetFolderId: currentFolderId });
     }
+    e.target.value = '';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -446,7 +460,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      await uploadFiles(files, currentFolderId);
+      setPendingUploadFiles({ files: Array.from(files), targetFolderId: currentFolderId });
       return;
     }
 
@@ -1316,6 +1330,16 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
             fetchItems(currentFolderId);
             fetchRecentFiles();
           }}
+        />
+      )}
+
+      {pendingUploadFiles && (
+        <SmartUploadModal 
+          files={pendingUploadFiles.files}
+          defaultFolderId={pendingUploadFiles.targetFolderId}
+          folders={Object.values(folderMap).map(f => ({ id: f.parentId === null ? rootFolderId : Object.keys(folderMap).find(k => folderMap[k] === f) || '', name: f.name }))}
+          onUpload={executeSmartUpload}
+          onCancel={() => setPendingUploadFiles(null)}
         />
       )}
 
