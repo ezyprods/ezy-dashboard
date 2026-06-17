@@ -72,7 +72,20 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
     hasMoved.current = false;
     startTime.current = Date.now();
 
+    const cleanup = () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+      window.removeEventListener('pointerup', cleanup);
+      window.removeEventListener('pointercancel', cleanup);
+    };
+
+    window.addEventListener('pointerup', cleanup);
+    window.addEventListener('pointercancel', cleanup);
+
     longPressTimer.current = setTimeout(() => {
+      cleanup();
       if (!hasMoved.current) {
         const rect = target.getBoundingClientRect();
         const cx = rect.left + rect.width / 2;
@@ -80,7 +93,7 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
         setCenter({ x: cx, y: cy });
         setShowRadial(true);
       }
-    }, 450);
+    }, 550);
   };
 
   const handleLocalPointerMove = (e: React.PointerEvent) => {
@@ -163,16 +176,9 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
     hasMoved.current = true;
   };
 
-  const handlePointerUp = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
   const handleClick = (e: React.MouseEvent) => {
     const elapsed = Date.now() - startTime.current;
-    if (hasMoved.current || elapsed > 300) {
+    if (hasMoved.current || elapsed > 400) {
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -228,7 +234,6 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
       onPointerMove={handleLocalPointerMove}
       onPointerLeave={handlePointerLeave} 
       onPointerCancel={handlePointerCancel}
-      onPointerUp={handlePointerUp}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
     >
