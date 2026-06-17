@@ -123,12 +123,6 @@ function generateName(original: string, subType: string, artistName?: string): s
   if (subType === 'bounce') {
     const artistPrefix = artistName ? `${artistName} - ` : '';
     return `${artistPrefix}${cleanName} [${dateStr}]${ext}`;
-  } else if (subType === 'master') {
-    return `[MASTER] ${cleanName}${ext}`;
-  } else if (subType === 'mix') {
-    return `[MIX] ${cleanName}${ext}`;
-  } else if (subType === 'stem') {
-    return `[STEM] ${cleanName}${ext}`;
   }
 
   return original;
@@ -152,9 +146,12 @@ export function SmartUploadModal({
   const [projectSubfolders, setProjectSubfolders] = useState<Record<string, any[]>>({});
   const [loadingFolders, setLoadingFolders] = useState<Record<string, boolean>>({});
 
+  const hasInitializedRef = useRef(false);
+
   // 1. Initialize files and apply fuzzy matching detection
   useEffect(() => {
-    if (initialFiles.length === 0) return;
+    if (initialFiles.length === 0 || hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
 
     const initialized = initialFiles.map((f, i) => {
       let mimeGroup: SmartUploadFile['mimeGroup'] = 'other';
@@ -623,7 +620,7 @@ export function SmartUploadModal({
               {item.uploadStatus === 'pending' && (
                 <div className="grid grid-cols-2 gap-4 mt-2">
                   {/* Select Artist */}
-                  <div className={preselectedArtistId ? "opacity-60 pointer-events-none" : ""}>
+                  <div>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
                     <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border">
                       {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
