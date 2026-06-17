@@ -149,16 +149,28 @@ export function SmartUploadModal({
   const hasInitializedRef = useRef(false);
 
   // Sort artists by recent interaction
-  const sortedArtists = [...artists].sort((a, b) => {
-    let accessedA = 0, accessedB = 0;
-    if (typeof window !== 'undefined') {
-      const storedA = localStorage.getItem(`accessed_${a.id}`);
-      const storedB = localStorage.getItem(`accessed_${b.id}`);
-      accessedA = storedA ? parseInt(storedA, 10) : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
-      accessedB = storedB ? parseInt(storedB, 10) : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
-    }
-    return accessedB - accessedA;
-  });
+  const [sortedArtists, setSortedArtists] = useState<any[]>([]);
+
+  useEffect(() => {
+    const sorted = [...artists].sort((a, b) => {
+      let accessedA = 0, accessedB = 0;
+      if (typeof window !== 'undefined') {
+        const storedA = localStorage.getItem(`accessed_${a.id}`);
+        const storedB = localStorage.getItem(`accessed_${b.id}`);
+        
+        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        
+        accessedA = storedA ? parseInt(storedA, 10) : (isNaN(timeA) ? 0 : timeA);
+        accessedB = storedB ? parseInt(storedB, 10) : (isNaN(timeB) ? 0 : timeB);
+        
+        if (isNaN(accessedA)) accessedA = 0;
+        if (isNaN(accessedB)) accessedB = 0;
+      }
+      return accessedB - accessedA;
+    });
+    setSortedArtists(sorted);
+  }, [artists]);
 
   // 1. Initialize files and apply fuzzy matching detection
   useEffect(() => {
@@ -362,18 +374,24 @@ export function SmartUploadModal({
     setItems(prev => prev.map(item => {
       if (item.id !== id) return item;
       const updated = { ...item, ...updates };
-      if (updates.subType !== undefined) {
-        const artistName = artists.find(a => a.id === updated.artistId)?.name;
-        updated.customName = generateName(item.file.name, updated.subType, artistName);
+      
+      // If subType or artistId changes, regenerate the name
+      if (updates.subType !== undefined || updates.artistId !== undefined) {
+        const subTypeToUse = updates.subType !== undefined ? updates.subType : item.subType;
+        const artistIdToUse = updates.artistId !== undefined ? updates.artistId : item.artistId;
+        const artistName = artists.find(a => a.id === artistIdToUse)?.name;
+        
+        updated.customName = generateName(item.file.name, subTypeToUse, artistName);
+        
         // Reset resolved folderId so the router effect can pick it up again
-        if (!preselectedFolderId) updated.folderId = ''; 
+        if (!preselectedFolderId && updates.artistId !== undefined && updates.artistId !== item.artistId) {
+           updated.projectId = ''; // Reset project if artist changes
+           updated.folderId = '';
+        } else if (!preselectedFolderId && updates.subType !== undefined) {
+           updated.folderId = '';
+        }
       }
-      if (updates.artistId !== undefined && updates.artistId !== item.artistId) {
-        const artistName = artists.find(a => a.id === updates.artistId)?.name;
-        updated.customName = generateName(item.file.name, updated.subType, artistName);
-        updated.projectId = ''; // Reset project for new artist
-        if (!preselectedFolderId) updated.folderId = '';
-      }
+      
       return updated;
     }));
   };
