@@ -50,7 +50,7 @@ const formatModificationTime = (timeStr?: string) => {
   return `${d}/${m}/${y} ${h}:${min}`;
 };
 
-export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string, rootName: string }) {
+export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }: { rootFolderId: string, rootName: string, artistEmail?: string, artistId?: string }) {
   const [currentFolderId, setCurrentFolderId] = useState(rootFolderId);
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([{ id: rootFolderId, name: rootName }]);
   const [items, setItems] = useState<DriveItem[]>([]);
@@ -370,61 +370,13 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [selectedIds, items, actionStack, redoStack]);
 
-  const executeSmartUpload = async (processedFiles: { file: File; folderId: string; customName: string; overwriteId?: string }[]) => {
-    setIsUploading(true);
-    let uploadedCount = 0;
-    try {
-      for (const item of processedFiles) {
-        const formData = new FormData();
-        const renamedFile = new File([item.file], item.customName, { type: item.file.type });
-        formData.append('file', renamedFile);
-        formData.append('parentId', item.folderId);
-        
-        if (item.overwriteId) {
-          formData.append('overwrite', 'true');
-          formData.append('targetFileId', item.overwriteId);
-          formData.append('skipSimilarity', 'true');
-        }
-
-        let res = await fetch('/api/files', { method: 'POST', body: formData });
-        
-        if (res.status === 409 && !item.overwriteId) {
-          const json = await res.json();
-          const replace = await customConfirm(`Se encontró un archivo similar: "${json.similarFile.name}".\n\nPresiona 'Aceptar' para REEMPLAZARLO.\nPresiona 'Cancelar' para decidir si quieres subirlo como archivo NUEVO.`);
-          
-          if (replace) {
-            formData.append('overwrite', 'true');
-            formData.append('targetFileId', json.similarFile.id);
-            res = await fetch('/api/files', { method: 'POST', body: formData });
-          } else {
-            const uploadAsNew = await customConfirm(`¿Deseas subir "${renamedFile.name}" como un archivo nuevo independiente?`);
-            if (uploadAsNew) {
-              formData.append('skipSimilarity', 'true');
-              res = await fetch('/api/files', { method: 'POST', body: formData });
-            } else {
-              continue;
-            }
-          }
-        }
-        
-        if (!res.ok) {
-           const errJson = await res.json().catch(() => null);
-           throw new Error(errJson?.error || 'Error al subir el archivo');
-        }
-        uploadedCount++;
-      }
-      if (uploadedCount > 0) {
-        customAlert('Archivos subidos con éxito');
-        fetchItems(currentFolderId);
-        fetchRecentFiles();
-        extraPanes.forEach(pane => fetchPaneItems(pane.folderId));
-      }
-    } catch (err: any) {
-      customAlert(err.message || 'Error al subir archivos');
-    } finally {
-      setIsUploading(false);
-      setPendingUploadFiles(null);
-    }
+  const executeSmartUpload = async () => {
+    // The SmartUploadModal now handles its own uploads internally.
+    // We just need to refresh the file list afterwards.
+    fetchItems(currentFolderId);
+    fetchRecentFiles();
+    extraPanes.forEach(pane => fetchPaneItems(pane.folderId));
+    setPendingUploadFiles(null);
   };
 
   const uploadFiles = async (files: FileList | File[], targetFolderId: string) => {
@@ -1339,6 +1291,8 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           defaultFolderId={pendingUploadFiles.targetFolderId}
           folders={Object.values(folderMap).map(f => ({ id: f.parentId === null ? rootFolderId : Object.keys(folderMap).find(k => folderMap[k] === f) || '', name: f.name }))}
           artistName={rootName}
+          artistEmail={artistEmail}
+          artistId={artistId}
           onUpload={executeSmartUpload}
           onCancel={() => setPendingUploadFiles(null)}
         />

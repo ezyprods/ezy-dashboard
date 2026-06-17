@@ -412,7 +412,7 @@ export default function ArtistDetailPage() {
 
       {/* Tab Content: Files (Drive Explorer) */}
       {activeTab === 'files' && (
-        <DriveExplorer rootFolderId={artist?.driveFolderId || artistId} rootName={artist?.name || 'Archivos'} />
+        <DriveExplorer rootFolderId={artist?.driveFolderId || artistId} rootName={artist?.name || 'Archivos'} artistEmail={artist?.email} artistId={artistId} />
       )}
 
       {/* Tab Content: Portal */}
