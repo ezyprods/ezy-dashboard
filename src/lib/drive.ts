@@ -3,28 +3,40 @@ import { DRIVE_ROOT_FOLDER_ID } from './constants';
 import { getFileType } from './utils';
 import type { DriveFile, FileType } from '@/types';
 
-// Singleton para el cliente de Google Auth
-export const getAuthClient = () => {
+// Cliente de Google Auth para Drive
+export const getDriveAuthClient = () => {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.BETTER_AUTH_URL + '/api/auth/callback/google'
   );
 
-  // Usamos un Refresh Token permanente del productor (el admin)
-  // ya que la app siempre leerá/escribirá en SU carpeta de Drive
-  if (process.env.GOOGLE_REFRESH_TOKEN) {
-    oauth2Client.setCredentials({
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN
-    });
+  const token = process.env.GOOGLE_DRIVE_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN;
+  if (token) {
+    oauth2Client.setCredentials({ refresh_token: token });
   }
 
   return oauth2Client;
 };
 
-// Cliente de Drive
+// Cliente de Google Auth para Calendar
+export const getCalendarAuthClient = () => {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.BETTER_AUTH_URL + '/api/auth/callback/google'
+  );
+
+  const token = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN;
+  if (token) {
+    oauth2Client.setCredentials({ refresh_token: token });
+  }
+
+  return oauth2Client;
+};
+
 export const getDriveService = () => {
-  return google.drive({ version: 'v3', auth: getAuthClient() });
+  return google.drive({ version: 'v3', auth: getDriveAuthClient() });
 };
 
 /**

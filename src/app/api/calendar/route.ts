@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { getAuthClient } from '@/lib/drive';
+import { getCalendarAuthClient } from '@/lib/drive';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get('days') || '30', 10);
 
-    const auth = getAuthClient();
+    const auth = getCalendarAuthClient();
     const calendar = google.calendar({ version: 'v3', auth });
     
     // Configurar fechas
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const auth = getAuthClient();
+    const auth = getCalendarAuthClient();
     const calendar = google.calendar({ version: 'v3', auth });
 
     const response = await calendar.events.insert({

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { findAndReadJsonFile, saveJsonFile, getAuthClient } from '@/lib/drive';
+import { findAndReadJsonFile, saveJsonFile, getCalendarAuthClient } from '@/lib/drive';
 import { randomUUID } from 'crypto';
 import { google } from 'googleapis';
 import type { FlexBoardData, Task } from '@/types';
@@ -40,7 +40,7 @@ async function syncProductionGridToGoogleCalendar(
   oldGrid: any
 ) {
   try {
-    const auth = getAuthClient();
+    const auth = getCalendarAuthClient();
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 

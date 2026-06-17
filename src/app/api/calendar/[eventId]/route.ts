@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { getAuthClient } from '@/lib/drive';
+import { getCalendarAuthClient } from '@/lib/drive';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ eventId: string }> }) {
   try {
@@ -12,7 +12,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ even
       return NextResponse.json({ error: 'eventId is required' }, { status: 400 });
     }
 
-    const auth = getAuthClient();
+    const auth = getCalendarAuthClient();
     const calendar = google.calendar({ version: 'v3', auth });
     
     // First, fetch the existing event to keep any properties we're not overwriting
@@ -52,7 +52,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ e
       return NextResponse.json({ error: 'eventId is required' }, { status: 400 });
     }
 
-    const auth = getAuthClient();
+    const auth = getCalendarAuthClient();
     const calendar = google.calendar({ version: 'v3', auth });
 
     await calendar.events.delete({
