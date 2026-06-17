@@ -28,6 +28,7 @@ export interface SmartUploadFile {
   uploadProgress?: number;
   uploadError?: string;
   resultId?: string;
+  notifyArtist?: boolean;
 }
 
 interface SmartUploadModalProps {
@@ -224,6 +225,7 @@ export function SmartUploadModal({
         isAnalyzing: mimeGroup === 'audio',
         uploadStatus: 'pending' as const,
         uploadProgress: 0,
+        notifyArtist: false,
       };
     });
 
@@ -539,23 +541,34 @@ export function SmartUploadModal({
       abortControllersRef.current.set(item.id, ctrl);
 
       try {
-        const formData = new FormData();
         let finalName = finalCustomName;
         if (!finalName.endsWith(extension)) finalName += extension;
         
         const renamedFile = new File([fileToProcess], finalName, { type: fileToProcess.type });
-        formData.append('file', renamedFile);
 
-        if (fileToReplaceId) {
-          formData.append('fileId', fileToReplaceId); // Overwrite mode
-        } else {
-          formData.append('parentId', finalFolderId); // New file mode
+        const sessionRes = await fetch('/api/files/upload-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+             name: finalName,
+             mimeType: renamedFile.type || 'application/octet-stream',
+             parentId: finalFolderId,
+             fileId: fileToReplaceId
+          })
+        });
+
+        if (!sessionRes.ok) {
+           const errData = await sessionRes.json();
+           throw new Error(errData.error || 'Failed to create upload session');
         }
 
-        // Fake progress logic using XMLHttpRequest
+        const { uploadUrl } = await sessionRes.json();
+
+        // Real progress logic using XMLHttpRequest
         const uploadTask = new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/api/files');
+          xhr.open('PUT', uploadUrl);
+          xhr.setRequestHeader('Content-Type', renamedFile.type || 'application/octet-stream');
           
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
@@ -566,11 +579,13 @@ export function SmartUploadModal({
 
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-              const data = JSON.parse(xhr.responseText);
-              updateItem(item.id, { uploadStatus: 'done', uploadProgress: 100, resultId: data.file?.id });
+              let responseData: any = {};
+              try { responseData = JSON.parse(xhr.responseText); } catch (e) {}
               
-              // Email notification for Masters
-              if (item.subType === 'master') {
+              updateItem(item.id, { uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId });
+              
+              // Email notification
+              if (item.notifyArtist) {
                 const artistData = artists.find(a => a.id === item.artistId);
                 if (artistData?.email) {
                   fetch('/api/notifications/master', {
@@ -579,9 +594,9 @@ export function SmartUploadModal({
                     body: JSON.stringify({
                       artistEmail: artistData.email,
                       artistName: artistData.name,
-                      songName: item.file.name.replace(/\.[^.]+$/, '').replace(/\[MASTER\]\s*/i, ''),
+                      songName: finalName.replace(/\.[^.]+$/, '').replace(/\[MASTER\]\s*/i, ''),
                       isUpdate: !!fileToReplaceId,
-                      downloadLink: data.file?.webViewLink || ''
+                      downloadLink: ''
                     })
                   }).catch(console.error);
                 }
@@ -596,7 +611,7 @@ export function SmartUploadModal({
           xhr.onabort = () => reject(new Error('Cancelled by user'));
           
           ctrl.signal.addEventListener('abort', () => xhr.abort());
-          xhr.send(formData);
+          xhr.send(renamedFile);
         });
 
         await uploadTask;
@@ -622,14 +637,14 @@ export function SmartUploadModal({
   
   // Collect unique artists that will receive emails
   const artistsReceivingEmails = Array.from(new Set(
-    items.filter(i => i.subType === 'master')
+    items.filter(i => i.notifyArtist)
          .map(i => artists.find(a => a.id === i.artistId))
          .filter(a => a && a.email)
   ));
 
   const modal = (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/70 backdrop-blur-md p-6 animate-in fade-in duration-200">
-      <div className="glass w-full max-w-4xl max-h-[90vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_80px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 zoom-in-95 duration-300">
+    <div className="fixed bottom-4 right-4 z-[500] pointer-events-none p-4 flex flex-col items-end justify-end">
+      <div className="pointer-events-auto glass w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_80px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 zoom-in-95 duration-300">
         {/* Header */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-border shrink-0 bg-surface/50 backdrop-blur-xl">
           <div className="flex items-center gap-4">
@@ -711,7 +726,7 @@ export function SmartUploadModal({
 
               {/* Controls - only show when pending */}
               {item.uploadStatus === 'pending' && (
-                <div className="grid grid-cols-2 gap-4 mt-2">
+                <div className="flex flex-col gap-3 mt-2">
                   {/* Select Artist */}
                   <div>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
@@ -754,12 +769,29 @@ export function SmartUploadModal({
                     </div>
                   )}
 
-                  {/* Generated name preview — full width or partial depending on audio */}
-                  <div className={item.mimeGroup === 'audio' ? '' : 'col-span-2'}>
+                  {/* Generated name preview */}
+                  <div className="flex flex-col">
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Nombre final en Drive</label>
-                    <div className="flex items-center gap-2 bg-surface border border-border/40 rounded-lg px-4 py-2 h-[38px] shadow-inner">
-                      <span className="text-sm text-text-primary font-mono break-all line-clamp-1" title={item.customName}>{item.customName}</span>
-                    </div>
+                    <input 
+                      type="text" 
+                      value={item.customName} 
+                      onChange={e => updateItem(item.id, { customName: e.target.value })}
+                      className="w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none"
+                    />
+                  </div>
+
+                  {/* Notify Artist Toggle */}
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="checkbox"
+                      id={`notify-${item.id}`}
+                      checked={!!item.notifyArtist}
+                      onChange={e => updateItem(item.id, { notifyArtist: e.target.checked })}
+                      className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated"
+                    />
+                    <label htmlFor={`notify-${item.id}`} className="text-sm text-text-secondary cursor-pointer hover:text-text-primary transition-colors">
+                      Avisar al artista por email al finalizar
+                    </label>
                   </div>
                 </div>
               )}

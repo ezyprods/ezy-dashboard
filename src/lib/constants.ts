@@ -15,7 +15,7 @@ export const ARTIST_FOLDER_STRUCTURE = [
 // Drive folder structure template for new projects
 export const PROJECT_FOLDER_STRUCTURE = [
   '01_Sesiones_y_DAW',
-  '02_Bounces_y_Grabaciones',
+  'Bounces',
   '03_Revisiones_y_Mezclas',
   '04_Masters_Finales',
   '05_Referencias_y_Otros',
@@ -23,7 +23,7 @@ export const PROJECT_FOLDER_STRUCTURE = [
 
 export const FOLDER_NAME_MAP: Record<string, string> = {
   Sessions: '01_Sesiones_y_DAW',
-  Bounces: '02_Bounces_y_Grabaciones',
+  Bounces: 'Bounces',
   Mix: '03_Revisiones_y_Mezclas',
   Master: '04_Masters_Finales',
   References: '05_Referencias_y_Otros',
