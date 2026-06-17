@@ -948,7 +948,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
             )}
           >
             {isUploading && (
-              <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-55 flex flex-col items-center justify-center p-4 text-center">
+              <div className="absolute inset-0 bg-background/80 backdrop-blur-md z-55 flex flex-col items-center justify-center p-4 text-center pointer-events-none">
                 <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
                   <Loader2 className="w-6 h-6 animate-spin text-accent" />
                 </div>

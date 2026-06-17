@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle } from 'lucide-react';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { customConfirm } from '@/lib/dialog';
 import { createPortal } from 'react-dom';
@@ -147,6 +147,18 @@ export function SmartUploadModal({
   const [loadingFolders, setLoadingFolders] = useState<Record<string, boolean>>({});
 
   const hasInitializedRef = useRef(false);
+
+  // Sort artists by recent interaction
+  const sortedArtists = [...artists].sort((a, b) => {
+    let accessedA = 0, accessedB = 0;
+    if (typeof window !== 'undefined') {
+      const storedA = localStorage.getItem(`accessed_${a.id}`);
+      const storedB = localStorage.getItem(`accessed_${b.id}`);
+      accessedA = storedA ? parseInt(storedA, 10) : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
+      accessedB = storedB ? parseInt(storedB, 10) : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
+    }
+    return accessedB - accessedA;
+  });
 
   // 1. Initialize files and apply fuzzy matching detection
   useEffect(() => {
@@ -622,33 +634,42 @@ export function SmartUploadModal({
                   {/* Select Artist */}
                   <div>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
-                    <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border">
-                      {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
+                    <div className="relative">
+                      <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg pl-3 pr-10 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border appearance-none cursor-pointer">
+                        {sortedArtists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
+                    </div>
                   </div>
 
                   {/* Select Project (only if it's a mix/master/stem that requires a project) */}
                   <div className={(item.subType === 'bounce' || preselectedFolderId) ? "opacity-50 pointer-events-none" : ""}>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
-                    <select value={item.projectId} onChange={e => updateItem(item.id, { projectId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border">
-                      {item.subType === 'bounce' ? (
-                         <option value="">Carpeta General (Artista)</option>
-                      ) : (
-                        projectList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
-                      )}
-                    </select>
+                    <div className="relative">
+                      <select value={item.projectId} onChange={e => updateItem(item.id, { projectId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg pl-3 pr-10 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border appearance-none cursor-pointer">
+                        {item.subType === 'bounce' ? (
+                           <option value="">Carpeta General (Artista)</option>
+                        ) : (
+                          projectList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                        )}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
+                    </div>
                   </div>
 
                   {item.mimeGroup === 'audio' && (
                     <div>
                       <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Tipo de Archivo</label>
-                      <select value={item.subType} onChange={e => updateItem(item.id, { subType: e.target.value as any })} className="w-full bg-surface-elevated border border-border/60 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border">
-                        <option value="bounce">🎵 Bounce (Demo)</option>
-                        <option value="mix">🎛️ Mix</option>
-                        <option value="master">💿 Master (Final)</option>
-                        <option value="stem">🎸 Stem</option>
-                        <option value="none">📁 Otro Audio</option>
-                      </select>
+                      <div className="relative">
+                        <select value={item.subType} onChange={e => updateItem(item.id, { subType: e.target.value as any })} className="w-full bg-surface-elevated border border-border/60 rounded-lg pl-3 pr-10 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border appearance-none cursor-pointer">
+                          <option value="bounce">🎵 Bounce (Demo)</option>
+                          <option value="mix">🎛️ Mix</option>
+                          <option value="master">💿 Master (Final)</option>
+                          <option value="stem">🎸 Stem</option>
+                          <option value="none">📁 Otro Audio</option>
+                        </select>
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
+                      </div>
                     </div>
                   )}
 
