@@ -29,9 +29,10 @@ export default function DashboardPage() {
       .then(res => res.json())
       .then(data => {
         if (data.needsAuth) {
-          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Pulsa Aceptar para reconectar y volver a ver tu información.').then(() => {
+          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Redirigiendo para reconectar...');
+          setTimeout(() => {
             window.location.href = '/api/auth/google';
-          });
+          }, 2000);
           return;
         }
         setPulseData(data);

@@ -55,9 +55,10 @@ export default function MatricesPage() {
         const artistsData = await artistsRes.json();
 
         if (artistsData.needsAuth || matricesData.needsAuth) {
-          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Pulsa Aceptar para reconectar y volver a ver tus matrices.').then(() => {
+          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Redirigiendo para reconectar...');
+          setTimeout(() => {
             window.location.href = '/api/auth/google';
-          });
+          }, 2000);
           return;
         }
         

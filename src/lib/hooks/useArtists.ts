@@ -18,9 +18,10 @@ export function useArtists() {
       }
       const data = await res.json();
       if (data.needsAuth) {
-        customAlert('Tu sesión de Google Drive ha expirado por seguridad. Pulsa Aceptar para reconectar y volver a ver tus artistas.').then(() => {
+        customAlert('Tu sesión de Google Drive ha expirado por seguridad. Redirigiendo para reconectar...');
+        setTimeout(() => {
           window.location.href = '/api/auth/google';
-        });
+        }, 2000);
         throw new Error(data.error || 'Token de Google expirado.');
       }
       setArtists(data.artists || []);
