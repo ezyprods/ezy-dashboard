@@ -27,7 +27,8 @@ export interface SmartUploadFile {
 async function detectAudioFeatures(file: File): Promise<{ bpm: number | null; key: string | null }> {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const AudioCtxClass: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const audioCtx = new AudioCtxClass();
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     audioCtx.close();
 
