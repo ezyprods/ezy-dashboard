@@ -1338,6 +1338,7 @@ export function DriveExplorer({ rootFolderId, rootName }: { rootFolderId: string
           files={pendingUploadFiles.files}
           defaultFolderId={pendingUploadFiles.targetFolderId}
           folders={Object.values(folderMap).map(f => ({ id: f.parentId === null ? rootFolderId : Object.keys(folderMap).find(k => folderMap[k] === f) || '', name: f.name }))}
+          artistName={rootName}
           onUpload={executeSmartUpload}
           onCancel={() => setPendingUploadFiles(null)}
         />

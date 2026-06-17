@@ -18,12 +18,14 @@ export function SmartUploadModal({
   files,
   defaultFolderId,
   folders,
+  artistName,
   onUpload,
   onCancel
 }: {
   files: File[];
   defaultFolderId: string;
   folders: { id: string; name: string }[];
+  artistName?: string;
   onUpload: (processedFiles: { file: File; folderId: string; customName: string; overwriteId?: string }[]) => void;
   onCancel: () => void;
 }) {
@@ -68,11 +70,12 @@ export function SmartUploadModal({
     const baseName = original.replace(/\.[^.]+$/, '');
 
     // Limpiar prefijos existentes si se detectan
-    let cleanName = baseName.replace(/^\[.*?\]\s*/, '').replace(/^(Master|Bounce|Mix|Stem)_/i, '');
+    let cleanName = baseName.replace(/^\[.*?\]\s*/, '').replace(/^(Master|Bounce|Mix|Stem)_/i, '').trim();
 
     if (subType === 'bounce') {
       const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-      return `[Bounce - ${dateStr}] ${cleanName}${ext}`;
+      const artistPrefix = artistName ? `${artistName} - ` : '';
+      return `${artistPrefix}${cleanName} [${dateStr}]${ext}`;
     } else if (subType === 'master') {
       return `[MASTER] ${cleanName}${ext}`;
     } else if (subType === 'mix') {
@@ -112,15 +115,12 @@ export function SmartUploadModal({
             const data = await res.json();
             const existingFiles = data.items || [];
             
-            // Buscar posibles Masters anteriores: audios que contengan "master" en el nombre, 
-            // o que tengan el mismo nombre base.
             const possibleMasters = existingFiles.filter((f: any) => 
               f.mimeType.startsWith('audio/') && 
               (f.name.toLowerCase().includes('master') || f.name.toLowerCase() === item.customName.toLowerCase())
             );
 
             if (possibleMasters.length > 0) {
-              // Tomar el más probable o el más reciente
               const target = possibleMasters[0];
               const confirm = await customConfirm(`Para el archivo "${item.file.name}", hemos detectado un Master anterior en este proyecto: "${target.name}".\n\n¿Deseas reemplazarlo con esta nueva versión? (Si cancelas, se subirá como archivo nuevo)`);
               if (confirm) {
@@ -130,6 +130,35 @@ export function SmartUploadModal({
           }
         } catch (e) {
           console.error('Error verificando masters existentes', e);
+        }
+      } else if (item.subType === 'bounce') {
+        try {
+          // Inteligencia para Bounces: detectar versiones previas
+          const res = await fetch(`/api/files?folderId=${item.folderId}`);
+          if (res.ok) {
+            const data = await res.json();
+            const existingFiles = data.items || [];
+            
+            // Buscar otros audios que contengan el nombre base de la canción (limpio de fechas)
+            const cleanBase = item.file.name.replace(/\.[^.]+$/, '').replace(/^\[.*?\]\s*/, '').replace(/^(Master|Bounce|Mix|Stem)_/i, '').trim().toLowerCase();
+            
+            const existingBounces = existingFiles.filter((f: any) => {
+               if (!f.mimeType.startsWith('audio/')) return false;
+               const fClean = f.name.toLowerCase();
+               return fClean.includes(cleanBase) && (fClean.includes('bounce') || fClean.match(/\[\d{4}-\d{2}-\d{2}\]/));
+            });
+
+            if (existingBounces.length > 0) {
+              const confirmReplace = await customConfirm(`Hemos detectado ${existingBounces.length} versión(es) anterior(es) de este Bounce ("${cleanBase}").\n\nPor defecto, los bounces se acumulan como historial.\n\nPresiona 'Aceptar' si prefieres REEMPLAZAR la última versión.\nPresiona 'Cancelar' para guardarlo como un historial nuevo.`);
+              if (confirmReplace) {
+                // Sobrescribir el más reciente
+                const sorted = existingBounces.sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+                overwriteId = sorted[0].id;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error verificando bounces existentes', e);
         }
       }
 
