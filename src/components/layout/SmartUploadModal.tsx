@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { findBestMatch } from '@/lib/utils';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
 import { useArtists } from '@/lib/hooks/useArtists';
+import { convertWavToMp3 } from '@/lib/audioEncoder';
 
 export interface SmartUploadFile {
   file: File;
@@ -337,18 +338,32 @@ export function SmartUploadModal({
       if (item.subType === 'bounce') {
         const aFolders = artistFolders[item.artistId] || [];
         const bouncesFolder = aFolders.find(f => f.name.toLowerCase().includes('bounce') || f.name === FOLDER_NAME_MAP['Bounces']);
-        const newTarget = bouncesFolder ? bouncesFolder.id : item.artistId; // Fallback to artist root
+        const newTarget = bouncesFolder ? bouncesFolder.id : `CREATE_FOLDER::${FOLDER_NAME_MAP['Bounces']}::${item.artistId}`; 
         if (targetFolderId !== newTarget) {
           targetFolderId = newTarget;
           madeChanges = true;
         }
       } 
-      // If it's Master/Mix, route inside the specific Project folder
-      else if (item.projectId) {
+      // If it's Master, route directly to project root
+      else if (item.subType === 'master' && item.projectId) {
+        const newTarget = item.projectId;
+        if (targetFolderId !== newTarget) {
+          targetFolderId = newTarget;
+          madeChanges = true;
+        }
+      }
+      // If it's Mix/Stem/Session, route inside the specific Project folder
+      else if (item.projectId && item.subType !== 'none' && item.subType !== 'master') {
         const pFolders = projectSubfolders[item.projectId] || [];
-        const mappedName = FOLDER_NAME_MAP[item.subType === 'master' ? 'Master' : item.subType === 'mix' ? 'Mix' : 'Sessions'];
+        
+        let mappedName = '';
+        if (item.subType === 'mix') mappedName = FOLDER_NAME_MAP['Mix'];
+        else if (item.subType === 'stem') mappedName = FOLDER_NAME_MAP['Sessions'];
+        else mappedName = FOLDER_NAME_MAP['Other'] || '05_Referencias_y_Otros';
+
         const specificFolder = pFolders.find(f => f.name.toLowerCase() === item.subType || f.name === mappedName);
-        const newTarget = specificFolder ? specificFolder.id : item.projectId; // Fallback to project root
+        const newTarget = specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName}::${item.projectId}`;
+        
         if (targetFolderId !== newTarget) {
           targetFolderId = newTarget;
           madeChanges = true;
@@ -459,34 +474,82 @@ export function SmartUploadModal({
 
     let processedCount = 0;
     const itemsToUpload = items.filter(i => i.uploadStatus === 'pending');
+    const newlyCreatedFolders = new Map<string, string>(); // 'folderName::parentId' -> 'newFolderId'
 
     for (const item of itemsToUpload) {
       if (item.uploadStatus === 'cancelled') continue;
-      if (!item.folderId) {
+      
+      let finalFolderId = item.folderId;
+      
+      if (!finalFolderId) {
         updateItem(item.id, { uploadStatus: 'error', uploadError: 'No target folder resolved' });
         continue;
       }
 
-      updateItem(item.id, { uploadStatus: 'uploading', uploadProgress: 10 });
-      
-      const fileToReplaceId = await preCheckItem(item);
+      updateItem(item.id, { uploadStatus: 'uploading', uploadProgress: 5 });
+
+      // Handle Auto Folder Creation
+      if (finalFolderId.startsWith('CREATE_FOLDER::')) {
+        const [_, fName, pId] = finalFolderId.split('::');
+        const cacheKey = `${fName}::${pId}`;
+        if (newlyCreatedFolders.has(cacheKey)) {
+          finalFolderId = newlyCreatedFolders.get(cacheKey)!;
+        } else {
+          try {
+            const res = await fetch('/api/folders', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: fName, parentId: pId })
+            });
+            if (!res.ok) throw new Error('Failed to create folder');
+            const data = await res.json();
+            finalFolderId = data.id;
+            newlyCreatedFolders.set(cacheKey, finalFolderId);
+          } catch (err) {
+             updateItem(item.id, { uploadStatus: 'error', uploadError: `Error al crear la subcarpeta: ${fName}` });
+             continue;
+          }
+        }
+      }
+
+      let fileToProcess = item.file;
+      let finalCustomName = item.customName;
+      let extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
+
+      // WAV to MP3 Conversion for Bounces
+      if (item.subType === 'bounce' && extension.toLowerCase() === '.wav') {
+        try {
+          fileToProcess = await convertWavToMp3(item.file, (p) => {
+            updateItem(item.id, { uploadProgress: 5 + Math.floor(p * 0.15) }); // up to 20%
+          });
+          extension = '.mp3';
+          finalCustomName = finalCustomName.replace(/\.wav$/i, '') + '.mp3';
+        } catch (err) {
+          console.error('Error converting WAV to MP3', err);
+          updateItem(item.id, { uploadStatus: 'error', uploadError: 'Error al convertir WAV a MP3' });
+          continue;
+        }
+      }
+
+      // Pre-check uses the temporary updated item to search the correct folder
+      const tempItemForCheck = { ...item, folderId: finalFolderId, file: fileToProcess, customName: finalCustomName };
+      const fileToReplaceId = await preCheckItem(tempItemForCheck);
 
       const ctrl = new AbortController();
       abortControllersRef.current.set(item.id, ctrl);
 
       try {
         const formData = new FormData();
-        const extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
-        let finalName = item.customName;
+        let finalName = finalCustomName;
         if (!finalName.endsWith(extension)) finalName += extension;
         
-        const renamedFile = new File([item.file], finalName, { type: item.file.type });
+        const renamedFile = new File([fileToProcess], finalName, { type: fileToProcess.type });
         formData.append('file', renamedFile);
 
         if (fileToReplaceId) {
           formData.append('fileId', fileToReplaceId); // Overwrite mode
         } else {
-          formData.append('parentId', item.folderId); // New file mode
+          formData.append('parentId', finalFolderId); // New file mode
         }
 
         // Fake progress logic using XMLHttpRequest

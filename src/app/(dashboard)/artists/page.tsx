@@ -147,13 +147,7 @@ export default function ArtistsPage() {
         </div>
       </div>
 
-      {/* Drag hint banner - appears when dragging files over the page */}
-      {isDraggingFiles && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-accent/10 border border-accent/30 text-accent text-sm font-medium mb-4 animate-fade-in">
-          <UploadCloud className="w-4 h-4 shrink-0 animate-bounce" />
-          Suelta los archivos encima del artista al que pertenecen
-        </div>
-      )}
+      {/* Drag hint banner removed as requested */}
 
       {/* Content */}
       {isLoading ? (
