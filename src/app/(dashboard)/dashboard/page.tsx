@@ -28,6 +28,12 @@ export default function DashboardPage() {
     fetch('/api/dashboard/pulse')
       .then(res => res.json())
       .then(data => {
+        if (data.needsAuth) {
+          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Pulsa Aceptar para reconectar y volver a ver tu información.').then(() => {
+            window.location.href = '/api/auth/google';
+          });
+          return;
+        }
         setPulseData(data);
         setArtists(data.artists || []);
         setIsLoading(false);

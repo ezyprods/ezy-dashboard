@@ -53,6 +53,13 @@ export default function MatricesPage() {
       if (matricesRes.ok && artistsRes.ok) {
         const matricesData = await matricesRes.json();
         const artistsData = await artistsRes.json();
+
+        if (artistsData.needsAuth || matricesData.needsAuth) {
+          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Pulsa Aceptar para reconectar y volver a ver tus matrices.').then(() => {
+            window.location.href = '/api/auth/google';
+          });
+          return;
+        }
         
         setMatrices(matricesData.matrices || []);
         setArtists(artistsData.artists || []);

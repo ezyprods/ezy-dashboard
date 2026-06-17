@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Artist, CreateArtistInput } from '@/types';
+import { customAlert } from '@/lib/dialog';
 
 export function useArtists() {
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -16,6 +17,12 @@ export function useArtists() {
         throw new Error(errorData.error || 'Failed to fetch artists');
       }
       const data = await res.json();
+      if (data.needsAuth) {
+        customAlert('Tu sesión de Google Drive ha expirado por seguridad. Pulsa Aceptar para reconectar y volver a ver tus artistas.').then(() => {
+          window.location.href = '/api/auth/google';
+        });
+        throw new Error(data.error || 'Token de Google expirado.');
+      }
       setArtists(data.artists || []);
     } catch (err: any) {
       console.error('Error fetching artists:', err);
