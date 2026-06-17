@@ -88,7 +88,8 @@ export function GlobalDropZone() {
   const isArtistsList = pathname === '/artists';
 
   // Don't show global overlay when inside an artist folder (DriveExplorer handles it)
-  const shouldShowOverlay = isDraggingFiles && !isInsideArtistFolder;
+  // or when on the artists list page (Cards handle it)
+  const shouldShowOverlay = isDraggingFiles && !isInsideArtistFolder && !isArtistsList;
 
   const handleGenericDrop = (e: React.DragEvent) => {
     e.preventDefault();
