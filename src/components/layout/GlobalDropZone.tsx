@@ -103,74 +103,41 @@ export function GlobalDropZone() {
   if (typeof document === 'undefined') return null;
 
   const overlay = shouldShowOverlay ? (
-    <div className="fixed inset-0 z-[400] pointer-events-none">
+    // The ENTIRE overlay is the drop target — no specific zone
+    <div
+      className="fixed inset-0 z-[400] pointer-events-auto"
+      onDragEnter={(e) => { e.preventDefault(); setHoveredZone(true); }}
+      onDragLeave={(e) => {
+        // Only clear if leaving the window entirely
+        if (e.clientX === 0 && e.clientY === 0) setHoveredZone(false);
+      }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        setHoveredZone(false);
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+          triggerUploadForArtist(files, preselectedArtistId || (activeArtists[0]?.id ?? ''));
+        }
+      }}
+    >
       {/* Semi-transparent backdrop */}
-      <div className="absolute inset-0 bg-background/85 backdrop-blur-md" />
+      <div className={`absolute inset-0 transition-colors duration-150 ${hoveredZone ? 'bg-background/90 backdrop-blur-md' : 'bg-background/80 backdrop-blur-sm'}`} />
 
-      {/* Content */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-center p-8 gap-6">
-        
-        {/* Title */}
-        <div className="text-center mb-2 pointer-events-none">
-          <div className="w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto mb-4">
-            <UploadCloud className="w-8 h-8 text-accent animate-pulse" />
-          </div>
-          <h2 className="text-2xl font-bold text-text-primary">Subir Archivos</h2>
-          <p className="text-text-secondary mt-1 text-sm">
-            {isArtistsList
-              ? 'Suelta los archivos encima del artista al que pertenecen'
-              : 'Suelta los archivos aquí para procesarlos con Subida Inteligente'}
+      {/* Centered message only — no box to drop into */}
+      <div className="relative z-10 h-full flex flex-col items-center justify-center gap-5 pointer-events-none select-none">
+        <div className={`w-20 h-20 rounded-2xl border-2 flex items-center justify-center transition-all duration-200 ${hoveredZone ? 'border-accent bg-accent/20 scale-110' : 'border-accent/30 bg-accent/5'}`}>
+          <UploadCloud className={`w-10 h-10 transition-colors ${hoveredZone ? 'text-accent' : 'text-accent/60'}`} />
+        </div>
+        <div className="text-center">
+          <h2 className={`text-2xl font-bold transition-colors ${hoveredZone ? 'text-accent' : 'text-text-primary'}`}>
+            {hoveredZone ? '¡Suelta donde quieras!' : 'Suelta en cualquier parte de la pantalla'}
+          </h2>
+          <p className="text-text-secondary mt-2 text-sm">
+            El sistema detectará el tipo de archivo y te pedirá los detalles
           </p>
         </div>
-
-        {isArtistsList ? (
-          /* Artist cards grid — each is a drop target */
-          <div className="pointer-events-auto w-full max-w-2xl">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-              {activeArtists.map(artist => (
-                <ArtistDropCard
-                  key={artist.id}
-                  artist={artist}
-                  onDrop={(files, artistId) => triggerUploadForArtist(files, artistId)}
-                />
-              ))}
-              {activeArtists.length === 0 && (
-                <div className="col-span-2 text-center text-text-secondary text-sm py-8">
-                  No tienes artistas. Crea uno primero.
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          /* Generic drop zone */
-          <div
-            className="pointer-events-auto"
-            onDragEnter={(e) => { e.preventDefault(); zoneCounter.current++; setHoveredZone(true); }}
-            onDragLeave={() => { zoneCounter.current--; if (zoneCounter.current <= 0) { zoneCounter.current = 0; setHoveredZone(false); } }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleGenericDrop}
-          >
-            <div className={`
-              w-80 h-48 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 transition-all duration-200
-              ${hoveredZone
-                ? 'border-accent bg-accent/15 scale-105 shadow-2xl shadow-accent/20'
-                : 'border-accent/40 bg-accent/5'}
-            `}>
-              <UploadCloud className={`w-10 h-10 transition-colors ${hoveredZone ? 'text-accent' : 'text-accent/60'}`} />
-              <div className="text-center">
-                <p className={`font-semibold text-sm transition-colors ${hoveredZone ? 'text-accent' : 'text-text-primary'}`}>
-                  {hoveredZone ? '¡Suelta aquí!' : 'Zona de subida'}
-                </p>
-                <p className="text-xs text-text-secondary mt-0.5">Audio, imágenes, vídeos y más</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Press Escape hint */}
-        <p className="text-xs text-text-secondary pointer-events-none opacity-60 mt-2">
-          Pulsa Escape para cancelar
-        </p>
+        <p className="text-xs text-text-secondary opacity-50 mt-4">Pulsa Escape para cancelar</p>
       </div>
     </div>
   ) : null;
@@ -185,7 +152,6 @@ export function GlobalDropZone() {
           isOpen={true}
           onClose={clearDroppedFiles}
           initialFiles={droppedFiles}
-          artists={activeArtists}
           preselectedArtistId={preselectedArtistId ?? undefined}
         />
       )}

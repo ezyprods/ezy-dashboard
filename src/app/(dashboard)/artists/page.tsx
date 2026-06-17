@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from "@/components/ui/Button";
-import { Plus, Search, LayoutGrid, List as ListIcon, Filter, Share2 } from "lucide-react";
+import { Plus, Search, LayoutGrid, List as ListIcon, Filter, Share2, UploadCloud } from "lucide-react";
 import { useArtists } from "@/lib/hooks/useArtists";
 import { SERVICE_LABELS } from "@/lib/constants";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { cn } from "@/lib/utils";
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
+import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 
 
 export default function ArtistsPage() {
@@ -21,6 +22,34 @@ export default function ArtistsPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'name-asc' | 'name-desc'>('recent');
+  const [hoveredArtistId, setHoveredArtistId] = useState<string | null>(null);
+  const dragCounters = useRef<Record<string, number>>({});
+  const { isDraggingFiles, triggerUploadForArtist } = useGlobalDragDrop();
+
+  const handleArtistDragEnter = (e: React.DragEvent, artistId: string) => {
+    e.preventDefault();
+    dragCounters.current[artistId] = (dragCounters.current[artistId] || 0) + 1;
+    setHoveredArtistId(artistId);
+  };
+
+  const handleArtistDragLeave = (e: React.DragEvent, artistId: string) => {
+    dragCounters.current[artistId] = (dragCounters.current[artistId] || 1) - 1;
+    if (dragCounters.current[artistId] <= 0) {
+      dragCounters.current[artistId] = 0;
+      setHoveredArtistId(prev => prev === artistId ? null : prev);
+    }
+  };
+
+  const handleArtistDrop = (e: React.DragEvent, artistId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounters.current[artistId] = 0;
+    setHoveredArtistId(null);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      triggerUploadForArtist(files, artistId);
+    }
+  };
 
   const filteredArtists = activeArtists
     .filter(artist => 
@@ -108,6 +137,14 @@ export default function ArtistsPage() {
         </div>
       </div>
 
+      {/* Drag hint banner - appears when dragging files over the page */}
+      {isDraggingFiles && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-accent/10 border border-accent/30 text-accent text-sm font-medium mb-4 animate-fade-in">
+          <UploadCloud className="w-4 h-4 shrink-0 animate-bounce" />
+          Suelta los archivos encima del artista al que pertenecen
+        </div>
+      )}
+
       {/* Content */}
       {isLoading ? (
         <div className="flex justify-center py-20">
@@ -147,11 +184,16 @@ export default function ArtistsPage() {
             <div 
               key={artist.id} 
               onClick={() => {
+                if (isDraggingFiles) return; // don't navigate while dragging
                 if (typeof window !== 'undefined') {
                   localStorage.setItem(`accessed_${artist.id}`, Date.now().toString());
                 }
                 router.push(`/artists/${artist.id}`);
               }}
+              onDragEnter={(e) => handleArtistDragEnter(e, artist.id)}
+              onDragLeave={(e) => handleArtistDragLeave(e, artist.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleArtistDrop(e, artist.id)}
               onContextMenu={(e) => {
                 e.preventDefault();
                 showMenu(e.clientX, e.clientY, [
@@ -165,10 +207,23 @@ export default function ArtistsPage() {
               }}
               data-context="artist"
               data-artist-id={artist.id}
-              className={`bg-surface-elevated border border-border card-hover cursor-pointer group rounded-xl overflow-hidden relative ${
+              className={`bg-surface-elevated border card-hover cursor-pointer group rounded-xl overflow-hidden relative transition-all duration-150 ${
                 viewMode === 'list' ? 'flex items-center p-4 gap-6' : 'p-4 flex flex-col gap-3'
+              } ${
+                hoveredArtistId === artist.id
+                  ? 'border-accent ring-2 ring-accent/30 scale-[1.02] shadow-lg shadow-accent/10'
+                  : 'border-border'
               }`}
             >
+              {/* Drop-over label */}
+              {hoveredArtistId === artist.id && (
+                <div className="absolute inset-0 bg-accent/10 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-xl pointer-events-none">
+                  <div className="flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+                    <UploadCloud className="w-4 h-4" />
+                    Subir a {artist.name}
+                  </div>
+                </div>
+              )}
               <div className={cn("flex items-center", viewMode === 'list' ? "gap-6 flex-1" : "gap-3")}>
                 <div className={cn(
                   "rounded-full bg-surface border-2 border-border flex items-center justify-center overflow-hidden shrink-0",

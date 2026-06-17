@@ -148,3 +148,90 @@ export function getPaymentMethodIcon(method: string): string {
     default: return 'CreditCard';
   }
 }
+
+// Calculate string similarity (0 to 1) using normalized Levenshtein distance
+export function stringSimilarity(s1: string, s2: string): number {
+  if (s1 === s2) return 1.0;
+  if (!s1 || !s2) return 0.0;
+  
+  const m = s1.length;
+  const n = s2.length;
+  const d: number[][] = [];
+  
+  for (let i = 0; i <= m; i++) {
+    d[i] = [i];
+  }
+  for (let j = 0; j <= n; j++) {
+    d[0][j] = j;
+  }
+  
+  for (let j = 1; j <= n; j++) {
+    for (let i = 1; i <= m; i++) {
+      if (s1[i - 1] === s2[j - 1]) {
+        d[i][j] = d[i - 1][j - 1];
+      } else {
+        d[i][j] = Math.min(
+          d[i - 1][j] + 1,
+          d[i][j - 1] + 1,
+          d[i - 1][j - 1] + 1
+        );
+      }
+    }
+  }
+  
+  const distance = d[m][n];
+  const maxLen = Math.max(m, n);
+  return (maxLen - distance) / maxLen;
+}
+
+// Find the best match from an array of objects
+export function findBestMatch<T>(
+  query: string, 
+  items: T[], 
+  getString: (item: T) => string, 
+  threshold = 0.6
+): T | null {
+  const cleanQuery = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+  if (!cleanQuery) return null;
+
+  const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 2);
+  if (queryWords.length === 0 && cleanQuery.length > 0) {
+    queryWords.push(cleanQuery);
+  }
+  
+  let bestScore = 0;
+  let bestItem: T | null = null;
+  
+  for (const item of items) {
+    const itemName = getString(item);
+    const itemClean = itemName.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+    
+    if (query.toLowerCase().includes(itemClean) || itemClean.includes(cleanQuery)) {
+      return item;
+    }
+    
+    const itemWords = itemClean.split(/\s+/);
+    let totalScore = 0;
+    
+    for (const qw of queryWords) {
+      let maxWordScore = 0;
+      for (const iw of itemWords) {
+        if (iw.includes(qw) || qw.includes(iw)) {
+          maxWordScore = 1;
+        } else {
+          maxWordScore = Math.max(maxWordScore, stringSimilarity(qw, iw));
+        }
+      }
+      totalScore += maxWordScore;
+    }
+    
+    const avgScore = totalScore / queryWords.length;
+    
+    if (avgScore > bestScore && avgScore >= threshold) {
+      bestScore = avgScore;
+      bestItem = item;
+    }
+  }
+  
+  return bestItem;
+}

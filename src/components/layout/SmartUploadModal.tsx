@@ -1,568 +1,705 @@
 'use client';
 
-import * as React from 'react';
-import { Modal } from '@/components/ui/Modal';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
-import { 
-  Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Music, 
-  FileText, FileCode, Clock, Trash2, Edit3, ArrowRight, FolderKanban
-} from 'lucide-react';
-import { formatFileSize } from '@/lib/utils';
-import type { Artist } from '@/types';
+import { customConfirm } from '@/lib/dialog';
+import { createPortal } from 'react-dom';
+import { findBestMatch } from '@/lib/utils';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
+import { useArtists } from '@/lib/hooks/useArtists';
+
+export interface SmartUploadFile {
+  file: File;
+  id: string;
+  mimeGroup: 'audio' | 'image' | 'video' | 'other';
+  subType: 'bounce' | 'master' | 'mix' | 'stem' | 'cover' | 'promo' | 'none';
+  artistId: string;
+  projectId: string; // empty means artist root folder
+  folderId: string;  // final resolved target folder ID
+  customName: string;
+  // Audio analysis
+  bpm?: number | null;
+  key?: string | null;
+  isAnalyzing?: boolean;
+  // Upload state
+  uploadStatus?: 'pending' | 'uploading' | 'done' | 'error' | 'cancelled';
+  uploadProgress?: number;
+  uploadError?: string;
+  resultId?: string;
+}
 
 interface SmartUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialFiles: File[];
-  artists: Artist[];
   preselectedArtistId?: string;
+  preselectedFolderId?: string; // If user drops inside DriveExplorer in a specific folder
 }
 
-interface FileToUpload {
-  file: File;
-  customName: string;
-  artistId: string;
-  projectId: string; // empty means artist root folder
-  folderId: string; // target folder ID where it will be uploaded
-  folderType: string; // 'Bounces' | 'Mix' | 'Master' | 'Sessions' | 'Other'
-  expiresInMs: number | null; // expiration time in MS, or null for never
-  status: 'idle' | 'uploading' | 'success' | 'error';
-  progress: number;
-  errorMessage?: string;
-  resultId?: string;
-  resultLink?: string;
+// ─── BPM Detection via Web Audio API ──────────────────────────────────────────
+async function detectAudioFeatures(file: File): Promise<{ bpm: number | null; key: string | null }> {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const AudioCtxClass: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const audioCtx = new AudioCtxClass();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    audioCtx.close();
+
+    const channelData = audioBuffer.getChannelData(0);
+    const sampleRate = audioBuffer.sampleRate;
+
+    const bufferSize = 512;
+    const peaks: number[] = [];
+    let lastPeak = 0;
+    const threshold = 0.3;
+
+    for (let i = 0; i < channelData.length; i += bufferSize) {
+      let sum = 0;
+      for (let j = 0; j < bufferSize && i + j < channelData.length; j++) {
+        sum += Math.abs(channelData[i + j]);
+      }
+      const rms = Math.sqrt(sum / bufferSize);
+      const frameTime = i / sampleRate;
+      if (rms > threshold && frameTime - lastPeak > 0.3) {
+        peaks.push(frameTime);
+        lastPeak = frameTime;
+      }
+    }
+
+    let bpm: number | null = null;
+    if (peaks.length > 4) {
+      const intervals: number[] = [];
+      for (let i = 1; i < Math.min(peaks.length, 50); i++) {
+        intervals.push(peaks[i] - peaks[i - 1]);
+      }
+      const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const rawBpm = 60 / avgInterval;
+      let normalized = rawBpm;
+      while (normalized > 180) normalized /= 2;
+      while (normalized < 60) normalized *= 2;
+      bpm = Math.round(normalized);
+    }
+
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const start = Math.floor(channelData.length * 0.3);
+    const sampleLen = Math.min(sampleRate * 10, channelData.length - start);
+    const sample = channelData.slice(start, start + sampleLen);
+
+    const chromagram = new Array(12).fill(0);
+    for (let n = 0; n < 12; n++) {
+      const freq = 261.63 * Math.pow(2, n / 12);
+      let real = 0, imag = 0;
+      for (let i = 0; i < sample.length; i++) {
+        const t = i / sampleRate;
+        real += sample[i] * Math.cos(2 * Math.PI * freq * t);
+        imag += sample[i] * Math.sin(2 * Math.PI * freq * t);
+      }
+      chromagram[n] = Math.sqrt(real * real + imag * imag);
+    }
+    const maxIdx = chromagram.indexOf(Math.max(...chromagram));
+    const key = noteNames[maxIdx];
+
+    return { bpm, key };
+  } catch {
+    return { bpm: null, key: null };
+  }
 }
 
-export function SmartUploadModal({ isOpen, onClose, initialFiles, artists, preselectedArtistId }: SmartUploadModalProps) {
-  const [files, setFiles] = React.useState<FileToUpload[]>([]);
-  const [activeFileIndex, setActiveFileIndex] = React.useState<number>(0);
-  const [artistFolders, setArtistFolders] = React.useState<Record<string, any[]>>({});
-  const [projectSubfolders, setProjectSubfolders] = React.useState<Record<string, any[]>>({});
-  const [loadingFolders, setLoadingFolders] = React.useState<Record<string, boolean>>({});
+// ─── Name Generation ──────────────────────────────────────────────────────────
+function generateName(original: string, subType: string, artistName?: string): string {
+  if (subType === 'none') return original;
 
-  // 1. Initialize files and apply smart detection
-  React.useEffect(() => {
+  const extMatch = original.match(/\.[^.]+$/);
+  const ext = extMatch ? extMatch[0] : '';
+  const baseName = original.replace(/\.[^.]+$/, '');
+  let cleanName = baseName.replace(/^\[.*?\]\s*/, '').replace(/^(Master|Bounce|Mix|Stem)_/i, '').trim();
+
+  // DD-MM-YYYY
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const dateStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`;
+
+  if (subType === 'bounce') {
+    const artistPrefix = artistName ? `${artistName} - ` : '';
+    return `${artistPrefix}${cleanName} [${dateStr}]${ext}`;
+  } else if (subType === 'master') {
+    return `[MASTER] ${cleanName}${ext}`;
+  } else if (subType === 'mix') {
+    return `[MIX] ${cleanName}${ext}`;
+  } else if (subType === 'stem') {
+    return `[STEM] ${cleanName}${ext}`;
+  }
+
+  return original;
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export function SmartUploadModal({
+  isOpen,
+  onClose,
+  initialFiles,
+  preselectedArtistId,
+  preselectedFolderId
+}: SmartUploadModalProps) {
+  const { activeArtists: artists } = useArtists();
+  const [items, setItems] = useState<SmartUploadFile[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [globalStatus, setGlobalStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  const [artistFolders, setArtistFolders] = useState<Record<string, any[]>>({});
+  const [projectSubfolders, setProjectSubfolders] = useState<Record<string, any[]>>({});
+  const [loadingFolders, setLoadingFolders] = useState<Record<string, boolean>>({});
+
+  // 1. Initialize files and apply fuzzy matching detection
+  useEffect(() => {
     if (initialFiles.length === 0) return;
 
-    const initialized = initialFiles.map(file => {
-      const nameLower = file.name.toLowerCase();
-      
-      // If a preselected artist was provided (e.g. dropped on artist card), use it
+    const initialized = initialFiles.map((f, i) => {
+      let mimeGroup: SmartUploadFile['mimeGroup'] = 'other';
+      if (f.type.startsWith('audio/')) mimeGroup = 'audio';
+      else if (f.type.startsWith('image/')) mimeGroup = 'image';
+      else if (f.type.startsWith('video/')) mimeGroup = 'video';
+
+      let subType: SmartUploadFile['subType'] = 'none';
+      if (mimeGroup === 'audio') {
+        const nl = f.name.toLowerCase();
+        if (nl.includes('master')) subType = 'master';
+        else if (nl.includes('mix')) subType = 'mix';
+        else if (nl.includes('stem')) subType = 'stem';
+        else subType = 'bounce';
+      }
+
+      // Detect Artist using Fuzzy Match
       let detectedArtistId = '';
+      let detectedArtistName = '';
       if (preselectedArtistId) {
         detectedArtistId = preselectedArtistId;
+        detectedArtistName = artists.find(a => a.id === preselectedArtistId)?.name || '';
       } else {
-        // Auto-detect Artist from filename
-        for (const artist of artists) {
-          const artistNameClean = artist.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-          const fileClean = nameLower.replace(/[^a-z0-9]/g, '');
-          if (fileClean.includes(artistNameClean) || nameLower.includes(artist.name.toLowerCase())) {
-            detectedArtistId = artist.id;
-            break;
-          }
+        const bestArtistMatch = findBestMatch(f.name, artists, (a: any) => a.name, 0.4);
+        if (bestArtistMatch) {
+          detectedArtistId = bestArtistMatch.id;
+          detectedArtistName = bestArtistMatch.name;
+        } else if (artists.length > 0) {
+          detectedArtistId = artists[0].id;
+          detectedArtistName = artists[0].name;
         }
       }
 
-      // Default to first artist if none detected
-      if (!detectedArtistId && artists.length > 0) {
-        detectedArtistId = artists[0].id;
-      }
-
-      // Auto-detect Folder Type
-      let detectedFolderType = 'Other';
-      if (nameLower.includes('bounce')) {
-        detectedFolderType = 'Bounces';
-      } else if (nameLower.includes('master')) {
-        detectedFolderType = 'Master';
-      } else if (nameLower.includes('mix') || nameLower.includes('mezcla')) {
-        detectedFolderType = 'Mix';
-      } else if (nameLower.includes('session') || nameLower.includes('sesion') || nameLower.includes('stem')) {
-        detectedFolderType = 'Sessions';
-      }
-
       return {
-        file,
-        customName: file.name,
+        file: f,
+        id: `file-${i}`,
+        mimeGroup,
+        subType,
         artistId: detectedArtistId,
-        projectId: '', // will load projects dynamically
-        folderId: '', // will resolve once folders are loaded
-        folderType: detectedFolderType,
-        expiresInMs: null,
-        status: 'idle' as const,
-        progress: 0
+        projectId: '', // Resolved dynamically based on name and artist folders
+        folderId: preselectedFolderId || '', // Resolved dynamically based on smart folder routing
+        customName: generateName(f.name, subType, detectedArtistName),
+        bpm: undefined,
+        key: undefined,
+        isAnalyzing: mimeGroup === 'audio',
+        uploadStatus: 'pending' as const,
+        uploadProgress: 0,
       };
     });
 
-    setFiles(initialized);
-    setActiveFileIndex(0);
-  }, [initialFiles, artists]);
+    setItems(initialized);
 
-  // Load folders for selected artist
-  const loadArtistFolders = React.useCallback(async (artistFolderId: string) => {
-    if (!artistFolderId || artistFolders[artistFolderId] || loadingFolders[artistFolderId]) return;
+    // Audio Analysis
+    initialized.forEach(item => {
+      if (item.mimeGroup === 'audio') {
+        detectAudioFeatures(item.file).then(({ bpm, key }) => {
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, bpm, key, isAnalyzing: false } : p));
+        });
+      }
+    });
+  }, [initialFiles, artists, preselectedArtistId, preselectedFolderId]);
 
-    setLoadingFolders(prev => ({ ...prev, [artistFolderId]: true }));
+  // Load artist folders
+  const loadArtistFolders = useCallback(async (artistId: string) => {
+    if (!artistId || artistFolders[artistId] || loadingFolders[artistId]) return;
+    setLoadingFolders(prev => ({ ...prev, [artistId]: true }));
     try {
-      const res = await fetch(`/api/files?folderId=${artistFolderId}`);
+      const res = await fetch(`/api/files?folderId=${artistId}`);
       if (res.ok) {
         const data = await res.json();
-        // Keep only folders
         const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
-        setArtistFolders(prev => ({ ...prev, [artistFolderId]: folders }));
+        setArtistFolders(prev => ({ ...prev, [artistId]: folders }));
       }
     } catch (err) {
       console.error('Error loading artist folders:', err);
     } finally {
-      setLoadingFolders(prev => ({ ...prev, [artistFolderId]: false }));
+      setLoadingFolders(prev => ({ ...prev, [artistId]: false }));
     }
   }, [artistFolders, loadingFolders]);
 
-  // Load project subfolders (Bounces, Mix, Master, etc.)
-  const loadProjectFolders = React.useCallback(async (projectFolderId: string) => {
-    if (!projectFolderId || projectSubfolders[projectFolderId] || loadingFolders[projectFolderId]) return;
-
-    setLoadingFolders(prev => ({ ...prev, [projectFolderId]: true }));
+  // Load project subfolders
+  const loadProjectFolders = useCallback(async (projectId: string) => {
+    if (!projectId || projectSubfolders[projectId] || loadingFolders[projectId]) return;
+    setLoadingFolders(prev => ({ ...prev, [projectId]: true }));
     try {
-      const res = await fetch(`/api/files?folderId=${projectFolderId}`);
+      const res = await fetch(`/api/files?folderId=${projectId}`);
       if (res.ok) {
         const data = await res.json();
         const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
-        setProjectSubfolders(prev => ({ ...prev, [projectFolderId]: folders }));
+        setProjectSubfolders(prev => ({ ...prev, [projectId]: folders }));
       }
     } catch (err) {
       console.error('Error loading project folders:', err);
     } finally {
-      setLoadingFolders(prev => ({ ...prev, [projectFolderId]: false }));
+      setLoadingFolders(prev => ({ ...prev, [projectId]: false }));
     }
   }, [projectSubfolders, loadingFolders]);
 
-  const activeFile = files[activeFileIndex];
+  // Trigger loading artist folders for all detected artists
+  useEffect(() => {
+    items.forEach(item => {
+      if (item.artistId && !artistFolders[item.artistId]) {
+        loadArtistFolders(item.artistId);
+      }
+    });
+  }, [items, artistFolders, loadArtistFolders]);
 
-  // Auto-fetch folders when active file changes or artistId/projectId changes
-  React.useEffect(() => {
-    if (!activeFile) return;
-    loadArtistFolders(activeFile.artistId);
-    if (activeFile.projectId) {
-      loadProjectFolders(activeFile.projectId);
+  // Auto-detect project based on fuzzy filename matching
+  useEffect(() => {
+    let madeChanges = false;
+    const newItems = items.map(item => {
+      if (item.projectId || !item.artistId || preselectedFolderId) return item; // Already resolved or preselected
+      const folders = artistFolders[item.artistId];
+      if (!folders || folders.length === 0) return item;
+
+      const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
+      const projects = folders.filter(f => !ignoreList.includes(f.name));
+
+      if (projects.length > 0) {
+        // Try fuzzy matching project name
+        const bestProjectMatch = findBestMatch(item.file.name, projects, (p: any) => p.name, 0.4);
+        if (bestProjectMatch) {
+          madeChanges = true;
+          return { ...item, projectId: bestProjectMatch.id };
+        } else {
+          // Default to first project
+          madeChanges = true;
+          return { ...item, projectId: projects[0].id };
+        }
+      }
+      return item;
+    });
+    
+    if (madeChanges) {
+      setItems(newItems);
     }
-  }, [activeFile, loadArtistFolders, loadProjectFolders]);
+  }, [items, artistFolders, preselectedFolderId]);
 
-  // Auto-detect project based on filename once artist folders are loaded
-  React.useEffect(() => {
-    if (!activeFile || !activeFile.artistId) return;
-    const folders = artistFolders[activeFile.artistId];
-    if (!folders || folders.length === 0) return;
+  // Load subfolders for detected projects
+  useEffect(() => {
+    items.forEach(item => {
+      if (item.projectId && !projectSubfolders[item.projectId]) {
+        loadProjectFolders(item.projectId);
+      }
+    });
+  }, [items, projectSubfolders, loadProjectFolders]);
 
-    // Filter projects (ignore standard items like Images, Contracts, etc.)
-    const ignoreList = [
-      'Images', 'Documents', 'Contracts', 'Stems', 'Bounces', 'Mix', 'Master', 'Sessions', 'Other',
-      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos',
-      '01_Sesiones_y_DAW', '02_Bounces_y_Grabaciones', '03_Revisiones_y_Mezclas', '04_Masters_Finales', '05_Referencias_y_Otros'
-    ];
-    const projects = folders.filter(f => !ignoreList.includes(f.name));
+  // ─── Smart Folder Target Resolution ─────────────────────────────────────────
+  useEffect(() => {
+    if (preselectedFolderId) return; // If manually provided by DriveExplorer, keep it.
 
-    if (projects.length > 0 && !activeFile.projectId) {
-      let matchedProjectId = '';
-      const nameLower = activeFile.file.name.toLowerCase();
+    let madeChanges = false;
+    const newItems = items.map(item => {
+      if (item.uploadStatus !== 'pending') return item;
 
-      for (const proj of projects) {
-        const projNameClean = proj.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (nameLower.includes(projNameClean) || nameLower.includes(proj.name.toLowerCase())) {
-          matchedProjectId = proj.id;
-          break;
+      let targetFolderId = item.folderId;
+      
+      // If it's a Bounce, route to Artist's global bounces folder
+      if (item.subType === 'bounce') {
+        const aFolders = artistFolders[item.artistId] || [];
+        const bouncesFolder = aFolders.find(f => f.name.toLowerCase().includes('bounce') || f.name === FOLDER_NAME_MAP['Bounces']);
+        const newTarget = bouncesFolder ? bouncesFolder.id : item.artistId; // Fallback to artist root
+        if (targetFolderId !== newTarget) {
+          targetFolderId = newTarget;
+          madeChanges = true;
+        }
+      } 
+      // If it's Master/Mix, route inside the specific Project folder
+      else if (item.projectId) {
+        const pFolders = projectSubfolders[item.projectId] || [];
+        const mappedName = FOLDER_NAME_MAP[item.subType === 'master' ? 'Master' : item.subType === 'mix' ? 'Mix' : 'Sessions'];
+        const specificFolder = pFolders.find(f => f.name.toLowerCase() === item.subType || f.name === mappedName);
+        const newTarget = specificFolder ? specificFolder.id : item.projectId; // Fallback to project root
+        if (targetFolderId !== newTarget) {
+          targetFolderId = newTarget;
+          madeChanges = true;
+        }
+      } 
+      // Fallback
+      else {
+        const newTarget = item.artistId || '';
+        if (targetFolderId !== newTarget) {
+          targetFolderId = newTarget;
+          madeChanges = true;
         }
       }
 
-      if (matchedProjectId) {
-        updateActiveFile({ projectId: matchedProjectId });
-      } else {
-        // Default to first project if none matches
-        updateActiveFile({ projectId: projects[0].id });
-      }
-    }
-  }, [activeFile, artistFolders]);
+      return { ...item, folderId: targetFolderId };
+    });
 
-  const updateActiveFile = (updates: Partial<FileToUpload>) => {
-    setFiles(prev => prev.map((f, i) => i === activeFileIndex ? { ...f, ...updates } : f));
+    if (madeChanges) setItems(newItems);
+  }, [items, artistFolders, projectSubfolders, preselectedFolderId]);
+
+  // ─── State Modifiers ─────────────────────────────────────────────────────────
+  const updateItem = (id: string, updates: Partial<SmartUploadFile>) => {
+    setItems(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const updated = { ...item, ...updates };
+      if (updates.subType !== undefined) {
+        const artistName = artists.find(a => a.id === updated.artistId)?.name;
+        updated.customName = generateName(item.file.name, updated.subType, artistName);
+        // Reset resolved folderId so the router effect can pick it up again
+        if (!preselectedFolderId) updated.folderId = ''; 
+      }
+      if (updates.artistId !== undefined && updates.artistId !== item.artistId) {
+        const artistName = artists.find(a => a.id === updates.artistId)?.name;
+        updated.customName = generateName(item.file.name, updated.subType, artistName);
+        updated.projectId = ''; // Reset project for new artist
+        if (!preselectedFolderId) updated.folderId = '';
+      }
+      return updated;
+    }));
   };
 
-  const handleUploadSingle = async (index: number) => {
-    const f = files[index];
-    if (!f || f.status === 'uploading' || f.status === 'success') return;
+  const cancelItem = (id: string) => {
+    const ctrl = abortControllersRef.current.get(id);
+    if (ctrl) ctrl.abort();
+    updateItem(id, { uploadStatus: 'cancelled', uploadProgress: 0 });
+  };
 
-    // Set target folder ID
-    const mappedFolderName = FOLDER_NAME_MAP[f.folderType] || f.folderType;
-    const targetFolderId = f.projectId 
-      ? (projectSubfolders[f.projectId]?.find(sf => sf.name.toLowerCase() === f.folderType.toLowerCase() || sf.name === mappedFolderName)?.id || f.projectId)
-      : (artistFolders[f.artistId]?.find(sf => sf.name.toLowerCase() === f.folderType.toLowerCase() || sf.name === mappedFolderName)?.id || f.artistId);
-
-    if (!targetFolderId) {
-      setFiles(prev => prev.map((item, i) => i === index ? { 
-        ...item, 
-        status: 'error', 
-        errorMessage: 'No se pudo resolver la carpeta de destino en Google Drive.' 
-      } : item));
-      return;
-    }
-
-    setFiles(prev => prev.map((item, i) => i === index ? { ...item, status: 'uploading', progress: 20 } : item));
+  // ─── Pre-check Existing Files (Masters/Bounces) ────────────────────────────
+  const preCheckItem = async (item: SmartUploadFile): Promise<string | undefined> => {
+    if (item.subType !== 'master' && item.subType !== 'bounce') return undefined;
+    if (!item.folderId) return undefined;
 
     try {
-      const formData = new FormData();
-      // Use the customName provided by user, keeping the original extension
-      const extension = f.file.name.substring(f.file.name.lastIndexOf('.'));
-      let finalName = f.customName;
-      if (!finalName.endsWith(extension)) {
-        finalName += extension;
-      }
-
-      const renamedFile = new File([f.file], finalName, { type: f.file.type });
-      formData.append('file', renamedFile);
-      formData.append('parentId', targetFolderId);
-
-      const res = await fetch('/api/files', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!res.ok) {
-        throw new Error('Error al subir el archivo');
-      }
-
+      const res = await fetch(`/api/files?folderId=${item.folderId}`);
+      if (!res.ok) return undefined;
       const data = await res.json();
-      const uploadedFileId = data.file.id;
+      const existingFiles: any[] = data.items || [];
 
-      // Handle expiration if selected
-      if (f.expiresInMs) {
-        await fetch(`/api/files/${uploadedFileId}/expiration`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expiresInMs: f.expiresInMs })
+      if (item.subType === 'master') {
+        const masters = existingFiles.filter(f =>
+          f.mimeType.startsWith('audio/') &&
+          (f.name.toLowerCase().includes('master') || f.name.toLowerCase() === item.customName.toLowerCase())
+        );
+        if (masters.length > 0) {
+          const confirm = await customConfirm(
+            `Hemos detectado un Master anterior en este proyecto: "${masters[0].name}".\n\n¿Deseas REEMPLAZARLO con esta nueva versión? (Cancelar = subir como archivo nuevo)`
+          );
+          return confirm ? masters[0].id : undefined;
+        }
+      } else if (item.subType === 'bounce') {
+        const cleanBase = item.file.name
+          .replace(/\.[^.]+$/, '')
+          .replace(/^\[.*?\]\s*/, '')
+          .replace(/^(Master|Bounce|Mix|Stem)_/i, '')
+          .trim()
+          .toLowerCase();
+        const bounces = existingFiles.filter(f => {
+          if (!f.mimeType.startsWith('audio/')) return false;
+          const fn = f.name.toLowerCase();
+          return fn.includes(cleanBase) && (fn.includes('bounce') || /\[\d{2}-\d{2}-\d{4}\]/.test(fn) || /\[\d{4}-\d{2}-\d{2}\]/.test(fn));
         });
+        if (bounces.length > 0) {
+          const confirm = await customConfirm(
+            `Hemos detectado ${bounces.length} versión(es) anterior(es) de este Bounce ("${cleanBase}").\n\nLos bounces se acumulan como historial automáticamente.\n\nPresiona Aceptar si prefieres REEMPLAZAR la versión más reciente en lugar de añadirla.`
+          );
+          if (confirm) {
+            bounces.sort((a, b) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+            return bounces[0].id;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error in pre-check', err);
+    }
+    return undefined;
+  };
+
+  // ─── Upload Execution ────────────────────────────────────────────────────────
+  const handleUpload = async () => {
+    setIsProcessing(true);
+    setGlobalStatus('uploading');
+
+    let processedCount = 0;
+    const itemsToUpload = items.filter(i => i.uploadStatus === 'pending');
+
+    for (const item of itemsToUpload) {
+      if (item.uploadStatus === 'cancelled') continue;
+      if (!item.folderId) {
+        updateItem(item.id, { uploadStatus: 'error', uploadError: 'No target folder resolved' });
+        continue;
       }
 
-      setFiles(prev => prev.map((item, i) => i === index ? { 
-        ...item, 
-        status: 'success', 
-        progress: 100,
-        resultId: uploadedFileId,
-        resultLink: data.file.webViewLink
-      } : item));
+      updateItem(item.id, { uploadStatus: 'uploading', uploadProgress: 10 });
+      
+      const fileToReplaceId = await preCheckItem(item);
 
-    } catch (err: any) {
-      setFiles(prev => prev.map((item, i) => i === index ? { 
-        ...item, 
-        status: 'error', 
-        progress: 0,
-        errorMessage: err.message || 'Error en la subida.' 
-      } : item));
-    }
-  };
+      const ctrl = new AbortController();
+      abortControllersRef.current.set(item.id, ctrl);
 
-  const handleUploadAll = async () => {
-    // Start uploads sequentially
-    for (let i = 0; i < files.length; i++) {
-      await handleUploadSingle(i);
-    }
-  };
-
-  const getFileIcon = (fileName: string) => {
-    const ext = fileName.split('.').pop()?.toLowerCase();
-    if (ext === 'flp') {
-      return (
-        <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 border border-orange-500/20 shadow-md">
-          <span className="text-orange-500 font-extrabold text-[10px] tracking-tight">FLP</span>
-        </div>
-      );
-    }
-    const audioExts = ['wav', 'mp3', 'm4a', 'flac', 'ogg', 'aif', 'aiff'];
-    if (audioExts.includes(ext || '')) {
-      return (
-        <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 border border-accent/20">
-          <Music className="w-5 h-5 text-accent" />
-        </div>
-      );
-    }
-    return (
-      <div className="w-10 h-10 rounded-lg bg-surface flex items-center justify-center shrink-0 border border-border">
-        <FileText className="w-5 h-5 text-text-secondary" />
-      </div>
-    );
-  };
-
-  if (files.length === 0) return null;
-
-  const currentArtistFolders = activeFile ? (artistFolders[activeFile.artistId] || []) : [];
-  const projectList = currentArtistFolders.filter(f => {
-    const ignoreList = [
-      'Images', 'Documents', 'Contracts', 'Stems', 'Bounces', 'Mix', 'Master', 'Sessions', 'Other',
-      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos',
-      '01_Sesiones_y_DAW', '02_Bounces_y_Grabaciones', '03_Revisiones_y_Mezclas', '04_Masters_Finales', '05_Referencias_y_Otros'
-    ];
-    return !ignoreList.includes(f.name);
-  });
-
-  const uploadSuccessCount = files.filter(f => f.status === 'success').length;
-  const isUploadingAny = files.some(f => f.status === 'uploading');
-
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={isUploadingAny ? () => {} : onClose}
-      title="Subida Rápida Inteligente"
-      description="Configura el destino, renombra o programa el borrado de los archivos arrastrados."
-      className="max-w-4xl"
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+      try {
+        const formData = new FormData();
+        const extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
+        let finalName = item.customName;
+        if (!finalName.endsWith(extension)) finalName += extension;
         
-        {/* Left pane: File list */}
-        <div className="lg:col-span-1 border-r border-border/40 pr-4 space-y-2 max-h-[420px] overflow-y-auto scroll-smooth">
-          <Label className="text-xs text-text-secondary uppercase tracking-wider font-bold">Archivos cargados ({files.length})</Label>
-          <div className="space-y-1.5 mt-2">
-            {files.map((f, i) => {
-              const isActive = i === activeFileIndex;
-              return (
-                <button
-                  key={i}
-                  onClick={() => setActiveFileIndex(i)}
-                  className={`w-full p-2.5 rounded-xl border flex items-center gap-3 text-left transition-all ${
-                    isActive 
-                      ? 'bg-accent/10 border-accent/40 shadow-lg shadow-accent/5' 
-                      : 'bg-surface/30 border-border/50 hover:bg-surface/70'
-                  }`}
-                >
-                  {getFileIcon(f.file.name)}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-semibold truncate ${isActive ? 'text-accent-light' : 'text-text-primary'}`}>
-                      {f.customName}
-                    </p>
-                    <span className="text-[10px] text-text-secondary">
-                      {formatFileSize(f.file.size)}
-                    </span>
-                  </div>
+        const renamedFile = new File([item.file], finalName, { type: item.file.type });
+        formData.append('file', renamedFile);
 
-                  {/* Status Indicator */}
-                  {f.status === 'uploading' && (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-                  )}
-                  {f.status === 'success' && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-                  )}
-                  {f.status === 'error' && (
-                    <AlertCircle className="w-3.5 h-3.5 text-error" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        if (fileToReplaceId) {
+          formData.append('fileId', fileToReplaceId); // Overwrite mode
+        } else {
+          formData.append('parentId', item.folderId); // New file mode
+        }
 
-        {/* Right pane: Config details for selected file */}
-        {activeFile && (
-          <div className="lg:col-span-2 space-y-5">
-            {/* File info header */}
-            <div className="p-3 bg-surface-elevated/40 border border-border/30 rounded-xl flex items-center gap-3">
-              {getFileIcon(activeFile.file.name)}
-              <div className="flex-1 min-w-0">
-                <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider">Archivo Seleccionado</span>
-                <p className="text-sm font-semibold text-text-primary truncate">{activeFile.file.name}</p>
-              </div>
+        // Fake progress logic using XMLHttpRequest
+        const uploadTask = new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/files');
+          
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const p = Math.round((e.loaded / e.total) * 90); // 10% to 100%
+              updateItem(item.id, { uploadProgress: Math.max(10, p) });
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              const data = JSON.parse(xhr.responseText);
+              updateItem(item.id, { uploadStatus: 'done', uploadProgress: 100, resultId: data.file?.id });
+              
+              // Email notification for Masters
+              if (item.subType === 'master') {
+                const artistData = artists.find(a => a.id === item.artistId);
+                if (artistData?.email) {
+                  fetch('/api/notifications/master', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      artistEmail: artistData.email,
+                      artistName: artistData.name,
+                      songName: item.file.name.replace(/\.[^.]+$/, '').replace(/\[MASTER\]\s*/i, ''),
+                      isUpdate: !!fileToReplaceId,
+                      downloadLink: data.file?.webViewLink || ''
+                    })
+                  }).catch(console.error);
+                }
+              }
+              resolve();
+            } else {
+              reject(new Error(xhr.responseText || 'Upload failed'));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.onabort = () => reject(new Error('Cancelled by user'));
+          
+          ctrl.signal.addEventListener('abort', () => xhr.abort());
+          xhr.send(formData);
+        });
+
+        await uploadTask;
+        processedCount++;
+
+      } catch (err: any) {
+        if (err.message !== 'Cancelled by user') {
+          updateItem(item.id, { uploadStatus: 'error', uploadError: err.message, uploadProgress: 0 });
+        }
+      } finally {
+        abortControllersRef.current.delete(item.id);
+      }
+    }
+
+    setIsProcessing(false);
+    setGlobalStatus('done');
+  };
+
+  if (!isOpen || initialFiles.length === 0) return null;
+
+  const hasAnyDone = items.some(i => i.uploadStatus === 'done');
+  const allDone = items.every(i => i.uploadStatus === 'done' || i.uploadStatus === 'error' || i.uploadStatus === 'cancelled');
+  
+  // Collect unique artists that will receive emails
+  const artistsReceivingEmails = Array.from(new Set(
+    items.filter(i => i.subType === 'master')
+         .map(i => artists.find(a => a.id === i.artistId))
+         .filter(a => a && a.email)
+  ));
+
+  const modal = (
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/70 backdrop-blur-md p-6 animate-in fade-in duration-200">
+      <div className="glass w-full max-w-4xl max-h-[90vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_80px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 zoom-in-95 duration-300">
+        {/* Header */}
+        <div className="flex items-center justify-between px-8 py-5 border-b border-border shrink-0 bg-surface/50 backdrop-blur-xl">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shadow-inner">
+              <UploadCloud className="w-6 h-6 text-accent" />
             </div>
-
-            {/* Editable Name */}
-            <div className="space-y-2">
-              <Label htmlFor="custom-name">Nombre del archivo en Google Drive</Label>
-              <input
-                id="custom-name"
-                type="text"
-                value={activeFile.customName.replace(/\.[^/.]+$/, "")}
-                onChange={(e) => {
-                  const ext = activeFile.file.name.substring(activeFile.file.name.lastIndexOf('.'));
-                  updateActiveFile({ customName: e.target.value + ext });
-                }}
-                disabled={activeFile.status === 'uploading' || activeFile.status === 'success'}
-                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-              />
-            </div>
-
-            {/* Target Selectors */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Artist Select */}
-              <div className="space-y-2">
-                <Label htmlFor="artist-select">Artista de destino</Label>
-                <select
-                  id="artist-select"
-                  value={activeFile.artistId}
-                  onChange={(e) => {
-                    updateActiveFile({ artistId: e.target.value, projectId: '' });
-                  }}
-                  disabled={activeFile.status === 'uploading' || activeFile.status === 'success'}
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none animate-fade-in"
-                >
-                  {artists.map(a => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Project Select */}
-              <div className="space-y-2">
-                <Label htmlFor="project-select">Proyecto / Carpeta del Proyecto</Label>
-                <select
-                  id="project-select"
-                  value={activeFile.projectId}
-                  onChange={(e) => {
-                    updateActiveFile({ projectId: e.target.value });
-                  }}
-                  disabled={activeFile.status === 'uploading' || activeFile.status === 'success' || loadingFolders[activeFile.artistId]}
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none"
-                >
-                  <option value="">Carpeta General (Artista)</option>
-                  {projectList.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Folder Type */}
-              <div className="space-y-2">
-                <Label htmlFor="folder-type">Subcarpeta de destino</Label>
-                <select
-                  id="folder-type"
-                  value={activeFile.folderType}
-                  onChange={(e) => updateActiveFile({ folderType: e.target.value })}
-                  disabled={activeFile.status === 'uploading' || activeFile.status === 'success'}
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none"
-                >
-                  <option value="Bounces">Bounces</option>
-                  <option value="Mix">Mix / Mezcla</option>
-                  <option value="Master">Master / Masterización</option>
-                  <option value="Sessions">Sessions / Sesiones</option>
-                  <option value="Other">Other / Otros</option>
-                </select>
-              </div>
-
-              {/* Expiration Timer (Autoborrado) */}
-              <div className="space-y-2">
-                <Label htmlFor="expiration-select">Eliminación Programada (Autoborrado)</Label>
-                <select
-                  id="expiration-select"
-                  value={activeFile.expiresInMs || ''}
-                  onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                    updateActiveFile({ expiresInMs: val });
-                  }}
-                  disabled={activeFile.status === 'uploading' || activeFile.status === 'success'}
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none"
-                >
-                  <option value="">No borrar nunca (Permanente)</option>
-                  <option value={24 * 60 * 60 * 1000}>Borrar en 1 día</option>
-                  <option value={3 * 24 * 60 * 60 * 1000}>Borrar en 3 días</option>
-                  <option value={7 * 24 * 60 * 60 * 1000}>Borrar en 7 días</option>
-                  <option value={30 * 24 * 60 * 60 * 1000}>Borrar en 30 días</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Individual File Status / Progress */}
-            {activeFile.status !== 'idle' && (
-              <div className="p-3 bg-surface-elevated/45 rounded-xl border border-border/30 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-text-primary">
-                    {activeFile.status === 'uploading' && 'Subiendo archivo...'}
-                    {activeFile.status === 'success' && 'Subido correctamente'}
-                    {activeFile.status === 'error' && 'Error al subir'}
-                  </span>
-                  <span className="text-text-secondary font-mono">{activeFile.progress}%</span>
-                </div>
-                {activeFile.status === 'uploading' && (
-                  <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-accent transition-all duration-300 rounded-full"
-                      style={{ width: `${activeFile.progress}%` }}
-                    />
-                  </div>
-                )}
-                {activeFile.status === 'error' && (
-                  <p className="text-[11px] text-error flex items-center gap-1.5 mt-1">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{activeFile.errorMessage}</span>
-                  </p>
-                )}
-                {activeFile.status === 'success' && activeFile.resultLink && (
-                  <a 
-                    href={activeFile.resultLink} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="text-[11px] text-accent hover:underline flex items-center gap-1 mt-1"
-                  >
-                    Ver archivo en Google Drive <ArrowRight className="w-3 h-3" />
-                  </a>
-                )}
-              </div>
-            )}
-
-            {/* Single item quick actions */}
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setFiles(prev => prev.filter((_, idx) => idx !== activeFileIndex));
-                  setActiveFileIndex(prev => Math.max(0, prev - 1));
-                }}
-                disabled={activeFile.status === 'uploading' || activeFile.status === 'success'}
-              >
-                Descartar Archivo
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleUploadSingle(activeFileIndex)}
-                disabled={activeFile.status === 'uploading' || activeFile.status === 'success'}
-              >
-                Subir este archivo
-              </Button>
+            <div>
+              <h2 className="text-lg font-bold text-text-primary">Subida Inteligente</h2>
+              <p className="text-sm text-text-secondary mt-0.5">
+                {items.length} archivo{items.length !== 1 ? 's' : ''} · Detección automática de tipo, BPM, tonalidad y artista destino
+              </p>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Footer / Global actions */}
-      <div className="flex items-center justify-between border-t border-border/40 mt-6 pt-4">
-        <div className="text-xs text-text-secondary flex items-center gap-2">
-          {uploadSuccessCount > 0 && (
-            <span className="text-success font-semibold flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" /> {uploadSuccessCount} subido(s)
-            </span>
+          {!isProcessing && (
+            <button onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} className="p-2 rounded-lg text-text-secondary hover:text-white hover:bg-surface-elevated transition-colors">
+              <X className="w-5 h-5" />
+            </button>
           )}
         </div>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isUploadingAny}
-          >
-            {uploadSuccessCount === files.length ? 'Cerrar' : 'Cancelar'}
-          </Button>
-          <Button
-            onClick={handleUploadAll}
-            disabled={isUploadingAny || uploadSuccessCount === files.length}
-            className="glow"
-          >
-            {isUploadingAny ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Subiendo...
-              </>
-            ) : (
-              'Subir todos los archivos'
+
+        {/* Files list */}
+        <div className="flex-1 overflow-y-auto px-8 py-5 space-y-4 bg-background/30 custom-scrollbar">
+          {items.map(item => {
+            const currentArtistFolders = artistFolders[item.artistId] || [];
+            const projectList = currentArtistFolders.filter(f => !['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(f.name));
+
+            return (
+            <div key={item.id} className={`rounded-xl border p-5 transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
+              {/* File row */}
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50">
+                  {item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-semibold text-text-primary truncate" title={item.file.name}>{item.file.name}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="text-xs text-text-secondary bg-surface-elevated px-2 py-0.5 rounded-md border border-border/50">{(item.file.size / 1024 / 1024).toFixed(1)} MB</span>
+                    {item.mimeGroup === 'audio' && (
+                      <>
+                        {item.isAnalyzing ? (
+                          <span className="text-xs text-accent flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Analizando audio...</span>
+                        ) : (
+                          <>
+                            {item.bpm && <span className="text-xs bg-accent/10 text-accent border border-accent/20 px-2 py-0.5 rounded-md font-mono flex items-center gap-1.5"><Activity className="w-3 h-3" /> {item.bpm} BPM</span>}
+                            {item.key && <span className="text-xs bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-md font-mono">{item.key}</span>}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status icon */}
+                <div className="shrink-0 flex items-center gap-2">
+                  {item.uploadStatus === 'done' && <span className="text-xs text-success font-medium mr-2">¡Completado!</span>}
+                  {item.uploadStatus === 'done' && <CheckCircle2 className="w-5 h-5 text-success" />}
+                  {item.uploadStatus === 'error' && <AlertTriangle className="w-5 h-5 text-danger" />}
+                  {item.uploadStatus === 'uploading' && (
+                    <button onClick={() => cancelItem(item.id)} className="p-1.5 rounded-full hover:bg-surface-elevated text-text-secondary hover:text-danger transition-colors" title="Cancelar este archivo"><XCircle className="w-5 h-5" /></button>
+                  )}
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              {item.uploadStatus === 'uploading' && (
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-text-secondary">Subiendo archivo a Drive...</span>
+                    <span className="text-xs text-accent font-mono font-bold">{item.uploadProgress || 0}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-surface-elevated rounded-full overflow-hidden border border-border/50">
+                    <div className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(108,92,231,0.5)]" style={{ width: `${item.uploadProgress || 0}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {item.uploadStatus === 'error' && <p className="text-xs text-danger mb-2 bg-danger/10 p-2 rounded-lg border border-danger/20">{item.uploadError || 'Error desconocido'}</p>}
+
+              {/* Controls - only show when pending */}
+              {item.uploadStatus === 'pending' && (
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  {/* Select Artist */}
+                  <div className={preselectedArtistId ? "opacity-60 pointer-events-none" : ""}>
+                    <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
+                    <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border">
+                      {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Select Project (only if it's a mix/master/stem that requires a project) */}
+                  <div className={(item.subType === 'bounce' || preselectedFolderId) ? "opacity-50 pointer-events-none" : ""}>
+                    <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
+                    <select value={item.projectId} onChange={e => updateItem(item.id, { projectId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border">
+                      {item.subType === 'bounce' ? (
+                         <option value="">Carpeta General (Artista)</option>
+                      ) : (
+                        projectList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                      )}
+                    </select>
+                  </div>
+
+                  {item.mimeGroup === 'audio' && (
+                    <div>
+                      <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Tipo de Archivo</label>
+                      <select value={item.subType} onChange={e => updateItem(item.id, { subType: e.target.value as any })} className="w-full bg-surface-elevated border border-border/60 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border">
+                        <option value="bounce">🎵 Bounce (Demo)</option>
+                        <option value="mix">🎛️ Mix</option>
+                        <option value="master">💿 Master (Final)</option>
+                        <option value="stem">🎸 Stem</option>
+                        <option value="none">📁 Otro Audio</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Generated name preview — full width or partial depending on audio */}
+                  <div className={item.mimeGroup === 'audio' ? '' : 'col-span-2'}>
+                    <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Nombre final en Drive</label>
+                    <div className="flex items-center gap-2 bg-surface border border-border/40 rounded-lg px-4 py-2 h-[38px] shadow-inner">
+                      <span className="text-sm text-text-primary font-mono break-all line-clamp-1" title={item.customName}>{item.customName}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )})}
+        </div>
+
+        {/* Footer */}
+        <div className="px-8 py-5 border-t border-border shrink-0 flex items-center justify-between gap-4 bg-surface/50 backdrop-blur-xl">
+          <div className="text-sm text-text-secondary">
+            {globalStatus === 'uploading' && <span className="flex items-center gap-2 font-medium"><Loader2 className="w-4 h-4 animate-spin text-accent" /> Procesando subidas...</span>}
+            {globalStatus === 'done' && <span className="flex items-center gap-2 text-success font-bold"><CheckCircle2 className="w-5 h-5" /> {hasAnyDone ? '¡Todos los archivos listos!' : 'Proceso finalizado'}</span>}
+            {globalStatus === 'idle' && artistsReceivingEmails.length > 0 && (
+              <span className="flex items-center gap-2 text-accent/80 font-medium bg-accent/10 px-3 py-1.5 rounded-lg border border-accent/20">
+                <span>📧</span> Notificando Masters a: {artistsReceivingEmails.map(a => a?.name).join(', ')}
+              </span>
             )}
-          </Button>
+            {globalStatus === 'idle' && artistsReceivingEmails.length === 0 && (
+              <span className="text-text-secondary/70">Revisa la configuración y pulsa Subir</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {allDone ? (
+              <Button onClick={onClose} variant="default" className="px-8">Cerrar</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} disabled={isProcessing}>Cancelar</Button>
+                <Button onClick={handleUpload} disabled={isProcessing} className="px-6 bg-accent hover:bg-accent-light text-white shadow-lg shadow-accent/20">
+                  {isProcessing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Subiendo...</> : <><UploadCloud className="w-4 h-4 mr-2" />Subir {items.length} archivo{items.length !== 1 ? 's' : ''}</>}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </Modal>
+    </div>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modal, document.body);
 }

@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { ShareModal } from './ShareModal';
 import { DeleteModal } from './DeleteModal';
-import { SmartUploadModal } from './SmartUploadModal';
+import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
 
 interface DriveItem {
   id: string;
@@ -1287,14 +1287,11 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
       {pendingUploadFiles && (
         <SmartUploadModal 
-          files={pendingUploadFiles.files}
-          defaultFolderId={pendingUploadFiles.targetFolderId}
-          folders={Object.values(folderMap).map(f => ({ id: f.parentId === null ? rootFolderId : Object.keys(folderMap).find(k => folderMap[k] === f) || '', name: f.name }))}
-          artistName={rootName}
-          artistEmail={artistEmail}
-          artistId={artistId}
-          onUpload={executeSmartUpload}
-          onCancel={() => setPendingUploadFiles(null)}
+          isOpen={true}
+          onClose={() => setPendingUploadFiles(null)}
+          initialFiles={pendingUploadFiles.files}
+          preselectedArtistId={artistId}
+          preselectedFolderId={pendingUploadFiles.targetFolderId !== rootFolderId ? pendingUploadFiles.targetFolderId : undefined}
         />
       )}
 
