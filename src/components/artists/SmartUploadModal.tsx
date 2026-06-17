@@ -273,7 +273,8 @@ export function SmartUploadModal({
 
     updateItem(item.id, { uploadStatus: 'uploading', uploadProgress: 5 });
 
-    const renamedFile = new File([item.file], item.customName, { type: item.file.type });
+    const renamedBlob = item.file.slice(0, item.file.size, item.file.type);
+    const renamedFile = new File([renamedBlob], item.customName);
     const formData = new FormData();
     formData.append('file', renamedFile);
     formData.append('parentId', item.folderId);
