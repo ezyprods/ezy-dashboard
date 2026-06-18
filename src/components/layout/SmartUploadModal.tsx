@@ -130,6 +130,41 @@ function generateName(original: string, subType: string, artistName?: string): s
   return original;
 }
 
+// ─── Resolve target folder for a single item ─────────────────────────────────
+function resolveTargetFolder(
+  item: SmartUploadFile,
+  aFolders: any[],
+  pFolders: any[],
+  preselectedFolderId?: string
+): string {
+  if (preselectedFolderId) return preselectedFolderId;
+
+  // Bounce → Artist's global bounces folder
+  if (item.subType === 'bounce') {
+    const bouncesFolder = aFolders.find(f => f.name.toLowerCase().includes('bounce') || f.name === FOLDER_NAME_MAP['Bounces']);
+    return bouncesFolder ? bouncesFolder.id : `CREATE_FOLDER::${FOLDER_NAME_MAP['Bounces']}::${item.artistId}`;
+  }
+
+  // Master → Project root directly
+  if (item.subType === 'master' && item.projectId) {
+    return item.projectId;
+  }
+
+  // Mix/Stem/Session → Specific subfolder inside project
+  if (item.projectId && item.subType !== 'none' && item.subType !== 'master') {
+    let mappedName = '';
+    if (item.subType === 'mix') mappedName = FOLDER_NAME_MAP['Mix'];
+    else if (item.subType === 'stem') mappedName = FOLDER_NAME_MAP['Sessions'];
+    else mappedName = FOLDER_NAME_MAP['Other'] || '05_Referencias_y_Otros';
+
+    const specificFolder = pFolders.find(f => f.name.toLowerCase() === item.subType || f.name === mappedName);
+    return specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName}::${item.projectId}`;
+  }
+
+  // Fallback
+  return item.artistId || '';
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SmartUploadModal({
   isOpen,
@@ -144,11 +179,15 @@ export function SmartUploadModal({
   const [globalStatus, setGlobalStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
-  const [artistFolders, setArtistFolders] = useState<Record<string, any[]>>({});
-  const [projectSubfolders, setProjectSubfolders] = useState<Record<string, any[]>>({});
-  const [loadingFolders, setLoadingFolders] = useState<Record<string, boolean>>({});
+  // Use refs for folder caches to avoid triggering re-renders in the effect chain
+  const artistFoldersRef = useRef<Record<string, any[]>>({});
+  const projectSubfoldersRef = useRef<Record<string, any[]>>({});
+  const loadingFoldersRef = useRef<Set<string>>(new Set());
+  // State version counter to trigger re-renders when folder data loads
+  const [folderDataVersion, setFolderDataVersion] = useState(0);
 
   const hasInitializedRef = useRef(false);
+  const isResolvingRef = useRef(false);
 
   // Sort artists by recent interaction
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
@@ -174,10 +213,108 @@ export function SmartUploadModal({
     setSortedArtists(sorted);
   }, [artists]);
 
+  // ─── Folder Loading (writes to refs, bumps version counter) ─────────────────
+  const loadArtistFolders = useCallback(async (artistId: string) => {
+    if (!artistId || artistFoldersRef.current[artistId] || loadingFoldersRef.current.has(artistId)) return;
+    loadingFoldersRef.current.add(artistId);
+    try {
+      const res = await fetch(`/api/files?folderId=${artistId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
+        artistFoldersRef.current[artistId] = folders;
+        setFolderDataVersion(v => v + 1); // Trigger re-render
+      }
+    } catch (err) {
+      console.error('Error loading artist folders:', err);
+    } finally {
+      loadingFoldersRef.current.delete(artistId);
+    }
+  }, []);
+
+  const loadProjectFolders = useCallback(async (projectId: string) => {
+    if (!projectId || projectSubfoldersRef.current[projectId] || loadingFoldersRef.current.has(projectId)) return;
+    loadingFoldersRef.current.add(projectId);
+    try {
+      const res = await fetch(`/api/files?folderId=${projectId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
+        projectSubfoldersRef.current[projectId] = folders;
+        setFolderDataVersion(v => v + 1); // Trigger re-render
+      }
+    } catch (err) {
+      console.error('Error loading project folders:', err);
+    } finally {
+      loadingFoldersRef.current.delete(projectId);
+    }
+  }, []);
+
+  // ─── Core Resolution: runs once when folder data arrives ────────────────────
+  const resolveItemsFromFolderData = useCallback(() => {
+    if (isResolvingRef.current) return;
+    isResolvingRef.current = true;
+
+    setItems(prevItems => {
+      let changed = false;
+      const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
+      
+      const newItems = prevItems.map(item => {
+        if (item.uploadStatus !== 'pending') return item;
+
+        let updatedItem = { ...item };
+        let itemChanged = false;
+
+        // 1. Auto-detect project if not yet set
+        if (!updatedItem.projectId && updatedItem.artistId && !preselectedFolderId) {
+          const folders = artistFoldersRef.current[updatedItem.artistId];
+          if (folders && folders.length > 0) {
+            const projects = folders.filter((f: any) => !ignoreList.includes(f.name));
+            if (projects.length > 0) {
+              const bestProjectMatch = findBestMatch(updatedItem.file.name, projects, (p: any) => p.name, 0.4);
+              updatedItem.projectId = bestProjectMatch ? bestProjectMatch.id : projects[0].id;
+              itemChanged = true;
+            }
+          }
+        }
+
+        // 2. Trigger project subfolder loading if needed
+        if (updatedItem.projectId && !projectSubfoldersRef.current[updatedItem.projectId] && !loadingFoldersRef.current.has(updatedItem.projectId)) {
+          // Schedule async load (don't await)
+          loadProjectFolders(updatedItem.projectId);
+        }
+
+        // 3. Resolve target folder
+        const aFolders = artistFoldersRef.current[updatedItem.artistId] || [];
+        const pFolders = projectSubfoldersRef.current[updatedItem.projectId] || [];
+        const newFolderId = resolveTargetFolder(updatedItem, aFolders, pFolders, preselectedFolderId);
+        
+        if (newFolderId !== updatedItem.folderId) {
+          updatedItem.folderId = newFolderId;
+          itemChanged = true;
+        }
+
+        if (itemChanged) {
+          changed = true;
+          return updatedItem;
+        }
+        return item; // Return original reference if nothing changed
+      });
+
+      isResolvingRef.current = false;
+      return changed ? newItems : prevItems; // Only update state if something actually changed
+    });
+  }, [preselectedFolderId, loadProjectFolders]);
+
   // 1. Initialize files and apply fuzzy matching detection
   useEffect(() => {
-    if (initialFiles.length === 0 || hasInitializedRef.current) return;
+    if (initialFiles.length === 0 || hasInitializedRef.current || artists.length === 0) return;
     hasInitializedRef.current = true;
+
+    // Reset refs for fresh initialization
+    artistFoldersRef.current = {};
+    projectSubfoldersRef.current = {};
+    loadingFoldersRef.current = new Set();
 
     const initialized = initialFiles.map((f, i) => {
       let mimeGroup: SmartUploadFile['mimeGroup'] = 'other';
@@ -231,7 +368,7 @@ export function SmartUploadModal({
 
     setItems(initialized);
 
-    // Audio Analysis
+    // Audio Analysis — run once per file, update only the specific item
     initialized.forEach(item => {
       if (item.mimeGroup === 'audio') {
         detectAudioFeatures(item.file).then(({ bpm, key }) => {
@@ -239,155 +376,22 @@ export function SmartUploadModal({
         });
       }
     });
-  }, [initialFiles, artists, preselectedArtistId, preselectedFolderId]);
 
-  // Load artist folders
-  const loadArtistFolders = useCallback(async (artistId: string) => {
-    if (!artistId || artistFolders[artistId] || loadingFolders[artistId]) return;
-    setLoadingFolders(prev => ({ ...prev, [artistId]: true }));
-    try {
-      const res = await fetch(`/api/files?folderId=${artistId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
-        setArtistFolders(prev => ({ ...prev, [artistId]: folders }));
-      }
-    } catch (err) {
-      console.error('Error loading artist folders:', err);
-    } finally {
-      setLoadingFolders(prev => ({ ...prev, [artistId]: false }));
-    }
-  }, [artistFolders, loadingFolders]);
-
-  // Load project subfolders
-  const loadProjectFolders = useCallback(async (projectId: string) => {
-    if (!projectId || projectSubfolders[projectId] || loadingFolders[projectId]) return;
-    setLoadingFolders(prev => ({ ...prev, [projectId]: true }));
-    try {
-      const res = await fetch(`/api/files?folderId=${projectId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
-        setProjectSubfolders(prev => ({ ...prev, [projectId]: folders }));
-      }
-    } catch (err) {
-      console.error('Error loading project folders:', err);
-    } finally {
-      setLoadingFolders(prev => ({ ...prev, [projectId]: false }));
-    }
-  }, [projectSubfolders, loadingFolders]);
-
-  // Trigger loading artist folders for all detected artists
-  useEffect(() => {
-    items.forEach(item => {
-      if (item.artistId && !artistFolders[item.artistId]) {
-        loadArtistFolders(item.artistId);
-      }
+    // Trigger loading artist folders for detected artists
+    const uniqueArtistIds = new Set(initialized.map(i => i.artistId).filter(Boolean));
+    uniqueArtistIds.forEach(artistId => {
+      loadArtistFolders(artistId);
     });
-  }, [items, artistFolders, loadArtistFolders]);
+  }, [initialFiles, artists, preselectedArtistId, preselectedFolderId, loadArtistFolders]);
 
-  // Auto-detect project based on fuzzy filename matching
+  // 2. When folder data version changes (new folder data loaded), resolve items
   useEffect(() => {
-    let madeChanges = false;
-    const newItems = items.map(item => {
-      if (item.projectId || !item.artistId || preselectedFolderId) return item; // Already resolved or preselected
-      const folders = artistFolders[item.artistId];
-      if (!folders || folders.length === 0) return item;
-
-      const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
-      const projects = folders.filter(f => !ignoreList.includes(f.name));
-
-      if (projects.length > 0) {
-        // Try fuzzy matching project name
-        const bestProjectMatch = findBestMatch(item.file.name, projects, (p: any) => p.name, 0.4);
-        if (bestProjectMatch) {
-          madeChanges = true;
-          return { ...item, projectId: bestProjectMatch.id };
-        } else {
-          // Default to first project
-          madeChanges = true;
-          return { ...item, projectId: projects[0].id };
-        }
-      }
-      return item;
-    });
-    
-    if (madeChanges) {
-      setItems(newItems);
-    }
-  }, [items, artistFolders, preselectedFolderId]);
-
-  // Load subfolders for detected projects
-  useEffect(() => {
-    items.forEach(item => {
-      if (item.projectId && !projectSubfolders[item.projectId]) {
-        loadProjectFolders(item.projectId);
-      }
-    });
-  }, [items, projectSubfolders, loadProjectFolders]);
-
-  // ─── Smart Folder Target Resolution ─────────────────────────────────────────
-  useEffect(() => {
-    if (preselectedFolderId) return; // If manually provided by DriveExplorer, keep it.
-
-    let madeChanges = false;
-    const newItems = items.map(item => {
-      if (item.uploadStatus !== 'pending') return item;
-
-      let targetFolderId = item.folderId;
-      
-      // If it's a Bounce, route to Artist's global bounces folder
-      if (item.subType === 'bounce') {
-        const aFolders = artistFolders[item.artistId] || [];
-        const bouncesFolder = aFolders.find(f => f.name.toLowerCase().includes('bounce') || f.name === FOLDER_NAME_MAP['Bounces']);
-        const newTarget = bouncesFolder ? bouncesFolder.id : `CREATE_FOLDER::${FOLDER_NAME_MAP['Bounces']}::${item.artistId}`; 
-        if (targetFolderId !== newTarget) {
-          targetFolderId = newTarget;
-          madeChanges = true;
-        }
-      } 
-      // If it's Master, route directly to project root
-      else if (item.subType === 'master' && item.projectId) {
-        const newTarget = item.projectId;
-        if (targetFolderId !== newTarget) {
-          targetFolderId = newTarget;
-          madeChanges = true;
-        }
-      }
-      // If it's Mix/Stem/Session, route inside the specific Project folder
-      else if (item.projectId && item.subType !== 'none' && item.subType !== 'master') {
-        const pFolders = projectSubfolders[item.projectId] || [];
-        
-        let mappedName = '';
-        if (item.subType === 'mix') mappedName = FOLDER_NAME_MAP['Mix'];
-        else if (item.subType === 'stem') mappedName = FOLDER_NAME_MAP['Sessions'];
-        else mappedName = FOLDER_NAME_MAP['Other'] || '05_Referencias_y_Otros';
-
-        const specificFolder = pFolders.find(f => f.name.toLowerCase() === item.subType || f.name === mappedName);
-        const newTarget = specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName}::${item.projectId}`;
-        
-        if (targetFolderId !== newTarget) {
-          targetFolderId = newTarget;
-          madeChanges = true;
-        }
-      } 
-      // Fallback
-      else {
-        const newTarget = item.artistId || '';
-        if (targetFolderId !== newTarget) {
-          targetFolderId = newTarget;
-          madeChanges = true;
-        }
-      }
-
-      return { ...item, folderId: targetFolderId };
-    });
-
-    if (madeChanges) setItems(newItems);
-  }, [items, artistFolders, projectSubfolders, preselectedFolderId]);
+    if (items.length === 0) return;
+    resolveItemsFromFolderData();
+  }, [folderDataVersion, resolveItemsFromFolderData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── State Modifiers ─────────────────────────────────────────────────────────
-  const updateItem = (id: string, updates: Partial<SmartUploadFile>) => {
+  const updateItem = useCallback((id: string, updates: Partial<SmartUploadFile>) => {
     setItems(prev => prev.map(item => {
       if (item.id !== id) return item;
       const updated = { ...item, ...updates };
@@ -404,6 +408,8 @@ export function SmartUploadModal({
         if (!preselectedFolderId && updates.artistId !== undefined && updates.artistId !== item.artistId) {
            updated.projectId = ''; // Reset project if artist changes
            updated.folderId = '';
+           // Load folders for the new artist
+           loadArtistFolders(updates.artistId);
         } else if (!preselectedFolderId && updates.subType !== undefined) {
            updated.folderId = '';
         }
@@ -411,7 +417,10 @@ export function SmartUploadModal({
       
       return updated;
     }));
-  };
+
+    // After an item update, trigger resolution on next tick
+    setTimeout(() => resolveItemsFromFolderData(), 0);
+  }, [artists, preselectedFolderId, loadArtistFolders, resolveItemsFromFolderData]);
 
   const cancelItem = (id: string) => {
     const ctrl = abortControllersRef.current.get(id);
@@ -458,7 +467,7 @@ export function SmartUploadModal({
             `Hemos detectado ${bounces.length} versión(es) anterior(es) de este Bounce ("${cleanBase}").\n\nLos bounces se acumulan como historial automáticamente.\n\nPresiona Aceptar si prefieres REEMPLAZAR la versión más reciente en lugar de añadirla.`
           );
           if (confirm) {
-            bounces.sort((a, b) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+            bounces.sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
             return bounces[0].id;
           }
         }
@@ -484,15 +493,17 @@ export function SmartUploadModal({
       let finalFolderId = item.folderId;
       
       if (!finalFolderId) {
-        updateItem(item.id, { uploadStatus: 'error', uploadError: 'No target folder resolved' });
+        setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: 'No target folder resolved' } : p));
         continue;
       }
 
-      updateItem(item.id, { uploadStatus: 'uploading', uploadProgress: 5 });
+      setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'uploading', uploadProgress: 5 } : p));
 
       // Handle Auto Folder Creation
       if (finalFolderId.startsWith('CREATE_FOLDER::')) {
-        const [_, fName, pId] = finalFolderId.split('::');
+        const parts = finalFolderId.split('::');
+        const fName = parts[1];
+        const pId = parts[2];
         const cacheKey = `${fName}::${pId}`;
         if (newlyCreatedFolders.has(cacheKey)) {
           finalFolderId = newlyCreatedFolders.get(cacheKey)!;
@@ -508,7 +519,7 @@ export function SmartUploadModal({
             finalFolderId = data.folderId || data.id; // Support both just in case
             newlyCreatedFolders.set(cacheKey, finalFolderId);
           } catch (err) {
-             updateItem(item.id, { uploadStatus: 'error', uploadError: `Error al crear la subcarpeta: ${fName}` });
+             setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: `Error al crear la subcarpeta: ${fName}` } : p));
              continue;
           }
         }
@@ -521,14 +532,19 @@ export function SmartUploadModal({
       // WAV to MP3 Conversion for Bounces
       if (item.subType === 'bounce' && extension.toLowerCase() === '.wav') {
         try {
+          let lastReportedPercent = -1;
           fileToProcess = await convertWavToMp3(item.file, (p) => {
-            updateItem(item.id, { uploadProgress: 5 + Math.floor(p * 0.15) }); // up to 20%
+            const newPercent = 5 + Math.floor(p * 0.15); // up to 20%
+            if (newPercent !== lastReportedPercent) {
+              lastReportedPercent = newPercent;
+              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: newPercent } : it));
+            }
           });
           extension = '.mp3';
           finalCustomName = finalCustomName.replace(/\.wav$/i, '') + '.mp3';
         } catch (err) {
           console.error('Error converting WAV to MP3', err);
-          updateItem(item.id, { uploadStatus: 'error', uploadError: 'Error al convertir WAV a MP3' });
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: 'Error al convertir WAV a MP3' } : p));
           continue;
         }
       }
@@ -565,15 +581,21 @@ export function SmartUploadModal({
         const { uploadUrl } = await sessionRes.json();
 
         // Real progress logic using XMLHttpRequest
+        const itemId = item.id;
         const uploadTask = new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('PUT', uploadUrl);
           xhr.setRequestHeader('Content-Type', renamedFile.type || 'application/octet-stream');
           
+          let lastXhrPercent = -1;
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const p = Math.round((e.loaded / e.total) * 90); // 10% to 100%
-              updateItem(item.id, { uploadProgress: Math.max(10, p) });
+              const clamped = Math.max(10, p);
+              if (clamped !== lastXhrPercent) {
+                lastXhrPercent = clamped;
+                setItems(prev => prev.map(it => it.id === itemId ? { ...it, uploadProgress: clamped } : it));
+              }
             }
           };
 
@@ -582,7 +604,7 @@ export function SmartUploadModal({
               let responseData: any = {};
               try { responseData = JSON.parse(xhr.responseText); } catch (e) {}
               
-              updateItem(item.id, { uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId });
+              setItems(prev => prev.map(it => it.id === itemId ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
               
               // Email notification
               if (item.notifyArtist) {
@@ -619,7 +641,7 @@ export function SmartUploadModal({
 
       } catch (err: any) {
         if (err.message !== 'Cancelled by user') {
-          updateItem(item.id, { uploadStatus: 'error', uploadError: err.message, uploadProgress: 0 });
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: err.message, uploadProgress: 0 } : p));
         }
       } finally {
         abortControllersRef.current.delete(item.id);
@@ -641,6 +663,9 @@ export function SmartUploadModal({
          .map(i => artists.find(a => a.id === i.artistId))
          .filter(a => a && a.email)
   ));
+
+  // Derive folder data from refs for rendering (safe because folderDataVersion triggers re-render)
+  const artistFolders = artistFoldersRef.current;
 
   const modal = (
     <div className={globalStatus === 'idle' 
