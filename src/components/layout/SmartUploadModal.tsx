@@ -141,7 +141,7 @@ function resolveTargetFolder(
 
   // Bounce → Artist's global bounces folder
   if (item.subType === 'bounce') {
-    const bouncesFolder = aFolders.find(f => f.name.toLowerCase().includes('bounce') || f.name === FOLDER_NAME_MAP['Bounces']);
+    const bouncesFolder = aFolders.find(f => f?.name?.toLowerCase()?.includes('bounce') || f?.name === FOLDER_NAME_MAP['Bounces']);
     return bouncesFolder ? bouncesFolder.id : `CREATE_FOLDER::${FOLDER_NAME_MAP['Bounces']}::${item.artistId}`;
   }
 
@@ -152,13 +152,11 @@ function resolveTargetFolder(
 
   // Mix/Stem/Session → Specific subfolder inside project
   if (item.projectId && item.subType !== 'none' && item.subType !== 'master') {
-    let mappedName = '';
-    if (item.subType === 'mix') mappedName = FOLDER_NAME_MAP['Mix'];
-    else if (item.subType === 'stem') mappedName = FOLDER_NAME_MAP['Sessions'];
-    else mappedName = FOLDER_NAME_MAP['Other'] || '05_Referencias_y_Otros';
-
-    const specificFolder = pFolders.find(f => f.name.toLowerCase() === item.subType || f.name === mappedName);
-    return specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName}::${item.projectId}`;
+    let mappedName = FOLDER_NAME_MAP[item.subType.charAt(0).toUpperCase() + item.subType.slice(1) as keyof typeof FOLDER_NAME_MAP];
+    
+    // Look for exact match or generic mapping
+    const specificFolder = pFolders.find(f => f?.name?.toLowerCase() === item.subType || f?.name === mappedName);
+    return specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName || item.subType}::${item.projectId}`;
   }
 
   // Fallback
@@ -256,53 +254,57 @@ export function SmartUploadModal({
     isResolvingRef.current = true;
 
     setItems(prevItems => {
-      let changed = false;
-      const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
-      
-      const newItems = prevItems.map(item => {
-        if (item.uploadStatus !== 'pending') return item;
+      try {
+        let changed = false;
+        const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
+        
+        const newItems = prevItems.map(item => {
+          if (item.uploadStatus !== 'pending') return item;
 
-        let updatedItem = { ...item };
-        let itemChanged = false;
+          let updatedItem = { ...item };
+          let itemChanged = false;
 
-        // 1. Auto-detect project if not yet set
-        if (!updatedItem.projectId && updatedItem.artistId && !preselectedFolderId) {
-          const folders = artistFoldersRef.current[updatedItem.artistId];
-          if (folders && folders.length > 0) {
-            const projects = folders.filter((f: any) => !ignoreList.includes(f.name));
-            if (projects.length > 0) {
-              const bestProjectMatch = findBestMatch(updatedItem.file.name, projects, (p: any) => p.name, 0.4);
-              updatedItem.projectId = bestProjectMatch ? bestProjectMatch.id : projects[0].id;
-              itemChanged = true;
+          // 1. Auto-detect project if not yet set
+          if (!updatedItem.projectId && updatedItem.artistId && !preselectedFolderId) {
+            const folders = artistFoldersRef.current[updatedItem.artistId];
+            if (folders && folders.length > 0) {
+              const projects = folders.filter((f: any) => f?.name && !ignoreList.includes(f.name));
+              if (projects.length > 0) {
+                const bestProjectMatch = findBestMatch(updatedItem.file.name, projects, (p: any) => p?.name || '', 0.4);
+                updatedItem.projectId = bestProjectMatch ? bestProjectMatch.id : projects[0].id;
+                itemChanged = true;
+              }
             }
           }
-        }
 
-        // 2. Trigger project subfolder loading if needed
-        if (updatedItem.projectId && !projectSubfoldersRef.current[updatedItem.projectId] && !loadingFoldersRef.current.has(updatedItem.projectId)) {
-          // Schedule async load (don't await)
-          loadProjectFolders(updatedItem.projectId);
-        }
+          // 2. Trigger project subfolder loading if needed
+          if (updatedItem.projectId && !projectSubfoldersRef.current[updatedItem.projectId] && !loadingFoldersRef.current.has(updatedItem.projectId)) {
+            loadProjectFolders(updatedItem.projectId);
+          }
 
-        // 3. Resolve target folder
-        const aFolders = artistFoldersRef.current[updatedItem.artistId] || [];
-        const pFolders = projectSubfoldersRef.current[updatedItem.projectId] || [];
-        const newFolderId = resolveTargetFolder(updatedItem, aFolders, pFolders, preselectedFolderId);
-        
-        if (newFolderId !== updatedItem.folderId) {
-          updatedItem.folderId = newFolderId;
-          itemChanged = true;
-        }
+          // 3. Resolve target folder
+          const aFolders = artistFoldersRef.current[updatedItem.artistId] || [];
+          const pFolders = projectSubfoldersRef.current[updatedItem.projectId] || [];
+          const newFolderId = resolveTargetFolder(updatedItem, aFolders, pFolders, preselectedFolderId);
+          
+          if (newFolderId !== updatedItem.folderId) {
+            updatedItem.folderId = newFolderId;
+            itemChanged = true;
+          }
 
-        if (itemChanged) {
-          changed = true;
-          return updatedItem;
-        }
-        return item; // Return original reference if nothing changed
-      });
+          if (itemChanged) {
+            return updatedItem;
+          }
+          return item;
+        });
 
-      isResolvingRef.current = false;
-      return changed ? newItems : prevItems; // Only update state if something actually changed
+        isResolvingRef.current = false;
+        return changed ? newItems : prevItems;
+      } catch (err) {
+        console.error('Error resolving folder data:', err);
+        isResolvingRef.current = false;
+        return prevItems;
+      }
     });
   }, [preselectedFolderId, loadProjectFolders]);
 
@@ -322,11 +324,11 @@ export function SmartUploadModal({
       else if (f.type.startsWith('image/')) mimeGroup = 'image';
       else if (f.type.startsWith('video/')) mimeGroup = 'video';
 
-      let subType: SmartUploadFile['subType'] = 'none';
+      let subType: 'bounce' | 'master' | 'mix' | 'stem' | 'cover' | 'promo' | 'none' = 'none';
       if (mimeGroup === 'audio') {
-        const nl = f.name.toLowerCase();
+        const nl = f.name?.toLowerCase() || '';
         if (nl.includes('master')) subType = 'master';
-        else if (nl.includes('mix')) subType = 'mix';
+        else if (nl.includes('bounce') || nl.includes('demo')) subType = 'bounce';
         else if (nl.includes('stem')) subType = 'stem';
         else subType = 'bounce';
       }
@@ -338,7 +340,7 @@ export function SmartUploadModal({
         detectedArtistId = preselectedArtistId;
         detectedArtistName = artists.find(a => a.id === preselectedArtistId)?.name || '';
       } else {
-        const bestArtistMatch = findBestMatch(f.name, artists, (a: any) => a.name, 0.4);
+        const bestArtistMatch = findBestMatch(f.name, artists, (a: any) => a?.name || '', 0.4);
         if (bestArtistMatch) {
           detectedArtistId = bestArtistMatch.id;
           detectedArtistName = bestArtistMatch.name;
@@ -441,8 +443,8 @@ export function SmartUploadModal({
 
       if (item.subType === 'master') {
         const masters = existingFiles.filter(f =>
-          f.mimeType.startsWith('audio/') &&
-          (f.name.toLowerCase().includes('master') || f.name.toLowerCase() === item.customName.toLowerCase())
+          f?.mimeType?.startsWith('audio/') &&
+          (f?.name?.toLowerCase()?.includes('master') || f?.name?.toLowerCase() === item?.customName?.toLowerCase())
         );
         if (masters.length > 0) {
           const confirm = await customConfirm(
@@ -451,20 +453,18 @@ export function SmartUploadModal({
           return confirm ? masters[0].id : undefined;
         }
       } else if (item.subType === 'bounce') {
-        const cleanBase = item.file.name
-          .replace(/\.[^.]+$/, '')
-          .replace(/^\[.*?\]\s*/, '')
-          .replace(/^(Master|Bounce|Mix|Stem)_/i, '')
-          .trim()
-          .toLowerCase();
         const bounces = existingFiles.filter(f => {
-          if (!f.mimeType.startsWith('audio/')) return false;
-          const fn = f.name.toLowerCase();
-          return fn.includes(cleanBase) && (fn.includes('bounce') || /\[\d{2}-\d{2}-\d{4}\]/.test(fn) || /\[\d{4}-\d{2}-\d{2}\]/.test(fn));
+          if (!f?.mimeType?.startsWith('audio/')) return false;
+          const fn = f?.name?.toLowerCase() || '';
+          const ic = item.customName?.toLowerCase() || '';
+          
+          return fn === ic || 
+                 fn === ic.replace(/\.mp3$/i, '.wav') || 
+                 fn === ic.replace(/\.wav$/i, '.mp3');
         });
         if (bounces.length > 0) {
           const confirm = await customConfirm(
-            `Hemos detectado ${bounces.length} versión(es) anterior(es) de este Bounce ("${cleanBase}").\n\nLos bounces se acumulan como historial automáticamente.\n\nPresiona Aceptar si prefieres REEMPLAZAR la versión más reciente en lugar de añadirla.`
+            `Hemos detectado ${bounces.length} versión(es) anterior(es) de este Bounce.\n\nLos bounces se acumulan como historial automáticamente.\n\nPresiona Aceptar si prefieres REEMPLAZAR la versión más reciente en lugar de añadirla.`
           );
           if (confirm) {
             bounces.sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
@@ -654,7 +654,6 @@ export function SmartUploadModal({
 
   if (!isOpen || initialFiles.length === 0) return null;
 
-  const hasAnyDone = items.some(i => i.uploadStatus === 'done');
   const allDone = items.every(i => i.uploadStatus === 'done' || i.uploadStatus === 'error' || i.uploadStatus === 'cancelled');
   
   // Collect unique artists that will receive emails
@@ -664,16 +663,13 @@ export function SmartUploadModal({
          .filter(a => a && a.email)
   ));
 
-  // Derive folder data from refs for rendering (safe because folderDataVersion triggers re-render)
-  const artistFolders = artistFoldersRef.current;
-
   const modal = (
     <div className="fixed bottom-4 right-4 z-[500] pointer-events-none p-4 flex flex-col items-end justify-end">
       
       <div className={globalStatus === 'idle'
         ? "pointer-events-auto glass w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"
         : "pointer-events-auto glass w-[380px] max-h-[70vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] transition-all duration-300"}>
-        {/* Header - Only show full header in idle, or a mini header in uploading */}
+        {/* Header */}
         {globalStatus === 'idle' ? (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0 bg-surface/80 backdrop-blur-xl">
             <div className="flex items-center gap-3">
@@ -683,7 +679,7 @@ export function SmartUploadModal({
               <div className="min-w-0">
                 <h2 className="text-base font-bold text-text-primary truncate">Subida Inteligente</h2>
                 <p className="text-xs text-text-secondary mt-0.5 truncate">
-                  {items.length} archivo{items.length !== 1 ? 's' : ''} detectados automáticamente
+                  {items.length} archivo{items.length !== 1 ? 's' : ''} detectados
                 </p>
               </div>
             </div>
@@ -710,8 +706,8 @@ export function SmartUploadModal({
         {/* Files list */}
         <div className={`flex-1 overflow-y-auto ${globalStatus === 'idle' ? 'px-4 py-4 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}>
           {items.map(item => {
-            const currentArtistFolders = artistFolders[item.artistId] || [];
-            const projectList = currentArtistFolders.filter(f => !['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(f.name));
+            const currentArtistFolders = artistFoldersRef.current[item.artistId] || [];
+            const projectList = currentArtistFolders.filter((f: any) => f?.name && !['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(f.name));
 
             return (
             <div key={item.id} className={`rounded-xl border ${globalStatus === 'idle' ? 'p-4' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
