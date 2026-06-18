@@ -255,7 +255,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         setSelectedIds([item.id]);
         setLastSelectedIndex(index);
         
-        if (item.mimeType.startsWith('audio/')) {
+        if (item.mimeType?.startsWith('audio/')) {
           if (currentTrack?.id === item.id) {
             togglePlay();
           } else {
@@ -633,34 +633,35 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         </svg>
       );
     }
-    if (mimeType === 'application/vnd.google-apps.folder') return <Folder className="w-5 h-5 text-accent" />;
-    if (mimeType.startsWith('audio/')) return <FileAudio className="w-5 h-5 text-purple-400" />;
-    if (mimeType.startsWith('image/')) return <FileImage className="w-5 h-5 text-green-400" />;
-    if (mimeType.startsWith('video/')) return <Film className="w-5 h-5 text-red-400" />;
-    if (mimeType.includes('pdf')) return <FileText className="w-5 h-5 text-orange-400" />;
+    const safeMime = mimeType || '';
+    if (safeMime === 'application/vnd.google-apps.folder') return <Folder className="w-5 h-5 text-accent" />;
+    if (safeMime.startsWith('audio/')) return <FileAudio className="w-5 h-5 text-purple-400" />;
+    if (safeMime.startsWith('image/')) return <FileImage className="w-5 h-5 text-green-400" />;
+    if (safeMime.startsWith('video/')) return <Film className="w-5 h-5 text-red-400" />;
+    if (safeMime.includes('pdf')) return <FileText className="w-5 h-5 text-orange-400" />;
     if (
-      mimeType.includes('document') ||
-      mimeType.includes('word') ||
-      mimeType === 'application/vnd.google-apps.document'
+      safeMime.includes('document') ||
+      safeMime.includes('word') ||
+      safeMime === 'application/vnd.google-apps.document'
     ) return <FileText className="w-5 h-5 text-blue-400" />;
     if (
-      mimeType.includes('sheet') ||
-      mimeType.includes('excel') ||
-      mimeType === 'application/vnd.google-apps.spreadsheet'
+      safeMime.includes('sheet') ||
+      safeMime.includes('excel') ||
+      safeMime === 'application/vnd.google-apps.spreadsheet'
     ) return <FileText className="w-5 h-5 text-emerald-400" />;
     if (
-      mimeType.includes('presentation') ||
-      mimeType.includes('powerpoint') ||
-      mimeType === 'application/vnd.google-apps.presentation'
+      safeMime.includes('presentation') ||
+      safeMime.includes('powerpoint') ||
+      safeMime === 'application/vnd.google-apps.presentation'
     ) return <FileText className="w-5 h-5 text-yellow-500" />;
-    if (mimeType === 'text/plain') return <FileText className="w-5 h-5 text-gray-300" />;
+    if (safeMime === 'text/plain') return <FileText className="w-5 h-5 text-gray-300" />;
     return <FileIcon className="w-5 h-5 text-text-secondary" />;
   };
 
   // Sort and group
   const groupedItems = (() => {
-    const audioItems = items.filter(i => i.mimeType.startsWith('audio/'));
-    const nonAudioItems = items.filter(i => !i.mimeType.startsWith('audio/'));
+    const audioItems = items.filter(i => i.mimeType?.startsWith('audio/'));
+    const nonAudioItems = items.filter(i => !i.mimeType?.startsWith('audio/'));
 
     const audioGroups = new Map<string, typeof items>();
     audioItems.forEach(item => {
@@ -759,7 +760,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
               </div>
             ) : (
               recentFiles.map((item: any) => {
-                const isAudio = item.mimeType.startsWith('audio/');
+                const isAudio = item.mimeType?.startsWith('audio/');
                 const isThisTrackActive = currentTrack?.id === item.id;
                 const isThisTrackPlaying = isThisTrackActive && isPlaying;
 
@@ -969,7 +970,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
               <div className="divide-y divide-border/40">
                 {groupedItems.map((item: any, idx) => {
                   const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
-                  const isAudio = item.mimeType.startsWith('audio/');
+                  const isAudio = item.mimeType?.startsWith('audio/');
 
                   return (
                     <div
