@@ -22,6 +22,7 @@ import {
   CalendarDays,
   ArrowRightLeft,
   Trash2,
+  Edit3,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -47,6 +48,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   CalendarDays,
   ArrowRightLeft,
   Trash2,
+  Edit3,
 };
 
 function MenuIcon({ name }: { name?: string }) {

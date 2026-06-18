@@ -668,29 +668,27 @@ export function SmartUploadModal({
   const artistFolders = artistFoldersRef.current;
 
   const modal = (
-    <div className={globalStatus === 'idle' 
-      ? "fixed inset-0 z-[500] flex items-center justify-center bg-black/70 backdrop-blur-md p-6 animate-in fade-in duration-200"
-      : "fixed bottom-4 right-4 z-[500] pointer-events-none p-4 flex flex-col items-end justify-end"}>
+    <div className="fixed bottom-4 right-4 z-[500] pointer-events-none p-4 flex flex-col items-end justify-end">
       
       <div className={globalStatus === 'idle'
-        ? "pointer-events-auto glass w-full max-w-4xl max-h-[90vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_80px_rgba(108,92,231,0.15)] animate-in zoom-in-95 duration-300"
-        : "pointer-events-auto glass w-[380px] max-h-[70vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"}>
+        ? "pointer-events-auto glass w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"
+        : "pointer-events-auto glass w-[380px] max-h-[70vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] transition-all duration-300"}>
         {/* Header - Only show full header in idle, or a mini header in uploading */}
         {globalStatus === 'idle' ? (
-          <div className="flex items-center justify-between px-8 py-5 border-b border-border shrink-0 bg-surface/50 backdrop-blur-xl">
-            <div className="flex items-center gap-4">
-              <div className="w-11 h-11 rounded-xl bg-accent/10 flex items-center justify-center shadow-inner">
-                <UploadCloud className="w-6 h-6 text-accent" />
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0 bg-surface/80 backdrop-blur-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shadow-inner shrink-0">
+                <UploadCloud className="w-5 h-5 text-accent" />
               </div>
-              <div>
-                <h2 className="text-lg font-bold text-text-primary">Subida Inteligente</h2>
-                <p className="text-sm text-text-secondary mt-0.5">
-                  {items.length} archivo{items.length !== 1 ? 's' : ''} · Detección automática de tipo, BPM, tonalidad y artista destino
+              <div className="min-w-0">
+                <h2 className="text-base font-bold text-text-primary truncate">Subida Inteligente</h2>
+                <p className="text-xs text-text-secondary mt-0.5 truncate">
+                  {items.length} archivo{items.length !== 1 ? 's' : ''} detectados automáticamente
                 </p>
               </div>
             </div>
             {!isProcessing && (
-              <button onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} className="p-2 rounded-lg text-text-secondary hover:text-white hover:bg-surface-elevated transition-colors">
+              <button onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} className="p-2 rounded-lg text-text-secondary hover:text-white hover:bg-surface-elevated transition-colors shrink-0">
                 <X className="w-5 h-5" />
               </button>
             )}
@@ -710,16 +708,16 @@ export function SmartUploadModal({
         )}
 
         {/* Files list */}
-        <div className={`flex-1 overflow-y-auto ${globalStatus === 'idle' ? 'px-8 py-5 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}>
+        <div className={`flex-1 overflow-y-auto ${globalStatus === 'idle' ? 'px-4 py-4 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}>
           {items.map(item => {
             const currentArtistFolders = artistFolders[item.artistId] || [];
             const projectList = currentArtistFolders.filter(f => !['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(f.name));
 
             return (
-            <div key={item.id} className={`rounded-xl border ${globalStatus === 'idle' ? 'p-5' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
+            <div key={item.id} className={`rounded-xl border ${globalStatus === 'idle' ? 'p-4' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
               {/* File row */}
-              <div className={`flex items-center gap-3 ${globalStatus === 'idle' ? 'mb-4' : (item.uploadStatus === 'uploading' ? 'mb-2' : '')}`}>
-                <div className={`${globalStatus === 'idle' ? 'w-10 h-10' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50`}>
+              <div className={`flex items-center gap-3 ${globalStatus === 'idle' ? 'mb-3' : (item.uploadStatus === 'uploading' ? 'mb-2' : '')}`}>
+                <div className={`${globalStatus === 'idle' ? 'w-9 h-9' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50`}>
                   {item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
                 </div>
 
@@ -773,7 +771,7 @@ export function SmartUploadModal({
 
               {/* Controls - only show when pending and idle */}
               {item.uploadStatus === 'pending' && globalStatus === 'idle' && (
-                <div className="grid grid-cols-2 gap-4 mt-2">
+                <div className="grid grid-cols-2 gap-3 mt-2">
                   {/* Select Artist */}
                   <div>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
@@ -848,22 +846,17 @@ export function SmartUploadModal({
 
         {/* Footer */}
         {globalStatus === 'idle' && (
-          <div className="px-8 py-5 border-t border-border shrink-0 flex items-center justify-between gap-4 bg-surface/50 backdrop-blur-xl">
-            <div className="text-sm text-text-secondary">
-              {globalStatus === 'idle' && artistsReceivingEmails.length > 0 && (
-                <span className="flex items-center gap-2 text-accent/80 font-medium bg-accent/10 px-3 py-1.5 rounded-lg border border-accent/20">
-                  <span>📧</span> Notificando Masters a: {artistsReceivingEmails.map(a => a?.name).join(', ')}
-                </span>
-              )}
-              {globalStatus === 'idle' && artistsReceivingEmails.length === 0 && (
-                <span className="text-text-secondary/70">Revisa la configuración y pulsa Subir</span>
-              )}
-            </div>
+          <div className="px-5 py-4 border-t border-border shrink-0 flex flex-col gap-3 bg-surface/80 backdrop-blur-xl">
+            {artistsReceivingEmails.length > 0 && (
+              <div className="text-xs text-text-secondary w-full bg-accent/10 px-3 py-2 rounded-lg border border-accent/20 truncate">
+                <span className="mr-1">📧</span> Notificando: {artistsReceivingEmails.map(a => a?.name).join(', ')}
+              </div>
+            )}
 
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} disabled={isProcessing}>Cancelar</Button>
-              <Button onClick={handleUpload} disabled={isProcessing} className="px-6 bg-accent hover:bg-accent-light text-white shadow-lg shadow-accent/20">
-                {isProcessing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Subiendo...</> : <><UploadCloud className="w-4 h-4 mr-2" />Subir {items.length} archivo{items.length !== 1 ? 's' : ''}</>}
+            <div className="flex items-center justify-end gap-3 w-full">
+              <Button variant="outline" size="sm" onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} disabled={isProcessing}>Cancelar</Button>
+              <Button onClick={handleUpload} size="sm" disabled={isProcessing} className="px-5 bg-accent hover:bg-accent-light text-white shadow-lg shadow-accent/20">
+                {isProcessing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Subiendo...</> : <><UploadCloud className="w-4 h-4 mr-2" />Subir {items.length}</>}
               </Button>
             </div>
           </div>

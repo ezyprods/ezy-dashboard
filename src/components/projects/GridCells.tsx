@@ -65,12 +65,15 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.todo;
   const Icon = cfg.icon;
 
+  const isRadialOpenRef = useRef(false);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     const target = e.currentTarget;
     startPos.current = { x: e.clientX, y: e.clientY };
     hasMoved.current = false;
     startTime.current = Date.now();
+    isRadialOpenRef.current = false;
 
     const cleanup = () => {
       if (longPressTimer.current) {
@@ -92,6 +95,7 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
         const cy = rect.top + rect.height / 2;
         setCenter({ x: cx, y: cy });
         setShowRadial(true);
+        isRadialOpenRef.current = true;
       }
     }, 550);
   };
@@ -177,15 +181,19 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
   };
 
   const handleClick = (e: React.MouseEvent) => {
-    const elapsed = Date.now() - startTime.current;
-    if (hasMoved.current || elapsed > 400) {
+    // If radial opened via long press, ignore this click
+    if (isRadialOpenRef.current || showRadial) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
-    if (!showRadial) {
-      onStatusChange(NEXT_STATUS[status] || 'in_progress');
+    // If pointer moved significantly, ignore
+    if (hasMoved.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
     }
+    onStatusChange(NEXT_STATUS[status] || 'in_progress');
   };
 
   const radialItems: { s: FlexTaskStatus; x: number; y: number }[] = [

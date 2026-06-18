@@ -221,6 +221,25 @@ export function ProductionGridBoard({
 
             let rowModified = false;
             const newCells = { ...row.cells };
+            
+            const checkMatch = (fileName: string) => {
+              const fileNameNorm = normalize(fileName);
+              // Exact substring match (either direction)
+              if (fileNameNorm.includes(rowNameNorm) || rowNameNorm.includes(fileNameNorm)) {
+                 return 1000 - Math.abs(fileNameNorm.length - rowNameNorm.length);
+              }
+              // Token-based match (e.g. "song title" vs "artist song title mix v2")
+              const rowTokens = rowNameNorm.split(' ').filter(t => t.length > 2);
+              const fileTokens = fileNameNorm.replace(/wav|mp3|m4a|flac|ogg|aiff/gi, '').split(' ').filter(t => t.length > 2);
+              if (rowTokens.length > 0 && fileTokens.length > 0) {
+                 const matchCount = rowTokens.filter(t => fileTokens.some(ft => ft.includes(t) || t.includes(ft))).length;
+                 // If more than 60% of significant words match
+                 if (matchCount / rowTokens.length >= 0.6) {
+                    return 500 + matchCount * 10 - Math.abs(fileNameNorm.length - rowNameNorm.length);
+                 }
+              }
+              return 0;
+            };
 
             for (const col of prevGrid.columns) {
               if (col.type === 'file') {
@@ -230,14 +249,10 @@ export function ProductionGridBoard({
                   let bestScore = 0;
 
                   for (const file of audioFiles) {
-                    const fileNameNorm = normalize(file.name);
-                    if (fileNameNorm.includes(rowNameNorm)) {
-                      // Higher score for files that have less extra characters (tighter match)
-                      const score = 1000 - (fileNameNorm.length - rowNameNorm.length);
-                      if (score > bestScore) {
-                        bestScore = score;
-                        bestMatch = file;
-                      }
+                    const score = checkMatch(file.name);
+                    if (score > bestScore) {
+                      bestScore = score;
+                      bestMatch = file;
                     }
                   }
 
@@ -258,13 +273,10 @@ export function ProductionGridBoard({
                let bestMatch = null;
                let bestScore = 0;
                for (const file of audioFiles) {
-                  const fileNameNorm = normalize(file.name);
-                  if (fileNameNorm.includes(rowNameNorm)) {
-                     const score = 1000 - (fileNameNorm.length - rowNameNorm.length);
-                     if (score > bestScore) {
-                        bestScore = score;
-                        bestMatch = file;
-                     }
+                  const score = checkMatch(file.name);
+                  if (score > bestScore) {
+                     bestScore = score;
+                     bestMatch = file;
                   }
                }
                if (bestMatch) {

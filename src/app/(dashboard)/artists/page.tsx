@@ -29,6 +29,18 @@ export default function ArtistsPage() {
   const { isDraggingFiles, triggerUploadForArtist } = useGlobalDragDrop();
   const [editingArtist, setEditingArtist] = useState<any | null>(null);
 
+  const handleDeleteArtist = async (artistId: string, artistName: string) => {
+    if (!await customConfirm(`¿Estás seguro de que quieres eliminar a ${artistName}? Esto borrará su configuración.`)) return;
+    try {
+      const res = await fetch(`/api/artists/${artistId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar el artista');
+      customAlert('Artista eliminado correctamente');
+      window.location.reload(); // Quick refresh
+    } catch (e: any) {
+      customAlert(e.message);
+    }
+  };
+
   const handleArtistDragEnter = (e: React.DragEvent, artistId: string) => {
     e.preventDefault();
     dragCounters.current[artistId] = (dragCounters.current[artistId] || 0) + 1;
@@ -208,6 +220,8 @@ export default function ArtistsPage() {
                     navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`);
                     customAlert('Enlace copiado');
                   }},
+                  { separator: true },
+                  { label: 'Eliminar', icon: 'Trash2', variant: 'danger', action: () => handleDeleteArtist(artist.id, artist.name) },
                 ]);
               }}
               data-context="artist"
@@ -285,6 +299,12 @@ export default function ArtistsPage() {
                         { label: 'Ver Perfil', icon: 'User', action: () => router.push(`/artists/${artist.id}`) },
                         { label: 'Editar Perfil', icon: 'Edit3', action: () => setEditingArtist(artist) },
                         { label: 'Portal del Artista', icon: 'ExternalLink', action: () => window.open(`/portal/${artist.id}`, '_blank') },
+                        { label: 'Copiar Enlace Portal', icon: 'Copy', action: () => {
+                          navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`);
+                          customAlert('Enlace copiado');
+                        }},
+                        { separator: true },
+                        { label: 'Eliminar', icon: 'Trash2', variant: 'danger', action: () => handleDeleteArtist(artist.id, artist.name) },
                       ]);
                     }}
                   >
