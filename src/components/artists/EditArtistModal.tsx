@@ -129,39 +129,6 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="edit-genre">Género Musical (Separado por comas)</Label>
-            <Input
-              id="edit-genre"
-              placeholder="Urbano, Reggaeton, Trap"
-              value={formData.genre}
-              onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
-              disabled={isLoading}
-            />
-          </div>
-
-          <div className="space-y-3">
-            <Label>Servicios Contratados</Label>
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(SERVICE_LABELS) as ServiceType[]).map((service) => (
-                <button
-                  key={service}
-                  type="button"
-                  onClick={() => handleServiceToggle(service)}
-                  disabled={isLoading}
-                  className={`
-                    px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 border
-                    ${selectedServices.includes(service)
-                      ? 'bg-accent/20 border-accent/50 text-accent shadow-sm'
-                      : 'bg-surface hover:bg-surface-elevated border-border text-text-secondary hover:text-text-primary'
-                    }
-                  `}
-                >
-                  {SERVICE_LABELS[service]}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-border mt-6">

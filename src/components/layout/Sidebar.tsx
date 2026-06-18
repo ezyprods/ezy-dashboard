@@ -71,9 +71,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
             const Icon = item.icon;
             
             return (
-              <button
+              <Link
                 key={item.name}
-                onClick={() => router.push(item.href)}
+                href={item.href}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative overflow-hidden text-left",
                   isActive 
@@ -90,7 +90,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                   isActive ? "text-accent-light" : "text-text-secondary group-hover:text-text-primary"
                 )} />
                 {item.name}
-              </button>
+              </Link>
             );
           })}
         </nav>

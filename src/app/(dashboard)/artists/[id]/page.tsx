@@ -146,17 +146,6 @@ export default function ArtistDetailPage() {
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-text-primary truncate">{artist.name}</h2>
-                <div className="hidden lg:flex items-center gap-2">
-                  {Array.isArray(artist.genre) ? artist.genre.slice(0, 2).map(g => (
-                    <span key={g} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
-                      {g}
-                    </span>
-                  )) : typeof artist.genre === 'string' && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-surface border border-border text-text-secondary uppercase tracking-wider">
-                      {artist.genre}
-                    </span>
-                  )}
-                </div>
               </div>
               <div className="flex items-center gap-3 mt-0.5 text-text-secondary text-xs">
                 {artist.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {artist.email}</span>}

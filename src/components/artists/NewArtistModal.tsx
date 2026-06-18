@@ -114,35 +114,6 @@ export function NewArtistModal({ isOpen, onClose }: NewArtistModalProps) {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="genre">Géneros (separados por coma)</Label>
-            <Input 
-              id="genre" 
-              placeholder="Rock, Indie, Pop"
-              value={formData.genre}
-              onChange={(e) => setFormData(prev => ({ ...prev, genre: e.target.value }))}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Servicios Contratados</Label>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {(Object.keys(SERVICE_LABELS) as ServiceType[]).map((service) => (
-                <button
-                  key={service}
-                  type="button"
-                  onClick={() => handleServiceToggle(service)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                    selectedServices.includes(service)
-                      ? 'bg-accent/20 border-accent/50 text-accent-light'
-                      : 'bg-surface border-border text-text-secondary hover:border-text-secondary'
-                  }`}
-                >
-                  {SERVICE_LABELS[service]}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-border/50">

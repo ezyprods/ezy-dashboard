@@ -293,6 +293,7 @@ export function SmartUploadModal({
           }
 
           if (itemChanged) {
+            changed = true;
             return updatedItem;
           }
           return item;

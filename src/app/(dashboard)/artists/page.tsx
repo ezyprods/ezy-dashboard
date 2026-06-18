@@ -261,25 +261,6 @@ export default function ArtistsPage() {
                 </div>
               </div>
 
-              {/* Tags & Services */}
-              <div className={cn("flex flex-wrap items-center gap-2", viewMode === 'list' ? "flex-1 justify-end" : "")}>
-                {(!artist.genre?.length && !artist.services?.length && viewMode === 'grid') && (
-                  <span className="text-xs text-text-secondary/60 italic">Sin etiquetas</span>
-                )}
-                
-                {artist.genre?.slice(0, 2).map(g => (
-                  <span key={g} className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary bg-surface px-2 py-1 rounded-md">
-                    {g}
-                  </span>
-                ))}
-                
-                {artist.services?.slice(0, 3).map((service) => (
-                  <span key={service} className="px-2 py-1 rounded-md text-[10px] font-medium bg-accent/10 border border-accent/20 text-accent-light whitespace-nowrap">
-                    {SERVICE_LABELS[service] || service}
-                  </span>
-                ))}
-              </div>
-
               {/* Hover Actions (Grid only) */}
               {viewMode === 'grid' && (
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-20">
