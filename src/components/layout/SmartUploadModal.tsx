@@ -147,6 +147,7 @@ export function SmartUploadModal({
   const [artistFoldersCache, setArtistFoldersCache] = useState<Record<string, any[]>>({});
   const [projectFoldersCache, setProjectFoldersCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
+  const hasInitializedRef = useRef(false);
 
   // Sort artists by recent interaction
   useEffect(() => {
@@ -200,8 +201,13 @@ export function SmartUploadModal({
 
   // ─── Initialization ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen || initialFiles.length === 0 || artists.length === 0) return;
+    if (!isOpen) {
+      hasInitializedRef.current = false;
+      return;
+    }
+    if (initialFiles.length === 0 || artists.length === 0 || hasInitializedRef.current) return;
 
+    hasInitializedRef.current = true;
     setGlobalStatus('idle');
     setIsProcessing(false);
     abortControllersRef.current.clear();
