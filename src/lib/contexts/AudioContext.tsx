@@ -45,7 +45,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   // If track changes, load new URL
   useEffect(() => {
     if (currentTrack && audioRef.current) {
-      audioRef.current.src = `/api/audio/${currentTrack.id}`;
+      audioRef.current.src = currentTrack.url;
       audioRef.current.load();
       audioRef.current.play().catch(e => console.error('Audio play error:', e));
       setIsPlaying(true);
