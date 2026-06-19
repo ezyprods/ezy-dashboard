@@ -51,7 +51,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     headers.set('Accept-Ranges', 'bytes');
     
     if (response.headers['content-range']) headers.set('Content-Range', response.headers['content-range']);
-    if (response.headers['content-length']) headers.set('Content-Length', response.headers['content-length']);
+    if (response.headers['content-length']) {
+      headers.set('Content-Length', response.headers['content-length']);
+    } else if (meta.size && !rangeHeader) {
+      headers.set('Content-Length', meta.size.toString());
+    }
     
     const status = response.status || 200;
 

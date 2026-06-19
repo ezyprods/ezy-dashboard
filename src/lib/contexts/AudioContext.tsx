@@ -91,31 +91,17 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setCurrentTime(0);
     setDuration(0);
 
-    // New track — always route through the secure API proxy to get the direct Drive streaming URL
-    try {
-      const res = await fetch(`/api/audio/${track.id}/resolve`);
-      if (!res.ok) throw new Error('Failed to resolve audio URL');
-      const data = await res.json();
-      
-      setCurrentTrack(track);
-      audioRef.current.src = data.url;
-      audioRef.current.load();
+    // New track — always route through the secure API proxy
+    const finalUrl = `/api/audio/${track.id}`;
+    
+    setCurrentTrack(track);
+    audioRef.current.src = finalUrl;
+    audioRef.current.load();
 
-      // Wait for enough data before playing to avoid empty-play bug
-      const onCanPlay = () => {
-        audioRef.current?.removeEventListener('canplay', onCanPlay);
-        audioRef.current?.play().catch(e => console.error('Audio play error:', e));
-        setIsPlaying(true);
-      };
-      audioRef.current.addEventListener('canplay', onCanPlay, { once: true });
-
-      // Fallback: if canplay never fires within 8s, try playing anyway
-      setTimeout(() => {
-        audioRef.current?.removeEventListener('canplay', onCanPlay);
-      }, 8000);
-    } catch (e) {
-      console.error('Audio resolve error:', e);
-    }
+    // Play immediately and update state when the promise resolves
+    audioRef.current.play()
+      .then(() => setIsPlaying(true))
+      .catch(e => console.error('Audio play error:', e));
   };
 
   const togglePlay = () => {
