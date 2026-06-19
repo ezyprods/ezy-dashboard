@@ -147,7 +147,6 @@ export function SmartUploadModal({
   const [artistFoldersCache, setArtistFoldersCache] = useState<Record<string, any[]>>({});
   const [projectFoldersCache, setProjectFoldersCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
-  const hasInitializedRef = useRef(false);
 
   // Sort artists by recent interaction
   useEffect(() => {
@@ -201,13 +200,8 @@ export function SmartUploadModal({
 
   // ─── Initialization ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen) {
-      hasInitializedRef.current = false;
-      return;
-    }
-    if (initialFiles.length === 0 || artists.length === 0 || hasInitializedRef.current) return;
+    if (!isOpen || initialFiles.length === 0 || artists.length === 0) return;
 
-    hasInitializedRef.current = true;
     setGlobalStatus('idle');
     setIsProcessing(false);
     abortControllersRef.current.clear();
@@ -284,7 +278,8 @@ export function SmartUploadModal({
       }
     });
 
-  }, [isOpen, initialFiles, artists, preselectedArtistId, preselectedFolderId]); // Depend exclusively on initial props
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialFiles, preselectedArtistId, preselectedFolderId]); // Depend exclusively on initial props
 
   // ─── UI Interactions ──────────────────────────────────────────────────────────
   const updateItem = async (id: string, updates: Partial<SmartUploadFile>) => {
