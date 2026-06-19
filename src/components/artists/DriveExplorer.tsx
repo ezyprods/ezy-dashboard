@@ -1137,7 +1137,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                 <div className="divide-y divide-border/50">
                   {pane.items.map((item: any) => {
                     const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
-                    const isAudio = item.mimeType.startsWith('audio/');
+                    const isAudio = item.mimeType?.startsWith('audio/');
 
                     return (
                       <div

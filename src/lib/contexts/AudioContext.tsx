@@ -75,7 +75,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isPlaying]);
 
-  const playTrack = (track: AudioTrack) => {
+  const playTrack = async (track: AudioTrack) => {
     if (!audioRef.current) return;
     
     // If it's the same track, just toggle play
@@ -91,25 +91,31 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setCurrentTime(0);
     setDuration(0);
 
-    // New track — always route through the secure API proxy
-    const finalUrl = `/api/audio/${track.id}`;
+    // New track — always route through the secure API proxy to get the direct Drive streaming URL
+    try {
+      const res = await fetch(`/api/audio/${track.id}/resolve`);
+      if (!res.ok) throw new Error('Failed to resolve audio URL');
+      const data = await res.json();
+      
+      setCurrentTrack(track);
+      audioRef.current.src = data.url;
+      audioRef.current.load();
 
-    setCurrentTrack(track);
-    audioRef.current.src = finalUrl;
-    audioRef.current.load();
+      // Wait for enough data before playing to avoid empty-play bug
+      const onCanPlay = () => {
+        audioRef.current?.removeEventListener('canplay', onCanPlay);
+        audioRef.current?.play().catch(e => console.error('Audio play error:', e));
+        setIsPlaying(true);
+      };
+      audioRef.current.addEventListener('canplay', onCanPlay, { once: true });
 
-    // Wait for enough data before playing to avoid empty-play bug
-    const onCanPlay = () => {
-      audioRef.current?.removeEventListener('canplay', onCanPlay);
-      audioRef.current?.play().catch(e => console.error('Audio play error:', e));
-      setIsPlaying(true);
-    };
-    audioRef.current.addEventListener('canplay', onCanPlay, { once: true });
-
-    // Fallback: if canplay never fires within 8s, try playing anyway
-    setTimeout(() => {
-      audioRef.current?.removeEventListener('canplay', onCanPlay);
-    }, 8000);
+      // Fallback: if canplay never fires within 8s, try playing anyway
+      setTimeout(() => {
+        audioRef.current?.removeEventListener('canplay', onCanPlay);
+      }, 8000);
+    } catch (e) {
+      console.error('Audio resolve error:', e);
+    }
   };
 
   const togglePlay = () => {

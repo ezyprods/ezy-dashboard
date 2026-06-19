@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { UploadCloud, Music, Image as ImageIcon, Film, File as FileIcon, User } from 'lucide-react';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
@@ -78,6 +78,7 @@ function ArtistDropCard({ artist, onDrop }: { artist: Artist; onDrop: (files: Fi
  */
 export function GlobalDropZone() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { isDraggingFiles, droppedFiles, preselectedArtistId, clearDroppedFiles, triggerUploadForArtist } = useGlobalDragDrop();
   const { activeArtists } = useArtists();
   const [hoveredZone, setHoveredZone] = useState(false);
@@ -85,19 +86,27 @@ export function GlobalDropZone() {
 
   // Detect if we're in a context where DriveExplorer handles its own drops
   const isInsideArtistFolder = pathname.startsWith('/artists/') && pathname !== '/artists';
+  const activeTab = searchParams.get('tab') || 'files';
+  const isFilesTab = isInsideArtistFolder && activeTab === 'files';
   const isArtistsList = pathname === '/artists';
 
-  // Don't show global overlay when inside an artist folder (DriveExplorer handles it)
+  // Don't show global overlay when inside the DriveExplorer (files tab)
   // or when on the artists list page (Cards handle it)
-  const shouldShowOverlay = isDraggingFiles && !isInsideArtistFolder && !isArtistsList;
+  const shouldShowOverlay = isDraggingFiles && !isFilesTab && !isArtistsList;
 
   const handleGenericDrop = (e: React.DragEvent) => {
     e.preventDefault();
     zoneCounter.current = 0;
     setHoveredZone(false);
     const files = Array.from(e.dataTransfer.files);
+    
+    let targetArtistId = preselectedArtistId;
+    if (!targetArtistId && isInsideArtistFolder) {
+      targetArtistId = pathname.split('/')[2];
+    }
+    
     if (files.length > 0) {
-      triggerUploadForArtist(files, preselectedArtistId || (activeArtists[0]?.id ?? ''));
+      triggerUploadForArtist(files, targetArtistId || (activeArtists[0]?.id ?? ''));
     }
   };
 

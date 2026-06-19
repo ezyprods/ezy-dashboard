@@ -59,11 +59,20 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
       setIsDraggingFiles(false);
     };
 
+    // Failsafe for stuck drag states (common issue when dropping outside window)
+    const handleMouseMove = (e: MouseEvent) => {
+      if (dragCounter.current > 0 && e.buttons === 0) {
+        dragCounter.current = 0;
+        setIsDraggingFiles(false);
+      }
+    };
+
     window.addEventListener('dragenter', handleDragEnter);
     window.addEventListener('dragleave', handleDragLeave);
     window.addEventListener('dragover', handleDragOver);
     window.addEventListener('drop', handleDrop);
     window.addEventListener('dragend', handleDragEnd);
+    window.addEventListener('mousemove', handleMouseMove);
 
     return () => {
       window.removeEventListener('dragenter', handleDragEnter);
@@ -71,6 +80,7 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
       window.removeEventListener('dragover', handleDragOver);
       window.removeEventListener('drop', handleDrop);
       window.removeEventListener('dragend', handleDragEnd);
+      window.removeEventListener('mousemove', handleMouseMove);
     };
   }, []);
 
