@@ -17,7 +17,6 @@ export interface SmartUploadFile {
   subType: 'bounce' | 'master' | 'mix' | 'stem' | 'cover' | 'promo' | 'none';
   artistId: string;
   projectId: string; // empty means artist root folder
-  folderId: string;  // final resolved target folder ID
   customName: string;
   // Audio analysis
   bpm?: number | null;
@@ -85,7 +84,6 @@ async function detectAudioFeatures(file: File): Promise<{ bpm: number | null; ke
 
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const start = Math.floor(channelData.length * 0.3);
-    // Process only 2 seconds of audio instead of 10 to prevent JS thread blocking
     const sampleLen = Math.min(sampleRate * 2, channelData.length - start);
     const sample = channelData.slice(start, start + sampleLen);
 
@@ -93,7 +91,6 @@ async function detectAudioFeatures(file: File): Promise<{ bpm: number | null; ke
     for (let n = 0; n < 12; n++) {
       const freq = 261.63 * Math.pow(2, n / 12);
       let real = 0, imag = 0;
-      // Skip every 4th sample to speed up computation by 4x without losing much accuracy
       for (let i = 0; i < sample.length; i += 4) {
         const t = i / sampleRate;
         real += sample[i] * Math.cos(2 * Math.PI * freq * t);
@@ -132,39 +129,6 @@ function generateName(original: string, subType: string, artistName?: string): s
   return original;
 }
 
-// ─── Resolve target folder for a single item ─────────────────────────────────
-function resolveTargetFolder(
-  item: SmartUploadFile,
-  aFolders: any[],
-  pFolders: any[],
-  preselectedFolderId?: string
-): string {
-  if (preselectedFolderId) return preselectedFolderId;
-
-  // Bounce → Artist's global bounces folder
-  if (item.subType === 'bounce') {
-    const bouncesFolder = aFolders.find(f => f?.name?.toLowerCase()?.includes('bounce') || f?.name === FOLDER_NAME_MAP['Bounces']);
-    return bouncesFolder ? bouncesFolder.id : `CREATE_FOLDER::${FOLDER_NAME_MAP['Bounces']}::${item.artistId}`;
-  }
-
-  // Master → Project root directly
-  if (item.subType === 'master' && item.projectId) {
-    return item.projectId;
-  }
-
-  // Mix/Stem/Session → Specific subfolder inside project
-  if (item.projectId && item.subType !== 'none' && item.subType !== 'master') {
-    let mappedName = FOLDER_NAME_MAP[item.subType.charAt(0).toUpperCase() + item.subType.slice(1) as keyof typeof FOLDER_NAME_MAP];
-    
-    // Look for exact match or generic mapping
-    const specificFolder = pFolders.find(f => f?.name?.toLowerCase() === item.subType || f?.name === mappedName);
-    return specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName || item.subType}::${item.projectId}`;
-  }
-
-  // Fallback
-  return item.artistId || '';
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function SmartUploadModal({
   isOpen,
@@ -179,32 +143,22 @@ export function SmartUploadModal({
   const [globalStatus, setGlobalStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
-  // Use refs for folder caches to avoid triggering re-renders in the effect chain
-  const artistFoldersRef = useRef<Record<string, any[]>>({});
-  const projectSubfoldersRef = useRef<Record<string, any[]>>({});
-  const loadingFoldersRef = useRef<Set<string>>(new Set());
-  // State version counter to trigger re-renders when folder data loads
-  const [folderDataVersion, setFolderDataVersion] = useState(0);
-
-  const hasInitializedRef = useRef(false);
-  const isResolvingRef = useRef(false);
-
-  // Sort artists by recent interaction
+  // Local caching state to avoid infinite loops and multi-fetching
+  const [artistFoldersCache, setArtistFoldersCache] = useState<Record<string, any[]>>({});
+  const [projectFoldersCache, setProjectFoldersCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
 
+  // Sort artists by recent interaction
   useEffect(() => {
     const sorted = [...artists].sort((a, b) => {
       let accessedA = 0, accessedB = 0;
       if (typeof window !== 'undefined') {
         const storedA = localStorage.getItem(`accessed_${a.id}`);
         const storedB = localStorage.getItem(`accessed_${b.id}`);
-        
         const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        
         accessedA = storedA ? parseInt(storedA, 10) : (isNaN(timeA) ? 0 : timeA);
         accessedB = storedB ? parseInt(storedB, 10) : (isNaN(timeB) ? 0 : timeB);
-        
         if (isNaN(accessedA)) accessedA = 0;
         if (isNaN(accessedB)) accessedB = 0;
       }
@@ -213,113 +167,44 @@ export function SmartUploadModal({
     setSortedArtists(sorted);
   }, [artists]);
 
-  // ─── Folder Loading (writes to refs, bumps version counter) ─────────────────
-  const loadArtistFolders = useCallback(async (artistId: string) => {
-    if (!artistId || artistFoldersRef.current[artistId] || loadingFoldersRef.current.has(artistId)) return;
-    loadingFoldersRef.current.add(artistId);
+  // ─── Safe Folder Fetching Methods ───────────────────────────────────────────
+  const fetchArtistFolders = async (artistId: string) => {
+    if (!artistId) return [];
+    if (artistFoldersCache[artistId]) return artistFoldersCache[artistId];
     try {
       const res = await fetch(`/api/files?folderId=${artistId}`);
       if (res.ok) {
         const data = await res.json();
         const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
-        artistFoldersRef.current[artistId] = folders;
-        setFolderDataVersion(v => v + 1); // Trigger re-render
+        setArtistFoldersCache(prev => ({ ...prev, [artistId]: folders }));
+        return folders;
       }
-    } catch (err) {
-      console.error('Error loading artist folders:', err);
-    } finally {
-      loadingFoldersRef.current.delete(artistId);
-    }
-  }, []);
+    } catch {}
+    return [];
+  };
 
-  const loadProjectFolders = useCallback(async (projectId: string) => {
-    if (!projectId || projectSubfoldersRef.current[projectId] || loadingFoldersRef.current.has(projectId)) return;
-    loadingFoldersRef.current.add(projectId);
+  const fetchProjectFolders = async (projectId: string) => {
+    if (!projectId) return [];
+    if (projectFoldersCache[projectId]) return projectFoldersCache[projectId];
     try {
       const res = await fetch(`/api/files?folderId=${projectId}`);
       if (res.ok) {
         const data = await res.json();
         const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
-        projectSubfoldersRef.current[projectId] = folders;
-        setFolderDataVersion(v => v + 1); // Trigger re-render
+        setProjectFoldersCache(prev => ({ ...prev, [projectId]: folders }));
+        return folders;
       }
-    } catch (err) {
-      console.error('Error loading project folders:', err);
-    } finally {
-      loadingFoldersRef.current.delete(projectId);
-    }
-  }, []);
+    } catch {}
+    return [];
+  };
 
-  // ─── Core Resolution: runs once when folder data arrives ────────────────────
-  const resolveItemsFromFolderData = useCallback(() => {
-    if (isResolvingRef.current) return;
-    isResolvingRef.current = true;
-
-    setItems(prevItems => {
-      try {
-        let changed = false;
-        const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
-        
-        const newItems = prevItems.map(item => {
-          if (item.uploadStatus !== 'pending') return item;
-
-          let updatedItem = { ...item };
-          let itemChanged = false;
-
-          // 1. Auto-detect project if not yet set
-          if (!updatedItem.projectId && updatedItem.artistId && !preselectedFolderId) {
-            const folders = artistFoldersRef.current[updatedItem.artistId];
-            if (folders && folders.length > 0) {
-              const projects = folders.filter((f: any) => f?.name && !ignoreList.includes(f.name));
-              if (projects.length > 0) {
-                const bestProjectMatch = findBestMatch(updatedItem.file.name, projects, (p: any) => p?.name || '', 0.4);
-                updatedItem.projectId = bestProjectMatch ? bestProjectMatch.id : projects[0].id;
-                itemChanged = true;
-              }
-            }
-          }
-
-          // 2. Trigger project subfolder loading if needed
-          if (updatedItem.projectId && !projectSubfoldersRef.current[updatedItem.projectId] && !loadingFoldersRef.current.has(updatedItem.projectId)) {
-            loadProjectFolders(updatedItem.projectId);
-          }
-
-          // 3. Resolve target folder
-          const aFolders = artistFoldersRef.current[updatedItem.artistId] || [];
-          const pFolders = projectSubfoldersRef.current[updatedItem.projectId] || [];
-          const newFolderId = resolveTargetFolder(updatedItem, aFolders, pFolders, preselectedFolderId);
-          
-          if (newFolderId !== updatedItem.folderId) {
-            updatedItem.folderId = newFolderId;
-            itemChanged = true;
-          }
-
-          if (itemChanged) {
-            changed = true;
-            return updatedItem;
-          }
-          return item;
-        });
-
-        isResolvingRef.current = false;
-        return changed ? newItems : prevItems;
-      } catch (err) {
-        console.error('Error resolving folder data:', err);
-        isResolvingRef.current = false;
-        return prevItems;
-      }
-    });
-  }, [preselectedFolderId, loadProjectFolders]);
-
-  // 1. Initialize files and apply fuzzy matching detection
+  // ─── Initialization ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (initialFiles.length === 0 || hasInitializedRef.current || artists.length === 0) return;
-    hasInitializedRef.current = true;
+    if (!isOpen || initialFiles.length === 0 || artists.length === 0) return;
 
-    // Reset refs for fresh initialization
-    artistFoldersRef.current = {};
-    projectSubfoldersRef.current = {};
-    loadingFoldersRef.current = new Set();
+    setGlobalStatus('idle');
+    setIsProcessing(false);
+    abortControllersRef.current.clear();
 
     const initialized = initialFiles.map((f, i) => {
       let mimeGroup: SmartUploadFile['mimeGroup'] = 'other';
@@ -336,7 +221,7 @@ export function SmartUploadModal({
         else subType = 'bounce';
       }
 
-      // Detect Artist using Fuzzy Match
+      // Initial artist detection
       let detectedArtistId = '';
       let detectedArtistName = '';
       if (preselectedArtistId) {
@@ -355,15 +240,12 @@ export function SmartUploadModal({
 
       return {
         file: f,
-        id: `file-${i}`,
+        id: `file-${Date.now()}-${i}`,
         mimeGroup,
         subType,
         artistId: detectedArtistId,
-        projectId: '', // Resolved dynamically based on name and artist folders
-        folderId: preselectedFolderId || '', // Resolved dynamically based on smart folder routing
+        projectId: '', // Will be resolved asynchronously
         customName: generateName(f.name, subType, detectedArtistName),
-        bpm: undefined,
-        key: undefined,
         isAnalyzing: mimeGroup === 'audio',
         uploadStatus: 'pending' as const,
         uploadProgress: 0,
@@ -373,59 +255,63 @@ export function SmartUploadModal({
 
     setItems(initialized);
 
-    // Audio Analysis — run once per file, update only the specific item
-    initialized.forEach(item => {
+    // Asynchronous resolution step (runs once independently per file)
+    initialized.forEach(async (item) => {
+      // Audio BPM/Key
       if (item.mimeGroup === 'audio') {
         detectAudioFeatures(item.file).then(({ bpm, key }) => {
           setItems(prev => prev.map(p => p.id === item.id ? { ...p, bpm, key, isAnalyzing: false } : p));
         });
       }
+
+      // Auto-detect project if applicable
+      if (item.artistId && !preselectedFolderId) {
+        const folders = await fetchArtistFolders(item.artistId);
+        const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
+        const projects = folders.filter((f: any) => f?.name && !ignoreList.includes(f.name));
+        
+        if (projects.length > 0) {
+          const bestProjectMatch = findBestMatch(item.file.name, projects, (p: any) => p?.name || '', 0.4);
+          const guessedProjectId = bestProjectMatch ? bestProjectMatch.id : projects[0].id;
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, projectId: guessedProjectId } : p));
+        }
+      }
     });
 
-    // Trigger loading artist folders for detected artists
-    const uniqueArtistIds = new Set(initialized.map(i => i.artistId).filter(Boolean));
-    uniqueArtistIds.forEach(artistId => {
-      loadArtistFolders(artistId);
-    });
-  }, [initialFiles, artists, preselectedArtistId, preselectedFolderId, loadArtistFolders]);
+  }, [isOpen, initialFiles, artists, preselectedArtistId, preselectedFolderId]); // Depend exclusively on initial props
 
-  // 2. When folder data version changes (new folder data loaded), resolve items
-  useEffect(() => {
-    if (items.length === 0) return;
-    resolveItemsFromFolderData();
-  }, [folderDataVersion, resolveItemsFromFolderData]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ─── State Modifiers ─────────────────────────────────────────────────────────
-  const updateItem = useCallback((id: string, updates: Partial<SmartUploadFile>) => {
+  // ─── UI Interactions ──────────────────────────────────────────────────────────
+  const updateItem = async (id: string, updates: Partial<SmartUploadFile>) => {
     setItems(prev => prev.map(item => {
       if (item.id !== id) return item;
       const updated = { ...item, ...updates };
-      
-      // If subType or artistId changes, regenerate the name
+
       if (updates.subType !== undefined || updates.artistId !== undefined) {
-        const subTypeToUse = updates.subType !== undefined ? updates.subType : item.subType;
-        const artistIdToUse = updates.artistId !== undefined ? updates.artistId : item.artistId;
-        const artistName = artists.find(a => a.id === artistIdToUse)?.name;
-        
-        updated.customName = generateName(item.file.name, subTypeToUse, artistName);
-        
-        // Reset resolved folderId so the router effect can pick it up again
-        if (!preselectedFolderId && updates.artistId !== undefined && updates.artistId !== item.artistId) {
-           updated.projectId = ''; // Reset project if artist changes
-           updated.folderId = '';
-           // Load folders for the new artist
-           loadArtistFolders(updates.artistId);
-        } else if (!preselectedFolderId && updates.subType !== undefined) {
-           updated.folderId = '';
-        }
+        const artistName = artists.find(a => a.id === updated.artistId)?.name;
+        updated.customName = generateName(updated.file.name, updated.subType, artistName);
       }
-      
+
+      if (updates.artistId !== undefined && updates.artistId !== item.artistId && !preselectedFolderId) {
+        updated.projectId = '';
+      }
+
       return updated;
     }));
 
-    // After an item update, trigger resolution on next tick
-    setTimeout(() => resolveItemsFromFolderData(), 0);
-  }, [artists, preselectedFolderId, loadArtistFolders, resolveItemsFromFolderData]);
+    // If artist changed, auto-fetch their projects and guess again
+    if (updates.artistId !== undefined) {
+       const folders = await fetchArtistFolders(updates.artistId);
+       const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
+       const projects = folders.filter((f: any) => f?.name && !ignoreList.includes(f.name));
+       if (projects.length > 0) {
+         setItems(prev => prev.map(p => {
+           if (p.id !== id) return p;
+           const bestProjectMatch = findBestMatch(p.file.name, projects, (proj: any) => proj?.name || '', 0.4);
+           return { ...p, projectId: bestProjectMatch ? bestProjectMatch.id : projects[0].id };
+         }));
+       }
+    }
+  };
 
   const cancelItem = (id: string) => {
     const ctrl = abortControllersRef.current.get(id);
@@ -433,21 +319,42 @@ export function SmartUploadModal({
     updateItem(id, { uploadStatus: 'cancelled', uploadProgress: 0 });
   };
 
-  // ─── Pre-check Existing Files (Masters/Bounces) ────────────────────────────
-  const preCheckItem = async (item: SmartUploadFile): Promise<string | undefined> => {
+  // ─── Upload Engine ────────────────────────────────────────────────────────────
+  const resolveTargetFolderForUpload = async (item: SmartUploadFile): Promise<string> => {
+    if (preselectedFolderId) return preselectedFolderId;
+
+    if (item.subType === 'bounce') {
+      const aFolders = await fetchArtistFolders(item.artistId);
+      const bouncesFolder = aFolders.find((f: any) => f?.name?.toLowerCase()?.includes('bounce') || f?.name === FOLDER_NAME_MAP['Bounces']);
+      return bouncesFolder ? bouncesFolder.id : `CREATE_FOLDER::${FOLDER_NAME_MAP['Bounces']}::${item.artistId}`;
+    }
+
+    if (item.subType === 'master' && item.projectId) return item.projectId;
+
+    if (item.projectId && item.subType !== 'none') {
+      const pFolders = await fetchProjectFolders(item.projectId);
+      let mappedName = FOLDER_NAME_MAP[item.subType.charAt(0).toUpperCase() + item.subType.slice(1) as keyof typeof FOLDER_NAME_MAP];
+      const specificFolder = pFolders.find((f: any) => f?.name?.toLowerCase() === item.subType || f?.name === mappedName);
+      return specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName || item.subType}::${item.projectId}`;
+    }
+
+    return item.artistId || '';
+  };
+
+  const preCheckItem = async (item: SmartUploadFile, finalFolderId: string): Promise<string | undefined> => {
     if (item.subType !== 'master' && item.subType !== 'bounce') return undefined;
-    if (!item.folderId) return undefined;
+    if (!finalFolderId || finalFolderId.startsWith('CREATE_FOLDER::')) return undefined;
 
     try {
-      const res = await fetch(`/api/files?folderId=${item.folderId}`);
+      const res = await fetch(`/api/files?folderId=${finalFolderId}`);
       if (!res.ok) return undefined;
       const data = await res.json();
       const existingFiles: any[] = data.items || [];
 
       if (item.subType === 'master') {
-        const masters = existingFiles.filter(f =>
+        const masters = existingFiles.filter((f: any) =>
           f?.mimeType?.startsWith('audio/') &&
-          (f?.name?.toLowerCase()?.includes('master') || f?.name?.toLowerCase() === item?.customName?.toLowerCase())
+          (f?.name?.toLowerCase()?.includes('master') || f?.name?.toLowerCase() === item.customName.toLowerCase())
         );
         if (masters.length > 0) {
           const confirm = await customConfirm(
@@ -456,14 +363,11 @@ export function SmartUploadModal({
           return confirm ? masters[0].id : undefined;
         }
       } else if (item.subType === 'bounce') {
-        const bounces = existingFiles.filter(f => {
+        const bounces = existingFiles.filter((f: any) => {
           if (!f?.mimeType?.startsWith('audio/')) return false;
           const fn = f?.name?.toLowerCase() || '';
-          const ic = item.customName?.toLowerCase() || '';
-          
-          return fn === ic || 
-                 fn === ic.replace(/\.mp3$/i, '.wav') || 
-                 fn === ic.replace(/\.wav$/i, '.mp3');
+          const ic = item.customName.toLowerCase();
+          return fn === ic || fn === ic.replace(/\.mp3$/i, '.wav') || fn === ic.replace(/\.wav$/i, '.mp3');
         });
         if (bounces.length > 0) {
           const confirm = await customConfirm(
@@ -475,66 +379,56 @@ export function SmartUploadModal({
           }
         }
       }
-    } catch (err) {
-      console.error('Error in pre-check', err);
-    }
+    } catch {}
     return undefined;
   };
 
-  // ─── Upload Execution ────────────────────────────────────────────────────────
   const handleUpload = async () => {
     setIsProcessing(true);
     setGlobalStatus('uploading');
 
-    let processedCount = 0;
     const itemsToUpload = items.filter(i => i.uploadStatus === 'pending');
     const newlyCreatedFolders = new Map<string, string>(); // 'folderName::parentId' -> 'newFolderId'
 
     for (const item of itemsToUpload) {
       if (item.uploadStatus === 'cancelled') continue;
       
-      let finalFolderId = item.folderId;
-      
-      if (!finalFolderId) {
-        setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: 'No target folder resolved' } : p));
-        continue;
-      }
-
       setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'uploading', uploadProgress: 5 } : p));
 
-      // Handle Auto Folder Creation
-      if (finalFolderId.startsWith('CREATE_FOLDER::')) {
-        const parts = finalFolderId.split('::');
-        const fName = parts[1];
-        const pId = parts[2];
-        const cacheKey = `${fName}::${pId}`;
-        if (newlyCreatedFolders.has(cacheKey)) {
-          finalFolderId = newlyCreatedFolders.get(cacheKey)!;
-        } else {
-          try {
+      try {
+        let finalFolderId = await resolveTargetFolderForUpload(item);
+        
+        if (!finalFolderId) {
+          throw new Error('No target folder resolved');
+        }
+
+        // Handle Auto Folder Creation
+        if (finalFolderId.startsWith('CREATE_FOLDER::')) {
+          const parts = finalFolderId.split('::');
+          const fName = parts[1];
+          const pId = parts[2];
+          const cacheKey = `${fName}::${pId}`;
+          if (newlyCreatedFolders.has(cacheKey)) {
+            finalFolderId = newlyCreatedFolders.get(cacheKey)!;
+          } else {
             const res = await fetch('/api/folders', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name: fName, parentId: pId })
             });
-            if (!res.ok) throw new Error('Failed to create folder');
+            if (!res.ok) throw new Error(`Failed to create subfolder: ${fName}`);
             const data = await res.json();
-            finalFolderId = data.folderId || data.id; // Support both just in case
+            finalFolderId = data.folderId || data.id; 
             newlyCreatedFolders.set(cacheKey, finalFolderId);
-          } catch (err) {
-             setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: `Error al crear la subcarpeta: ${fName}` } : p));
-             continue;
           }
         }
-      }
 
-      let fileToProcess = item.file;
-      let finalCustomName = item.customName;
-      let extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
+        let fileToProcess = item.file;
+        let finalCustomName = item.customName;
+        let extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
 
-      // WAV to MP3 Conversion for Bounces
-      if (item.subType === 'bounce' && extension.toLowerCase() === '.wav') {
-        try {
+        // WAV to MP3 Conversion for Bounces
+        if (item.subType === 'bounce' && extension.toLowerCase() === '.wav') {
           let lastReportedPercent = -1;
           fileToProcess = await convertWavToMp3(item.file, (p) => {
             const newPercent = 5 + Math.floor(p * 0.15); // up to 20%
@@ -545,24 +439,15 @@ export function SmartUploadModal({
           });
           extension = '.mp3';
           finalCustomName = finalCustomName.replace(/\.wav$/i, '') + '.mp3';
-        } catch (err) {
-          console.error('Error converting WAV to MP3', err);
-          setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: 'Error al convertir WAV a MP3' } : p));
-          continue;
         }
-      }
 
-      // Pre-check uses the temporary updated item to search the correct folder
-      const tempItemForCheck = { ...item, folderId: finalFolderId, file: fileToProcess, customName: finalCustomName };
-      const fileToReplaceId = await preCheckItem(tempItemForCheck);
+        const fileToReplaceId = await preCheckItem({ ...item, customName: finalCustomName }, finalFolderId);
 
-      const ctrl = new AbortController();
-      abortControllersRef.current.set(item.id, ctrl);
+        const ctrl = new AbortController();
+        abortControllersRef.current.set(item.id, ctrl);
 
-      try {
         let finalName = finalCustomName;
         if (!finalName.endsWith(extension)) finalName += extension;
-        
         const renamedFile = new File([fileToProcess], finalName, { type: fileToProcess.type });
 
         const sessionRes = await fetch('/api/files/upload-session', {
@@ -583,8 +468,7 @@ export function SmartUploadModal({
 
         const { uploadUrl } = await sessionRes.json();
 
-        // Real progress logic using XMLHttpRequest
-        const itemId = item.id;
+        // Real upload via XMLHttpRequest
         const uploadTask = new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('PUT', uploadUrl);
@@ -594,10 +478,10 @@ export function SmartUploadModal({
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const p = Math.round((e.loaded / e.total) * 90); // 10% to 100%
-              const clamped = Math.max(10, p);
+              const clamped = Math.max(20, p); // Offset if wav conversion took first 20%
               if (clamped !== lastXhrPercent) {
                 lastXhrPercent = clamped;
-                setItems(prev => prev.map(it => it.id === itemId ? { ...it, uploadProgress: clamped } : it));
+                setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: clamped } : it));
               }
             }
           };
@@ -607,9 +491,8 @@ export function SmartUploadModal({
               let responseData: any = {};
               try { responseData = JSON.parse(xhr.responseText); } catch (e) {}
               
-              setItems(prev => prev.map(it => it.id === itemId ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
+              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
               
-              // Email notification
               if (item.notifyArtist) {
                 const artistData = artists.find(a => a.id === item.artistId);
                 if (artistData?.email) {
@@ -640,11 +523,10 @@ export function SmartUploadModal({
         });
 
         await uploadTask;
-        processedCount++;
 
       } catch (err: any) {
         if (err.message !== 'Cancelled by user') {
-          setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: err.message, uploadProgress: 0 } : p));
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'error', uploadError: err.message || 'Error desconocido', uploadProgress: 0 } : p));
         }
       } finally {
         abortControllersRef.current.delete(item.id);
@@ -659,7 +541,6 @@ export function SmartUploadModal({
 
   const allDone = items.every(i => i.uploadStatus === 'done' || i.uploadStatus === 'error' || i.uploadStatus === 'cancelled');
   
-  // Collect unique artists that will receive emails
   const artistsReceivingEmails = Array.from(new Set(
     items.filter(i => i.notifyArtist)
          .map(i => artists.find(a => a.id === i.artistId))
@@ -672,6 +553,7 @@ export function SmartUploadModal({
       <div className={globalStatus === 'idle'
         ? "pointer-events-auto glass w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"
         : "pointer-events-auto glass w-[380px] max-h-[70vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] transition-all duration-300"}>
+        
         {/* Header */}
         {globalStatus === 'idle' ? (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0 bg-surface/80 backdrop-blur-xl">
@@ -709,12 +591,11 @@ export function SmartUploadModal({
         {/* Files list */}
         <div className={`flex-1 overflow-y-auto ${globalStatus === 'idle' ? 'px-4 py-4 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}>
           {items.map(item => {
-            const currentArtistFolders = artistFoldersRef.current[item.artistId] || [];
+            const currentArtistFolders = artistFoldersCache[item.artistId] || [];
             const projectList = currentArtistFolders.filter((f: any) => f?.name && !['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(f.name));
 
             return (
             <div key={item.id} className={`rounded-xl border ${globalStatus === 'idle' ? 'p-4' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
-              {/* File row */}
               <div className={`flex items-center gap-3 ${globalStatus === 'idle' ? 'mb-3' : (item.uploadStatus === 'uploading' ? 'mb-2' : '')}`}>
                 <div className={`${globalStatus === 'idle' ? 'w-9 h-9' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50`}>
                   {item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
@@ -768,10 +649,9 @@ export function SmartUploadModal({
 
               {item.uploadStatus === 'error' && <p className="text-xs text-danger mb-2 bg-danger/10 p-2 rounded-lg border border-danger/20">{item.uploadError || 'Error desconocido'}</p>}
 
-              {/* Controls - only show when pending and idle */}
+              {/* Controls */}
               {item.uploadStatus === 'pending' && globalStatus === 'idle' && (
                 <div className="grid grid-cols-2 gap-3 mt-2">
-                  {/* Select Artist */}
                   <div>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
                     <div className="relative">
@@ -782,7 +662,6 @@ export function SmartUploadModal({
                     </div>
                   </div>
 
-                  {/* Select Project (only if it's a mix/master/stem that requires a project) */}
                   <div className={(item.subType === 'bounce' || preselectedFolderId) ? "opacity-50 pointer-events-none" : ""}>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
                     <div className="relative">
@@ -790,7 +669,7 @@ export function SmartUploadModal({
                         {item.subType === 'bounce' ? (
                            <option value="">Carpeta General (Artista)</option>
                         ) : (
-                          projectList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)
+                          projectList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)
                         )}
                       </select>
                       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
@@ -813,7 +692,6 @@ export function SmartUploadModal({
                     </div>
                   )}
 
-                  {/* Generated name preview */}
                   <div className="col-span-2 flex flex-col">
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Nombre final en Drive</label>
                     <input 
@@ -824,7 +702,6 @@ export function SmartUploadModal({
                     />
                   </div>
 
-                  {/* Notify Artist Toggle */}
                   <div className="flex items-center gap-2 mt-1">
                     <input
                       type="checkbox"
