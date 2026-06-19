@@ -348,7 +348,7 @@ export function SmartUploadModal({
   };
 
   const preCheckItem = async (item: SmartUploadFile, finalFolderId: string): Promise<string | undefined> => {
-    if (item.subType !== 'master' && item.subType !== 'bounce') return undefined;
+    if (item.subType !== 'master') return undefined; // Bounces always create a new file
     if (!finalFolderId || finalFolderId.startsWith('CREATE_FOLDER::')) return undefined;
 
     try {
@@ -357,32 +357,14 @@ export function SmartUploadModal({
       const data = await res.json();
       const existingFiles: any[] = data.items || [];
 
+      // Masters replace the previous file
       if (item.subType === 'master') {
         const masters = existingFiles.filter((f: any) =>
           f?.mimeType?.startsWith('audio/') &&
           (f?.name?.toLowerCase()?.includes('master') || f?.name?.toLowerCase() === item.customName.toLowerCase())
         );
         if (masters.length > 0) {
-          const confirm = await customConfirm(
-            `Hemos detectado un Master anterior en este proyecto: "${masters[0].name}".\n\n¿Deseas REEMPLAZARLO con esta nueva versión? (Cancelar = subir como archivo nuevo)`
-          );
-          return confirm ? masters[0].id : undefined;
-        }
-      } else if (item.subType === 'bounce') {
-        const bounces = existingFiles.filter((f: any) => {
-          if (!f?.mimeType?.startsWith('audio/')) return false;
-          const fn = f?.name?.toLowerCase() || '';
-          const ic = item.customName.toLowerCase();
-          return fn === ic || fn === ic.replace(/\.mp3$/i, '.wav') || fn === ic.replace(/\.wav$/i, '.mp3');
-        });
-        if (bounces.length > 0) {
-          const confirm = await customConfirm(
-            `Hemos detectado ${bounces.length} versión(es) anterior(es) de este Bounce.\n\nLos bounces se acumulan como historial automáticamente.\n\nPresiona Aceptar si prefieres REEMPLAZAR la versión más reciente en lugar de añadirla.`
-          );
-          if (confirm) {
-            bounces.sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
-            return bounces[0].id;
-          }
+          return masters[0].id;
         }
       }
     } catch {}
