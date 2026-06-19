@@ -359,10 +359,12 @@ export function SmartUploadModal({
 
       // Masters replace the previous file
       if (item.subType === 'master') {
-        const masters = existingFiles.filter((f: any) =>
-          f?.mimeType?.startsWith('audio/') &&
-          (f?.name?.toLowerCase()?.includes('master') || f?.name?.toLowerCase() === item.customName.toLowerCase())
-        );
+        const itemBaseName = item.customName.toLowerCase().replace(/\.[^.]+$/, '');
+        const masters = existingFiles.filter((f: any) => {
+          if (!f?.mimeType?.startsWith('audio/')) return false;
+          const fBaseName = f.name.toLowerCase().replace(/\.[^.]+$/, '');
+          return fBaseName === itemBaseName;
+        });
         if (masters.length > 0) {
           return masters[0].id;
         }
