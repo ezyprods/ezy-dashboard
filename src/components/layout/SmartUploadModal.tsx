@@ -200,13 +200,27 @@ export function SmartUploadModal({
 
   // ─── Initialization ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!isOpen || initialFiles.length === 0 || artists.length === 0) return;
+    if (!isOpen) {
+      setItems([]);
+      setGlobalStatus('idle');
+      setIsProcessing(false);
+      abortControllersRef.current.clear();
+      return;
+    }
 
-    setGlobalStatus('idle');
-    setIsProcessing(false);
-    abortControllersRef.current.clear();
+    if (initialFiles.length === 0 || artists.length === 0) return;
 
-    const initialized = initialFiles.map((f, i) => {
+    // Filter out files that are already in the list
+    const newFiles = initialFiles.filter(f => !items.some(item => item.file.name === f.name && item.file.size === f.size && item.file.lastModified === f.lastModified));
+
+    if (newFiles.length === 0) return;
+
+    if (globalStatus === 'done') {
+      setGlobalStatus('idle');
+      // We keep the old files in the list so the user sees what was already uploaded
+    }
+
+    const newInitialized = newFiles.map((f, i) => {
       let mimeGroup: SmartUploadFile['mimeGroup'] = 'other';
       if (f.type.startsWith('audio/')) mimeGroup = 'audio';
       else if (f.type.startsWith('image/')) mimeGroup = 'image';
@@ -240,7 +254,7 @@ export function SmartUploadModal({
 
       return {
         file: f,
-        id: `file-${Date.now()}-${i}`,
+        id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // ensure unique IDs
         mimeGroup,
         subType,
         artistId: detectedArtistId,
@@ -253,10 +267,10 @@ export function SmartUploadModal({
       };
     });
 
-    setItems(initialized);
+    setItems(prev => [...prev, ...newInitialized]);
 
-    // Asynchronous resolution step (runs once independently per file)
-    initialized.forEach(async (item) => {
+    // Asynchronous resolution step (runs once independently per new file)
+    newInitialized.forEach(async (item) => {
       // Audio BPM/Key
       if (item.mimeGroup === 'audio') {
         detectAudioFeatures(item.file).then(({ bpm, key }) => {
