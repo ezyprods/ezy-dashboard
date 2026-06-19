@@ -14,6 +14,7 @@ import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
 import { CustomSortModal } from '@/components/projects/CustomSortModal';
 import { STATUS_CONFIG } from '@/lib/constants';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { isBrowserCompatible } from '@/lib/utils';
 
 
 export default function ProjectDetailPage() {
@@ -479,7 +480,15 @@ export default function ProjectDetailPage() {
                               {
                                 label: 'Ver en Navegador',
                                 icon: 'ExternalLink',
-                                action: () => window.open(`/api/files/${file.id}?inline=true`, '_blank')
+                                action: () => {
+                                  if (isBrowserCompatible(file.mimeType)) {
+                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
+                                  } else if (file.webViewLink) {
+                                    window.open(file.webViewLink, '_blank');
+                                  } else {
+                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
+                                  }
+                                }
                               },
                               {
                                 label: 'Descargar',
@@ -511,7 +520,15 @@ export default function ProjectDetailPage() {
                               {
                                 label: 'Ver archivo',
                                 icon: 'Eye',
-                                action: () => window.open(`/api/files/${file.id}?inline=true`, '_blank')
+                                action: () => {
+                                  if (isBrowserCompatible(file.mimeType)) {
+                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
+                                  } else if (file.webViewLink) {
+                                    window.open(file.webViewLink, '_blank');
+                                  } else {
+                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
+                                  }
+                                }
                               },
                               {
                                 label: 'Renombrar',
@@ -586,7 +603,7 @@ export default function ProjectDetailPage() {
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                             <a 
-                              href={`/api/files/${file.id}?inline=true`} 
+                              href={isBrowserCompatible(file.mimeType) ? `/api/files/${file.id}?inline=true` : (file.webViewLink || `/api/files/${file.id}?inline=true`)}
                               target="_blank" 
                               rel="noopener noreferrer" 
                               className="p-1 text-text-secondary hover:text-accent rounded hover:bg-surface/50"

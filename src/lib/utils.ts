@@ -7,6 +7,17 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
+export function isBrowserCompatible(mimeType?: string): boolean {
+  if (!mimeType) return false;
+  return (
+    mimeType.startsWith('image/') ||
+    mimeType.startsWith('video/') ||
+    mimeType.startsWith('audio/') ||
+    mimeType === 'application/pdf' ||
+    mimeType === 'text/plain'
+  );
+}
+
 // Format file size to human-readable string
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';

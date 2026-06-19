@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { useAudio } from '@/lib/contexts/AudioContext';
+import { isBrowserCompatible } from '@/lib/utils';
 
 // ─── Mini audio player for releases ──────────────────────────────────────────
 function ReleasePlayer({ release }: { release: any }) {
@@ -434,7 +435,7 @@ export default function PortalPage() {
                                       </button>
                                     )}
                                     {row.linkedFile.webViewLink && (
-                                      <a href={`/api/files/${row.linkedFile.id}?inline=true`} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Ver en Navegador">
+                                      <a href={isBrowserCompatible(row.linkedFile.mimeType) ? `/api/files/${row.linkedFile.id}?inline=true` : row.linkedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Ver en Navegador">
                                         <ExternalLink className="w-3.5 h-3.5" />
                                       </a>
                                     )}

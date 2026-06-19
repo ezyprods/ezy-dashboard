@@ -6,7 +6,7 @@ import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, Chevron
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
-import { cn } from '@/lib/utils';
+import { cn, isBrowserCompatible } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { ShareModal } from './ShareModal';
 import { DeleteModal } from './DeleteModal';
@@ -279,6 +279,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           } else {
             playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
           }
+        } else if (isBrowserCompatible(item.mimeType)) {
+          window.open(`/api/files/${item.id}?inline=true`, '_blank');
+        } else if (item.webViewLink) {
+          window.open(item.webViewLink, '_blank');
         } else {
           window.open(`/api/files/${item.id}?inline=true`, '_blank');
         }
@@ -798,9 +802,13 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         } else {
                           playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
                         }
-                      } else {
+                      } else if (isBrowserCompatible(item.mimeType)) {
                         const openUrl = `/api/files/${item.id}?inline=true`;
                         window.open(openUrl, '_blank');
+                      } else if (item.webViewLink) {
+                        window.open(item.webViewLink, '_blank');
+                      } else {
+                        window.open(`/api/files/${item.id}?inline=true`, '_blank');
                       }
                     }}
                     className="relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-all flex items-center gap-3 group cursor-pointer overflow-hidden"
@@ -1001,6 +1009,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         e.stopPropagation();
                         if (isFolder) {
                           navigateTo(item.id, item.name);
+                        } else if (isBrowserCompatible(item.mimeType)) {
+                          window.open(`/api/files/${item.id}?inline=true`, '_blank');
+                        } else if (item.webViewLink) {
+                          window.open(item.webViewLink, '_blank');
                         } else {
                           window.open(`/api/files/${item.id}?inline=true`, '_blank');
                         }
@@ -1168,6 +1180,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           e.stopPropagation();
                           if (isFolder) {
                             navigatePaneTo(idx, item.id, item.name);
+                          } else if (isBrowserCompatible(item.mimeType)) {
+                            window.open(`/api/files/${item.id}?inline=true`, '_blank');
+                          } else if (item.webViewLink) {
+                            window.open(item.webViewLink, '_blank');
                           } else {
                             window.open(`/api/files/${item.id}?inline=true`, '_blank');
                           }
