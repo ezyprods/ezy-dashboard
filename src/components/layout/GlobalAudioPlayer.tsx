@@ -44,9 +44,24 @@ export function GlobalAudioPlayer() {
           </div>
           <div className="overflow-hidden">
             <p className="text-xs md:text-sm font-bold text-text-primary truncate" title={currentTrack.name}>{currentTrack.name}</p>
-            {currentTrack.artistName && (
+            {currentTrack.pathSegments && currentTrack.pathSegments.length > 0 ? (
+              <p className="text-[10px] md:text-xs text-text-secondary truncate flex items-center gap-1">
+                {currentTrack.pathSegments.map((seg, i) => (
+                  <React.Fragment key={i}>
+                    {seg.onClick ? (
+                      <button onClick={seg.onClick} className="hover:text-text-primary hover:underline transition-colors text-left truncate">{seg.name}</button>
+                    ) : seg.url ? (
+                      <a href={seg.url} className="hover:text-text-primary hover:underline transition-colors">{seg.name}</a>
+                    ) : (
+                      <span>{seg.name}</span>
+                    )}
+                    {i < currentTrack.pathSegments!.length - 1 && <span>/</span>}
+                  </React.Fragment>
+                ))}
+              </p>
+            ) : currentTrack.artistName ? (
               <p className="text-[10px] md:text-xs text-text-secondary truncate">{currentTrack.artistName}</p>
-            )}
+            ) : null}
           </div>
         </div>
         

@@ -12,7 +12,7 @@ import { Loader2 } from 'lucide-react';
 
 interface EditArtistModalProps {
   isOpen: boolean;
-  onClose: () => void;
+  onClose: (saved?: boolean) => void;
   artist: Artist;
 }
 
@@ -66,7 +66,7 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
       });
 
       if (result.success) {
-        onClose();
+        onClose(true);
       } else {
         setError(result.error || 'Hubo un error al actualizar el artista');
       }
@@ -132,7 +132,7 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-border mt-6">
-          <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+          <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={isLoading}>
             Cancelar
           </Button>
           <Button type="submit" disabled={isLoading || !formData.name}>

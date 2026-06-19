@@ -367,10 +367,12 @@ function DateCellUI({ dueDate, status, onUpdate }: any) {
 // --- Main Cell Component ---
 
 export function CellComponent({
-  rowId, colId, colType = 'status', cellData, artistName, files, onUpdate, uploadTargetId
+  rowId, colId, colType = 'status', cellData, artistName, files, onUpdate, uploadTargetId,
+  artistId, projectId, projects, rowName
 }: {
   rowId: string; colId: string; colType?: ColumnType; cellData: GridCell; artistName: string; files: any[];
   onUpdate: (rowId: string, colId: string, updates: Partial<GridCell>) => void; uploadTargetId: string;
+  artistId: string; projectId?: string; projects?: any[]; rowName?: string;
 }) {
   const [isUploading, setIsUploading] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
@@ -383,7 +385,19 @@ export function CellComponent({
     e.stopPropagation();
     if (!cellData.fileId || !cellData.fileName) return;
     if (currentTrack?.id === cellData.fileId) togglePlay();
-    else playTrack({ id: cellData.fileId, name: cellData.fileName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${cellData.fileId}`, artistName });
+    else {
+      const pathSegs: { name: string; url?: string }[] = [
+        { name: 'Artistas', url: '/artists' },
+        { name: artistName, url: `/artists/${artistId}` }
+      ];
+      if (projectId && projects) {
+        const p = projects.find((x:any) => x.id === projectId);
+        if (p) pathSegs.push({ name: p.title, url: `/artists/${artistId}?project=${projectId}` });
+      }
+      pathSegs.push({ name: rowName || cellData.fileName });
+
+      playTrack({ id: cellData.fileId, name: cellData.fileName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${cellData.fileId}`, artistName, pathSegments: pathSegs });
+    }
   };
 
   const uploadFile = async (file: File) => {
@@ -530,15 +544,28 @@ export function CellComponent({
                           
                           {item.fileName?.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i) && (
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              className="w-6 h-6 rounded-full bg-accent/10 text-accent hover:bg-accent/20 flex items-center justify-center p-0 ml-1 shrink-0"
-                              onClick={() => {
-                                const isCurrent = currentTrack?.id === item.fileId;
-                                if (isCurrent) togglePlay();
-                                else playTrack({ id: item.fileId!, name: item.fileName!.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.fileId}`, artistName });
-                              }}
-                            >
+                                variant="ghost"
+                                size="icon"
+                                className="w-6 h-6 rounded-full bg-accent/10 text-accent hover:bg-accent/20 flex items-center justify-center p-0 ml-1 shrink-0"
+                                onClick={() => {
+                                  const isCurrent = currentTrack?.id === item.fileId;
+                                  if (isCurrent) togglePlay();
+                                  else {
+                                    const pathSegs: { name: string; url?: string }[] = [
+                                      { name: 'Artistas', url: '/artists' },
+                                      { name: artistName, url: `/artists/${artistId}` }
+                                    ];
+                                    if (projectId && projects) {
+                                      const p = projects.find((x:any) => x.id === projectId);
+                                      if (p) pathSegs.push({ name: p.title, url: `/artists/${artistId}?project=${projectId}` });
+                                    }
+                                    pathSegs.push({ name: rowName || 'Checklist' });
+                                    pathSegs.push({ name: item.fileName || 'Audio' });
+
+                                    playTrack({ id: item.fileId!, name: item.fileName!.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.fileId}`, artistName, pathSegments: pathSegs });
+                                  }
+                                }}
+                              >
                               {isPlaying && currentTrack?.id === item.fileId ? (
                                 <Pause className="w-2.5 h-2.5 fill-current" />
                               ) : (

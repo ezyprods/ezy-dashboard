@@ -60,6 +60,24 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   const { showMenu } = useContextMenu();
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
+  const getPathSegments = (fileName: string, currentBreadcrumbs: Breadcrumb[]) => {
+    const pathSegs: { name: string; url?: string; onClick?: () => void }[] = [];
+    pathSegs.push({ name: 'Artistas', url: '/artists' });
+    
+    currentBreadcrumbs.forEach((b, idx) => {
+      pathSegs.push({
+        name: b.name,
+        onClick: () => {
+          setCurrentFolderId(b.id);
+          setBreadcrumbs(currentBreadcrumbs.slice(0, idx + 1));
+        }
+      });
+    });
+    
+    pathSegs.push({ name: fileName.replace(/\.[^/.]+$/, '') });
+    return pathSegs;
+  };
+
   // Modal states
   const [shareModalFile, setShareModalFile] = useState<DriveItem | null>(null);
   const [deleteModalFile, setDeleteModalFile] = useState<DriveItem | null>(null);
@@ -259,7 +277,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           if (currentTrack?.id === item.id) {
             togglePlay();
           } else {
-            playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}` });
+            playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
           }
         } else if (item.webViewLink) {
           window.open(item.webViewLink, '_blank');
@@ -778,7 +796,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         if (isThisTrackActive) {
                           togglePlay();
                         } else {
-                          playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}` });
+                          playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
                         }
                       } else {
                         const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
@@ -799,7 +817,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                             if (isThisTrackActive) {
                               togglePlay();
                             } else {
-                              playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}` });
+                              playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
                             }
                           }}
                         >

@@ -112,9 +112,9 @@ export default function ArtistDetailPage() {
       {artist && (
         <EditArtistModal
           isOpen={isEditArtistModalOpen}
-          onClose={() => {
+          onClose={(saved) => {
             setIsEditArtistModalOpen(false);
-            fetchArtist();
+            if(saved) fetchArtist();
           }}
           artist={artist}
         />
