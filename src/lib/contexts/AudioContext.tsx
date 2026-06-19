@@ -21,6 +21,7 @@ interface AudioContextType {
   volume: number;
   setVolume: (v: number) => void;
   closePlayer: () => void;
+  isLoading: boolean;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -31,84 +32,51 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(1);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
-  useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-    }
-    const audio = audioRef.current;
-
-    const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration);
-    const onEnded = () => setIsPlaying(false);
-
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('loadedmetadata', updateDuration);
-    audio.addEventListener('ended', onEnded);
-
-    return () => {
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('loadedmetadata', updateDuration);
-      audio.removeEventListener('ended', onEnded);
-    };
-  }, []);
-
-  // Sync volume
+  // Sync volume safely
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
     }
   }, [volume]);
 
-  // Handle play/pause state changes — only handles PAUSE here.
-  // PLAY is triggered by the canplay event inside playTrack() to avoid race conditions.
+  // If track changes, load new URL
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    
-    if (!isPlaying) {
-      audio.pause();
-    } else if (audio.readyState >= 3) {
-      // Only auto-play if data is already loaded (e.g. toggling pause/resume)
-      audio.play().catch(e => console.error('Audio resume error:', e));
+    if (currentTrack && audioRef.current) {
+      audioRef.current.src = `/api/audio/${currentTrack.id}`;
+      audioRef.current.load();
+      audioRef.current.play().catch(e => console.error('Audio play error:', e));
+      setIsPlaying(true);
+      setIsLoading(true);
+    } else if (!currentTrack && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      setIsPlaying(false);
     }
-  }, [isPlaying]);
+  }, [currentTrack]);
 
-  const playTrack = async (track: AudioTrack) => {
-    if (!audioRef.current) return;
+  // Handle Play/Pause toggling when `isPlaying` state changes
+  useEffect(() => {
+    if (!audioRef.current || !currentTrack) return;
     
-    // If it's the same track, just toggle play
+    if (isPlaying && audioRef.current.paused) {
+      audioRef.current.play().catch(e => console.error('Audio resume error:', e));
+    } else if (!isPlaying && !audioRef.current.paused) {
+      audioRef.current.pause();
+    }
+  }, [isPlaying, currentTrack]);
+
+  const playTrack = (track: AudioTrack) => {
     if (currentTrack?.id === track.id) {
-      setIsPlaying(prev => !prev);
-      return;
-    }
-
-    // Stop current track cleanly
-    audioRef.current.pause();
-    audioRef.current.currentTime = 0;
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
-
-    // New track — always route through the secure API proxy
-    const finalUrl = `/api/audio/${track.id}`;
-    
-    setCurrentTrack(track);
-    audioRef.current.src = finalUrl;
-    audioRef.current.load();
-
-    // Play immediately and update state when the promise resolves
-    audioRef.current.play()
-      .then(() => setIsPlaying(true))
-      .catch(e => console.error('Audio play error:', e));
-  };
-
-  const togglePlay = () => {
-    if (currentTrack) {
-      setIsPlaying(!isPlaying);
+      setIsPlaying(p => !p); // Toggle if same track
+    } else {
+      setCurrentTrack(track); // Let the useEffect handle the new track
     }
   };
+
+  const togglePlay = () => setIsPlaying(!isPlaying);
 
   const seek = (time: number) => {
     if (audioRef.current) {
@@ -117,14 +85,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const closePlayer = () => {
-    setIsPlaying(false);
-    setCurrentTrack(null);
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-    }
-  };
+  const closePlayer = () => setCurrentTrack(null);
 
   return (
     <AudioContext.Provider value={{
@@ -137,9 +98,22 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       seek,
       volume,
       setVolume,
-      closePlayer
+      closePlayer,
+      isLoading
     }}>
       {children}
+      {/* Real, mounted audio element handles all events cleanly */}
+      <audio
+        ref={audioRef}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onEnded={() => setIsPlaying(false)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onCanPlay={() => setIsLoading(false)}
+        onWaiting={() => setIsLoading(true)}
+        style={{ display: 'none' }}
+      />
     </AudioContext.Provider>
   );
 }

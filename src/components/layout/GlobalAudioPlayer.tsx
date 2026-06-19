@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useAudio } from '@/lib/contexts/AudioContext';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2 } from 'lucide-react';
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -12,7 +12,7 @@ function formatTime(seconds: number): string {
 }
 
 export function GlobalAudioPlayer() {
-  const { currentTrack, isPlaying, duration, currentTime, togglePlay, seek, volume, setVolume, closePlayer } = useAudio();
+  const { currentTrack, isPlaying, duration, currentTime, togglePlay, seek, volume, setVolume, closePlayer, isLoading } = useAudio();
 
   if (!currentTrack) return null;
 
@@ -54,9 +54,10 @@ export function GlobalAudioPlayer() {
         <div className="flex items-center gap-2 md:hidden">
           <button 
             onClick={togglePlay}
-            className="w-8 h-8 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center"
+            disabled={isLoading}
+            className="w-8 h-8 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center disabled:opacity-70"
           >
-            {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
           </button>
           <button onClick={closePlayer} className="text-text-secondary hover:text-error p-1">
             <X className="w-4 h-4" />
@@ -74,9 +75,10 @@ export function GlobalAudioPlayer() {
           
           <button 
             onClick={togglePlay}
-            className="w-10 h-10 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center hover:scale-105 transition-transform"
+            disabled={isLoading}
+            className="w-10 h-10 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-70 disabled:hover:scale-100"
           >
-            {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
           </button>
 
           <button className="text-text-secondary hover:text-text-primary transition-colors">
