@@ -33,11 +33,16 @@ export async function POST(request: Request) {
 
     const bodyData = fileId ? {} : { name, parents: [parentId] };
 
+    // Extract origin from request to forward it to Google for CORS
+    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
     const fetchRes = await fetch(fetchUrl, {
       method,
       headers: {
         Authorization: `Bearer ${token.token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Upload-Content-Type': mimeType || 'application/octet-stream',
+        'Origin': origin,
       },
       body: JSON.stringify(bodyData)
     });
