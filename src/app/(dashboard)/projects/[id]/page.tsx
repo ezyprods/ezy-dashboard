@@ -477,9 +477,9 @@ export default function ProjectDetailPage() {
                                 action: () => handleMoveFile(file.id, folder.id)
                               },
                               {
-                                label: 'Ver en Drive',
+                                label: 'Ver en Navegador',
                                 icon: 'ExternalLink',
-                                action: () => window.open(file.webViewLink, '_blank')
+                                action: () => window.open(`/api/files/${file.id}?inline=true`, '_blank')
                               },
                               {
                                 label: 'Descargar',
@@ -511,7 +511,7 @@ export default function ProjectDetailPage() {
                               {
                                 label: 'Ver archivo',
                                 icon: 'Eye',
-                                action: () => window.open(file.webViewLink, '_blank')
+                                action: () => window.open(`/api/files/${file.id}?inline=true`, '_blank')
                               },
                               {
                                 label: 'Renombrar',
@@ -527,7 +527,7 @@ export default function ProjectDetailPage() {
                                 label: 'Copiar enlace',
                                 icon: 'Copy',
                                 action: () => {
-                                  navigator.clipboard.writeText(file.webViewLink);
+                                  navigator.clipboard.writeText(`${window.location.origin}/api/files/${file.id}?inline=true`);
                                 }
                               },
                               {
@@ -570,7 +570,7 @@ export default function ProjectDetailPage() {
                               <FolderInput className="w-3.5 h-3.5" />
                             </button>
                             <a
-                              href={file.webContentLink || file.webViewLink}
+                              href={`/api/files/${file.id}?inline=false`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/file:opacity-100 transition-opacity"
@@ -586,11 +586,11 @@ export default function ProjectDetailPage() {
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                             <a 
-                              href={file.webViewLink} 
+                              href={`/api/files/${file.id}?inline=true`} 
                               target="_blank" 
                               rel="noopener noreferrer" 
                               className="p-1 text-text-secondary hover:text-accent rounded hover:bg-surface/50"
-                              title="Ver en Drive"
+                              title="Ver en Navegador"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>

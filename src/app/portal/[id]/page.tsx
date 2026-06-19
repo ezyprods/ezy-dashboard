@@ -428,18 +428,18 @@ export default function PortalPage() {
                               <div className="flex items-center gap-2">
                                 {row.linkedFile && (
                                   <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1.5 py-0.5 rounded border border-border/50">
-                                    {(row.linkedFile.mimeType?.includes('audio/') || /\\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
-                                      <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile.id, name: row.name || row.linkedFile.name, url: row.linkedFile.webContentLink || '', artistName: data?.artistConfig?.artistName || 'Artista' }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
+                                    {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
+                                      <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile.id, name: row.name || row.linkedFile.name, url: `/api/audio/${row.linkedFile.id}`, artistName: data?.artistConfig?.artistName || 'Artista' }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
                                         <Play className="w-3.5 h-3.5" />
                                       </button>
                                     )}
                                     {row.linkedFile.webViewLink && (
-                                      <a href={row.linkedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Abrir en Drive">
+                                      <a href={`/api/files/${row.linkedFile.id}?inline=true`} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Ver en Navegador">
                                         <ExternalLink className="w-3.5 h-3.5" />
                                       </a>
                                     )}
                                     {row.linkedFile.webContentLink && (
-                                      <a href={row.linkedFile.webContentLink} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar archivo">
+                                      <a href={`/api/files/${row.linkedFile.id}?inline=false`} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar archivo">
                                         <Download className="w-3.5 h-3.5" />
                                       </a>
                                     )}

@@ -279,8 +279,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           } else {
             playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
           }
-        } else if (item.webViewLink) {
-          window.open(item.webViewLink, '_blank');
+        } else {
+          window.open(`/api/files/${item.id}?inline=true`, '_blank');
         }
       }
     }
@@ -799,7 +799,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
                         }
                       } else {
-                        const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
+                        const openUrl = `/api/files/${item.id}?inline=true`;
                         window.open(openUrl, '_blank');
                       }
                     }}
@@ -1001,8 +1001,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         e.stopPropagation();
                         if (isFolder) {
                           navigateTo(item.id, item.name);
-                        } else if (item.webViewLink) {
-                          window.open(item.webViewLink, '_blank');
+                        } else {
+                          window.open(`/api/files/${item.id}?inline=true`, '_blank');
                         }
                       }}
                       className={cn(
@@ -1168,8 +1168,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           e.stopPropagation();
                           if (isFolder) {
                             navigatePaneTo(idx, item.id, item.name);
-                          } else if (item.webViewLink) {
-                            window.open(item.webViewLink, '_blank');
+                          } else {
+                            window.open(`/api/files/${item.id}?inline=true`, '_blank');
                           }
                         }}
                         className="group relative flex items-center p-3 transition-colors cursor-pointer hover:bg-surface-elevated/80"
