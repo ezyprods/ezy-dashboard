@@ -61,41 +61,55 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [volume]);
 
-  // Handle play/pause state changes
+  // Handle play/pause state changes — only handles PAUSE here.
+  // PLAY is triggered by the canplay event inside playTrack() to avoid race conditions.
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     
-    if (isPlaying) {
-      audio.play().catch(e => console.error("Audio play error", e));
-    } else {
+    if (!isPlaying) {
       audio.pause();
+    } else if (audio.readyState >= 3) {
+      // Only auto-play if data is already loaded (e.g. toggling pause/resume)
+      audio.play().catch(e => console.error('Audio resume error:', e));
     }
   }, [isPlaying]);
 
-  const playTrack = async (track: AudioTrack) => {
+  const playTrack = (track: AudioTrack) => {
     if (!audioRef.current) return;
     
     // If it's the same track, just toggle play
     if (currentTrack?.id === track.id) {
-      setIsPlaying(true);
+      setIsPlaying(prev => !prev);
       return;
     }
 
-    // New track
+    // Stop current track cleanly
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+
+    // New track — always route through the secure API proxy
+    const finalUrl = `/api/audio/${track.id}`;
+
     setCurrentTrack(track);
-    
-    // Play through our secure API proxy
-    let finalUrl = track.url;
-    if (!finalUrl.startsWith('/api/audio/')) {
-       finalUrl = `/api/audio/${track.id}`;
-    }
-    
-    if (audioRef.current.src !== finalUrl) {
-      audioRef.current.src = finalUrl;
-      audioRef.current.load();
-    }
-    setIsPlaying(true);
+    audioRef.current.src = finalUrl;
+    audioRef.current.load();
+
+    // Wait for enough data before playing to avoid empty-play bug
+    const onCanPlay = () => {
+      audioRef.current?.removeEventListener('canplay', onCanPlay);
+      audioRef.current?.play().catch(e => console.error('Audio play error:', e));
+      setIsPlaying(true);
+    };
+    audioRef.current.addEventListener('canplay', onCanPlay, { once: true });
+
+    // Fallback: if canplay never fires within 8s, try playing anyway
+    setTimeout(() => {
+      audioRef.current?.removeEventListener('canplay', onCanPlay);
+    }, 8000);
   };
 
   const togglePlay = () => {

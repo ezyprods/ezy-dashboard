@@ -89,8 +89,8 @@ function SortableRow({
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
           {row.linkedFile && (
             <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1 py-0.5 rounded border border-border/50">
-              {(row.linkedFile.mimeType?.includes('audio/') || /\\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
-                <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile!.id, name: row.name || row.linkedFile!.name, url: row.linkedFile!.webContentLink || '', artistName }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
+              {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
+                <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile!.id, name: row.name || row.linkedFile!.name, url: `/api/audio/${row.linkedFile!.id}`, artistName }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
                   <Play className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -162,8 +162,8 @@ export function ProductionGridBoard({
   }, [artistId, matrixId]);
 
   useEffect(() => {
-    if (linkedProjectId) fetchFiles(linkedProjectId);
-    else setFiles([]);
+    // Always fetch files — if no project linked, fetchFiles will only scan artist bounces
+    fetchFiles(linkedProjectId);
   }, [linkedProjectId]);
 
   const fetchGrid = async () => {
@@ -193,120 +193,134 @@ export function ProductionGridBoard({
 
   const fetchFiles = async (projId: string) => {
     try {
-      const res = await fetch(`/api/projects/${projId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const allFiles = [
-          ...(data.rootFiles || []),
-          ...(data.folders ? data.folders.flatMap((f: any) => f.files) : [])
-        ];
-        setFiles(allFiles);
-
-        // Intelligent Auto-Match Logic
-        setGrid(prevGrid => {
-          let hasChanges = false;
-          const audioFiles = allFiles.filter((f: any) => 
-            f.mimeType?.includes('audio/') || 
+      // ── 1. Deep-fetch all files from the linked project ──────────────────
+      let projectAudioFiles: any[] = [];
+      if (projId) {
+        const projectRes = await fetch(`/api/projects/${projId}`);
+        if (projectRes.ok) {
+          const data = await projectRes.json();
+          // Flatten: root files + all files from every recursive sub-folder
+          const allProjectFiles = [
+            ...(data.rootFiles || []),
+            ...(data.folders ? data.folders.flatMap((f: any) => f.files || []) : [])
+          ];
+          projectAudioFiles = allProjectFiles.filter((f: any) =>
+            f.mimeType?.startsWith('audio/') ||
             /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || '')
           );
-          
-          const normalize = (s: string) => {
-            if (!s) return '';
-            return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-          };
-
-          const newRows = prevGrid.rows.map(row => {
-            const rowNameNorm = normalize(row.name);
-            if (!rowNameNorm) return row;
-
-            let rowModified = false;
-            const newCells = { ...row.cells };
-            
-            const checkMatch = (fileName: string) => {
-              const fileNameNorm = normalize(fileName);
-              // Exact substring match (either direction)
-              if (fileNameNorm.includes(rowNameNorm) || rowNameNorm.includes(fileNameNorm)) {
-                 return 1000 - Math.abs(fileNameNorm.length - rowNameNorm.length);
-              }
-              // Token-based match (e.g. "song title" vs "artist song title mix v2")
-              const rowTokens = rowNameNorm.split(' ').filter(t => t.length > 2);
-              const fileTokens = fileNameNorm.replace(/wav|mp3|m4a|flac|ogg|aiff/gi, '').split(' ').filter(t => t.length > 2);
-              if (rowTokens.length > 0 && fileTokens.length > 0) {
-                 const matchCount = rowTokens.filter(t => fileTokens.some(ft => ft.includes(t) || t.includes(ft))).length;
-                 // If more than 60% of significant words match
-                 if (matchCount / rowTokens.length >= 0.6) {
-                    return 500 + matchCount * 10 - Math.abs(fileNameNorm.length - rowNameNorm.length);
-                 }
-              }
-              return 0;
-            };
-
-            for (const col of prevGrid.columns) {
-              if (col.type === 'file') {
-                const cell = newCells[col.id] || { status: 'todo' };
-                if (!cell.fileId) {
-                  let bestMatch = null;
-                  let bestScore = 0;
-
-                  for (const file of audioFiles) {
-                    const score = checkMatch(file.name);
-                    if (score > bestScore) {
-                      bestScore = score;
-                      bestMatch = file;
-                    }
-                  }
-
-                  if (bestMatch) {
-                    newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
-                    rowModified = true;
-                    // Also attach it globally to the row
-                    if (!row.linkedFile) {
-                      row.linkedFile = { id: bestMatch.id, name: bestMatch.name, webViewLink: bestMatch.webViewLink || bestMatch.webContentLink, webContentLink: bestMatch.webContentLink, mimeType: bestMatch.mimeType };
-                    }
-                  }
-                }
-              }
-            }
-
-            // Also check if we should attach linkedFile even if there are no file columns, or if cell was already filled
-            if (!row.linkedFile) {
-               let bestMatch = null;
-               let bestScore = 0;
-               for (const file of audioFiles) {
-                  const score = checkMatch(file.name);
-                  if (score > bestScore) {
-                     bestScore = score;
-                     bestMatch = file;
-                  }
-               }
-               if (bestMatch) {
-                  row.linkedFile = { id: bestMatch.id, name: bestMatch.name, webViewLink: bestMatch.webViewLink || bestMatch.webContentLink, webContentLink: bestMatch.webContentLink, mimeType: bestMatch.mimeType };
-                  rowModified = true;
-               }
-            }
-
-            if (rowModified) {
-              hasChanges = true;
-              return { ...row, cells: newCells };
-            }
-            return row;
-          });
-
-          if (hasChanges) {
-            const updatedGrid = { ...prevGrid, rows: newRows };
-            fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                productionGrid: updatedGrid,
-                projectId: projId 
-              })
-            }).catch(console.error);
-            return updatedGrid;
-          }
-          return prevGrid;
-        });
+        }
       }
+
+      // ── 2. Deep-fetch all audio from artist root (covers bounces etc.) ───
+      const artistRes = await fetch(`/api/artists/${artistId}/files`);
+      let artistAudioFiles: any[] = [];
+      if (artistRes.ok) {
+        const data = await artistRes.json();
+        artistAudioFiles = (data.files || []).filter((f: any) =>
+          f.mimeType?.startsWith('audio/') ||
+          /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || '')
+        );
+      }
+
+      // ── 3. Merge, deduplicate by file id ────────────────────────────────
+      const seen = new Set<string>();
+      const allFiles: any[] = [];
+      for (const f of [...projectAudioFiles, ...artistAudioFiles]) {
+        if (!seen.has(f.id)) {
+          seen.add(f.id);
+          allFiles.push(f);
+        }
+      }
+
+      setFiles(allFiles);
+
+      // ── 4. Intelligent Auto-Match Logic ─────────────────────────────────
+      setGrid(prevGrid => {
+        let hasChanges = false;
+        const audioFiles = allFiles;
+
+        const normalize = (s: string) => {
+          if (!s) return '';
+          return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+        };
+
+        const checkMatch = (fileName: string, rowName: string) => {
+          const fileNameNorm = normalize(fileName.replace(/\.(wav|mp3|m4a|flac|aiff|ogg)$/i, ''));
+          const rowNameNorm = normalize(rowName);
+          if (!fileNameNorm || !rowNameNorm) return 0;
+          // Exact substring match (either direction)
+          if (fileNameNorm.includes(rowNameNorm) || rowNameNorm.includes(fileNameNorm)) {
+            return 1000 - Math.abs(fileNameNorm.length - rowNameNorm.length);
+          }
+          // Token-based match
+          const rowTokens = rowNameNorm.split('').length > 0 ? rowNameNorm.match(/[a-z0-9]{2,}/g) || [] : [];
+          const fileTokens = fileNameNorm.match(/[a-z0-9]{2,}/g) || [];
+          if (rowTokens.length > 0 && fileTokens.length > 0) {
+            const matchCount = rowTokens.filter(t => fileTokens.some(ft => ft.includes(t) || t.includes(ft))).length;
+            if (matchCount / rowTokens.length >= 0.6) {
+              return 500 + matchCount * 10 - Math.abs(fileNameNorm.length - rowNameNorm.length);
+            }
+          }
+          return 0;
+        };
+
+        const newRows = prevGrid.rows.map(row => {
+          if (!row.name?.trim()) return row;
+          let rowModified = false;
+          const newCells = { ...row.cells };
+
+          // Find best matching audio file for this row
+          let bestMatch: any = null;
+          let bestScore = 0;
+          for (const file of audioFiles) {
+            const score = checkMatch(file.name, row.name);
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = file;
+            }
+          }
+
+          // Apply to file-type columns if not already set
+          for (const col of prevGrid.columns) {
+            if (col.type === 'file') {
+              const cell = newCells[col.id] || { status: 'todo' };
+              if (!cell.fileId && bestMatch) {
+                newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
+                rowModified = true;
+              }
+            }
+          }
+
+          // Always attach linkedFile for the play button
+          if (!row.linkedFile && bestMatch) {
+            row.linkedFile = {
+              id: bestMatch.id,
+              name: bestMatch.name,
+              webViewLink: bestMatch.webViewLink,
+              webContentLink: bestMatch.webContentLink,
+              mimeType: bestMatch.mimeType
+            };
+            rowModified = true;
+          }
+
+          if (rowModified) {
+            hasChanges = true;
+            return { ...row, cells: newCells };
+          }
+          return row;
+        });
+
+        if (hasChanges) {
+          const updatedGrid = { ...prevGrid, rows: newRows };
+          fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productionGrid: updatedGrid, projectId: projId })
+          }).catch(console.error);
+          return updatedGrid;
+        }
+        return prevGrid;
+      });
     } catch (e) { console.error(e); }
   };
 
