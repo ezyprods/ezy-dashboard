@@ -42,41 +42,53 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [volume]);
 
-  // If track changes, load new URL
+  // If track is cleared, pause audio
   useEffect(() => {
-    if (currentTrack && audioRef.current) {
-      audioRef.current.src = currentTrack.url;
-      audioRef.current.load();
-      audioRef.current.play().catch(e => console.error('Audio play error:', e));
-      setIsPlaying(true);
-      setIsLoading(true);
-    } else if (!currentTrack && audioRef.current) {
+    if (!currentTrack && audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = '';
       setIsPlaying(false);
     }
   }, [currentTrack]);
 
-  // Handle Play/Pause toggling when `isPlaying` state changes
-  useEffect(() => {
-    if (!audioRef.current || !currentTrack) return;
-    
-    if (isPlaying && audioRef.current.paused) {
-      audioRef.current.play().catch(e => console.error('Audio resume error:', e));
-    } else if (!isPlaying && !audioRef.current.paused) {
-      audioRef.current.pause();
-    }
-  }, [isPlaying, currentTrack]);
-
   const playTrack = (track: AudioTrack) => {
+    if (!audioRef.current) return;
+
     if (currentTrack?.id === track.id) {
-      setIsPlaying(p => !p); // Toggle if same track
+      // Toggle if same track
+      if (audioRef.current.paused) {
+        audioRef.current.play().catch(e => console.error('Audio resume error:', e));
+        setIsPlaying(true);
+      } else {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
     } else {
-      setCurrentTrack(track); // Let the useEffect handle the new track
+      // New track: load and play synchronously
+      setCurrentTrack(track);
+      setIsLoading(true);
+      audioRef.current.src = track.url;
+      audioRef.current.load();
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch(e => {
+        console.error('Audio play error:', e);
+        // If auto-play blocked, still set state so UI reflects it tried
+        setIsPlaying(true);
+      });
     }
   };
 
-  const togglePlay = () => setIsPlaying(!isPlaying);
+  const togglePlay = () => {
+    if (!audioRef.current || !currentTrack) return;
+    if (audioRef.current.paused) {
+      audioRef.current.play().catch(e => console.error('Audio resume error:', e));
+      setIsPlaying(true);
+    } else {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+  };
 
   const seek = (time: number) => {
     if (audioRef.current) {

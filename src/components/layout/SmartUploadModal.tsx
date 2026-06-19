@@ -85,14 +85,16 @@ async function detectAudioFeatures(file: File): Promise<{ bpm: number | null; ke
 
     const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const start = Math.floor(channelData.length * 0.3);
-    const sampleLen = Math.min(sampleRate * 10, channelData.length - start);
+    // Process only 2 seconds of audio instead of 10 to prevent JS thread blocking
+    const sampleLen = Math.min(sampleRate * 2, channelData.length - start);
     const sample = channelData.slice(start, start + sampleLen);
 
     const chromagram = new Array(12).fill(0);
     for (let n = 0; n < 12; n++) {
       const freq = 261.63 * Math.pow(2, n / 12);
       let real = 0, imag = 0;
-      for (let i = 0; i < sample.length; i++) {
+      // Skip every 4th sample to speed up computation by 4x without losing much accuracy
+      for (let i = 0; i < sample.length; i += 4) {
         const t = i / sampleRate;
         real += sample[i] * Math.cos(2 * Math.PI * freq * t);
         imag += sample[i] * Math.sin(2 * Math.PI * freq * t);
