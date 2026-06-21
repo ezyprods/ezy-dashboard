@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Artist, CreateArtistInput } from '@/types';
 import { customAlert } from '@/lib/dialog';
 
@@ -81,6 +81,9 @@ export function useArtists() {
     }
   };
 
+  const activeArtists = useMemo(() => artists.filter(a => a.status === 'active'), [artists]);
+  const archivedArtists = useMemo(() => artists.filter(a => a.status === 'archived'), [artists]);
+
   return {
     artists,
     isLoading,
@@ -88,8 +91,7 @@ export function useArtists() {
     fetchArtists,
     createArtist,
     updateArtist,
-    // Add computed properties
-    activeArtists: artists.filter(a => a.status === 'active'),
-    archivedArtists: artists.filter(a => a.status === 'archived'),
+    activeArtists,
+    archivedArtists,
   };
 }

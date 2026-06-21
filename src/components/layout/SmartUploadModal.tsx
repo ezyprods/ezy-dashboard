@@ -137,7 +137,7 @@ export function SmartUploadModal({
   preselectedArtistId,
   preselectedFolderId
 }: SmartUploadModalProps) {
-  const { activeArtists: artists } = useArtists();
+  const { activeArtists: artists, isLoading: isArtistsLoading } = useArtists();
   const [items, setItems] = useState<SmartUploadFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [globalStatus, setGlobalStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
@@ -208,7 +208,7 @@ export function SmartUploadModal({
       return;
     }
 
-    if (initialFiles.length === 0 || artists.length === 0) return;
+    if (initialFiles.length === 0 || isArtistsLoading) return;
 
     // Filter out files that are already in the list
     const newFiles = initialFiles.filter(f => !items.some(item => item.file.name === f.name && item.file.size === f.size && item.file.lastModified === f.lastModified));
@@ -293,7 +293,7 @@ export function SmartUploadModal({
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialFiles, preselectedArtistId, preselectedFolderId]); // Depend exclusively on initial props
+  }, [isOpen, initialFiles, preselectedArtistId, preselectedFolderId, isArtistsLoading, artists]); // Depend on artists so it runs when they load
 
   // ─── UI Interactions ──────────────────────────────────────────────────────────
   const updateItem = async (id: string, updates: Partial<SmartUploadFile>) => {
