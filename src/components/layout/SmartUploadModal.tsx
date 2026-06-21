@@ -146,6 +146,7 @@ export function SmartUploadModal({
   // Local caching state to avoid infinite loops and multi-fetching
   const [artistFoldersCache, setArtistFoldersCache] = useState<Record<string, any[]>>({});
   const [projectFoldersCache, setProjectFoldersCache] = useState<Record<string, any[]>>({});
+  const [artistMatricesCache, setArtistMatricesCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
 
   // Sort artists by recent interaction
@@ -193,6 +194,20 @@ export function SmartUploadModal({
         const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
         setProjectFoldersCache(prev => ({ ...prev, [projectId]: folders }));
         return folders;
+      }
+    } catch {}
+    return [];
+  };
+
+  const fetchMatrices = async (aId: string) => {
+    if (artistMatricesCache[aId]) return artistMatricesCache[aId];
+    try {
+      const res = await fetch(`/api/artists/${aId}/matrices`);
+      if (res.ok) {
+        const data = await res.json();
+        const matrices = data.matrices || [];
+        setArtistMatricesCache(prev => ({ ...prev, [aId]: matrices }));
+        return matrices;
       }
     } catch {}
     return [];
@@ -280,6 +295,8 @@ export function SmartUploadModal({
 
       // Auto-detect project if applicable
       if (item.artistId && !preselectedFolderId) {
+        fetchMatrices(item.artistId); // Pre-fetch matrices for this artist
+        
         const folders = await fetchArtistFolders(item.artistId);
         const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
         const projects = folders.filter((f: any) => f?.name && !ignoreList.includes(f.name));
@@ -315,6 +332,8 @@ export function SmartUploadModal({
 
     // If artist changed, auto-fetch their projects and guess again
     if (updates.artistId !== undefined) {
+       fetchMatrices(updates.artistId); // Pre-fetch matrices for the new artist
+
        const folders = await fetchArtistFolders(updates.artistId);
        const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
        const projects = folders.filter((f: any) => f?.name && !ignoreList.includes(f.name));
@@ -634,7 +653,7 @@ export function SmartUploadModal({
               </div>
 
               {/* Progress bar */}
-              {item.uploadStatus === 'uploading' && (
+              {item.uploadStatus === 'uploading' ? (
                 <div className="mb-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs font-medium text-text-secondary">Subiendo archivo a Drive...</span>
@@ -642,6 +661,34 @@ export function SmartUploadModal({
                   </div>
                   <div className="w-full h-2 bg-surface-elevated rounded-full overflow-hidden border border-border/50">
                     <div className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(108,92,231,0.5)]" style={{ width: `${item.uploadProgress || 0}%` }} />
+                  </div>
+                </div>
+              ) : item.uploadStatus === 'done' && (
+                <div className="flex items-center gap-2 mt-3">
+                  <div className="flex items-center justify-between gap-2 w-full">
+                    <div className="flex items-center gap-2 text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-lg w-full">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="text-xs font-semibold">Completado</span>
+                    </div>
+                    
+                    {/* Option to Open Matrix if linked */}
+                    {(() => {
+                      if (!item.projectId) return null;
+                      const linkedMatrix = artistMatricesCache[item.artistId]?.find(m => m.projectId === item.projectId);
+                      if (!linkedMatrix) return null;
+                      
+                      return (
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="whitespace-nowrap flex-shrink-0"
+                          onClick={() => window.open(`/artists/${item.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`, '_blank')}
+                        >
+                          <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5" />
+                          Abrir Matriz
+                        </Button>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

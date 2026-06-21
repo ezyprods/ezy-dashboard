@@ -252,7 +252,7 @@ export default function ProjectDetailPage() {
                   variant="secondary" 
                   size="sm" 
                   className="h-6 text-xs px-2 ml-2"
-                  onClick={() => router.push(`/artists/${project.artistId}?tab=matrices`)}
+                  onClick={() => router.push(`/artists/${project.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`)}
                   title={`Abrir matriz: ${linkedMatrix.name}`}
                 >
                   <ExternalLinkIcon className="w-3 h-3 mr-1.5" />

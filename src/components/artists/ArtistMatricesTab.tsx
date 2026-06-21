@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
@@ -8,9 +9,10 @@ import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 
 
 export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; artistName?: string }) {
+  const searchParams = useSearchParams();
   const [matrices, setMatrices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeMatrixId, setActiveMatrixId] = useState<string | null>(null);
+  const [activeMatrixId, setActiveMatrixId] = useState<string | null>(searchParams.get('matrixId'));
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newMatrixName, setNewMatrixName] = useState('');
