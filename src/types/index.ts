@@ -13,8 +13,10 @@ export interface CoverHistoryEntry {
 export interface ReleaseTrack {
   id: string;
   originalFileId: string;
+  originalFileName?: string;
   title: string;
   newFileId: string;
+  previewFileId?: string;
 }
 
 export interface Release {

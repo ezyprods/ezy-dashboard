@@ -11,6 +11,8 @@
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@radix-ui/react-slot": "^1.2.5",
     "@react-email/components": "^1.0.12",
     "@tiptap/extension-placeholder": "^3.26.0",

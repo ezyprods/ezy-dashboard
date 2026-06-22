@@ -258,7 +258,7 @@ export default function PublicPreviewPage() {
       {currentTrack && (
         <audio
           ref={audioRef}
-          src={`/api/audio/${currentTrack.newFileId}`}
+          src={`/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}`}
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleNext}
           onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}

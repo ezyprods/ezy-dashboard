@@ -30,6 +30,8 @@ export default function ReleaseEditorPage() {
   const [isDraggingCover, setIsDraggingCover] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [conversionState, setConversionState] = useState({ active: false, progress: 0, trackTitle: '' });
+  const ffmpegRef = useRef<any>(null);
 
   // Playback State
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
@@ -123,6 +125,7 @@ export default function ReleaseEditorPage() {
     const newTrack = {
       id: newTrackId,
       originalFileId: fileId,
+      originalFileName: fileName,
       title: fileName.replace(/\.[^/.]+$/, ''),
       newFileId: fileId,
     };
@@ -140,6 +143,81 @@ export default function ReleaseEditorPage() {
       if (!prev) return prev;
       return { ...prev, tracks: prev.tracks.map(t => t.id === trackId ? { ...t, title: newTitle } : t) };
     });
+  };
+
+  const optimizeTracksToMp3 = async () => {
+    try {
+      const tracksToConvert = release?.tracks.filter(t => !t.previewFileId && (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav'))) || [];
+      if (tracksToConvert.length === 0) {
+        customAlert('Todas las pistas ya están optimizadas');
+        return;
+      }
+
+      setConversionState({ active: true, progress: 0, trackTitle: 'Iniciando motor FFmpeg...' });
+      
+      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+      const { fetchFile } = await import('@ffmpeg/util');
+
+      if (!ffmpegRef.current) {
+        const ffmpeg = new FFmpeg();
+        ffmpeg.on('progress', ({ progress }) => {
+          setConversionState(prev => ({ ...prev, progress: Math.max(0, Math.min(100, Math.round(progress * 100))) }));
+        });
+        await ffmpeg.load({
+          coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+          wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
+        });
+        ffmpegRef.current = ffmpeg;
+      }
+
+      const ffmpeg = ffmpegRef.current;
+      let newTracks = [...(release?.tracks || [])];
+
+      for (const track of tracksToConvert) {
+        setConversionState({ active: true, progress: 0, trackTitle: `Descargando: ${track.title}` });
+        
+        const response = await fetch(`/api/audio/${track.originalFileId}`);
+        if (!response.ok) throw new Error('No se pudo descargar ' + track.title);
+        const blob = await response.blob();
+        
+        setConversionState({ active: true, progress: 0, trackTitle: `Optimizando: ${track.title}` });
+        
+        await ffmpeg.writeFile('input.wav', await fetchFile(blob));
+        await ffmpeg.exec(['-i', 'input.wav', '-b:a', '320k', 'output.mp3']);
+        
+        const data = await ffmpeg.readFile('output.mp3');
+        const mp3Blob = new Blob([data], { type: 'audio/mpeg' });
+        
+        setConversionState({ active: true, progress: 100, trackTitle: `Guardando: ${track.title}` });
+        const formData = new FormData();
+        const safeTitle = track.title.replace(/[^a-z0-9]/gi, '_');
+        formData.append('file', mp3Blob, `Preview_${safeTitle}.mp3`);
+        formData.append('parentId', releaseId);
+        formData.append('skipSimilarity', 'true');
+        
+        const uploadRes = await fetch('/api/files', { method: 'POST', body: formData });
+        if (!uploadRes.ok) throw new Error('Error subiendo MP3 de ' + track.title);
+        const uploadData = await uploadRes.json();
+        const mp3FileId = uploadData.file?.id || uploadData.id;
+        
+        newTracks = newTracks.map(t => t.id === track.id ? { ...t, previewFileId: mp3FileId } : t);
+        setRelease(prev => prev ? { ...prev, tracks: newTracks } : null);
+        
+        // Save release immediately so we don't lose progress if page crashes
+        await fetch(`/api/releases/${releaseId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tracks: newTracks }),
+        });
+      }
+      
+      customAlert('Optimización completada. El reproductor cargará ultrarrápido.');
+    } catch (err: any) {
+      console.error(err);
+      customAlert('Error en la optimización: ' + (err.message || 'Desconocido'));
+    } finally {
+      setConversionState({ active: false, progress: 0, trackTitle: '' });
+    }
   };
 
   const removeTrack = async (trackId: string, index: number) => {
@@ -511,7 +589,7 @@ export default function ReleaseEditorPage() {
       {currentTrack && (
         <audio
           ref={audioRef}
-          src={`/api/audio/${currentTrack.newFileId}`}
+          src={`/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}`}
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleNext}
           onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
@@ -661,7 +739,37 @@ export default function ReleaseEditorPage() {
           >
             {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
           </button>
+          
+          {/* Convert MP3 Button */}
+          {release?.tracks?.some(t => !t.previewFileId && (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav'))) && (
+            <button
+              onClick={optimizeTracksToMp3}
+              disabled={conversionState.active}
+              className="flex items-center gap-2 px-4 py-2 bg-surface border border-border rounded-full text-sm font-semibold hover:bg-surface-hover hover:text-white transition-all disabled:opacity-50"
+            >
+              {conversionState.active ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : <Music className="w-4 h-4 text-accent" />}
+              {conversionState.active ? 'Optimizando...' : 'Generar MP3s Ultrarrápidos'}
+            </button>
+          )}
         </div>
+        
+        {/* Conversion Progress Bar */}
+        {conversionState.active && (
+          <div className="px-8 pb-4">
+            <div className="bg-[#181818] rounded-xl p-4 border border-[#282828] flex flex-col gap-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-bold text-[#1db954]">{conversionState.trackTitle}</span>
+                <span className="text-white">{conversionState.progress}%</span>
+              </div>
+              <div className="w-full h-2 bg-[#282828] rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-[#1db954] transition-all duration-300 ease-out" 
+                  style={{ width: `${conversionState.progress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Tracklist Area */}
         <div className="relative z-10 px-8 pb-12">
