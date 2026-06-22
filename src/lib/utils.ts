@@ -246,3 +246,26 @@ export function findBestMatch<T>(
   
   return bestItem;
 }
+
+// Normalize filename for fuzzy matching (removes extensions, common suffixes, etc.)
+export function getNormalizedBaseName(filename: string): string {
+  if (!filename) return '';
+  
+  // Remove extension
+  const extMatch = filename.match(/\.[^.]+$/);
+  let base = extMatch ? filename.slice(0, -extMatch[0].length) : filename;
+  
+  // Convert to lowercase and remove diacritics
+  base = base.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Remove common suffixes like v1, v2, master, bounce, mix, 24bits, 48khz, final
+  // Also remove dates or things in parentheses
+  base = base.replace(/\b(v\d+|master|bounce|mix|final|24bits|48khz|24b|16b|44\.1khz)\b/g, '');
+  base = base.replace(/\(.*?\)/g, ''); // Remove anything in parentheses
+  base = base.replace(/\[.*?\]/g, ''); // Remove anything in brackets
+  
+  // Remove non-alphanumeric characters and collapse spaces
+  base = base.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  
+  return base;
+}

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getDriveService, listFolders } from '@/lib/drive';
+import { getDriveService, listFolders, listFiles } from '@/lib/drive';
 import { Readable } from 'stream';
 
 import { FOLDER_NAME_MAP } from '@/lib/constants';
+import { getNormalizedBaseName, stringSimilarity } from '@/lib/utils';
 
 // POST /api/files/upload
 // Body: FormData with fields: artistId, folderType, file (repeatable)
@@ -82,7 +83,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Upload each file
+    // 2. Fetch existing files in target folder to detect fuzzy duplicates
+    const existingFiles = await listFiles(targetFolderId);
+
+    // 3. Upload or Overwrite each file
     const uploaded: { id: string; name: string; webViewLink?: string }[] = [];
 
     for (const file of files) {
@@ -103,24 +107,74 @@ export async function POST(request: Request) {
         finalName = `${base} Master 24Bits 48kHz${ext}`;
       }
 
-      const response = await drive.files.create({
-        requestBody: {
-          name: finalName,
-          parents: [targetFolderId],
-        },
-        media: {
-          mimeType: file.type || 'application/octet-stream',
-          body: stream,
-        },
-        fields: 'id, name, webViewLink',
-        supportsAllDrives: true,
-      });
+      // Fuzzy Overwrite Detection
+      const newNormalized = getNormalizedBaseName(finalName);
+      let matchFound = false;
+      let matchedFileId = null;
 
-      uploaded.push({
-        id: response.data.id!,
-        name: response.data.name!,
-        webViewLink: response.data.webViewLink ?? undefined,
-      });
+      if (newNormalized.length > 2) {
+        let bestScore = 0;
+        let bestMatch = null;
+
+        for (const existing of existingFiles) {
+          const existingNormalized = getNormalizedBaseName(existing.name);
+          if (existingNormalized.length > 2) {
+            const similarity = stringSimilarity(newNormalized, existingNormalized);
+            if (similarity > bestScore) {
+              bestScore = similarity;
+              bestMatch = existing;
+            }
+          }
+        }
+
+        // If similarity is >= 85%, we consider it the same track
+        if (bestScore >= 0.85 && bestMatch) {
+          matchFound = true;
+          matchedFileId = bestMatch.id;
+        }
+      }
+
+      if (matchFound && matchedFileId) {
+        // OVERWRITE existing file
+        const response = await drive.files.update({
+          fileId: matchedFileId,
+          requestBody: {
+            name: finalName, // Update the name to the new correct one
+          },
+          media: {
+            mimeType: file.type || 'application/octet-stream',
+            body: stream,
+          },
+          fields: 'id, name, webViewLink',
+          supportsAllDrives: true,
+        });
+
+        uploaded.push({
+          id: response.data.id!,
+          name: response.data.name!,
+          webViewLink: response.data.webViewLink ?? undefined,
+        });
+      } else {
+        // CREATE new file
+        const response = await drive.files.create({
+          requestBody: {
+            name: finalName,
+            parents: [targetFolderId],
+          },
+          media: {
+            mimeType: file.type || 'application/octet-stream',
+            body: stream,
+          },
+          fields: 'id, name, webViewLink',
+          supportsAllDrives: true,
+        });
+
+        uploaded.push({
+          id: response.data.id!,
+          name: response.data.name!,
+          webViewLink: response.data.webViewLink ?? undefined,
+        });
+      }
     }
 
     return NextResponse.json({ success: true, files: uploaded }, { status: 201 });
