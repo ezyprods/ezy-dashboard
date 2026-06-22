@@ -23,14 +23,7 @@ export const customConfirm = (message: string, title?: string): Promise<boolean>
       return;
     }
     
-    // Fallback to window.confirm if DialogProvider is missing after 1s
     let handled = false;
-    const fallbackTimeout = setTimeout(() => {
-      if (!handled) {
-        handled = true;
-        resolve(window.confirm(message));
-      }
-    }, 500);
 
     const event = new CustomEvent('custom-dialog', {
       detail: {
@@ -40,13 +33,11 @@ export const customConfirm = (message: string, title?: string): Promise<boolean>
         onConfirm: () => {
           if (handled) return;
           handled = true;
-          clearTimeout(fallbackTimeout);
           resolve(true);
         },
         onCancel: () => {
           if (handled) return;
           handled = true;
-          clearTimeout(fallbackTimeout);
           resolve(false);
         },
       }
@@ -63,12 +54,6 @@ export const customPrompt = (message: string, defaultValue?: string, title?: str
     }
     
     let handled = false;
-    const fallbackTimeout = setTimeout(() => {
-      if (!handled) {
-        handled = true;
-        resolve(window.prompt(message, defaultValue));
-      }
-    }, 500);
 
     const event = new CustomEvent('custom-dialog', {
       detail: {
@@ -79,13 +64,11 @@ export const customPrompt = (message: string, defaultValue?: string, title?: str
         onConfirm: (val: string | undefined) => {
           if (handled) return;
           handled = true;
-          clearTimeout(fallbackTimeout);
           resolve(val || null);
         },
         onCancel: () => {
           if (handled) return;
           handled = true;
-          clearTimeout(fallbackTimeout);
           resolve(null);
         },
       }
