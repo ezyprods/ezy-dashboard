@@ -56,6 +56,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   try {
     await drive.files.delete({
       fileId: id,
+      supportsAllDrives: true,
     });
     return NextResponse.json({ success: true });
   } catch (error: any) {
