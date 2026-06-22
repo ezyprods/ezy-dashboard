@@ -153,19 +153,19 @@ export function SmartUploadModal({
   const [artistMatricesCache, setArtistMatricesCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
 
-  // Sort artists by recent interaction
+  // Sort artists by recent interaction or update
   useEffect(() => {
     const sorted = [...artists].sort((a, b) => {
-      let accessedA = 0, accessedB = 0;
+      const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      let accessedA = timeA;
+      let accessedB = timeB;
+      
       if (typeof window !== 'undefined') {
         const storedA = localStorage.getItem(`accessed_${a.id}`);
         const storedB = localStorage.getItem(`accessed_${b.id}`);
-        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        accessedA = storedA ? parseInt(storedA, 10) : (isNaN(timeA) ? 0 : timeA);
-        accessedB = storedB ? parseInt(storedB, 10) : (isNaN(timeB) ? 0 : timeB);
-        if (isNaN(accessedA)) accessedA = 0;
-        if (isNaN(accessedB)) accessedB = 0;
+        if (storedA) accessedA = Math.max(accessedA, parseInt(storedA, 10));
+        if (storedB) accessedB = Math.max(accessedB, parseInt(storedB, 10));
       }
       return accessedB - accessedA;
     });
@@ -228,16 +228,16 @@ export function SmartUploadModal({
     if (initialFiles.length === 0 || isArtistsLoading) return;
 
     const inlineSortedArtists = [...artists].sort((a, b) => {
-      let accessedA = 0, accessedB = 0;
+      const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      let accessedA = timeA;
+      let accessedB = timeB;
+      
       if (typeof window !== 'undefined') {
         const storedA = localStorage.getItem(`accessed_${a.id}`);
         const storedB = localStorage.getItem(`accessed_${b.id}`);
-        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        accessedA = storedA ? parseInt(storedA, 10) : (isNaN(timeA) ? 0 : timeA);
-        accessedB = storedB ? parseInt(storedB, 10) : (isNaN(timeB) ? 0 : timeB);
-        if (isNaN(accessedA)) accessedA = 0;
-        if (isNaN(accessedB)) accessedB = 0;
+        if (storedA) accessedA = Math.max(accessedA, parseInt(storedA, 10));
+        if (storedB) accessedB = Math.max(accessedB, parseInt(storedB, 10));
       }
       return accessedB - accessedA;
     });
@@ -271,16 +271,29 @@ export function SmartUploadModal({
         detectedArtistId = preselectedArtistId;
         detectedArtistName = artists.find(a => a.id === preselectedArtistId)?.name || '';
       } else {
-        const bestArtistMatch = findBestMatch(f.name, artists, (a: any) => a?.name || '', 0.4);
-        if (bestArtistMatch) {
-          detectedArtistId = bestArtistMatch.id;
-          detectedArtistName = bestArtistMatch.name;
-        } else if (inlineSortedArtists.length > 0) {
-          detectedArtistId = inlineSortedArtists[0].id;
-          detectedArtistName = inlineSortedArtists[0].name;
-        } else if (artists.length > 0) {
-          detectedArtistId = artists[0].id;
-          detectedArtistName = artists[0].name;
+        const normalizedFile = f.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        // Exact substring match
+        const exactMatch = inlineSortedArtists.find(a => {
+           const normArtist = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+           return normalizedFile.includes(normArtist);
+        });
+
+        if (exactMatch) {
+          detectedArtistId = exactMatch.id;
+          detectedArtistName = exactMatch.name;
+        } else {
+          const bestArtistMatch = findBestMatch(f.name, artists, (a: any) => a?.name || '', 0.4);
+          if (bestArtistMatch) {
+            detectedArtistId = bestArtistMatch.id;
+            detectedArtistName = bestArtistMatch.name;
+          } else if (inlineSortedArtists.length > 0) {
+            detectedArtistId = inlineSortedArtists[0].id;
+            detectedArtistName = inlineSortedArtists[0].name;
+          } else if (artists.length > 0) {
+            detectedArtistId = artists[0].id;
+            detectedArtistName = artists[0].name;
+          }
         }
       }
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
 import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Music } from 'lucide-react';
 import type { Artist } from '@/types';
+import { findBestMatch, getNormalizedBaseName } from '@/lib/utils';
 
 const FOLDER_OPTIONS = ['Bounces', 'Mix', 'Master', 'Sessions', 'Other'] as const;
 type FolderType = typeof FOLDER_OPTIONS[number];
@@ -36,6 +37,13 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sort artists by updatedAt descending
+  const sortedArtists = [...artists].sort((a, b) => {
+    const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    return timeB - timeA;
+  });
+
   const reset = () => {
     setStep(1);
     setSelectedArtistId('');
@@ -51,8 +59,31 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      setFiles(newFiles);
+
+      // Auto-detect artist from first filename if none selected
+      if (!selectedArtistId) {
+        const fileName = newFiles[0].name;
+        const normalizedName = getNormalizedBaseName(fileName).toLowerCase();
+        
+        // Exact substring match first
+        const exactMatch = sortedArtists.find(a => normalizedName.includes(a.name.toLowerCase()));
+        
+        if (exactMatch) {
+          setSelectedArtistId(exactMatch.id);
+        } else {
+          // Fuzzy match
+          const bestMatch = findBestMatch(fileName, sortedArtists, a => a.name, 0.4);
+          if (bestMatch) {
+            setSelectedArtistId(bestMatch.id);
+          } else if (sortedArtists.length > 0) {
+            // Fallback to most recently modified artist
+            setSelectedArtistId(sortedArtists[0].id);
+          }
+        }
+      }
     }
   };
 
@@ -159,7 +190,7 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
                 className="w-full h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 <option value="">— Selecciona un artista —</option>
-                {artists.map((a) => (
+                {sortedArtists.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
