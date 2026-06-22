@@ -1,6 +1,6 @@
 import { useEffect, RefObject } from 'react';
 
-export function useSmoothScroll(ref: RefObject<HTMLElement | null>) {
+export function useSmoothScroll(ref: RefObject<HTMLElement | null>, deps: any[] = []) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -64,5 +64,5 @@ export function useSmoothScroll(ref: RefObject<HTMLElement | null>) {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [ref]);
+  }, [ref, ...deps]);
 }

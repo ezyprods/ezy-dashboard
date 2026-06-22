@@ -10,7 +10,7 @@ export function GlobalMatricesWidget() {
   const [matrices, setMatrices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-  useSmoothScroll(scrollRef);
+  useSmoothScroll(scrollRef, [isLoading]);
 
   useEffect(() => {
     fetch('/api/dashboard/matrices')
