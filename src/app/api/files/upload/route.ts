@@ -37,12 +37,33 @@ export async function POST(request: Request) {
     let targetFolderId: string | null = null;
     const mappedFolderName = (FOLDER_NAME_MAP as any)[folderType || ''] || folderType;
 
-    for (const project of projects) {
-      const subfolders = await listFolders(project.id!);
-      const match = subfolders.find((f) => f.name === folderType || f.name === mappedFolderName);
+    if (folderType === 'Bounces') {
+      // For Bounces, always use or create a Bounces folder in the Artist root
+      const subfolders = await listFolders(artistId);
+      const match = subfolders.find((f) => f.name?.toLowerCase() === 'bounces');
       if (match) {
         targetFolderId = match.id!;
-        break;
+      } else {
+        const response = await drive.files.create({
+          requestBody: {
+            name: 'Bounces',
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [artistId],
+          },
+          fields: 'id',
+          supportsAllDrives: true,
+        });
+        targetFolderId = response.data.id!;
+      }
+    } else {
+      // Standard logic for other folder types
+      for (const project of projects) {
+        const subfolders = await listFolders(project.id!);
+        const match = subfolders.find((f) => f.name === folderType || f.name === mappedFolderName);
+        if (match) {
+          targetFolderId = match.id!;
+          break;
+        }
       }
     }
 
@@ -70,9 +91,21 @@ export async function POST(request: Request) {
       stream.push(Buffer.from(buffer));
       stream.push(null);
 
+      // Smart Renaming for Masters
+      let finalName = file.name;
+      if (folderType === 'Master') {
+        const extMatch = file.name.match(/\.[^.]+$/);
+        const ext = extMatch ? extMatch[0] : '';
+        let base = extMatch ? file.name.slice(0, -ext.length) : file.name;
+        
+        // Remove existing "Master", "24Bits", "48kHz" to avoid duplicates if they typed it slightly differently
+        base = base.replace(/(?:\s*-?\s*master.*|\s*-?\s*24bits.*)/i, '').trim();
+        finalName = `${base} Master 24Bits 48kHz${ext}`;
+      }
+
       const response = await drive.files.create({
         requestBody: {
-          name: file.name,
+          name: finalName,
           parents: [targetFolderId],
         },
         media: {

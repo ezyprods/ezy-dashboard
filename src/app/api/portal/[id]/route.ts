@@ -72,12 +72,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           const drive = getDriveService();
           const { folders: foldersWithFiles, files: rootFiles } = await fetchFoldersRecursively(drive, projectFolder.id!);
           const allFiles = [
-            ...rootFiles,
-            ...foldersWithFiles.flatMap(f => f.files)
+            ...rootFiles.map((f: any) => ({ ...f, parentFolderName: projectFolder.name })),
+            ...foldersWithFiles.flatMap((f: any) => f.files.map((file: any) => ({ ...file, parentFolderName: f.name })))
           ];
           
           bounces = allFiles
             .filter((f: any) => f.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || ''))
+            .filter((f: any) => {
+              const nameLower = (f.name || '').toLowerCase();
+              const parentLower = (f.parentFolderName || '').toLowerCase();
+              return nameLower.includes('master') || parentLower.endsWith('bounces') || parentLower === 'bounces';
+            })
             .sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
             
         } catch (e) {
@@ -97,6 +102,52 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         };
       })
     );
+
+    // 3.5 Fetch loose bounces (from Artist Root and Root Bounces folder)
+    let looseBounces: any[] = [];
+    try {
+      const drive = getDriveService();
+      
+      // Root Master files
+      const query = `mimeType!='application/vnd.google-apps.folder' and '${id}' in parents and trashed=false`;
+      const res = await drive.files.list({ q: query, fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)', supportsAllDrives: true });
+      if (res.data.files) {
+        looseBounces = res.data.files
+          .filter(f => f.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || ''))
+          .filter(f => (f.name || '').toLowerCase().includes('master'));
+      }
+      
+      // Root Bounces folder
+      const bouncesFolder = folders.find(f => f.name?.toLowerCase() === 'bounces');
+      if (bouncesFolder) {
+        const queryBounces = `mimeType!='application/vnd.google-apps.folder' and '${bouncesFolder.id}' in parents and trashed=false`;
+        const resB = await drive.files.list({ q: queryBounces, fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)', supportsAllDrives: true });
+        if (resB.data.files) {
+          const bFiles = resB.data.files.filter(f => f.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || ''));
+          looseBounces = [...looseBounces, ...bFiles];
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching loose bounces:', e);
+    }
+
+    const allGlobalBounces = [
+      ...looseBounces,
+      ...projectsData.flatMap(p => p.bounces)
+    ].sort((a: any, b: any) => new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime());
+
+    // Inject "Todos los archivos" project
+    projectsData.unshift({
+      id: 'all',
+      title: 'Todos los archivos',
+      type: 'Global',
+      status: 'active',
+      budget: 0,
+      requirePaymentForDownload: false,
+      driveUrl: '',
+      tasks: projectsData.flatMap(p => p.tasks),
+      bounces: allGlobalBounces
+    });
 
     // 4. Obtener resumen de pagos del artista
     const allPayments = await findAndReadJsonFile<any[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID) || [];
