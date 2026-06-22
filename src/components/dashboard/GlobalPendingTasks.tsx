@@ -89,7 +89,7 @@ export function GlobalPendingTasks() {
     textColor: string, 
     borderColor: string
   ) => (
-    <div className="flex flex-col h-[500px] bg-surface-elevated/50 rounded-2xl border border-border/50 overflow-hidden shadow-inner">
+    <div className="flex flex-col h-full min-h-0 bg-surface-elevated/50 rounded-2xl border border-border/50 overflow-hidden shadow-inner">
       <div className={cn("p-4 border-b border-border/50 flex items-center justify-between", bgColor)}>
         <div className="flex items-center gap-2">
           {icon}
@@ -163,11 +163,11 @@ export function GlobalPendingTasks() {
   }
 
   return (
-    <div className="glass rounded-[24px] border border-border p-6 shadow-xl relative overflow-hidden mt-8">
+    <div className="glass rounded-[24px] border border-border p-6 shadow-xl relative overflow-hidden flex flex-col h-full">
       {/* Decorative background element */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
       
-      <div className="relative z-10 flex items-center justify-between mb-8">
+      <div className="relative z-10 flex items-center justify-between mb-6 shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-text-primary flex items-center gap-3">
             <KanbanSquare className="w-6 h-6 text-accent" />
@@ -191,7 +191,7 @@ export function GlobalPendingTasks() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10 flex-1 min-h-0">
         {renderColumn(
           "Pendientes", 
           <Circle className="w-4 h-4 text-text-secondary" />, 

@@ -73,7 +73,7 @@ export default function DashboardPage() {
   const activeProjectsCount = pulseData.globalStats?.totalActiveProjects || 0;
 
   return (
-    <div className="space-y-8 animate-fade-in pb-20">
+    <div className="h-full flex flex-col gap-6 animate-fade-in pb-4 overflow-hidden">
       <NewArtistModal 
         isOpen={isNewArtistModalOpen} 
         onClose={() => setIsNewArtistModalOpen(false)} 
@@ -91,7 +91,7 @@ export default function DashboardPage() {
 
 
       {/* Action Center (Header) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-bold text-text-primary tracking-tight">Centro de Comando</h1>
           <div className="mt-2 space-y-1">
@@ -116,12 +116,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-8 overflow-hidden">
         {/* Left Column (Main Content) */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 flex flex-col gap-6 min-h-0">
           
           {/* Quick Actions */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="shrink-0 grid grid-cols-1 md:grid-cols-3 gap-4">
             <div onClick={() => setIsNewProjectOpen(true)} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                 <Music className="w-5 h-5" />
@@ -146,12 +146,16 @@ export default function DashboardPage() {
           </div>
 
           {/* Global Tasks Command Center in place of the old Artists Directory */}
-          <GlobalPendingTasks />
+          <div className="flex-1 min-h-0 flex flex-col">
+            <GlobalPendingTasks />
+          </div>
         </div>
 
         {/* Right Column (Widgets) */}
-        <div className="space-y-6">
-          <GlobalMatricesWidget />
+        <div className="flex flex-col gap-6 min-h-0 h-full">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <GlobalMatricesWidget />
+          </div>
 
           <div className="relative">
             <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/20 to-transparent rounded-[20px] blur opacity-50" />

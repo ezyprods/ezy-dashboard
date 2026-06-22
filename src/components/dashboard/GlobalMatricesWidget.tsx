@@ -37,10 +37,10 @@ export function GlobalMatricesWidget() {
   }
 
   return (
-    <div className="relative">
+    <div className="relative h-full flex flex-col min-h-0">
       <div className="absolute -inset-0.5 bg-gradient-to-b from-accent/20 to-transparent rounded-[20px] blur opacity-50" />
-      <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-border/50 bg-surface/50 flex items-center justify-between">
+      <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl flex flex-col h-full min-h-0">
+        <div className="p-4 border-b border-border/50 bg-surface/50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Table2 className="w-4 h-4 text-accent" />
             <h3 className="font-semibold text-sm">Matrices Activas</h3>
@@ -50,9 +50,9 @@ export function GlobalMatricesWidget() {
           </span>
         </div>
         
-        <div className="p-3 max-h-[380px] overflow-y-auto space-y-2 custom-scrollbar">
+        <div className="p-3 flex-1 min-h-0 overflow-y-auto space-y-2 custom-scrollbar">
           {matrices.length === 0 ? (
-            <div className="text-center py-8 text-xs text-text-secondary">
+            <div className="text-center py-8 text-xs text-text-secondary h-full flex flex-col items-center justify-center">
               <Table2 className="w-6 h-6 mx-auto mb-2 opacity-30" />
               <p>No hay matrices abiertas.</p>
             </div>
@@ -61,7 +61,7 @@ export function GlobalMatricesWidget() {
               <Link 
                 key={`${m.artistId}-${m.id}`}
                 href={`/artists/${m.artistId}?tab=matrices`}
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-surface border border-transparent hover:border-border/50 transition-all group block"
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-surface border border-transparent hover:border-border/50 transition-all group block shrink-0"
               >
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-xs text-text-primary group-hover:text-accent transition-colors truncate">{m.name}</h4>
