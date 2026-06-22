@@ -139,9 +139,13 @@ export function SmartUploadModal({
 }: SmartUploadModalProps) {
   const { activeArtists: artists, isLoading: isArtistsLoading } = useArtists();
   const [items, setItems] = useState<SmartUploadFile[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [globalStatus, setGlobalStatus] = useState<'idle' | 'uploading' | 'done'>('idle');
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  const pendingItemsCount = items.filter(i => i.uploadStatus === 'pending').length;
+  const isConfiguring = pendingItemsCount > 0;
+  
+  // Track globally if we've completed the overall queue to auto-close
+  const allDone = items.length > 0 && items.every(i => i.uploadStatus === 'done' || i.uploadStatus === 'error' || i.uploadStatus === 'cancelled');
 
   // Local caching state to avoid infinite loops and multi-fetching
   const [artistFoldersCache, setArtistFoldersCache] = useState<Record<string, any[]>>({});
@@ -217,8 +221,6 @@ export function SmartUploadModal({
   useEffect(() => {
     if (!isOpen) {
       setItems([]);
-      setGlobalStatus('idle');
-      setIsProcessing(false);
       abortControllersRef.current.clear();
       return;
     }
@@ -245,10 +247,7 @@ export function SmartUploadModal({
 
     if (newFiles.length === 0) return;
 
-    if (globalStatus === 'done') {
-      setGlobalStatus('idle');
-      // We keep the old files in the list so the user sees what was already uploaded
-    }
+    // We keep the old files in the list so the user sees what was already uploaded
 
     const newInitialized = newFiles.map((f, i) => {
       let mimeGroup: SmartUploadFile['mimeGroup'] = 'other';
@@ -420,16 +419,19 @@ export function SmartUploadModal({
   };
 
   const handleUpload = async () => {
-    setIsProcessing(true);
-    setGlobalStatus('uploading');
-
     const itemsToUpload = items.filter(i => i.uploadStatus === 'pending');
+    if (itemsToUpload.length === 0) return;
+
+    // Immediately mark them as uploading so they don't get picked up by concurrent calls
+    // and so the UI updates to show them in the progress list
+    setItems(prev => prev.map(p => itemsToUpload.some(it => it.id === p.id) ? { ...p, uploadStatus: 'uploading', uploadProgress: 0 } : p));
+
     const newlyCreatedFolders = new Map<string, string>(); // 'folderName::parentId' -> 'newFolderId'
 
     for (const item of itemsToUpload) {
       if (item.uploadStatus === 'cancelled') continue;
       
-      setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadStatus: 'uploading', uploadProgress: 5 } : p));
+      setItems(prev => prev.map(p => p.id === item.id ? { ...p, uploadProgress: 5 } : p));
 
       try {
         let finalFolderId = await resolveTargetFolderForUpload(item);
@@ -568,15 +570,12 @@ export function SmartUploadModal({
         abortControllersRef.current.delete(item.id);
       }
     }
-
-    setIsProcessing(false);
-    setGlobalStatus('done');
   };
 
   // Auto-close modal 15 seconds after completion
   useEffect(() => {
     let timeout: NodeJS.Timeout;
-    if (globalStatus === 'done') {
+    if (allDone) {
       timeout = setTimeout(() => {
         onClose();
       }, 15000);
@@ -584,11 +583,9 @@ export function SmartUploadModal({
     return () => {
       if (timeout) clearTimeout(timeout);
     };
-  }, [globalStatus, onClose]);
+  }, [allDone, onClose]);
 
   if (!isOpen || initialFiles.length === 0) return null;
-
-  const allDone = items.every(i => i.uploadStatus === 'done' || i.uploadStatus === 'error' || i.uploadStatus === 'cancelled');
   
   const artistsReceivingEmails = Array.from(new Set(
     items.filter(i => i.notifyArtist)
@@ -599,12 +596,12 @@ export function SmartUploadModal({
   const modal = (
     <div className="fixed bottom-4 right-4 z-[500] pointer-events-none p-4 flex flex-col items-end justify-end">
       
-      <div className={globalStatus === 'idle'
+      <div className={isConfiguring
         ? "pointer-events-auto glass w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"
         : "pointer-events-auto glass w-[380px] max-h-[70vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] transition-all duration-300"}>
         
         {/* Header */}
-        {globalStatus === 'idle' ? (
+        {isConfiguring ? (
           <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0 bg-surface/80 backdrop-blur-xl">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shadow-inner shrink-0">
@@ -617,11 +614,9 @@ export function SmartUploadModal({
                 </p>
               </div>
             </div>
-            {!isProcessing && (
-              <button onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} className="p-2 rounded-lg text-text-secondary hover:text-white hover:bg-surface-elevated transition-colors shrink-0">
-                <X className="w-5 h-5" />
-              </button>
-            )}
+            <button onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} className="p-2 rounded-lg text-text-secondary hover:text-white hover:bg-surface-elevated transition-colors shrink-0">
+              <X className="w-5 h-5" />
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 bg-surface/80 backdrop-blur-xl">
@@ -638,22 +633,22 @@ export function SmartUploadModal({
         )}
 
         {/* Files list */}
-        <div className={`flex-1 overflow-y-auto ${globalStatus === 'idle' ? 'px-4 py-4 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}>
+        <div className={`flex-1 overflow-y-auto ${isConfiguring ? 'px-4 py-4 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}>
           {items.map(item => {
             const currentArtistFolders = artistFoldersCache[item.artistId] || [];
             const projectList = currentArtistFolders.filter((f: any) => f?.name && !['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(f.name));
 
             return (
-            <div key={item.id} className={`rounded-xl border ${globalStatus === 'idle' ? 'p-4' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
-              <div className={`flex items-center gap-3 ${globalStatus === 'idle' ? 'mb-3' : (item.uploadStatus === 'uploading' ? 'mb-2' : '')}`}>
-                <div className={`${globalStatus === 'idle' ? 'w-9 h-9' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50`}>
+            <div key={item.id} className={`rounded-xl border ${isConfiguring ? 'p-4' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
+              <div className={`flex items-center gap-3 ${isConfiguring ? 'mb-3' : (item.uploadStatus === 'uploading' ? 'mb-2' : '')}`}>
+                <div className={`${isConfiguring ? 'w-9 h-9' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50`}>
                   {item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className={`${globalStatus === 'idle' ? 'text-base' : 'text-xs'} font-semibold text-text-primary truncate`} title={item.file.name}>{item.file.name}</p>
+                  <p className={`${isConfiguring ? 'text-base' : 'text-xs'} font-semibold text-text-primary truncate`} title={item.file.name}>{item.file.name}</p>
                   
-                  {globalStatus === 'idle' && (
+                  {isConfiguring && (
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs text-text-secondary bg-surface-elevated px-2 py-0.5 rounded-md border border-border/50">{(item.file.size / 1024 / 1024).toFixed(1)} MB</span>
                       {item.mimeGroup === 'audio' && (
@@ -674,11 +669,11 @@ export function SmartUploadModal({
 
                 {/* Status icon */}
                 <div className="shrink-0 flex items-center gap-2">
-                  {item.uploadStatus === 'done' && globalStatus === 'idle' && <span className="text-xs text-success font-medium mr-2">¡Completado!</span>}
-                  {item.uploadStatus === 'done' && <CheckCircle2 className={`${globalStatus === 'idle' ? 'w-5 h-5' : 'w-4 h-4'} text-success`} />}
-                  {item.uploadStatus === 'error' && <AlertTriangle className={`${globalStatus === 'idle' ? 'w-5 h-5' : 'w-4 h-4'} text-danger`} />}
+                  {item.uploadStatus === 'done' && isConfiguring && <span className="text-xs text-success font-medium mr-2">¡Completado!</span>}
+                  {item.uploadStatus === 'done' && <CheckCircle2 className={`${isConfiguring ? 'w-5 h-5' : 'w-4 h-4'} text-success`} />}
+                  {item.uploadStatus === 'error' && <AlertTriangle className={`${isConfiguring ? 'w-5 h-5' : 'w-4 h-4'} text-danger`} />}
                   {item.uploadStatus === 'uploading' && (
-                    <button onClick={() => cancelItem(item.id)} className="p-1 rounded-full hover:bg-surface-elevated text-text-secondary hover:text-danger transition-colors" title="Cancelar este archivo"><XCircle className={`${globalStatus === 'idle' ? 'w-5 h-5' : 'w-4 h-4'}`} /></button>
+                    <button onClick={() => cancelItem(item.id)} className="p-1 rounded-full hover:bg-surface-elevated text-text-secondary hover:text-danger transition-colors" title="Cancelar este archivo"><XCircle className={`${isConfiguring ? 'w-5 h-5' : 'w-4 h-4'}`} /></button>
                   )}
                 </div>
               </div>
@@ -727,7 +722,7 @@ export function SmartUploadModal({
               {item.uploadStatus === 'error' && <p className="text-xs text-danger mb-2 bg-danger/10 p-2 rounded-lg border border-danger/20">{item.uploadError || 'Error desconocido'}</p>}
 
               {/* Controls */}
-              {item.uploadStatus === 'pending' && globalStatus === 'idle' && (
+              {item.uploadStatus === 'pending' && isConfiguring && (
                 <div className="grid grid-cols-2 gap-3 mt-2">
                   <div>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
@@ -798,7 +793,7 @@ export function SmartUploadModal({
         </div>
 
         {/* Footer */}
-        {globalStatus === 'idle' && (
+        {isConfiguring && (
           <div className="px-5 py-4 border-t border-border shrink-0 flex flex-col gap-3 bg-surface/80 backdrop-blur-xl">
             {artistsReceivingEmails.length > 0 && (
               <div className="text-xs text-text-secondary w-full bg-accent/10 px-3 py-2 rounded-lg border border-accent/20 truncate">
@@ -807,9 +802,10 @@ export function SmartUploadModal({
             )}
 
             <div className="flex items-center justify-end gap-3 w-full">
-              <Button variant="outline" size="sm" onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }} disabled={isProcessing}>Cancelar</Button>
-              <Button onClick={handleUpload} size="sm" disabled={isProcessing} className="px-5 bg-accent hover:bg-accent-light text-white shadow-lg shadow-accent/20">
-                {isProcessing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Subiendo...</> : <><UploadCloud className="w-4 h-4 mr-2" />Subir {items.length}</>}
+              <Button variant="outline" size="sm" onClick={() => { abortControllersRef.current.forEach(c => c.abort()); onClose(); }}>Cancelar todo</Button>
+              <Button onClick={handleUpload} size="sm" disabled={pendingItemsCount === 0} className="px-5 bg-accent hover:bg-accent-light text-white shadow-lg shadow-accent/20">
+                <UploadCloud className="w-4 h-4 mr-2" />
+                Subir {pendingItemsCount} nuevo{pendingItemsCount !== 1 ? 's' : ''} archivo{pendingItemsCount !== 1 ? 's' : ''}
               </Button>
             </div>
           </div>

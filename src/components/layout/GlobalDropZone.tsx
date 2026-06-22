@@ -113,43 +113,47 @@ export function GlobalDropZone() {
   if (typeof document === 'undefined') return null;
 
   const overlay = shouldShowOverlay ? (
-    // The ENTIRE overlay is the drop target — no specific zone
-    <div
-      className="fixed inset-0 z-[400] pointer-events-auto"
-      onDragEnter={(e) => { e.preventDefault(); setHoveredZone(true); }}
-      onDragLeave={(e) => {
-        // Only clear if leaving the window entirely
-        if (e.clientX === 0 && e.clientY === 0) setHoveredZone(false);
-      }}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        setHoveredZone(false);
-        const files = Array.from(e.dataTransfer.files);
-        if (files.length > 0) {
-          triggerUploadForArtist(files, preselectedArtistId || (activeArtists[0]?.id ?? ''));
-        }
-      }}
-    >
-      {/* Semi-transparent backdrop */}
-      <div className={`absolute inset-0 transition-colors duration-150 ${hoveredZone ? 'bg-background/90 backdrop-blur-md' : 'bg-background/80 backdrop-blur-sm'}`} />
-
-      {/* Centered message only — no box to drop into */}
-      <div className="relative z-10 h-full flex flex-col items-center justify-center gap-5 pointer-events-none select-none">
-        <div className={`w-20 h-20 rounded-2xl border-2 flex items-center justify-center transition-all duration-200 ${hoveredZone ? 'border-accent bg-accent/20 scale-110' : 'border-accent/30 bg-accent/5'}`}>
-          <UploadCloud className={`w-10 h-10 transition-colors ${hoveredZone ? 'text-accent' : 'text-accent/60'}`} />
-        </div>
-        <div className="text-center">
-          <h2 className={`text-2xl font-bold transition-colors ${hoveredZone ? 'text-accent' : 'text-text-primary'}`}>
-            {hoveredZone ? '¡Suelta donde quieras!' : 'Suelta en cualquier parte de la pantalla'}
-          </h2>
-          <p className="text-text-secondary mt-2 text-sm">
-            El sistema detectará el tipo de archivo y te pedirá los detalles
-          </p>
-        </div>
-        <p className="text-xs text-text-secondary opacity-50 mt-4">Pulsa Escape para cancelar</p>
+    <>
+      {/* 1. INVISIBLE DROP TARGET (z-[400]) */}
+      {/* It covers the screen but lets DriveExplorer (z-[500]) stay on top to receive its own drops */}
+      <div
+        className="fixed inset-0 z-[400] pointer-events-auto"
+        onDragEnter={(e) => { e.preventDefault(); setHoveredZone(true); }}
+        onDragLeave={(e) => {
+          if (e.clientX === 0 && e.clientY === 0) setHoveredZone(false);
+        }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          setHoveredZone(false);
+          const files = Array.from(e.dataTransfer.files);
+          if (files.length > 0) {
+            triggerUploadForArtist(files, preselectedArtistId || (activeArtists[0]?.id ?? ''));
+          }
+        }}
+      >
+        {/* Soft background dimming that sits behind DriveExplorer */}
+        <div className={`absolute inset-0 transition-colors duration-150 ${hoveredZone ? 'bg-background/80 backdrop-blur-sm' : 'bg-background/60 backdrop-blur-sm'}`} />
       </div>
-    </div>
+
+      {/* 2. VISUAL OVERLAY (z-[9999]) */}
+      {/* Placed at the top so it's never occluded by DriveExplorer */}
+      <div className="fixed top-24 left-0 right-0 z-[9999] pointer-events-none flex justify-center px-4 animate-in fade-in slide-in-from-top-10 duration-200">
+        <div className={`flex items-center gap-4 px-8 py-5 rounded-2xl border bg-surface/90 backdrop-blur-xl shadow-2xl transition-all duration-200 ${hoveredZone ? 'border-accent bg-accent/10 scale-105 shadow-[0_20px_60px_-15px_rgba(108,92,231,0.6)]' : 'border-accent/30 shadow-[0_20px_60px_-15px_rgba(108,92,231,0.2)]'}`}>
+          <div className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center transition-all ${hoveredZone ? 'border-accent bg-accent/20' : 'border-accent/30 bg-accent/5'}`}>
+            <UploadCloud className={`w-6 h-6 transition-colors ${hoveredZone ? 'text-accent' : 'text-accent/60'}`} />
+          </div>
+          <div>
+            <h2 className={`text-xl font-bold transition-colors ${hoveredZone ? 'text-accent' : 'text-text-primary'}`}>
+              {hoveredZone ? '¡Suelta donde quieras!' : 'Suelta para subir'}
+            </h2>
+            <p className="text-text-secondary text-sm">
+              Arrastra aquí o sobre los archivos del artista
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
   ) : null;
 
   return (
