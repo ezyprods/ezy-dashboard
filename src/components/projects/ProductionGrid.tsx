@@ -204,6 +204,7 @@ export function ProductionGridBoard({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [newRowName, setNewRowName] = useState('');
+  const { showMenu } = useContextMenu();
   
   // Modals state
   const [linkingRowId, setLinkingRowId] = useState<string | null>(null);
