@@ -26,6 +26,8 @@ import {
   Circle,
   Clock,
   CheckCircle2,
+  CheckSquare,
+  AlignLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -55,6 +57,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Circle,
   Clock,
   CheckCircle2,
+  CheckSquare,
+  AlignLeft,
 };
 
 function MenuIcon({ name, className }: { name?: string; className?: string }) {

@@ -203,8 +203,6 @@ export function ProductionGridBoard({
   const [grid, setGrid] = useState<ProductionGrid>({ columns: [], rows: [], mode: 'simple' });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [newColName, setNewColName] = useState('');
-  const [newColType, setNewColType] = useState<ColumnType>('status');
   const [newRowName, setNewRowName] = useState('');
   
   // Modals state
@@ -452,12 +450,7 @@ export function ProductionGridBoard({
     await saveGrid(grid, projId);
   };
 
-  const addColumn = () => {
-    if (!newColName.trim()) return;
-    const newCol = { id: Math.random().toString(36).substring(7), name: newColName.trim(), type: newColType };
-    saveGrid({ ...grid, columns: [...grid.columns, newCol] });
-    setNewColName('');
-  };
+
 
   const addRow = () => {
     if (!newRowName.trim()) return;
@@ -576,19 +569,27 @@ export function ProductionGridBoard({
                   {grid.columns.map(col => <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} onRename={renameColumn} />)}
                 </SortableContext>
 
-                <th className="p-1.5 sm:p-2 border-b border-border bg-surface/50 min-w-[180px] sm:min-w-[200px] max-w-[240px]">
-                  <div className="flex items-center gap-1">
-                    <select 
-                      value={newColType} 
-                      onChange={e => setNewColType(e.target.value as ColumnType)} 
-                      className="h-7 w-20 shrink-0 text-[10px] bg-surface-elevated border border-border rounded outline-none text-text-secondary px-1"
-                      title="Tipo de Fase"
-                    >
-                      {COL_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                    </select>
-                    <Input placeholder="+ Fase..." value={newColName} onChange={e => setNewColName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addColumn()} className="h-7 text-xs bg-transparent w-full px-2" />
-                    <Button size="sm" variant="ghost" onClick={addColumn} disabled={!newColName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>
-                  </div>
+                <th className="p-1 sm:p-2 border-b border-border bg-surface/50 w-10 min-w-[40px] max-w-[40px] shrink-0 text-center">
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      showMenu(e.clientX, e.clientY, COL_TYPES.map(t => ({
+                        label: t.label,
+                        icon: t.id === 'status' ? 'Circle' : t.id === 'file' ? 'Paperclip' : t.id === 'checklist' ? 'CheckSquare' : t.id === 'text' ? 'AlignLeft' : 'Calendar',
+                        action: () => {
+                          const id = Math.random().toString(36).substring(7);
+                          const updatedRows = grid.rows.map(r => ({ ...r, cells: { ...r.cells, [id]: { status: 'todo' } } }));
+                          saveGrid({ ...grid, columns: [...grid.columns, { id, name: t.label, type: t.id }], rows: updatedRows });
+                        }
+                      })));
+                    }} 
+                    className="h-7 w-7 p-0 shrink-0 text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
+                    title="Añadir Columna"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
                 </th>
               </tr>
             </thead>
