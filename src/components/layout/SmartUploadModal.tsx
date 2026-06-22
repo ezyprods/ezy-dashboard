@@ -555,6 +555,19 @@ export function SmartUploadModal({
     setGlobalStatus('done');
   };
 
+  // Auto-close modal 15 seconds after completion
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (globalStatus === 'done') {
+      timeout = setTimeout(() => {
+        onClose();
+      }, 15000);
+    }
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [globalStatus, onClose]);
+
   if (!isOpen || initialFiles.length === 0) return null;
 
   const allDone = items.every(i => i.uploadStatus === 'done' || i.uploadStatus === 'error' || i.uploadStatus === 'cancelled');

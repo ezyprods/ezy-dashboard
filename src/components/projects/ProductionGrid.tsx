@@ -118,40 +118,8 @@ function SortableRow({
   return (
     <tr ref={setNodeRef} style={style} className={`group/row transition-colors ${isDragging ? 'bg-surface-elevated shadow-lg' : 'hover:bg-surface/30'}`}>
       <td className="p-1.5 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 max-w-[140px] sm:max-w-[200px]">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-[200px]">
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
-          {row.linkedFile && (
-            <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1 py-0.5 rounded border border-border/50">
-              {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
-                <button onClick={(e) => { 
-                  e.stopPropagation(); 
-                  const pathSegs: { name: string; url?: string }[] = [
-                    { name: 'Artistas', url: '/artists' },
-                    { name: artistName, url: `/artists/${artistId}` }
-                  ];
-                  if (projectId) {
-                    const p = projects.find((x:any) => x.id === projectId);
-                    if (p) pathSegs.push({ name: p.title, url: `/artists/${artistId}?project=${projectId}` });
-                  }
-                  pathSegs.push({ name: row.name || row.linkedFile!.name });
-                  
-                  playTrack({ id: row.linkedFile!.id, name: row.name || row.linkedFile!.name, url: `/api/audio/${row.linkedFile!.id}`, artistName, pathSegments: pathSegs }); 
-                }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
-                  <Play className="w-3.5 h-3.5" />
-                </button>
-              )}
-              {row.linkedFile.webViewLink && (
-                <a href={row.linkedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Abrir en Drive">
-                  <Link className="w-3.5 h-3.5" />
-                </a>
-              )}
-              {row.linkedFile.webContentLink && (
-                <a href={row.linkedFile.webContentLink} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar archivo">
-                  <Download className="w-3.5 h-3.5" />
-                </a>
-              )}
-            </div>
-          )}
           <input 
             value={localName} 
             onChange={e => setLocalName(e.target.value)}
@@ -161,17 +129,51 @@ function SortableRow({
             className="font-medium text-sm bg-transparent border-none outline-none flex-1 min-w-0 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors cursor-context-menu" 
             title={localName}
           />
-          <button 
-            onClick={() => {
-              const customEvent = new CustomEvent('open-comments-modal', { detail: { rowId: row.id, name: row.name } });
-              window.dispatchEvent(customEvent);
-            }} 
-            className="text-text-secondary hover:text-accent p-1 rounded transition-colors shrink-0" 
-            title="Observaciones"
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => onDelete(row.id)} className="opacity-0 group-hover/row:opacity-100 text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
+            {row.linkedFile && (
+              <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1 py-0.5 rounded border border-border/50">
+                {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
+                  <button onClick={(e) => { 
+                    e.stopPropagation(); 
+                    const pathSegs: { name: string; url?: string }[] = [
+                      { name: 'Artistas', url: '/artists' },
+                      { name: artistName, url: `/artists/${artistId}` }
+                    ];
+                    if (projectId) {
+                      const p = projects.find((x:any) => x.id === projectId);
+                      if (p) pathSegs.push({ name: p.title, url: `/artists/${artistId}?project=${projectId}` });
+                    }
+                    pathSegs.push({ name: row.name || row.linkedFile!.name });
+                    
+                    playTrack({ id: row.linkedFile!.id, name: row.name || row.linkedFile!.name, url: `/api/audio/${row.linkedFile!.id}`, artistName, pathSegments: pathSegs }); 
+                  }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
+                    <Play className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {row.linkedFile.webViewLink && (
+                  <a href={row.linkedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Abrir en Drive">
+                    <Link className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {row.linkedFile.webContentLink && (
+                  <a href={row.linkedFile.webContentLink} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar archivo">
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
+                )}
+              </div>
+            )}
+            <button 
+              onClick={() => {
+                const customEvent = new CustomEvent('open-comments-modal', { detail: { rowId: row.id, name: row.name } });
+                window.dispatchEvent(customEvent);
+              }} 
+              className="text-text-secondary hover:text-accent p-1 rounded transition-colors shrink-0" 
+              title="Observaciones"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onDelete(row.id)} className="text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
         </div>
       </td>
       {columns.map(col => (

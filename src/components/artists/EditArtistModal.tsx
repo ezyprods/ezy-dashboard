@@ -80,7 +80,7 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => onClose(false)}
       title="Editar Artista"
       description="Modifica la información del perfil del artista."
     >
