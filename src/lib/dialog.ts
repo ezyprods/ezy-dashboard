@@ -10,6 +10,8 @@ export type DialogOptions = {
   onCancel?: () => void;
 };
 
+type DialogListener = (options: DialogOptions) => void;
+
 export const setDialogListener = (l: DialogListener) => {
   // Not used directly anymore, keeping signature for backwards compatibility
 };
