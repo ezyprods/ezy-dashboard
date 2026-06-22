@@ -446,7 +446,7 @@ export default function PublicPreviewPage() {
               onClick={seekTo}
             >
               <div 
-                className="h-full bg-white group-hover:bg-[#1db954] rounded-full transition-colors relative"
+                className="h-full bg-white group-hover:bg-[#1db954] rounded-full transition-all duration-100 ease-linear relative"
                 style={{ width: `${progress}%` }}
               >
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -569,8 +569,8 @@ export default function PublicPreviewPage() {
               className="h-1 bg-[#4d4d4d] rounded-full flex items-center relative py-2"
               onClick={seekTo}
             >
-              <div className="h-1 bg-white rounded-full relative pointer-events-none" style={{ width: `${progress}%` }}>
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full" />
+              <div className="h-1 bg-white rounded-full relative pointer-events-none transition-all duration-100 ease-linear" style={{ width: `${progress}%` }}>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow" />
               </div>
             </div>
             <div className="flex items-center justify-between text-xs text-[#a7a7a7] font-medium tabular-nums">

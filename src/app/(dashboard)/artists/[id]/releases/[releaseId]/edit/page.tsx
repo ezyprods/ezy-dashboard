@@ -885,12 +885,12 @@ export default function ReleaseEditorPage() {
             >
               <div className="w-full h-1 bg-[#4d4d4d] rounded-full overflow-hidden pointer-events-none">
                 <div 
-                  className={`h-full bg-white rounded-full transition-colors ${isDraggingProgress ? 'bg-[#1db954]' : 'group-hover:bg-[#1db954]'}`}
+                  className={`h-full bg-white rounded-full transition-all duration-100 ease-linear ${isDraggingProgress ? 'bg-[#1db954]' : 'group-hover:bg-[#1db954]'}`}
                   style={{ width: `${progress}%` }}
                 />
               </div>
               <div 
-                className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow pointer-events-none transition-opacity ${isDraggingProgress ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow pointer-events-none transition-all duration-100 ease-linear ${isDraggingProgress ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                 style={{ left: `calc(${progress}% - 6px)` }}
               />
             </div>
