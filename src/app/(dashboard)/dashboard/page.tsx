@@ -145,91 +145,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Active Artists List */}
-          <div className="glass rounded-2xl p-6 border border-border">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-                <Users className="w-5 h-5 text-accent" />
-                Directorio de Artistas
-              </h2>
-              <button onClick={() => router.push('/artists')} className="text-sm text-accent hover:text-accent-light font-medium transition-colors">
-                Ver todos
-              </button>
-            </div>
-
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-accent" />
-              </div>
-            ) : artists.length === 0 ? (
-              <div className="text-center py-8 text-text-secondary border border-dashed border-border rounded-xl">
-                No tienes artistas aún. Añade tu primer cliente.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {[...artists]
-                  .sort((a, b) => {
-                    const aActive = a.pulseStats?.activeProjects?.length || 0;
-                    const bActive = b.pulseStats?.activeProjects?.length || 0;
-                    if (aActive !== bActive) return bActive - aActive;
-                    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-                  })
-                  .slice(0, 8)
-                  .map((artist) => {
-                  const pulse = artist.pulseStats;
-                  const hasActiveProject = pulse?.activeProjects && pulse.activeProjects.length > 0;
-                  return (
-                    <div 
-                      key={artist.id}
-                      onClick={() => router.push(`/artists/${artist.id}`)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        showMenu(e.clientX, e.clientY, [
-                          { label: 'Ver Perfil', icon: 'User', action: () => router.push(`/artists/${artist.id}`) },
-                          { label: 'Portal del Artista', icon: 'ExternalLink', action: () => window.open(`/portal/${artist.id}`, '_blank') },
-                          { label: 'Copiar Enlace Portal', icon: 'Copy', action: () => {
-                            navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`);
-                            customAlert('Enlace copiado');
-                          }},
-                        ]);
-                      }}
-                      className="group flex items-center justify-between p-3 rounded-xl hover:bg-surface-elevated transition-all cursor-pointer border border-transparent hover:border-border/50"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full bg-surface flex items-center justify-center text-text-primary font-bold shadow-sm ${getStatusRingClass(pulse?.statusColor)}`}>
-                          {artist.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-text-primary group-hover:text-accent transition-colors">{artist.name}</h3>
-                            {pulse?.pendingPayments ? pulse.pendingPayments > 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-error/10 text-error font-medium">💰 Pagos pdtes.</span>
-                            ) : null}
-                          </div>
-                          <div className="text-xs mt-0.5">
-                            {getStatusText(pulse)}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {hasActiveProject ? (
-                        <div className="flex flex-col items-end gap-1">
-                          <Button size="sm" variant="ghost" className="h-8 opacity-0 group-hover:opacity-100 transition-opacity bg-accent/10 text-accent hover:bg-accent hover:text-white">
-                            <Play className="w-3 h-3 mr-1.5" /> Continuar
-                          </Button>
-                          {pulse?.lastSessionDate && (
-                            <span className="text-[10px] text-text-secondary">Últ. sesión: {pulse.lastSessionDate}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {/* Global Tasks Command Center in place of the old Artists Directory */}
+          <GlobalPendingTasks />
         </div>
 
         {/* Right Column (Widgets) */}
@@ -269,9 +186,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* Global Tasks Command Center */}
-      <GlobalPendingTasks />
     </div>
   );
 }

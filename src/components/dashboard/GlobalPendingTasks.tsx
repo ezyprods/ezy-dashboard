@@ -171,7 +171,7 @@ export function GlobalPendingTasks() {
         <div>
           <h2 className="text-2xl font-bold text-text-primary flex items-center gap-3">
             <KanbanSquare className="w-6 h-6 text-accent" />
-            Carga de Trabajo Global
+            Trabajo
           </h2>
           <p className="text-sm text-text-secondary mt-1">
             Vista unificada de todas las matrices y procesos activos
