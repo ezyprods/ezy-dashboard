@@ -75,7 +75,7 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
           setSelectedArtistId(exactMatch.id);
         } else {
           // Fuzzy match
-          const bestMatch = findBestMatch(fileName, sortedArtists, a => a.name, 0.4);
+          const bestMatch = findBestMatch(fileName, sortedArtists, a => a.name, 0.5);
           if (bestMatch) {
             setSelectedArtistId(bestMatch.id);
           } else if (sortedArtists.length > 0) {

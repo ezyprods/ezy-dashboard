@@ -283,7 +283,7 @@ export function SmartUploadModal({
           detectedArtistId = exactMatch.id;
           detectedArtistName = exactMatch.name;
         } else {
-          const bestArtistMatch = findBestMatch(f.name, artists, (a: any) => a?.name || '', 0.4);
+          const bestArtistMatch = findBestMatch(f.name, inlineSortedArtists, (a: any) => a?.name || '', 0.5);
           if (bestArtistMatch) {
             detectedArtistId = bestArtistMatch.id;
             detectedArtistName = bestArtistMatch.name;

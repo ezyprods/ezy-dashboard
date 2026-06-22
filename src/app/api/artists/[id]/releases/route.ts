@@ -31,19 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     for (const folder of releaseFolders) {
       const config = await findAndReadJsonFile<Release>('release_config.json', folder.id!);
       if (config) {
-        // Dynamic count of audio files
-        const audioQuery = `mimeType contains 'audio/' and '${folder.id}' in parents and trashed=false`;
-        const audioRes = await drive.files.list({ 
-          q: audioQuery, 
-          fields: 'files(id)',
-          includeItemsFromAllDrives: true,
-          supportsAllDrives: true,
-        });
-        
         releases.push({
           ...config,
           id: folder.id!,
-          tracks: Array(audioRes.data.files?.length || 0).fill({} as any) // Trick to make .length work correctly in the UI
         });
       }
     }

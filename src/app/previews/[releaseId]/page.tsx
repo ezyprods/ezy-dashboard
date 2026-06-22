@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Loader2, Play, Pause, SkipForward, SkipBack,
-  Disc, Share2, AlertCircle, Music, Volume2, VolumeX
+  Disc, Share2, AlertCircle, Music, Volume2, VolumeX, Volume1,
+  Shuffle, Repeat, Repeat1, Clock
 } from 'lucide-react';
 
 export default function PublicPreviewPage() {
@@ -13,9 +14,11 @@ export default function PublicPreviewPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [release, setRelease] = useState<any>(null);
+  const [artistName, setArtistName] = useState<string>('Unknown Artist');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Playback State
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -24,6 +27,14 @@ export default function PublicPreviewPage() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+
+  // Advanced Playback Modes
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
+  
+  // To handle shuffle queue correctly
+  const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
+  const [history, setHistory] = useState<number[]>([]);
 
   useEffect(() => {
     fetchRelease();
@@ -36,6 +47,12 @@ export default function PublicPreviewPage() {
       if (!res.ok) throw new Error('Preview no encontrado o privado');
       const data = await res.json();
       setRelease(data.release);
+      if (data.artistName) setArtistName(data.artistName);
+      
+      // Initialize natural indices
+      if (data.release?.tracks?.length > 0) {
+        setShuffledIndices(Array.from({ length: data.release.tracks.length }, (_, i) => i));
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -45,11 +62,38 @@ export default function PublicPreviewPage() {
 
   const currentTrack = release?.tracks?.[currentTrackIndex];
 
+  // Media Session API
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentTrack && release) {
+      navigator.mediaSession.metadata = new window.MediaMetadata({
+        title: currentTrack.title || 'Unknown Track',
+        artist: artistName,
+        album: release.title || 'Unknown Album',
+        artwork: release.coverArtId ? [
+          { src: `/api/audio/${release.coverArtId}`, sizes: '512x512', type: 'image/jpeg' }
+        ] : []
+      });
+
+      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
+    }
+  }, [currentTrackIndex, release, artistName, currentTrack]);
+
+  // Audio Playback Effect
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
     if (isPlaying) {
-      audio.play().catch(() => setIsPlaying(false));
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("Audio play failed:", err);
+          setIsPlaying(false);
+        });
+      }
     } else {
       audio.pause();
     }
@@ -61,35 +105,108 @@ export default function PublicPreviewPage() {
     }
   }, [volume, isMuted]);
 
+  // Shuffle toggle logic
+  const toggleShuffle = () => {
+    setIsShuffle(prev => {
+      const nextShuffle = !prev;
+      if (!release?.tracks) return nextShuffle;
+
+      if (nextShuffle) {
+        // Create a shuffled array of indices, but keep the current track at the beginning
+        let indices = Array.from({ length: release.tracks.length }, (_, i) => i).filter(i => i !== currentTrackIndex);
+        for (let i = indices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+        setShuffledIndices([currentTrackIndex, ...indices]);
+      } else {
+        // Restore natural order
+        setShuffledIndices(Array.from({ length: release.tracks.length }, (_, i) => i));
+      }
+      return nextShuffle;
+    });
+  };
+
+  const toggleRepeat = () => {
+    setRepeatMode(prev => {
+      if (prev === 'off') return 'all';
+      if (prev === 'all') return 'one';
+      return 'off';
+    });
+  };
+
+  const handleNext = () => {
+    if (!release?.tracks) return;
+    
+    // Repeat one -> just seek to start and play
+    if (repeatMode === 'one' && audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play();
+      return;
+    }
+
+    setHistory(prev => [...prev, currentTrackIndex]);
+    
+    const currentIndexInQueue = shuffledIndices.indexOf(currentTrackIndex);
+    if (currentIndexInQueue < shuffledIndices.length - 1) {
+      setCurrentTrackIndex(shuffledIndices[currentIndexInQueue + 1]);
+      setIsPlaying(true);
+    } else {
+      if (repeatMode === 'all') {
+        setCurrentTrackIndex(shuffledIndices[0]);
+        setIsPlaying(true);
+      } else {
+        setIsPlaying(false);
+        if (audioRef.current) audioRef.current.currentTime = 0;
+      }
+    }
+  };
+
+  const handlePrev = () => {
+    if (!release?.tracks) return;
+
+    if (audioRef.current && audioRef.current.currentTime > 3) {
+      audioRef.current.currentTime = 0;
+      return;
+    }
+
+    if (history.length > 0) {
+      const prevTrack = history[history.length - 1];
+      setHistory(prev => prev.slice(0, -1));
+      setCurrentTrackIndex(prevTrack);
+      setIsPlaying(true);
+      return;
+    }
+
+    const currentIndexInQueue = shuffledIndices.indexOf(currentTrackIndex);
+    if (currentIndexInQueue > 0) {
+      setCurrentTrackIndex(shuffledIndices[currentIndexInQueue - 1]);
+      setIsPlaying(true);
+    } else {
+      if (audioRef.current) audioRef.current.currentTime = 0;
+    }
+  };
+
   const handleTimeUpdate = () => {
     const audio = audioRef.current;
     if (!audio) return;
     const dur = audio.duration || 1;
     setProgress((audio.currentTime / dur) * 100);
     setCurrentTime(audio.currentTime);
-    setDuration(audio.duration || 0);
-  };
-
-  const handleTrackEnd = () => {
-    if (release && currentTrackIndex < release.tracks.length - 1) {
-      setCurrentTrackIndex(prev => prev + 1);
-      setProgress(0);
-      setCurrentTime(0);
-    } else {
-      setIsPlaying(false);
-      setProgress(0);
-      setCurrentTime(0);
-    }
   };
 
   const playTrack = (index: number) => {
     if (currentTrackIndex === index) {
       setIsPlaying(prev => !prev);
     } else {
+      setHistory(prev => [...prev, currentTrackIndex]);
       setCurrentTrackIndex(index);
       setIsPlaying(true);
-      setProgress(0);
-      setCurrentTime(0);
+      if (isShuffle) {
+        // Move selected track to front of remaining queue if clicked directly
+        let remaining = shuffledIndices.filter(i => i !== index);
+        setShuffledIndices([index, ...remaining]);
+      }
     }
   };
 
@@ -116,237 +233,248 @@ export default function PublicPreviewPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-[#6c5ce7]/10 border border-[#6c5ce7]/20 flex items-center justify-center mx-auto">
-            <Music className="w-8 h-8 text-[#6c5ce7] animate-pulse" />
-          </div>
-          <p className="text-xs text-[#8888a0] font-medium tracking-widest uppercase">Cargando Preview...</p>
-        </div>
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-white animate-spin" />
       </div>
     );
   }
 
   if (error || !release) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4">
-        <div className="backdrop-blur-xl bg-white/5 border border-white/10 p-8 rounded-2xl text-center max-w-md w-full">
-          <AlertCircle className="w-12 h-12 text-[#fdcb6e] mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">Acceso Denegado</h2>
-          <p className="text-[#8888a0]">Esta preview es privada o no existe.</p>
-        </div>
+      <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center p-4">
+        <AlertCircle className="w-16 h-16 text-[#e22134] mb-4" />
+        <h2 className="text-2xl font-bold text-white mb-2">Página no disponible</h2>
+        <p className="text-[#a7a7a7]">Esta preview es privada o no existe.</p>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white selection:bg-[#6c5ce7]/30">
-      {/* Ambient */}
-      <div className="fixed inset-0 pointer-events-none">
-        {release.coverArtId && (
-          <div
-            className="absolute inset-0 opacity-10 bg-cover bg-center blur-[120px] scale-110"
-            style={{ backgroundImage: `url(/api/audio/${release.coverArtId})` }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#0a0a0f]/60 to-[#0a0a0f]" />
-      </div>
+  const coverUrl = release.coverArtId ? `/api/audio/${release.coverArtId}` : '';
 
+  return (
+    <div className="flex flex-col h-screen bg-[#121212] text-white overflow-hidden selection:bg-[#1db954]/30 font-sans">
       {/* Hidden audio */}
       {currentTrack && (
         <audio
           ref={audioRef}
           src={`/api/audio/${currentTrack.newFileId}`}
           onTimeUpdate={handleTimeUpdate}
-          onEnded={handleTrackEnd}
+          onEnded={handleNext}
           onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+          autoPlay={isPlaying}
         />
       )}
 
-      <div className="relative z-10 min-h-screen flex flex-col md:flex-row">
-        {/* ── Left panel: Cover + Player ── */}
-        <div className="w-full md:w-[420px] lg:w-[500px] flex flex-col justify-center items-center p-8 md:p-12 lg:p-16 border-b md:border-b-0 md:border-r border-white/8">
-          {/* Cover */}
-          <div className="w-full max-w-xs aspect-square rounded-2xl overflow-hidden shadow-2xl mb-8 relative group">
-            {release.coverArtId ? (
-              <img
-                src={`/api/audio/${release.coverArtId}`}
-                alt="Cover"
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-              />
+      {/* Main View Area */}
+      <div className="flex-1 overflow-y-auto pb-24 relative hide-scrollbar">
+        {/* Dynamic Background Gradient */}
+        <div className="absolute top-0 left-0 right-0 h-[400px] pointer-events-none opacity-40 z-0 overflow-hidden">
+          {coverUrl && (
+            <div 
+              className="absolute inset-0 bg-cover bg-center blur-[80px] transform scale-110" 
+              style={{ backgroundImage: `url(${coverUrl})` }} 
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#121212]" />
+        </div>
+
+        {/* Header Content */}
+        <div className="relative z-10 px-8 pt-20 pb-8 flex items-end gap-6">
+          <div className="w-52 h-52 shadow-[0_4px_60px_rgba(0,0,0,0.5)] shrink-0 bg-[#282828] flex items-center justify-center">
+            {coverUrl ? (
+              <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full bg-[#13131a] border border-white/8 flex items-center justify-center">
-                <Disc className="w-24 h-24 text-white/10" />
-              </div>
-            )}
-            {/* Shine overlay */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-transparent to-white/5 pointer-events-none" />
-          </div>
-
-          {/* Track info */}
-          <div className="w-full max-w-xs text-center mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold mb-1 tracking-tight">{release.title}</h1>
-            {currentTrack && (
-              <div className="mt-2">
-                <p className="font-semibold text-white/90">{currentTrack.title}</p>
-                <p className="text-xs text-[#8888a0] font-mono mt-1">
-                  Pista {currentTrackIndex + 1} de {release.tracks.length}
-                </p>
-              </div>
+              <Music className="w-20 h-20 text-[#b3b3b3]" />
             )}
           </div>
-
-          {/* Controls */}
-          <div className="w-full max-w-xs space-y-4">
-            {/* Progress */}
-            <div>
-              <div
-                className="h-1.5 bg-white/10 rounded-full cursor-pointer overflow-hidden group"
-                onClick={seekTo}
-              >
-                <div
-                  className="h-full bg-gradient-to-r from-[#6c5ce7] to-[#a29bfe] rounded-full transition-all duration-100 group-hover:opacity-90"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs font-mono text-[#8888a0] mt-1.5">
-                <span>{formatTime(currentTime)}</span>
-                <span>{formatTime(duration)}</span>
-              </div>
-            </div>
-
-            {/* Buttons */}
-            <div className="flex items-center justify-center gap-6">
-              <button
-                onClick={() => currentTrackIndex > 0 && playTrack(currentTrackIndex - 1)}
-                className={`p-2.5 rounded-full transition-all ${
-                  currentTrackIndex === 0
-                    ? 'opacity-25 cursor-not-allowed'
-                    : 'hover:bg-white/10 text-[#8888a0] hover:text-white'
-                }`}
-              >
-                <SkipBack className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={() => setIsPlaying(prev => !prev)}
-                className="w-14 h-14 flex items-center justify-center bg-white text-black rounded-full shadow-xl hover:scale-105 active:scale-95 transition-all"
-              >
-                {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
-              </button>
-
-              <button
-                onClick={() => currentTrackIndex < release.tracks.length - 1 && playTrack(currentTrackIndex + 1)}
-                className={`p-2.5 rounded-full transition-all ${
-                  currentTrackIndex === release.tracks.length - 1
-                    ? 'opacity-25 cursor-not-allowed'
-                    : 'hover:bg-white/10 text-[#8888a0] hover:text-white'
-                }`}
-              >
-                <SkipForward className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Volume */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsMuted(prev => !prev)}
-                className="text-[#8888a0] hover:text-white transition-colors shrink-0"
-              >
-                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={isMuted ? 0 : volume}
-                onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
-                className="flex-1 accent-[#6c5ce7] h-1 cursor-pointer"
-              />
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-bold tracking-wider uppercase">Álbum</span>
+            <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-2" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+              {release.title}
+            </h1>
+            <div className="flex items-center gap-2 text-sm text-[#fff] font-medium">
+              <span>{artistName}</span>
+              <span className="w-1 h-1 rounded-full bg-white mx-1" />
+              <span>{new Date(release.createdAt).getFullYear()}</span>
+              <span className="w-1 h-1 rounded-full bg-white mx-1" />
+              <span>{release.tracks?.length || 0} canciones</span>
             </div>
           </div>
         </div>
 
-        {/* ── Right panel: Tracklist ── */}
-        <div className="flex-1 flex flex-col p-8 md:p-10 lg:p-14 overflow-y-auto">
-          <div className="max-w-2xl mx-auto w-full">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xs font-bold text-[#8888a0] uppercase tracking-[0.2em]">Tracklist</h2>
-              <button
-                onClick={handleShare}
-                className={`flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-full border transition-all ${
-                  shareCopied
-                    ? 'bg-[#00b894]/20 text-[#00b894] border-[#00b894]/30'
-                    : 'bg-white/5 text-[#8888a0] border-white/10 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                {shareCopied ? 'Enlace copiado' : 'Compartir'}
-              </button>
-            </div>
+        {/* Action Bar */}
+        <div className="relative z-10 px-8 py-4 flex items-center gap-6 bg-gradient-to-b from-[#121212]/0 to-[#121212]">
+          <button 
+            onClick={() => {
+              if (currentTrackIndex === 0 && !isPlaying) playTrack(0);
+              else setIsPlaying(!isPlaying);
+            }}
+            className="w-14 h-14 bg-[#1ed760] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+          >
+            {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
+          </button>
+          
+          <button 
+            onClick={toggleShuffle} 
+            className={`transition-colors ${isShuffle ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}
+            title="Aleatorio"
+          >
+            <Shuffle className="w-7 h-7" />
+          </button>
+        </div>
 
-            {/* Tracks */}
-            <div className="space-y-1.5">
-              {release.tracks.map((track: any, index: number) => (
-                <div
+        {/* Tracklist */}
+        <div className="relative z-10 px-8 pb-12">
+          {/* Table Header */}
+          <div className="grid grid-cols-[16px_1fr_40px] md:grid-cols-[16px_1fr_auto_40px] gap-4 px-4 py-2 border-b border-[#282828] text-[#b3b3b3] text-sm font-medium mb-4">
+            <div className="text-center">#</div>
+            <div>Título</div>
+            <div className="hidden md:block">Artista</div>
+            <div className="flex justify-end pr-8"><Clock className="w-4 h-4" /></div>
+          </div>
+
+          {/* Tracks */}
+          <div className="flex flex-col">
+            {release.tracks.map((track: any, index: number) => {
+              const isTrackPlaying = currentTrackIndex === index;
+              return (
+                <div 
                   key={track.id}
                   onClick={() => playTrack(index)}
-                  className={`flex items-center gap-4 px-4 py-3.5 rounded-xl cursor-pointer transition-all group ${
-                    currentTrackIndex === index
-                      ? 'bg-white/10 border border-white/15 shadow-lg'
-                      : 'hover:bg-white/5 border border-transparent hover:border-white/8'
-                  }`}
+                  className={`group grid grid-cols-[16px_1fr_40px] md:grid-cols-[16px_1fr_auto_40px] gap-4 px-4 py-2.5 rounded-md cursor-pointer hover:bg-white/10 transition-colors items-center ${isTrackPlaying ? 'bg-white/5 text-[#1db954]' : 'text-[#b3b3b3]'}`}
                 >
-                  {/* Track number / equalizer */}
-                  <div className="w-7 text-center shrink-0">
-                    {currentTrackIndex === index && isPlaying ? (
-                      <div className="flex items-end justify-center gap-0.5 h-4">
-                        <div className="w-0.5 bg-[#a29bfe] h-3 animate-[bounce_0.7s_ease-in-out_infinite]" />
-                        <div className="w-0.5 bg-[#a29bfe] h-4 animate-[bounce_0.7s_ease-in-out_infinite_100ms]" />
-                        <div className="w-0.5 bg-[#a29bfe] h-2 animate-[bounce_0.7s_ease-in-out_infinite_200ms]" />
-                        <div className="w-0.5 bg-[#a29bfe] h-3.5 animate-[bounce_0.7s_ease-in-out_infinite_50ms]" />
-                      </div>
+                  <div className="text-center text-sm flex items-center justify-center">
+                    {isTrackPlaying && isPlaying ? (
+                      <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5" />
+                    ) : isTrackPlaying && !isPlaying ? (
+                      <span className="text-[#1db954]">{index + 1}</span>
                     ) : (
-                      <span className={`text-sm font-mono ${
-                        currentTrackIndex === index ? 'text-[#a29bfe] font-bold' : 'text-[#8888a0] group-hover:text-white/60'
-                      } transition-colors`}>
-                        {index + 1}
-                      </span>
+                      <>
+                        <span className="group-hover:hidden">{index + 1}</span>
+                        <Play className="w-3 h-3 hidden group-hover:block fill-current text-white" />
+                      </>
                     )}
                   </div>
-
-                  {/* Title */}
-                  <div className="flex-1 min-w-0">
-                    <h4 className={`font-semibold truncate transition-colors ${
-                      currentTrackIndex === index ? 'text-white' : 'text-white/80 group-hover:text-white'
-                    }`}>
+                  <div className="flex flex-col justify-center overflow-hidden">
+                    <span className={`text-base truncate font-medium ${isTrackPlaying ? 'text-[#1db954]' : 'text-white'}`}>
                       {track.title}
-                    </h4>
+                    </span>
+                    <span className="text-sm truncate md:hidden">{artistName}</span>
                   </div>
-
-                  {/* Play icon on hover */}
-                  <div className={`shrink-0 transition-opacity ${
-                    currentTrackIndex === index ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
-                  }`}>
-                    {currentTrackIndex === index && isPlaying
-                      ? <Pause className="w-4 h-4 text-[#a29bfe]" />
-                      : <Play className="w-4 h-4 text-white" />
-                    }
+                  <div className="hidden md:flex text-sm items-center hover:text-white transition-colors">
+                    {artistName}
+                  </div>
+                  <div className="text-sm flex justify-end items-center pr-4">
+                    {isTrackPlaying ? formatTime(duration) : '--:--'}
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Footer */}
-            <div className="mt-12 pt-8 border-t border-white/8 text-center">
-              <p className="text-xs text-[#8888a0]">
-                Pre-escucha exclusiva · <span className="text-[#6c5ce7]">EZY Dashboard</span>
-              </p>
-            </div>
+              );
+            })}
           </div>
         </div>
+      </div>
+
+      {/* Fixed Bottom Player Bar */}
+      <div className="h-[90px] bg-[#181818] border-t border-[#282828] flex items-center justify-between px-4 z-50 shrink-0">
+        
+        {/* Left: Now Playing Info */}
+        <div className="flex items-center gap-3 w-[30%] min-w-[180px]">
+          {currentTrack ? (
+            <>
+              <div className="w-14 h-14 bg-[#282828] shrink-0 rounded flex items-center justify-center overflow-hidden relative group">
+                {coverUrl ? <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" /> : <Music className="w-6 h-6 text-[#b3b3b3]" />}
+              </div>
+              <div className="flex flex-col justify-center min-w-0">
+                <span className="text-sm text-white font-medium hover:underline cursor-pointer truncate">
+                  {currentTrack.title}
+                </span>
+                <span className="text-xs text-[#b3b3b3] hover:underline cursor-pointer hover:text-white transition-colors truncate">
+                  {artistName}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="w-14 h-14 bg-[#282828] rounded" />
+          )}
+        </div>
+
+        {/* Center: Player Controls */}
+        <div className="flex flex-col items-center max-w-[45%] w-full">
+          <div className="flex items-center gap-4 md:gap-6 mb-1.5">
+            <button onClick={toggleShuffle} className={`p-1 transition-colors ${isShuffle ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}>
+              <Shuffle className="w-4 h-4" />
+            </button>
+            <button onClick={handlePrev} className="p-1 text-[#b3b3b3] hover:text-white transition-colors">
+              <SkipBack className="w-5 h-5 fill-current" />
+            </button>
+            <button 
+              onClick={() => {
+                if (!currentTrack && release?.tracks?.length > 0) playTrack(0);
+                else setIsPlaying(!isPlaying);
+              }}
+              className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:scale-105 active:scale-95 transition-transform"
+            >
+              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
+            </button>
+            <button onClick={handleNext} className="p-1 text-[#b3b3b3] hover:text-white transition-colors">
+              <SkipForward className="w-5 h-5 fill-current" />
+            </button>
+            <button 
+              onClick={toggleRepeat} 
+              className={`p-1 transition-colors relative ${repeatMode !== 'off' ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}
+            >
+              {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
+              {repeatMode !== 'off' && <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1db954]" />}
+            </button>
+          </div>
+          <div className="flex items-center gap-2 w-full max-w-[600px]">
+            <span className="text-xs text-[#a7a7a7] min-w-[40px] text-right tabular-nums">{formatTime(currentTime)}</span>
+            <div 
+              className="flex-1 h-1 bg-[#4d4d4d] rounded-full flex items-center cursor-pointer group"
+              onClick={seekTo}
+            >
+              <div 
+                className="h-full bg-white group-hover:bg-[#1db954] rounded-full transition-colors relative"
+                style={{ width: `${progress}%` }}
+              >
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+            <span className="text-xs text-[#a7a7a7] min-w-[40px] tabular-nums">{formatTime(duration)}</span>
+          </div>
+        </div>
+
+        {/* Right: Volume & Extra Controls */}
+        <div className="flex items-center justify-end gap-3 w-[30%] min-w-[180px]">
+          <button 
+            onClick={handleShare}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+              shareCopied ? 'bg-[#1db954]/10 text-[#1db954] border-[#1db954]' : 'border-[#b3b3b3] text-[#b3b3b3] hover:text-white hover:border-white'
+            }`}
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            {shareCopied ? 'Copiado' : 'Compartir'}
+          </button>
+          
+          <div className="flex items-center gap-2 w-24">
+            <button 
+              onClick={() => setIsMuted(!isMuted)} 
+              className="text-[#b3b3b3] hover:text-white transition-colors p-1"
+            >
+              {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : volume < 0.5 ? <Volume1 className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={isMuted ? 0 : volume}
+              onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
+              className="w-full h-1 bg-[#4d4d4d] rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:bg-[#1db954] cursor-pointer"
+            />
+          </div>
+        </div>
+
       </div>
     </div>
   );
