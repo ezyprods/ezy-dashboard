@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, KanbanSquare, Circle, Clock, AlertCircle, ArrowRight, CheckCircle2, Play, Download, ExternalLink, MoreHorizontal, Link as LinkIcon, GripVertical } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { customAlert } from '@/lib/dialog';
+import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverlay, defaultDropAnimationSideEffects, useDraggable, useDroppable
@@ -109,9 +110,6 @@ function TaskCard({
             {...(isOverlay ? {} : listeners)}
             className="text-text-secondary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-opacity shrink-0 cursor-grab active:cursor-grabbing mt-0.5"
             title="Arrastrar para mover"
-            onPointerDown={(e) => {
-              if (isOverlay) e.stopPropagation();
-            }}
           >
             <GripVertical className="w-4 h-4" />
           </button>
@@ -213,6 +211,8 @@ function StatusColumn({
   onUpdateStatus: (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review') => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useSmoothScroll(scrollRef);
 
   return (
     <div 
@@ -232,7 +232,7 @@ function StatusColumn({
         </span>
       </div>
       
-      <div className="flex-1 p-3 overflow-y-auto scroll-smooth custom-scrollbar space-y-3">
+      <div ref={scrollRef} className="flex-1 p-3 overflow-y-auto scroll-smooth custom-scrollbar space-y-3">
         {columnTasks.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-40 text-text-secondary min-h-[100px]">
             <CheckCircle2 className="w-8 h-8 mb-2" />

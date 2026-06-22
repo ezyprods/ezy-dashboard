@@ -404,7 +404,7 @@ export default function MatricesPage() {
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={isSubmitting || !newMatrixName.trim() || !selectedArtistId}
+                  disabled={isSubmitting || !newMatrixName.trim() || (!selectedArtistId && !searchTerm.trim())}
                 >
                   {isSubmitting ? 'Creando...' : 'Crear Matriz'}
                 </Button>
