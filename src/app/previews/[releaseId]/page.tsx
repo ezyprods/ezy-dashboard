@@ -348,7 +348,7 @@ export default function PublicPreviewPage() {
 
           {/* Tracks */}
           <div className="flex flex-col gap-1 md:gap-0">
-            {release.tracks.map((track, index) => {
+            {release.tracks.map((track: any, index: number) => {
               const isTrackPlaying = currentTrackIndex === index;
               return (
                 <div 
