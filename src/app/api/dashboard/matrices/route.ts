@@ -27,24 +27,42 @@ export async function GET() {
     const results = await Promise.all(matrixPromises);
     const allMatrices = results.flat();
     
-    // Solo mostramos matrices que tengan al menos una tarea sin completar
-    const activeMatrices = allMatrices.filter(m => {
-      const grid = m.productionGrid;
-      if (!grid || !Array.isArray(grid.rows) || !Array.isArray(grid.columns)) return false;
-      if (grid.rows.length === 0 || grid.columns.length === 0) return false;
-      
-      for (const row of grid.rows) {
-        for (const col of grid.columns) {
-           const cell = row.cells?.[col.id];
-           if (!cell || cell.status !== 'done') {
-             return true; // Encontró al menos una tarea incompleta
-           }
-        }
-      }
-      return false; // Todas están 'done'
-    });
+    // Solo mostramos matrices que tengan al menos una tarea sin completar en 'matrices'
+    // Las completadas van en 'completedMatrices'
+    const activeMatrices = [];
+    const completedMatrices = [];
     
-    return NextResponse.json({ matrices: activeMatrices });
+    for (const m of allMatrices) {
+      const grid = m.productionGrid;
+      let isActive = false;
+      
+      if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns) && grid.rows.length > 0 && grid.columns.length > 0) {
+        for (const row of grid.rows) {
+          for (const col of grid.columns) {
+             const cell = row.cells?.[col.id];
+             if (!cell || cell.status !== 'done') {
+               isActive = true;
+               break;
+             }
+          }
+          if (isActive) break;
+        }
+      } else {
+        // Si no tiene grid o está vacío, se considera activa por defecto (para poder editarla)
+        isActive = true;
+      }
+      
+      if (isActive) {
+        activeMatrices.push(m);
+      } else {
+        completedMatrices.push(m);
+      }
+    }
+    
+    return NextResponse.json({ 
+      matrices: activeMatrices,
+      completedMatrices: completedMatrices
+    });
   } catch (error: any) {
     return NextResponse.json({ error: 'Failed to fetch global matrices', details: error.message }, { status: 500 });
   }

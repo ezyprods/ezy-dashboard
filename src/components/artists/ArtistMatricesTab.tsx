@@ -11,6 +11,7 @@ import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; artistName?: string }) {
   const searchParams = useSearchParams();
   const [matrices, setMatrices] = useState<any[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [activeMatrixId, setActiveMatrixId] = useState<string | null>(searchParams.get('matrixId'));
 
@@ -141,6 +142,36 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
     );
   }
 
+  // Separate active and completed matrices
+  const activeMatrices = [];
+  const completedMatrices = [];
+  
+  for (const m of matrices) {
+    const grid = m.productionGrid;
+    let isActive = false;
+    
+    if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns) && grid.rows.length > 0 && grid.columns.length > 0) {
+      for (const row of grid.rows) {
+        for (const col of grid.columns) {
+           const cell = row.cells?.[col.id];
+           if (!cell || cell.status !== 'done') {
+             isActive = true;
+             break;
+           }
+        }
+        if (isActive) break;
+      }
+    } else {
+      isActive = true;
+    }
+    
+    if (isActive) {
+      activeMatrices.push(m);
+    } else {
+      completedMatrices.push(m);
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -151,14 +182,18 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
         <Button onClick={() => setIsModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Nueva Matriz</Button>
       </div>
 
-      {matrices.length === 0 ? (
+      {activeMatrices.length === 0 && completedMatrices.length === 0 ? (
         <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border">
           <Table2 className="w-12 h-12 mx-auto mb-4 opacity-50 text-accent" />
           <p>No tienes matrices creadas para este artista.</p>
         </div>
+      ) : activeMatrices.length === 0 ? (
+        <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border">
+          <p>No tienes matrices activas en este momento.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {matrices.map(m => (
+          {activeMatrices.map(m => (
             <div key={m.id} className="glass rounded-xl p-5 border border-border hover:border-accent/50 transition-all group relative">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">
@@ -193,6 +228,61 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
               </Button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Completed Matrices Section */}
+      {completedMatrices.length > 0 && (
+        <div className="mt-12">
+          <button 
+            onClick={() => setShowCompleted(!showCompleted)}
+            className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors mb-4 w-full"
+          >
+            <ChevronRight className={`w-5 h-5 transition-transform ${showCompleted ? 'rotate-90' : ''}`} />
+            <h4 className="text-lg font-bold">Matrices Completadas ({completedMatrices.length})</h4>
+            <div className="h-px bg-border flex-1 ml-4" />
+          </button>
+          
+          {showCompleted && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-4 duration-300">
+              {completedMatrices.map((m: any) => (
+                <div 
+                  key={m.id} 
+                  className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between opacity-70 hover:opacity-100 bg-surface/50"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Table2 className="w-5 h-5 text-success shrink-0" />
+                        <h4 className="font-bold text-lg text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
+                      </div>
+                      <button 
+                        onClick={() => deleteMatrix(m.id)} 
+                        className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                        title="Eliminar Matriz"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 mt-4">
+                    <div className="flex items-center gap-4 text-[10px] text-text-secondary">
+                      <span className="text-success font-medium">Completada</span>
+                    </div>
+                    
+                    <Button 
+                      className="w-full text-xs h-8" 
+                      variant="outline" 
+                      onClick={() => setActiveMatrixId(m.id)}
+                    >
+                      Ver Matriz
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

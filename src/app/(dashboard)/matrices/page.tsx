@@ -8,7 +8,9 @@ import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 
 export default function MatricesPage() {
   const [matrices, setMatrices] = useState<any[]>([]);
+  const [completedMatrices, setCompletedMatrices] = useState<any[]>([]);
   const [artists, setArtists] = useState<any[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [activeMatrix, setActiveMatrix] = useState<{ id: string; name: string; artistId: string; artistName: string } | null>(null);
   
@@ -63,6 +65,7 @@ export default function MatricesPage() {
         }
         
         setMatrices(matricesData.matrices || []);
+        setCompletedMatrices(matricesData.completedMatrices || []);
         setArtists(artistsData.artists || []);
       } else {
         console.error('Error fetching data');
@@ -279,6 +282,67 @@ export default function MatricesPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Completed Matrices Section */}
+      {completedMatrices.length > 0 && (
+        <div className="mt-12">
+          <button 
+            onClick={() => setShowCompleted(!showCompleted)}
+            className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors mb-4 w-full"
+          >
+            <ChevronRight className={`w-5 h-5 transition-transform ${showCompleted ? 'rotate-90' : ''}`} />
+            <h2 className="text-xl font-bold">Matrices Completadas ({completedMatrices.length})</h2>
+            <div className="h-px bg-border flex-1 ml-4" />
+          </button>
+          
+          {showCompleted && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-4 duration-300">
+              {completedMatrices.map((m: any) => (
+                <div 
+                  key={m.id} 
+                  className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between min-h-[180px] opacity-70 hover:opacity-100 bg-surface/50"
+                >
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Check className="w-5 h-5 text-success shrink-0" />
+                        <h4 className="font-bold text-base text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
+                      </div>
+                      <button 
+                        onClick={() => handleDeleteMatrix(m.artistId, m.id)} 
+                        className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                        title="Eliminar Matriz"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium mb-4">
+                      <User className="w-3.5 h-3.5 text-accent-light" />
+                      <span>Artista:</span>
+                      <span className="text-text-primary">{m.artistName || 'Desconocido'}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-4 text-[10px] text-text-secondary">
+                      <span className="text-success font-medium">Completada</span>
+                    </div>
+                    
+                    <Button 
+                      className="w-full text-xs h-8" 
+                      variant="outline" 
+                      onClick={() => setActiveMatrix({ id: m.id, name: m.name, artistId: m.artistId, artistName: m.artistName })}
+                    >
+                      Ver Matriz
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
