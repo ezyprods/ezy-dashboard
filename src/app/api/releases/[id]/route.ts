@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getDriveService, findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import { Release } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   
@@ -60,6 +62,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     });
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    if (error?.status === 404 || error?.code === 404 || error?.message?.includes('File not found')) {
+      return NextResponse.json({ success: true, message: 'File was already deleted' });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

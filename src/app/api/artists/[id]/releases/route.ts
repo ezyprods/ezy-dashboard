@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { getDriveService, listFolders, createFolder, saveJsonFile, findAndReadJsonFile } from '@/lib/drive';
 import { Release } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

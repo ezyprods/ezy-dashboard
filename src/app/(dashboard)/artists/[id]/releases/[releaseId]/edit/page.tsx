@@ -39,6 +39,8 @@ export default function ReleaseEditorPage() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [isDraggingProgress, setIsDraggingProgress] = useState(false);
+  const progressBarRef = useRef<HTMLDivElement>(null);
 
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
@@ -95,10 +97,11 @@ export default function ReleaseEditorPage() {
       });
       if (!res.ok) throw new Error('Error saving');
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
+      setTimeout(() => {
+        router.push(`/artists/${artistId}/previews`);
+      }, 400);
     } catch {
       customAlert('Error al guardar');
-    } finally {
       setIsSaving(false);
     }
   };
@@ -180,34 +183,41 @@ export default function ReleaseEditorPage() {
     try {
       setIsSaving(true);
       const croppedFile = await cropImageToSquare(file);
-      const ext = croppedFile.name.split('.').pop() || 'jpg';
+      const ext = croppedFile.type === 'image/png' ? 'png' : 'jpg';
       const version = (release?.coverHistory?.length || 0) + 1;
       const cleanTitle = (release?.title || 'Preview').replace(/[^a-z0-9]/gi, '_');
       const newFileName = `Portada - ${cleanTitle} - v${version}.${ext}`;
       
-      const renamedFile = new File([croppedFile], newFileName, { type: croppedFile.type });
-
       const formData = new FormData();
-      formData.append('file', renamedFile);
-      formData.append('parentId', artistId);
+      // Use filename in append to avoid new File() constructor errors on some browsers
+      formData.append('file', croppedFile, newFileName);
+      formData.append('parentId', release?.id || releaseId);
+      formData.append('skipSimilarity', 'true');
       
-      const res = await fetch('/api/files/upload', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Error subiendo imagen');
+      const res = await fetch('/api/files', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || 'Error subiendo imagen');
+      }
       const data = await res.json();
       
-      const newEntry = { fileId: data.fileId, uploadedAt: new Date().toISOString() };
+      const fileId = data.file?.id || data.id || data.fileId;
+      if (!fileId) throw new Error('No se recibió ID del archivo');
+
+      const newEntry = { fileId, uploadedAt: new Date().toISOString() };
       
       setRelease(prev => {
         if (!prev) return null;
         const newHistory = [...(prev.coverHistory || []), newEntry];
         return { 
           ...prev, 
-          coverArtId: data.fileId,
+          coverArtId: fileId,
           coverHistory: newHistory 
         };
       });
-    } catch {
-      customAlert('Error al subir la portada');
+    } catch (err: any) {
+      console.error(err);
+      customAlert('Error al subir la portada: ' + (err.message || 'Desconocido'));
     } finally {
       setIsSaving(false);
       setIsDraggingCover(false);
@@ -380,12 +390,83 @@ export default function ReleaseEditorPage() {
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          if (release?.tracks && release.tracks.length > 0) {
+            setIsPlaying(prev => !prev);
+          }
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setVolume(prev => {
+            const next = Math.min(1, prev + 0.05);
+            if (next > 0) setIsMuted(false);
+            return next;
+          });
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          setVolume(prev => Math.max(0, prev - 0.05));
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (audioRef.current) {
+            audioRef.current.currentTime = Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + 5);
+          }
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (audioRef.current) {
+            audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5);
+          }
+          break;
+        case 'KeyM':
+          e.preventDefault();
+          setIsMuted(prev => !prev);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [release?.tracks]);
+
+  const handleSeekDrag = (e: MouseEvent | React.MouseEvent) => {
+    if (!progressBarRef.current || !audioRef.current || !duration) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const percentage = x / rect.width;
+    audioRef.current.currentTime = percentage * duration;
+    setProgress(percentage * 100);
+    setCurrentTime(audioRef.current.currentTime);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingProgress) handleSeekDrag(e);
+    };
+    const handleMouseUp = () => {
+      if (isDraggingProgress) setIsDraggingProgress(false);
+    };
+
+    if (isDraggingProgress) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingProgress, duration]);
+
   const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
-    const audio = audioRef.current;
-    if (!audio || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pos = (e.clientX - rect.left) / rect.width;
-    audio.currentTime = pos * duration;
+    handleSeekDrag(e);
   };
 
   const formatTime = (sec: number) => {
@@ -447,7 +528,7 @@ export default function ReleaseEditorPage() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           <button
             onClick={handleCopyLink}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-colors ${
@@ -455,7 +536,7 @@ export default function ReleaseEditorPage() {
             }`}
           >
             {linkCopied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {linkCopied ? 'Copiado' : 'Copiar URL'}
+            <span className="hidden md:inline">{linkCopied ? 'Copiado' : 'Copiar URL'}</span>
           </button>
           
           <button
@@ -465,7 +546,7 @@ export default function ReleaseEditorPage() {
             }`}
           >
             {release.isPublic ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
-            {release.isPublic ? 'Pública' : 'Privada'}
+            <span className="hidden md:inline">{release.isPublic ? 'Pública' : 'Privada'}</span>
           </button>
           
           <button 
@@ -476,7 +557,7 @@ export default function ReleaseEditorPage() {
             }`}
           >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-            {saveSuccess ? 'Guardado' : 'Guardar Cambios'}
+            <span className="hidden md:inline">{saveSuccess ? 'Guardado' : 'Guardar Cambios'}</span>
           </button>
         </div>
       </div>
@@ -605,6 +686,7 @@ export default function ReleaseEditorPage() {
                       isTrackPlaying={isTrackPlaying}
                       isPlaying={isPlaying}
                       playTrack={playTrack}
+                      togglePlayPause={() => setIsPlaying(!isPlaying)}
                       updateTrackTitle={updateTrackTitle}
                       removeTrack={removeTrack}
                       formatTime={formatTime}
@@ -631,13 +713,13 @@ export default function ReleaseEditorPage() {
       </div>
 
       {/* Fixed Bottom Player Bar */}
-      <div className="h-[90px] bg-[#181818] border-t border-[#282828] flex items-center justify-between px-4 z-50 shrink-0">
+      <div className="h-[90px] bg-[#181818] border-t border-[#282828] flex items-center justify-between px-2 md:px-4 z-50 shrink-0 gap-2 md:gap-0">
         
         {/* Left: Now Playing Info */}
-        <div className="flex items-center gap-3 w-[30%] min-w-[180px]">
+        <div className="flex items-center gap-2 md:gap-3 w-[35%] md:w-[30%] md:min-w-[180px] overflow-hidden">
           {currentTrack ? (
             <>
-              <div className="w-14 h-14 bg-[#282828] shrink-0 rounded flex items-center justify-center overflow-hidden relative group">
+              <div className="w-10 h-10 md:w-14 md:h-14 bg-[#282828] shrink-0 rounded flex items-center justify-center overflow-hidden relative group">
                 {coverUrl ? <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" /> : <Music className="w-6 h-6 text-[#b3b3b3]" />}
               </div>
               <div className="flex flex-col justify-center min-w-0">
@@ -655,7 +737,7 @@ export default function ReleaseEditorPage() {
         </div>
 
         {/* Center: Player Controls */}
-        <div className="flex flex-col items-center max-w-[45%] w-full">
+        <div className="flex flex-col items-center flex-1 max-w-[60%] md:max-w-[45%]">
           <div className="flex items-center gap-4 md:gap-6 mb-1.5">
             <button onClick={toggleShuffle} className={`p-1 transition-colors ${isShuffle ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}>
               <Shuffle className="w-4 h-4" />
@@ -686,22 +768,30 @@ export default function ReleaseEditorPage() {
           <div className="flex items-center gap-2 w-full max-w-[600px]">
             <span className="text-xs text-[#a7a7a7] min-w-[40px] text-right tabular-nums">{formatTime(currentTime)}</span>
             <div 
-              className="flex-1 h-1 bg-[#4d4d4d] rounded-full flex items-center cursor-pointer group"
-              onClick={seekTo}
+              ref={progressBarRef}
+              className="flex-1 h-1 flex items-center cursor-pointer group relative py-3 -my-3"
+              onMouseDown={(e) => {
+                setIsDraggingProgress(true);
+                handleSeekDrag(e);
+              }}
             >
-              <div 
-                className="h-full bg-white group-hover:bg-[#1db954] rounded-full transition-colors relative"
-                style={{ width: `${progress}%` }}
-              >
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="w-full h-1 bg-[#4d4d4d] rounded-full overflow-hidden pointer-events-none">
+                <div 
+                  className={`h-full bg-white rounded-full transition-colors ${isDraggingProgress ? 'bg-[#1db954]' : 'group-hover:bg-[#1db954]'}`}
+                  style={{ width: `${progress}%` }}
+                />
               </div>
+              <div 
+                className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow pointer-events-none transition-opacity ${isDraggingProgress ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                style={{ left: `calc(${progress}% - 6px)` }}
+              />
             </div>
             <span className="text-xs text-[#a7a7a7] min-w-[40px] tabular-nums">{formatTime(duration)}</span>
           </div>
         </div>
 
         {/* Right: Volume & Extra Controls */}
-        <div className="flex items-center justify-end gap-3 w-[30%] min-w-[180px]">
+        <div className="hidden md:flex items-center justify-end gap-3 w-[30%] min-w-[180px]">
           <div className="flex items-center gap-2 w-24">
             <button 
               onClick={() => setIsMuted(!isMuted)} 
@@ -726,7 +816,7 @@ export default function ReleaseEditorPage() {
   );
 }
 
-function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack, updateTrackTitle, removeTrack, formatTime, duration }: any) {
+function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack, togglePlayPause, updateTrackTitle, removeTrack, formatTime, duration }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id });
   
   const style = {
@@ -739,29 +829,40 @@ function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack,
     <div 
       ref={setNodeRef}
       style={style}
-      className={`group grid grid-cols-[30px_16px_1fr_40px] md:grid-cols-[30px_16px_1fr_auto_40px] gap-4 px-4 py-2 rounded-md transition-colors items-center hover:bg-white/10 ${isTrackPlaying ? 'bg-white/5' : ''} ${isDragging ? 'opacity-50 bg-white/20' : ''}`}
+      onDoubleClick={() => playTrack(index)}
+      className={`group grid grid-cols-[30px_16px_1fr_40px] md:grid-cols-[30px_16px_1fr_auto_40px] gap-4 px-4 py-2 rounded-md transition-colors items-center hover:bg-white/10 select-none ${isTrackPlaying ? 'bg-white/5' : ''} ${isDragging ? 'opacity-50 bg-white/20' : ''}`}
     >
       <div {...attributes} {...listeners} className="text-[#b3b3b3] cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 flex justify-center outline-none">
         <GripVertical className="w-4 h-4" />
       </div>
 
       <div 
-        className="text-center text-sm flex items-center justify-center cursor-pointer"
-        onClick={() => playTrack(index)}
+        className="text-center text-sm flex items-center justify-center cursor-pointer w-6 h-6 relative mx-auto"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isTrackPlaying) togglePlayPause();
+          else playTrack(index);
+        }}
       >
         {isTrackPlaying && isPlaying ? (
-          <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5" />
+          <>
+            <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5 group-hover:hidden" />
+            <Pause className="w-4 h-4 hidden group-hover:block fill-current text-white" />
+          </>
         ) : isTrackPlaying && !isPlaying ? (
-          <span className="text-[#1db954] font-bold">{index + 1}</span>
+          <>
+            <span className="text-[#1db954] font-bold group-hover:hidden">{index + 1}</span>
+            <Play className="w-4 h-4 hidden group-hover:block fill-current text-white ml-1" />
+          </>
         ) : (
           <>
             <span className="group-hover:hidden text-[#b3b3b3]">{index + 1}</span>
-            <Play className="w-3 h-3 hidden group-hover:block fill-current text-white" />
+            <Play className="w-4 h-4 hidden group-hover:block fill-current text-white ml-1" />
           </>
         )}
       </div>
 
-      <div className="flex flex-col justify-center overflow-hidden">
+      <div className="flex flex-col justify-center overflow-hidden" onDoubleClick={(e) => e.stopPropagation()}>
         <input
           type="text"
           value={track.title}
@@ -810,7 +911,9 @@ const cropImageToSquare = (file: File): Promise<File> => {
         
         canvas.toBlob((blob) => {
           if (!blob) return resolve(file);
-          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          // Return the blob directly, we'll set the filename in FormData
+          // Some environments fail with new File()
+          resolve(blob as unknown as File);
         }, 'image/jpeg', 0.9);
       };
       img.onerror = () => resolve(file);

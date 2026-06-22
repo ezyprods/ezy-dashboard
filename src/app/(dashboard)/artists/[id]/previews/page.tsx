@@ -9,7 +9,8 @@ import {
   Music, Eye, Trash2, Globe, Calendar, ListMusic, RefreshCw
 } from 'lucide-react';
 import type { Release } from '@/types';
-import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { customConfirm, customPrompt } from '@/lib/dialog';
+import { toast } from 'sonner';
 
 export default function ArtistPreviewsPage() {
   const params = useParams();
@@ -60,7 +61,7 @@ export default function ArtistPreviewsPage() {
       }
     } catch (err) {
       console.error(err);
-      customAlert('Error creando el preview');
+      toast.error('Error creando el preview');
     } finally {
       setIsCreating(false);
     }
@@ -75,21 +76,23 @@ export default function ArtistPreviewsPage() {
       });
       if (!res.ok) throw new Error('Error toggling');
       setReleases(prev => prev.map(r => r.id === releaseId ? { ...r, isPublic: !currentIsPublic } : r));
-      customAlert(!currentIsPublic ? '✓ Preview ahora pública — visible en el portal del artista' : 'Preview marcada como privada');
+      toast.success(!currentIsPublic ? '✓ Preview ahora pública — visible en el portal del artista' : 'Preview marcada como privada');
     } catch {
-      customAlert('Error al cambiar la privacidad');
+      toast.error('Error al cambiar la privacidad');
     }
   };
 
-  const handleDelete = async (releaseId: string, title: string) => {
+  const handleDelete = async (e: React.MouseEvent, releaseId: string, title: string) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!await customConfirm(`¿Eliminar el preview "${title}"? Esta acción no se puede deshacer.`)) return;
     try {
       const res = await fetch(`/api/releases/${releaseId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error deleting');
       setReleases(prev => prev.filter(r => r.id !== releaseId));
-      customAlert('Preview eliminado');
+      toast.success('Preview eliminado');
     } catch {
-      customAlert('Error al eliminar el preview');
+      toast.error('Error al eliminar el preview');
     }
   };
 
@@ -263,7 +266,8 @@ export default function ArtistPreviewsPage() {
 
                 {/* Delete */}
                 <button
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDelete(release.id, release.title); }}
+                  type="button"
+                  onClick={(e) => handleDelete(e, release.id, release.title)}
                   title="Eliminar"
                   className="p-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-error hover:border-error/30 hover:bg-error/5 transition-all"
                 >

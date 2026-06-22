@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { customConfirm } from '@/lib/dialog';
 import { createPortal } from 'react-dom';
@@ -138,6 +139,7 @@ export function SmartUploadModal({
   preselectedFolderId
 }: SmartUploadModalProps) {
   const { activeArtists: artists, isLoading: isArtistsLoading } = useArtists();
+  const router = useRouter();
   const [items, setItems] = useState<SmartUploadFile[]>([]);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
@@ -721,7 +723,10 @@ export function SmartUploadModal({
                           variant="secondary" 
                           size="sm" 
                           className="whitespace-nowrap flex-shrink-0"
-                          onClick={() => window.open(`/artists/${item.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`, '_blank')}
+                          onClick={() => {
+                            onClose();
+                            router.push(`/artists/${item.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`);
+                          }}
                         >
                           <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5" />
                           Abrir Matriz

@@ -83,8 +83,11 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
 
   const handleSelect = async (fileId: string, fileName: string) => {
     setIsSelectingId(fileId);
-    await onSelect(fileId, fileName);
-    // Modal will close externally from the parent
+    try {
+      await onSelect(fileId, fileName);
+    } finally {
+      setIsSelectingId(null);
+    }
   };
 
   const filteredItems = items.filter(item => 
@@ -92,10 +95,10 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative w-full max-w-2xl bg-[#181818] text-white border border-[#282828] rounded-xl shadow-2xl flex flex-col max-h-[85vh] animate-slide-up overflow-hidden">
+      <div className="relative w-full h-[90vh] md:h-auto max-w-2xl bg-[#181818] text-white md:border border-[#282828] rounded-t-xl md:rounded-xl shadow-2xl flex flex-col md:max-h-[85vh] animate-slide-up overflow-hidden">
         
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#282828] bg-[#121212]">

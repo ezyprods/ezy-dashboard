@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import {
   Loader2, Play, Pause, SkipForward, SkipBack,
   Disc, Share2, AlertCircle, Music, Volume2, VolumeX, Volume1,
-  Shuffle, Repeat, Repeat1, Clock
+  Shuffle, Repeat, Repeat1, Clock, ChevronDown, MoreHorizontal, Heart
 } from 'lucide-react';
 
 export default function PublicPreviewPage() {
@@ -31,6 +31,7 @@ export default function PublicPreviewPage() {
   // Advanced Playback Modes
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
+  const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   
   // To handle shuffle queue correctly
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
@@ -265,8 +266,9 @@ export default function PublicPreviewPage() {
         />
       )}
 
+      
       {/* Main View Area */}
-      <div className="flex-1 overflow-y-auto pb-24 relative hide-scrollbar">
+      <div className="flex-1 overflow-y-auto pb-[72px] md:pb-24 relative hide-scrollbar">
         {/* Dynamic Background Gradient */}
         <div className="absolute top-0 left-0 right-0 h-[400px] pointer-events-none opacity-40 z-0 overflow-hidden">
           {coverUrl && (
@@ -279,54 +281,65 @@ export default function PublicPreviewPage() {
         </div>
 
         {/* Header Content */}
-        <div className="relative z-10 px-8 pt-20 pb-8 flex items-end gap-6">
-          <div className="w-52 h-52 shadow-[0_4px_60px_rgba(0,0,0,0.5)] shrink-0 bg-[#282828] flex items-center justify-center">
+        <div className="relative z-10 px-5 md:px-8 pt-10 md:pt-20 pb-6 flex flex-col md:flex-row items-center md:items-end gap-5 md:gap-6 text-center md:text-left">
+          <div className="w-64 h-64 md:w-52 md:h-52 shadow-[0_8px_40px_rgba(0,0,0,0.5)] shrink-0 bg-[#282828] flex items-center justify-center">
             {coverUrl ? (
               <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
             ) : (
-              <Music className="w-20 h-20 text-[#b3b3b3]" />
+              <Music className="w-24 h-24 md:w-20 md:h-20 text-[#b3b3b3]" />
             )}
           </div>
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-bold tracking-wider uppercase">Álbum</span>
-            <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-2" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+          <div className="flex flex-col gap-2 mt-2 md:mt-0 items-center md:items-start">
+            <span className="hidden md:block text-sm font-bold tracking-wider uppercase">Álbum</span>
+            <h1 className="text-4xl md:text-7xl font-black tracking-tighter mb-2" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
               {release.title}
             </h1>
-            <div className="flex items-center gap-2 text-sm text-[#fff] font-medium">
-              <span>{artistName}</span>
-              <span className="w-1 h-1 rounded-full bg-white mx-1" />
-              <span>{new Date(release.createdAt).getFullYear()}</span>
-              <span className="w-1 h-1 rounded-full bg-white mx-1" />
-              <span>{release.tracks?.length || 0} canciones</span>
+            <div className="flex flex-wrap justify-center md:justify-start items-center gap-1.5 md:gap-2 text-sm text-white font-medium">
+              <div className="w-6 h-6 rounded-full bg-[#282828] overflow-hidden hidden md:block">
+                {coverUrl && <img src={coverUrl} className="w-full h-full object-cover" />}
+              </div>
+              <span className="font-bold">{artistName}</span>
+              <span className="w-1 h-1 rounded-full bg-white/60 mx-0.5" />
+              <span className="text-white/80">{new Date(release.createdAt).getFullYear()}</span>
+              <span className="w-1 h-1 rounded-full bg-white/60 mx-0.5" />
+              <span className="text-white/80">{release.tracks?.length || 0} canciones</span>
             </div>
           </div>
         </div>
 
         {/* Action Bar */}
-        <div className="relative z-10 px-8 py-4 flex items-center gap-6 bg-gradient-to-b from-[#121212]/0 to-[#121212]">
-          <button 
-            onClick={() => {
-              if (currentTrackIndex === 0 && !isPlaying) playTrack(0);
-              else setIsPlaying(!isPlaying);
-            }}
-            className="w-14 h-14 bg-[#1ed760] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
-          >
-            {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
-          </button>
-          
-          <button 
-            onClick={toggleShuffle} 
-            className={`transition-colors ${isShuffle ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}
-            title="Aleatorio"
-          >
-            <Shuffle className="w-7 h-7" />
-          </button>
+        <div className="relative z-10 px-5 md:px-8 py-2 md:py-4 flex items-center justify-between md:justify-start gap-4 md:gap-6 bg-gradient-to-b from-[#121212]/0 to-[#121212]">
+          <div className="flex items-center gap-4 md:hidden">
+             <button className="text-[#b3b3b3] hover:text-white transition-colors">
+               <Heart className="w-7 h-7" />
+             </button>
+             <button onClick={handleShare} className="text-[#b3b3b3] hover:text-white transition-colors">
+               <MoreHorizontal className="w-7 h-7" />
+             </button>
+          </div>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={toggleShuffle} 
+              className={`transition-colors hidden md:block ${isShuffle ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}
+            >
+              <Shuffle className="w-7 h-7" />
+            </button>
+            <button 
+              onClick={() => {
+                if (currentTrackIndex === 0 && !isPlaying) playTrack(0);
+                else setIsPlaying(!isPlaying);
+              }}
+              className="w-14 h-14 bg-[#1ed760] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            >
+              {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
+            </button>
+          </div>
         </div>
 
         {/* Tracklist */}
-        <div className="relative z-10 px-8 pb-12">
+        <div className="relative z-10 px-3 md:px-8 pb-32 md:pb-12">
           {/* Table Header */}
-          <div className="grid grid-cols-[16px_1fr_40px] md:grid-cols-[16px_1fr_auto_40px] gap-4 px-4 py-2 border-b border-[#282828] text-[#b3b3b3] text-sm font-medium mb-4">
+          <div className="hidden md:grid grid-cols-[16px_1fr_40px] md:grid-cols-[16px_1fr_auto_40px] gap-4 px-4 py-2 border-b border-[#282828] text-[#b3b3b3] text-sm font-medium mb-4">
             <div className="text-center">#</div>
             <div>Título</div>
             <div className="hidden md:block">Artista</div>
@@ -334,16 +347,16 @@ export default function PublicPreviewPage() {
           </div>
 
           {/* Tracks */}
-          <div className="flex flex-col">
-            {release.tracks.map((track: any, index: number) => {
+          <div className="flex flex-col gap-1 md:gap-0">
+            {release.tracks.map((track, index) => {
               const isTrackPlaying = currentTrackIndex === index;
               return (
                 <div 
                   key={track.id}
                   onClick={() => playTrack(index)}
-                  className={`group grid grid-cols-[16px_1fr_40px] md:grid-cols-[16px_1fr_auto_40px] gap-4 px-4 py-2.5 rounded-md cursor-pointer hover:bg-white/10 transition-colors items-center ${isTrackPlaying ? 'bg-white/5 text-[#1db954]' : 'text-[#b3b3b3]'}`}
+                  className={`group grid grid-cols-[1fr_40px] md:grid-cols-[16px_1fr_auto_40px] gap-3 md:gap-4 px-3 md:px-4 py-3 md:py-2.5 rounded-md cursor-pointer hover:bg-white/10 transition-colors items-center ${isTrackPlaying ? 'text-[#1db954]' : 'text-[#b3b3b3]'}`}
                 >
-                  <div className="text-center text-sm flex items-center justify-center">
+                  <div className="hidden md:flex text-center text-sm items-center justify-center">
                     {isTrackPlaying && isPlaying ? (
                       <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5" />
                     ) : isTrackPlaying && !isPlaying ? (
@@ -364,7 +377,7 @@ export default function PublicPreviewPage() {
                   <div className="hidden md:flex text-sm items-center hover:text-white transition-colors">
                     {artistName}
                   </div>
-                  <div className="text-sm flex justify-end items-center pr-4">
+                  <div className="text-sm flex justify-end items-center pr-2 md:pr-4">
                     {isTrackPlaying ? formatTime(duration) : '--:--'}
                   </div>
                 </div>
@@ -374,11 +387,11 @@ export default function PublicPreviewPage() {
         </div>
       </div>
 
-      {/* Fixed Bottom Player Bar */}
-      <div className="h-[90px] bg-[#181818] border-t border-[#282828] flex items-center justify-between px-4 z-50 shrink-0">
+      {/* Desktop Bottom Player */}
+      <div className="hidden md:flex h-[90px] bg-[#181818] border-t border-[#282828] items-center justify-between px-4 z-50 shrink-0">
         
         {/* Left: Now Playing Info */}
-        <div className="flex items-center gap-3 w-[30%] min-w-[180px]">
+        <div className="flex items-center gap-3 w-[30%] min-w-[180px] overflow-hidden">
           {currentTrack ? (
             <>
               <div className="w-14 h-14 bg-[#282828] shrink-0 rounded flex items-center justify-center overflow-hidden relative group">
@@ -394,13 +407,13 @@ export default function PublicPreviewPage() {
               </div>
             </>
           ) : (
-            <div className="w-14 h-14 bg-[#282828] rounded" />
+            <div className="w-14 h-14 bg-[#282828] rounded shrink-0" />
           )}
         </div>
 
         {/* Center: Player Controls */}
-        <div className="flex flex-col items-center max-w-[45%] w-full">
-          <div className="flex items-center gap-4 md:gap-6 mb-1.5">
+        <div className="flex flex-col items-center flex-1 max-w-[45%]">
+          <div className="flex items-center gap-6 mb-1.5">
             <button onClick={toggleShuffle} className={`p-1 transition-colors ${isShuffle ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}>
               <Shuffle className="w-4 h-4" />
             </button>
@@ -421,8 +434,7 @@ export default function PublicPreviewPage() {
             </button>
             <button 
               onClick={toggleRepeat} 
-              className={`p-1 transition-colors relative ${repeatMode !== 'off' ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}
-            >
+              className={`p-1 transition-colors relative ${repeatMode !== 'off' ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}>
               {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
               {repeatMode !== 'off' && <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1db954]" />}
             </button>
@@ -476,6 +488,125 @@ export default function PublicPreviewPage() {
         </div>
 
       </div>
+
+      {/* Mobile Mini Player */}
+      <div className="md:hidden fixed bottom-[16px] left-[8px] right-[8px] h-[56px] bg-[#2a2a2a] rounded-md flex items-center justify-between px-2 z-50 shadow-lg" onClick={() => setIsPlayerExpanded(true)}>
+        <div className="flex items-center gap-3 overflow-hidden flex-1">
+          {currentTrack ? (
+            <>
+              <div className="w-10 h-10 shrink-0 rounded overflow-hidden bg-[#181818]">
+                {coverUrl && <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />}
+              </div>
+              <div className="flex flex-col justify-center min-w-0 pr-2">
+                <span className="text-sm text-white font-medium truncate">{currentTrack.title}</span>
+                <span className="text-xs text-[#b3b3b3] truncate">{artistName}</span>
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-[#b3b3b3] px-2">Selecciona una canción</div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button className="p-2 text-[#b3b3b3]" onClick={(e) => { e.stopPropagation(); }}>
+            <Heart className="w-5 h-5" />
+          </button>
+          <button 
+            className="p-2 text-white"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!currentTrack && release?.tracks?.length > 0) playTrack(0);
+              else setIsPlaying(!isPlaying);
+            }}
+          >
+            {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
+          </button>
+        </div>
+        
+        {/* Mobile Mini Scrubber */}
+        {currentTrack && (
+          <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-white transition-all duration-100" style={{ width: `${progress}%` }} />
+          </div>
+        )}
+      </div>
+
+      {/* Mobile Full Screen Player */}
+      {isPlayerExpanded && (
+        <div className="md:hidden fixed inset-0 z-[100] bg-gradient-to-b from-[#404040] to-[#121212] flex flex-col pt-12 pb-8 px-6 animate-in slide-in-from-bottom duration-300">
+          <div className="flex items-center justify-between mb-8">
+            <button onClick={() => setIsPlayerExpanded(false)} className="text-white p-2 -ml-2">
+              <ChevronDown className="w-6 h-6" />
+            </button>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white">{release?.title}</span>
+            <button onClick={handleShare} className="text-white p-2 -mr-2">
+              <MoreHorizontal className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="w-full aspect-square rounded-lg shadow-2xl overflow-hidden bg-[#181818] mb-8 relative">
+            {coverUrl ? (
+              <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Music className="w-24 h-24 text-[#b3b3b3]" />
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col overflow-hidden pr-4">
+              <h2 className="text-2xl font-bold text-white truncate mb-1">{currentTrack?.title || 'Sin pista'}</h2>
+              <p className="text-lg text-[#b3b3b3] truncate">{artistName}</p>
+            </div>
+            <button className="text-white shrink-0">
+              <Heart className="w-7 h-7" />
+            </button>
+          </div>
+          
+          {/* Progress */}
+          <div className="flex flex-col gap-2 mb-6">
+            <div 
+              className="h-1 bg-[#4d4d4d] rounded-full flex items-center relative py-2"
+              onClick={seekTo}
+            >
+              <div className="h-1 bg-white rounded-full relative pointer-events-none" style={{ width: `${progress}%` }}>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-[#a7a7a7] font-medium tabular-nums">
+              <span>{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
+            </div>
+          </div>
+          
+          {/* Controls */}
+          <div className="flex items-center justify-between mb-8 px-2">
+            <button onClick={toggleShuffle} className={`p-2 transition-colors -ml-2 ${isShuffle ? 'text-[#1db954]' : 'text-white'}`}>
+              <Shuffle className="w-6 h-6" />
+            </button>
+            <button onClick={handlePrev} className="p-2 text-white">
+              <SkipBack className="w-9 h-9 fill-current" />
+            </button>
+            <button 
+              onClick={() => {
+                if (!currentTrack && release?.tracks?.length > 0) playTrack(0);
+                else setIsPlaying(!isPlaying);
+              }}
+              className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            >
+              {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 ml-1 fill-current" />}
+            </button>
+            <button onClick={handleNext} className="p-2 text-white">
+              <SkipForward className="w-9 h-9 fill-current" />
+            </button>
+            <button 
+              onClick={toggleRepeat} 
+              className={`p-2 transition-colors relative -mr-2 ${repeatMode !== 'off' ? 'text-[#1db954]' : 'text-white'}`}>
+              {repeatMode === 'one' ? <Repeat1 className="w-6 h-6" /> : <Repeat className="w-6 h-6" />}
+              {repeatMode !== 'off' && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1db954]" />}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
