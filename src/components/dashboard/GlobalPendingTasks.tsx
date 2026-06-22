@@ -24,7 +24,7 @@ interface PendingTask {
   rowName: string;
   colId: string;
   colName: string;
-  status: 'todo' | 'in_progress' | 'review';
+  status: 'todo' | 'in_progress' | 'review' | 'completed';
   projectId?: string;
   linkedFile?: { id: string; name: string; webViewLink?: string; webContentLink?: string; mimeType?: string };
 }
@@ -41,7 +41,7 @@ function TaskCard({
   task: PendingTask; 
   borderColor: string; 
   isOverlay?: boolean;
-  onUpdateStatus: (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review') => void;
+  onUpdateStatus: (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review' | 'completed') => void;
 }) {
   const { showMenu } = useContextMenu();
   const { playTrack } = useAudio();
@@ -60,9 +60,11 @@ function TaskCard({
     
     showMenu(e.clientX, e.clientY, [
       { label: 'Ir a Matriz', icon: 'KanbanSquare', action: () => window.location.href = `/artists/${task.artistId}?tab=matrices` },
-      { label: 'Marcar Pendiente', icon: 'Circle', action: () => onUpdateStatus(task, 'todo') },
-      { label: 'Marcar En Progreso', icon: 'Clock', action: () => onUpdateStatus(task, 'in_progress') },
-      { label: 'Marcar En Revisión', icon: 'AlertCircle', action: () => onUpdateStatus(task, 'review') },
+      { separator: true },
+      { label: 'Pendiente', icon: 'Circle', iconClassName: 'text-text-secondary', className: 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated', action: () => onUpdateStatus(task, 'todo') },
+      { label: 'En Progreso', icon: 'Clock', iconClassName: 'text-warning', className: '!text-warning hover:!text-warning hover:bg-warning/10', action: () => onUpdateStatus(task, 'in_progress') },
+      { label: 'En Revisión', icon: 'AlertCircle', iconClassName: 'text-blue-400', className: '!text-blue-400 hover:!text-blue-400 hover:bg-blue-500/10', action: () => onUpdateStatus(task, 'review') },
+      { label: 'Completado', icon: 'CheckCircle2', iconClassName: 'text-success', className: '!text-success hover:!text-success hover:bg-success/10', action: () => onUpdateStatus(task, 'completed') },
     ]);
   };
 
@@ -208,7 +210,7 @@ function StatusColumn({
   bgColor: string;
   textColor: string;
   borderColor: string;
-  onUpdateStatus: (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review') => void;
+  onUpdateStatus: (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review' | 'completed') => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -318,7 +320,7 @@ export function GlobalPendingTasks() {
       });
   }, []);
 
-  const updateTaskStatus = async (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review') => {
+  const updateTaskStatus = async (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review' | 'completed') => {
     if (task.status === newStatus) return;
 
     // 1. Optimistic Update
@@ -370,7 +372,7 @@ export function GlobalPendingTasks() {
     if (!over) return;
 
     const task = tasks.find(t => t.id === active.id);
-    const newStatus = over.id as 'todo' | 'in_progress' | 'review';
+    const newStatus = over.id as 'todo' | 'in_progress' | 'review' | 'completed';
 
     if (task && task.status !== newStatus) {
       updateTaskStatus(task, newStatus);
