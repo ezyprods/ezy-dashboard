@@ -59,7 +59,7 @@ function TaskCard({
     e.stopPropagation();
     
     showMenu(e.clientX, e.clientY, [
-      { label: 'Ir a Matriz', icon: 'KanbanSquare', action: () => window.location.href = `/artists/${task.artistId}?tab=matrices` },
+      { label: 'Ir a Matriz', icon: 'KanbanSquare', action: () => window.location.href = `/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}` },
       { separator: true },
       { label: 'Pendiente', icon: 'Circle', iconClassName: 'text-text-secondary', className: 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated', action: () => onUpdateStatus(task, 'todo') },
       { label: 'En Progreso', icon: 'Clock', iconClassName: 'text-warning', className: '!text-warning hover:!text-warning hover:bg-warning/10', action: () => onUpdateStatus(task, 'in_progress') },
@@ -86,14 +86,22 @@ function TaskCard({
       )}
     >
       <div className="flex justify-between items-start mb-2">
-        <span className="text-[10px] font-bold tracking-wider uppercase bg-surface-elevated px-2 py-0.5 rounded text-text-secondary truncate max-w-[120px]">
+        <Link 
+          href={`/artists/${task.artistId}`}
+          className="text-[10px] font-bold tracking-wider uppercase bg-surface-elevated px-2 py-0.5 rounded text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors truncate max-w-[120px] z-10"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           {task.artistName}
-        </span>
+        </Link>
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-text-secondary flex items-center gap-1 bg-surface-elevated px-2 py-0.5 rounded">
+          <Link 
+            href={task.projectId ? `/projects/${task.projectId}` : `/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}`}
+            className="text-[10px] text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors flex items-center gap-1 bg-surface-elevated px-2 py-0.5 rounded z-10"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             <KanbanSquare className="w-3 h-3" />
             <span className="truncate max-w-[80px]">{task.matrixName}</span>
-          </span>
+          </Link>
           <button 
             className="p-1 text-text-secondary hover:text-text-primary rounded-md hover:bg-background/50 transition-colors z-10"
             onClick={(e) => handleContextMenu(e)}
@@ -116,7 +124,7 @@ function TaskCard({
             <GripVertical className="w-4 h-4" />
           </button>
           <Link 
-            href={`/artists/${task.artistId}?tab=matrices`}
+            href={`/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}`}
             className="font-semibold text-text-primary text-sm line-clamp-2 leading-tight hover:text-accent transition-colors z-10"
             onPointerDown={(e) => e.stopPropagation()}
           >
