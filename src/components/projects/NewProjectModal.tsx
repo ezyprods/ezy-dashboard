@@ -57,8 +57,8 @@ export function NewProjectModal({ isOpen, onClose, artistId, artists }: NewProje
       if (result.success) {
         onClose();
         setFormData({ title: '', type: 'single', releaseDate: '', deliveryDate: '' });
-        // Si lo creamos desde el dashboard global, ir al proyecto
-        if (!artistId && result.project?.id) {
+        // Ir directamente al proyecto recién creado
+        if (result.project?.id) {
           router.push(`/projects/${result.project.id}`);
         }
       } else {

@@ -72,8 +72,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Nombre de la carpeta: "Tipo - Título"
-    const folderName = `${body.type.toUpperCase()} - ${body.title}`;
+    // Nombre de la carpeta: solo el título que introdujo el usuario
+    const folderName = body.title;
     
     // 1. Crear carpeta del proyecto
     const projectFolderId = await createFolder(folderName, body.artistId);
