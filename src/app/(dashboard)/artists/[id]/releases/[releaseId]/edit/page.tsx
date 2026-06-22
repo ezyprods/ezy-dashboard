@@ -8,6 +8,9 @@ import {
   Shuffle, Repeat, Repeat1, Clock, ArrowLeft, Save, Plus,
   Shield, ShieldOff, Copy, CheckCircle2, GripVertical, Trash2, Edit3, Image as ImageIcon
 } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Release, ReleaseTrack } from '@/types';
 import { TrackPickerModal } from '@/components/releases/TrackPickerModal';
 import { customAlert, customConfirm } from '@/lib/dialog';
@@ -40,6 +43,22 @@ export default function ReleaseEditorPage() {
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
   const [history, setHistory] = useState<number[]>([]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      const oldIndex = release?.tracks.findIndex(t => t.id === active.id) ?? -1;
+      const newIndex = release?.tracks.findIndex(t => t.id === over?.id) ?? -1;
+      if (oldIndex !== -1 && newIndex !== -1) {
+        reorderTracks(oldIndex, newIndex);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchRelease();
@@ -115,7 +134,6 @@ export default function ReleaseEditorPage() {
       customAlert('Error añadiendo la canción. Asegúrate de tener permisos.');
     } finally {
       setIsSaving(false);
-      setIsPickerOpen(false);
     }
   };
 
@@ -496,91 +514,29 @@ export default function ReleaseEditorPage() {
             <div className="flex justify-end pr-8"><Clock className="w-4 h-4" /></div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            {release.tracks.map((track, index) => {
-              const isTrackPlaying = currentTrackIndex === index;
-              return (
-                <div 
-                  key={track.id}
-                  draggable
-                  onDragStart={e => {
-                    e.dataTransfer.setData('text/plain', index.toString());
-                    e.dataTransfer.effectAllowed = 'move';
-                    (e.currentTarget as HTMLElement).style.opacity = '0.5';
-                  }}
-                  onDragEnd={e => {
-                    (e.currentTarget as HTMLElement).style.opacity = '1';
-                    document.querySelectorAll('.drag-over-track').forEach(el => el.classList.remove('bg-white/10', 'border-t-2', 'border-[#1db954]'));
-                  }}
-                  onDragOver={e => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    e.currentTarget.classList.add('bg-white/10', 'border-t-2', 'border-[#1db954]');
-                  }}
-                  onDragLeave={e => {
-                    e.currentTarget.classList.remove('bg-white/10', 'border-t-2', 'border-[#1db954]');
-                  }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove('bg-white/10', 'border-t-2', 'border-[#1db954]');
-                    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
-                    if (!isNaN(fromIndex) && fromIndex !== index) {
-                      reorderTracks(fromIndex, index);
-                    }
-                  }}
-                  className={`group grid grid-cols-[30px_16px_1fr_40px] md:grid-cols-[30px_16px_1fr_auto_40px] gap-4 px-4 py-2 rounded-md transition-colors items-center hover:bg-white/10 ${isTrackPlaying ? 'bg-white/5' : ''}`}
-                >
-                  {/* Drag Handle */}
-                  <div className="text-[#b3b3b3] cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 flex justify-center">
-                    <GripVertical className="w-4 h-4" />
-                  </div>
-
-                  {/* Play / Index */}
-                  <div 
-                    className="text-center text-sm flex items-center justify-center cursor-pointer"
-                    onClick={() => playTrack(index)}
-                  >
-                    {isTrackPlaying && isPlaying ? (
-                      <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5" />
-                    ) : isTrackPlaying && !isPlaying ? (
-                      <span className="text-[#1db954] font-bold">{index + 1}</span>
-                    ) : (
-                      <>
-                        <span className="group-hover:hidden text-[#b3b3b3]">{index + 1}</span>
-                        <Play className="w-3 h-3 hidden group-hover:block fill-current text-white" />
-                      </>
-                    )}
-                  </div>
-
-                  {/* Editable Title */}
-                  <div className="flex flex-col justify-center overflow-hidden">
-                    <input
-                      type="text"
-                      value={track.title}
-                      onChange={e => updateTrackTitle(track.id, e.target.value)}
-                      className={`text-base font-medium bg-transparent focus:outline-none focus:ring-1 focus:ring-[#1db954] rounded px-1 -ml-1 transition-colors ${isTrackPlaying ? 'text-[#1db954]' : 'text-white'}`}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={release.tracks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+              <div className="flex flex-col gap-1">
+                {release.tracks.map((track, index) => {
+                  const isTrackPlaying = currentTrackIndex === index;
+                  return (
+                    <SortableTrackItem
+                      key={track.id}
+                      track={track}
+                      index={index}
+                      isTrackPlaying={isTrackPlaying}
+                      isPlaying={isPlaying}
+                      playTrack={playTrack}
+                      updateTrackTitle={updateTrackTitle}
+                      removeTrack={removeTrack}
+                      formatTime={formatTime}
+                      duration={duration}
                     />
-                  </div>
-
-                  {/* Actions */}
-                  <div className="hidden md:flex text-sm items-center">
-                    <button 
-                      onClick={() => removeTrack(track.id, index)}
-                      className="text-[#b3b3b3] hover:text-[#e22134] transition-colors p-2 rounded-full hover:bg-white/5 opacity-0 group-hover:opacity-100"
-                      title="Eliminar canción"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {/* Duration */}
-                  <div className="text-sm flex justify-end items-center pr-4 text-[#b3b3b3]">
-                    {isTrackPlaying ? formatTime(duration) : '--:--'}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
 
           <div className="mt-6 px-4">
             <button 
@@ -687,6 +643,67 @@ export default function ReleaseEditorPage() {
           </div>
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack, updateTrackTitle, removeTrack, formatTime, duration }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id });
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef}
+      style={style}
+      className={`group grid grid-cols-[30px_16px_1fr_40px] md:grid-cols-[30px_16px_1fr_auto_40px] gap-4 px-4 py-2 rounded-md transition-colors items-center hover:bg-white/10 ${isTrackPlaying ? 'bg-white/5' : ''} ${isDragging ? 'opacity-50 bg-white/20' : ''}`}
+    >
+      <div {...attributes} {...listeners} className="text-[#b3b3b3] cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 flex justify-center outline-none">
+        <GripVertical className="w-4 h-4" />
+      </div>
+
+      <div 
+        className="text-center text-sm flex items-center justify-center cursor-pointer"
+        onClick={() => playTrack(index)}
+      >
+        {isTrackPlaying && isPlaying ? (
+          <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5" />
+        ) : isTrackPlaying && !isPlaying ? (
+          <span className="text-[#1db954] font-bold">{index + 1}</span>
+        ) : (
+          <>
+            <span className="group-hover:hidden text-[#b3b3b3]">{index + 1}</span>
+            <Play className="w-3 h-3 hidden group-hover:block fill-current text-white" />
+          </>
+        )}
+      </div>
+
+      <div className="flex flex-col justify-center overflow-hidden">
+        <input
+          type="text"
+          value={track.title}
+          onChange={e => updateTrackTitle(track.id, e.target.value)}
+          className={`text-base font-medium bg-transparent focus:outline-none focus:ring-1 focus:ring-[#1db954] rounded px-1 -ml-1 transition-colors ${isTrackPlaying ? 'text-[#1db954]' : 'text-white'}`}
+        />
+      </div>
+
+      <div className="hidden md:flex text-sm items-center">
+        <button 
+          onClick={() => removeTrack(track.id, index)}
+          className="text-[#b3b3b3] hover:text-[#e22134] transition-colors p-2 rounded-full hover:bg-white/5 opacity-0 group-hover:opacity-100"
+          title="Eliminar canción"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="text-sm flex justify-end items-center pr-4 text-[#b3b3b3]">
+        {isTrackPlaying ? formatTime(duration) : '--:--'}
       </div>
     </div>
   );
