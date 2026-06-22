@@ -8,6 +8,7 @@ import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
 import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
 import { GlobalMatricesWidget } from "@/components/dashboard/GlobalMatricesWidget";
+import { GlobalPendingTasks } from "@/components/dashboard/GlobalPendingTasks";
 import { useRouter } from 'next/navigation';
 import type { Artist } from '@/types';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
@@ -268,6 +269,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Global Tasks Command Center */}
+      <GlobalPendingTasks />
     </div>
   );
 }
