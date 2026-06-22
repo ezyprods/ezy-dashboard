@@ -7,6 +7,7 @@ import { customAlert } from '@/lib/dialog';
 
 interface TrackPickerModalProps {
   artistId: string; // The root folder ID of the artist
+  selectedFileIds?: string[];
   onClose: () => void;
   onSelect: (fileId: string, fileName: string) => void;
 }
@@ -23,7 +24,7 @@ interface Breadcrumb {
   name: string;
 }
 
-export function TrackPickerModal({ artistId, onClose, onSelect }: TrackPickerModalProps) {
+export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSelect }: TrackPickerModalProps) {
   const [currentFolderId, setCurrentFolderId] = useState<string>(artistId);
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([{ id: artistId, name: 'Raíz del Artista' }]);
   
@@ -155,16 +156,17 @@ export function TrackPickerModal({ artistId, onClose, onSelect }: TrackPickerMod
           ) : (
             filteredItems.map(item => {
               const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+              const isAlreadySelected = selectedFileIds.includes(item.id);
 
               return (
                 <div 
                   key={item.id} 
-                  className={`flex items-center justify-between p-2 rounded-lg hover:bg-white/10 transition-colors group cursor-pointer ${
-                    isSelectingId === item.id ? 'opacity-50 pointer-events-none' : ''
-                  }`}
+                  className={`flex items-center justify-between p-2 rounded-lg hover:bg-white/10 transition-colors group ${
+                    isFolder || !isAlreadySelected ? 'cursor-pointer' : 'opacity-60 pointer-events-none'
+                  } ${isSelectingId === item.id ? 'opacity-50 pointer-events-none' : ''}`}
                   onClick={() => {
                     if (isFolder) navigateToFolder(item.id, item.name);
-                    else handleSelect(item.id, item.name);
+                    else if (!isAlreadySelected) handleSelect(item.id, item.name);
                   }}
                 >
                   <div className="flex items-center gap-3 overflow-hidden flex-1">
@@ -188,12 +190,14 @@ export function TrackPickerModal({ artistId, onClose, onSelect }: TrackPickerMod
                       size="sm" 
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleSelect(item.id, item.name);
+                        if (!isAlreadySelected) handleSelect(item.id, item.name);
                       }}
-                      disabled={isSelectingId === item.id}
-                      className="shrink-0 bg-transparent border border-[#b3b3b3] text-white hover:border-white hover:scale-105 transition-all ml-4"
+                      disabled={isSelectingId === item.id || isAlreadySelected}
+                      className={`shrink-0 bg-transparent border hover:scale-105 transition-all ml-4 ${
+                        isAlreadySelected ? 'border-[#1db954] text-[#1db954] opacity-100 hover:scale-100' : 'border-[#b3b3b3] text-white hover:border-white'
+                      }`}
                     >
-                      {isSelectingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Seleccionar'}
+                      {isSelectingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : isAlreadySelected ? <><Check className="w-4 h-4 mr-1" /> Añadido</> : 'Seleccionar'}
                     </Button>
                   )}
                   {isFolder && (

@@ -27,6 +27,7 @@ export default function ReleaseEditorPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isDraggingCover, setIsDraggingCover] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -115,26 +116,20 @@ export default function ReleaseEditorPage() {
   };
 
   const handleAddTrack = async (fileId: string, fileName: string) => {
-    setIsSaving(true);
-    try {
-      const res = await fetch(`/api/releases/${releaseId}/tracks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ originalFileId: fileId, title: fileName.replace(/\.[^/.]+$/, '') })
-      });
-      if (!res.ok) throw new Error('Error copying track');
-      const data = await res.json();
-      setRelease(prev => {
-        if (!prev) return prev;
-        const newTracks = [...prev.tracks, data];
-        setShuffledIndices(Array.from({ length: newTracks.length }, (_, i) => i));
-        return { ...prev, tracks: newTracks };
-      });
-    } catch {
-      customAlert('Error añadiendo la canción. Asegúrate de tener permisos.');
-    } finally {
-      setIsSaving(false);
-    }
+    const newTrackId = Math.random().toString(36).substring(2, 15);
+    const newTrack = {
+      id: newTrackId,
+      originalFileId: fileId,
+      title: fileName.replace(/\.[^/.]+$/, ''),
+      newFileId: fileId,
+    };
+    
+    setRelease(prev => {
+      if (!prev) return prev;
+      const newTracks = [...prev.tracks, newTrack];
+      setShuffledIndices(Array.from({ length: newTracks.length }, (_, i) => i));
+      return { ...prev, tracks: newTracks };
+    });
   };
 
   const updateTrackTitle = (trackId: string, newTitle: string) => {
@@ -181,23 +176,21 @@ export default function ReleaseEditorPage() {
     });
   };
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const ext = file.name.split('.').pop() || 'jpg';
-    const version = (release?.coverHistory?.length || 0) + 1;
-    const cleanTitle = (release?.title || 'Preview').replace(/[^a-z0-9]/gi, '_');
-    const newFileName = `Portada - ${cleanTitle} - v${version}.${ext}`;
-    
-    const renamedFile = new File([file], newFileName, { type: file.type });
-
-    const formData = new FormData();
-    formData.append('file', renamedFile);
-    formData.append('parentId', artistId);
-    
+  const processAndUploadCover = async (file: File) => {
     try {
       setIsSaving(true);
+      const croppedFile = await cropImageToSquare(file);
+      const ext = croppedFile.name.split('.').pop() || 'jpg';
+      const version = (release?.coverHistory?.length || 0) + 1;
+      const cleanTitle = (release?.title || 'Preview').replace(/[^a-z0-9]/gi, '_');
+      const newFileName = `Portada - ${cleanTitle} - v${version}.${ext}`;
+      
+      const renamedFile = new File([croppedFile], newFileName, { type: croppedFile.type });
+
+      const formData = new FormData();
+      formData.append('file', renamedFile);
+      formData.append('parentId', artistId);
+      
       const res = await fetch('/api/files/upload', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Error subiendo imagen');
       const data = await res.json();
@@ -217,7 +210,35 @@ export default function ReleaseEditorPage() {
       customAlert('Error al subir la portada');
     } finally {
       setIsSaving(false);
+      setIsDraggingCover(false);
     }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processAndUploadCover(file);
+  };
+
+  const handleCoverDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingCover(true);
+  };
+
+  const handleCoverDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingCover(false);
+  };
+
+  const handleCoverDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingCover(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith('image/')) {
+      if (file) customAlert('Por favor, arrastra una imagen válida');
+      return;
+    }
+    await processAndUploadCover(file);
   };
 
   const handleSelectHistoricalCover = (fileId: string) => {
@@ -399,6 +420,7 @@ export default function ReleaseEditorPage() {
       {isPickerOpen && (
         <TrackPickerModal
           artistId={artistId}
+          selectedFileIds={release.tracks?.map(t => t.originalFileId) || []}
           onClose={() => setIsPickerOpen(false)}
           onSelect={handleAddTrack}
         />
@@ -475,16 +497,23 @@ export default function ReleaseEditorPage() {
         {/* Header Content */}
         <div className="relative z-10 px-8 pt-28 pb-8 flex items-end gap-6">
           <div className="flex flex-col gap-3">
-            <div className="w-52 h-52 shadow-[0_4px_60px_rgba(0,0,0,0.5)] shrink-0 bg-[#282828] flex items-center justify-center relative group cursor-pointer overflow-hidden rounded-md">
+            <div 
+              className={`w-52 h-52 shadow-[0_4px_60px_rgba(0,0,0,0.5)] shrink-0 bg-[#282828] flex items-center justify-center relative group cursor-pointer overflow-hidden rounded-md transition-all ${
+                isDraggingCover ? 'border-2 border-dashed border-[#1db954] scale-105 brightness-110' : ''
+              }`}
+              onDragOver={handleCoverDragOver}
+              onDragLeave={handleCoverDragLeave}
+              onDrop={handleCoverDrop}
+            >
               {coverUrl ? (
                 <img src={coverUrl} alt="Cover" className="w-full h-full object-cover group-hover:brightness-50 transition-all" />
               ) : (
                 <Music className="w-20 h-20 text-[#b3b3b3] group-hover:opacity-20 transition-all" />
               )}
-              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <ImageIcon className="w-8 h-8 text-white mb-2" />
+              <div className={`absolute inset-0 flex flex-col items-center justify-center transition-opacity ${isDraggingCover ? 'opacity-100 bg-[#1db954]/20 backdrop-blur-sm' : 'opacity-0 group-hover:opacity-100'}`}>
+                <ImageIcon className={`w-8 h-8 text-white mb-2 ${isDraggingCover ? 'animate-bounce text-[#1db954]' : ''}`} />
                 <span className="text-white text-sm font-bold bg-black/60 px-3 py-1 rounded-full backdrop-blur-md border border-white/20">
-                  {coverUrl ? 'Cambiar Portada' : 'Subir Portada'}
+                  {isDraggingCover ? 'Soltar aquí' : coverUrl ? 'Cambiar Portada' : 'Subir Portada'}
                 </span>
               </div>
               <input 
@@ -757,3 +786,37 @@ function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack,
     </div>
   );
 }
+
+const cropImageToSquare = (file: File): Promise<File> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = Math.min(img.width, img.height);
+        const targetSize = Math.min(size, 1500); // Max 1500px resolution
+        
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+        
+        const offsetX = (img.width - size) / 2;
+        const offsetY = (img.height - size) / 2;
+        
+        ctx.drawImage(img, offsetX, offsetY, size, size, 0, 0, targetSize, targetSize);
+        
+        canvas.toBlob((blob) => {
+          if (!blob) return resolve(file);
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.9);
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
