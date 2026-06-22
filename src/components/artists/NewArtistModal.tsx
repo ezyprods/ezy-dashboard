@@ -10,12 +10,15 @@ import { SERVICE_LABELS } from '@/lib/constants';
 import type { ServiceType } from '@/types';
 import { Loader2 } from 'lucide-react';
 
+import { useRouter } from 'next/navigation';
+
 interface NewArtistModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function NewArtistModal({ isOpen, onClose }: NewArtistModalProps) {
+  const router = useRouter();
   const { createArtist } = useArtists();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,11 +54,13 @@ export function NewArtistModal({ isOpen, onClose }: NewArtistModalProps) {
         services: selectedServices,
       });
 
-      if (result.success) {
+      if (result.success && result.artist) {
         onClose();
         // Reset form
         setFormData({ name: '', email: '', phone: '', genre: '' });
         setSelectedServices([]);
+        // Redirigir directamente al nuevo artista
+        router.push(`/artists/${result.artist.id}`);
       } else {
         setError(result.error || 'Hubo un error al crear el artista');
       }
