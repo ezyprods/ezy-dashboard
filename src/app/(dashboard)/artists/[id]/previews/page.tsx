@@ -228,7 +228,7 @@ export default function ArtistPreviewsPage() {
               <div className="flex items-center gap-1.5 px-4 pb-4 pt-0">
                 {/* Toggle public */}
                 <button
-                  onClick={() => togglePublic(release.id, !!release.isPublic)}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePublic(release.id, !!release.isPublic); }}
                   title={release.isPublic ? 'Hacer privada' : 'Publicar en portal del artista'}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex-1 justify-center ${
                     release.isPublic
@@ -241,7 +241,7 @@ export default function ArtistPreviewsPage() {
 
                 {/* Copy link */}
                 <button
-                  onClick={() => copyPreviewLink(release.id)}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); copyPreviewLink(release.id); }}
                   title="Copiar enlace de preview"
                   className={`p-2 rounded-lg text-xs transition-all border ${
                     copiedId === release.id
@@ -254,7 +254,7 @@ export default function ArtistPreviewsPage() {
 
                 {/* Edit */}
                 <button
-                  onClick={() => router.push(`/artists/${artistId}/releases/${release.id}/edit`)}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); router.push(`/artists/${artistId}/releases/${release.id}/edit`); }}
                   title="Entrar"
                   className="p-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-accent hover:border-accent/30 transition-all"
                 >
@@ -263,7 +263,7 @@ export default function ArtistPreviewsPage() {
 
                 {/* Delete */}
                 <button
-                  onClick={() => handleDelete(release.id, release.title)}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleDelete(release.id, release.title); }}
                   title="Eliminar"
                   className="p-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-error hover:border-error/30 hover:bg-error/5 transition-all"
                 >

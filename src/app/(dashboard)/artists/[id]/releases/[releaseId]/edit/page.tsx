@@ -184,20 +184,44 @@ export default function ReleaseEditorPage() {
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const ext = file.name.split('.').pop() || 'jpg';
+    const version = (release?.coverHistory?.length || 0) + 1;
+    const cleanTitle = (release?.title || 'Preview').replace(/[^a-z0-9]/gi, '_');
+    const newFileName = `Portada - ${cleanTitle} - v${version}.${ext}`;
+    
+    const renamedFile = new File([file], newFileName, { type: file.type });
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', renamedFile);
     formData.append('parentId', artistId);
+    
     try {
       setIsSaving(true);
       const res = await fetch('/api/files/upload', { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Error subiendo imagen');
       const data = await res.json();
-      setRelease(prev => prev ? { ...prev, coverArtId: data.fileId } : null);
+      
+      const newEntry = { fileId: data.fileId, uploadedAt: new Date().toISOString() };
+      
+      setRelease(prev => {
+        if (!prev) return null;
+        const newHistory = [...(prev.coverHistory || []), newEntry];
+        return { 
+          ...prev, 
+          coverArtId: data.fileId,
+          coverHistory: newHistory 
+        };
+      });
     } catch {
       customAlert('Error al subir la portada');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSelectHistoricalCover = (fileId: string) => {
+    setRelease(prev => prev ? { ...prev, coverArtId: fileId } : null);
   };
 
   // Playback logic
@@ -450,24 +474,49 @@ export default function ReleaseEditorPage() {
 
         {/* Header Content */}
         <div className="relative z-10 px-8 pt-28 pb-8 flex items-end gap-6">
-          <div className="w-52 h-52 shadow-[0_4px_60px_rgba(0,0,0,0.5)] shrink-0 bg-[#282828] flex items-center justify-center relative group cursor-pointer overflow-hidden">
-            {coverUrl ? (
-              <img src={coverUrl} alt="Cover" className="w-full h-full object-cover group-hover:brightness-50 transition-all" />
-            ) : (
-              <Music className="w-20 h-20 text-[#b3b3b3] group-hover:opacity-20 transition-all" />
-            )}
-            <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <ImageIcon className="w-8 h-8 text-white mb-2" />
-              <span className="text-xs font-bold">Cambiar foto</span>
+          <div className="flex flex-col gap-3">
+            <div className="w-52 h-52 shadow-[0_4px_60px_rgba(0,0,0,0.5)] shrink-0 bg-[#282828] flex items-center justify-center relative group cursor-pointer overflow-hidden rounded-md">
+              {coverUrl ? (
+                <img src={coverUrl} alt="Cover" className="w-full h-full object-cover group-hover:brightness-50 transition-all" />
+              ) : (
+                <Music className="w-20 h-20 text-[#b3b3b3] group-hover:opacity-20 transition-all" />
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <ImageIcon className="w-8 h-8 text-white mb-2" />
+                <span className="text-white text-sm font-bold bg-black/60 px-3 py-1 rounded-full backdrop-blur-md border border-white/20">
+                  {coverUrl ? 'Cambiar Portada' : 'Subir Portada'}
+                </span>
+              </div>
+              <input 
+                type="file" 
+                accept="image/*" 
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={handleCoverUpload}
+              />
             </div>
-            <input
-              type="file"
-              accept="image/*"
-              className="absolute inset-0 opacity-0 cursor-pointer"
-              onChange={handleCoverUpload}
-            />
+            
+            {/* Cover History */}
+            {release.coverHistory && release.coverHistory.length > 1 && (
+              <div className="flex gap-2 mt-1 max-w-[208px] overflow-x-auto hide-scrollbar pb-1">
+                {release.coverHistory.map((entry, idx) => (
+                  <button 
+                    key={entry.fileId} 
+                    onClick={() => handleSelectHistoricalCover(entry.fileId)}
+                    className={`w-10 h-10 shrink-0 rounded overflow-hidden transition-all hover:scale-110 relative ${
+                      release.coverArtId === entry.fileId 
+                        ? 'border-2 border-[#1db954] shadow-[0_0_10px_rgba(29,185,84,0.3)]' 
+                        : 'border border-white/10 opacity-50 hover:opacity-100'
+                    }`}
+                    title={`Versión ${idx + 1} - ${new Date(entry.uploadedAt).toLocaleDateString()}`}
+                  >
+                    <img src={`/api/audio/${entry.fileId}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex flex-col gap-2 flex-1">
+
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
             <span className="text-sm font-bold tracking-wider uppercase text-white/80">Editor de Álbum</span>
             
             {/* Editable Title */}
