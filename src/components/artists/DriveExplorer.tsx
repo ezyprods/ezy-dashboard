@@ -8,6 +8,7 @@ import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { cn, isBrowserCompatible } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
+import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import { ShareModal } from './ShareModal';
 import { DeleteModal } from './DeleteModal';
 import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
@@ -59,6 +60,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const { showMenu } = useContextMenu();
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { isDraggingFiles, triggerUploadForArtist } = useGlobalDragDrop();
 
   const getPathSegments = (fileName: string, currentBreadcrumbs: Breadcrumb[]) => {
     const pathSegs: { name: string; url?: string; onClick?: () => void }[] = [];
@@ -434,7 +436,11 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      setPendingUploadFiles({ files: Array.from(files), targetFolderId: currentFolderId });
+      if (artistId) {
+        triggerUploadForArtist(Array.from(files), artistId, currentFolderId);
+      } else {
+        setPendingUploadFiles({ files: Array.from(files), targetFolderId: currentFolderId });
+      }
       return;
     }
 
@@ -720,7 +726,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   };
 
   return (
-    <div ref={explorerRef} className="animate-fade-in space-y-6 transition-all w-full">
+    <div ref={explorerRef} className={cn("animate-fade-in space-y-6 transition-all w-full", isDraggingFiles && "relative z-[500]")}>
       {/* Mobile Tabs */}
       <div className="flex lg:hidden bg-surface-elevated p-1.5 rounded-xl border border-border overflow-x-auto gap-1 shadow-sm">
         <button

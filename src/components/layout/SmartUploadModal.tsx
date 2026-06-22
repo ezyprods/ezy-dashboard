@@ -291,7 +291,7 @@ export function SmartUploadModal({
         mimeGroup,
         subType,
         artistId: detectedArtistId,
-        projectId: '', // Will be resolved asynchronously
+        projectId: preselectedFolderId || '', // Use preselected folder if available
         customName: generateName(f.name, subType, detectedArtistName),
         isAnalyzing: mimeGroup === 'audio',
         uploadStatus: 'pending' as const,

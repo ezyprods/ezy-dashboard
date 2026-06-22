@@ -79,7 +79,7 @@ function ArtistDropCard({ artist, onDrop }: { artist: Artist; onDrop: (files: Fi
 export function GlobalDropZone() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isDraggingFiles, droppedFiles, preselectedArtistId, clearDroppedFiles, triggerUploadForArtist } = useGlobalDragDrop();
+  const { isDraggingFiles, droppedFiles, preselectedArtistId, preselectedFolderId, clearDroppedFiles, triggerUploadForArtist } = useGlobalDragDrop();
   const { activeArtists } = useArtists();
   const [hoveredZone, setHoveredZone] = useState(false);
   const zoneCounter = useRef(0);
@@ -90,9 +90,9 @@ export function GlobalDropZone() {
   const isFilesTab = isInsideArtistFolder && activeTab === 'files';
   const isArtistsList = pathname === '/artists';
 
-  // Don't show global overlay when inside the DriveExplorer (files tab)
-  // or when on the artists list page (Cards handle it)
-  const shouldShowOverlay = isDraggingFiles && !isFilesTab && !isArtistsList;
+  // Don't show global overlay when on the artists list page (Cards handle it)
+  // DriveExplorer will handle its own drops by appearing above this overlay (z-index)
+  const shouldShowOverlay = isDraggingFiles && !isArtistsList;
 
   const handleGenericDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -163,6 +163,7 @@ export function GlobalDropZone() {
           onClose={clearDroppedFiles}
           initialFiles={droppedFiles}
           preselectedArtistId={preselectedArtistId ?? undefined}
+          preselectedFolderId={preselectedFolderId ?? undefined}
         />
       )}
     </>

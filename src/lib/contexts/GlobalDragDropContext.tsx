@@ -6,14 +6,16 @@ interface GlobalDragDropContextValue {
   isDraggingFiles: boolean;
   droppedFiles: File[];
   preselectedArtistId: string | null;
+  preselectedFolderId: string | null;
   clearDroppedFiles: () => void;
-  triggerUploadForArtist: (files: File[], artistId: string) => void;
+  triggerUploadForArtist: (files: File[], artistId: string, folderId?: string) => void;
 }
 
 const GlobalDragDropContext = createContext<GlobalDragDropContextValue>({
   isDraggingFiles: false,
   droppedFiles: [],
   preselectedArtistId: null,
+  preselectedFolderId: null,
   clearDroppedFiles: () => {},
   triggerUploadForArtist: () => {},
 });
@@ -24,6 +26,7 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [preselectedArtistId, setPreselectedArtistId] = useState<string | null>(null);
+  const [preselectedFolderId, setPreselectedFolderId] = useState<string | null>(null);
   const dragCounter = useRef(0);
 
   useEffect(() => {
@@ -87,10 +90,12 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
   const clearDroppedFiles = useCallback(() => {
     setDroppedFiles([]);
     setPreselectedArtistId(null);
+    setPreselectedFolderId(null);
   }, []);
 
-  const triggerUploadForArtist = useCallback((files: File[], artistId: string) => {
+  const triggerUploadForArtist = useCallback((files: File[], artistId: string, folderId?: string) => {
     setPreselectedArtistId(artistId);
+    setPreselectedFolderId(folderId || null);
     setDroppedFiles(files);
     setIsDraggingFiles(false);
   }, []);
@@ -100,6 +105,7 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
       isDraggingFiles,
       droppedFiles,
       preselectedArtistId,
+      preselectedFolderId,
       clearDroppedFiles,
       triggerUploadForArtist,
     }}>
