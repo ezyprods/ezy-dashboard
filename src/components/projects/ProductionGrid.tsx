@@ -34,7 +34,7 @@ function SortableColHeader({ col, onDelete, onRename }: { col: { id: string; nam
     <th
       ref={setNodeRef}
       style={style}
-      className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 min-w-[120px] sm:min-w-[150px] group relative"
+      className={`p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 group relative ${col.type === 'status' ? 'min-w-[100px] sm:min-w-[130px]' : 'min-w-[120px] sm:min-w-[150px]'}`}
     >
       <div className="flex items-center justify-center gap-1.5">
         <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity shrink-0">
@@ -117,7 +117,7 @@ function SortableRow({
 
   return (
     <tr ref={setNodeRef} style={style} className={`group/row transition-colors ${isDragging ? 'bg-surface-elevated shadow-lg' : 'hover:bg-surface/30'}`}>
-      <td className="p-1.5 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 max-w-[140px] sm:max-w-[200px]">
+      <td className="p-1.5 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 min-w-[280px] sm:min-w-[380px] max-w-[400px]">
         <div className="flex items-center gap-2 min-w-[200px]">
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
           <input 
@@ -126,6 +126,7 @@ function SortableRow({
             onBlur={() => { if(localName.trim() && localName !== row.name) onRename(row.id, localName.trim()); else setLocalName(row.name); }}
             onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
             onContextMenu={handleContextMenu}
+            data-context="ignore"
             className="font-medium text-sm bg-transparent border-none outline-none flex-1 min-w-0 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors cursor-context-menu" 
             title={localName}
           />

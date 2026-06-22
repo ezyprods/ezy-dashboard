@@ -128,18 +128,19 @@ export function GlobalContextMenu() {
   // Global contextmenu listener
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-
       const target = e.target as HTMLElement;
       const contextEl = target.closest('[data-context]') as HTMLElement | null;
       const context = contextEl?.dataset.context;
-      const artistId = contextEl?.dataset.artistId;
-      const fileId = contextEl?.dataset.fileId;
-
-      if (context?.startsWith('calendar-')) {
-        // Let local calendar component handle its own custom context menu
+      
+      // If a local component wants to handle its own context menu, it should use data-context="ignore"
+      if (context === 'ignore' || context?.startsWith('calendar-')) {
         return;
       }
+
+      e.preventDefault();
+      
+      const artistId = contextEl?.dataset.artistId;
+      const fileId = contextEl?.dataset.fileId;
 
       let items: MenuItem[];
 

@@ -237,6 +237,7 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
     <div 
       ref={containerRef} 
       className="relative flex items-center justify-center w-full cursor-context-menu" 
+      data-context="ignore"
       style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }} 
       onPointerDown={handlePointerDown} 
       onPointerMove={handleLocalPointerMove}
@@ -379,6 +380,15 @@ export function CellComponent({
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
   const handleUpdate = (updates: Partial<GridCell>) => onUpdate(rowId, colId, updates);
+
+  if (colType === 'status') {
+    return (
+      <td className="p-1.5 sm:p-3 border-b border-r border-border min-w-[100px] sm:min-w-[130px]">
+        <StatusCellUI status={(cellData.status as FlexTaskStatus) || 'todo'} onStatusChange={status => handleUpdate({ status })} />
+      </td>
+    );
+  }
+
   const isCurrentAudioPlaying = isPlaying && currentTrack?.id === cellData.fileId;
 
   const handlePlayClick = (e: React.MouseEvent) => {
