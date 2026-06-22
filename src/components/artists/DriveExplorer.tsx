@@ -648,8 +648,9 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     }
   };
 
-  const getIcon = (mimeType: string, name: string) => {
-    if (name.toLowerCase().endsWith('.flp')) {
+  const getIcon = (mimeType: string, name?: string) => {
+    const safeName = name || '';
+    if (safeName.toLowerCase().endsWith('.flp')) {
       return (
         <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0 fill-[#ff793f]">
           <title>FL Studio Project</title>
@@ -693,7 +694,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
     const audioGroups = new Map<string, typeof items>();
     audioItems.forEach(item => {
-      const nameWithoutExt = item.name.replace(/\.[^/.]+$/, "");
+      const safeName = item.name || 'Sin Título';
+      const nameWithoutExt = safeName.replace(/\.[^/.]+$/, "");
       const baseName = nameWithoutExt.replace(/([ _-](v\d+|mix\s*\d+))$/i, '').trim();
       if (!audioGroups.has(baseName)) audioGroups.set(baseName, []);
       audioGroups.get(baseName)!.push(item);
@@ -701,7 +703,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
     const finalItems = [...nonAudioItems];
     audioGroups.forEach((versions, baseName) => {
-      versions.sort((a, b) => a.name.localeCompare(b.name));
+      versions.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       finalItems.push({
         ...versions[0],
         versions: versions.length > 1 ? versions : undefined
@@ -713,7 +715,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       const isBFolder = b.mimeType === 'application/vnd.google-apps.folder';
       if (isAFolder && !isBFolder) return -1;
       if (!isAFolder && isBFolder) return 1;
-      return a.name.localeCompare(b.name);
+      return (a.name || '').localeCompare(b.name || '');
     });
   })();
 
@@ -831,7 +833,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                             if (isThisTrackActive) {
                               togglePlay();
                             } else {
-                              playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
+                              const safeName = item.name || 'Audio';
+                              playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs) });
                             }
                           }}
                         >
@@ -844,8 +847,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       )}
 
                       <div className="flex-1 min-w-0 pr-2">
-                        <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
-                          <span className="truncate block">{item.name}</span>
+                        <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
+                          <span className="truncate block">{item.name || 'Sin Título'}</span>
                           {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3 h-3 text-accent opacity-70 shrink-0" /></span>}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
@@ -1051,7 +1054,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
                           <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
                             <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
-                              {item.name}
+                              {item.name || 'Sin Título'}
                               {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
                             </div>
                             {!isFolder && (
@@ -1219,7 +1222,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
                             <div className="flex-1 min-w-0 mr-14 flex flex-col justify-center">
                               <div className="font-medium text-text-primary text-xs flex items-center gap-2">
-                                <span className="truncate block">{item.name}</span>
+                                <span className="truncate block">{item.name || 'Sin Título'}</span>
                                 {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
                               </div>
                               {!isFolder && (

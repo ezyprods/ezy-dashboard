@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
@@ -262,7 +263,9 @@ export default function MatricesPage() {
                 <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium mb-4">
                   <User className="w-3.5 h-3.5 text-accent-light" />
                   <span>Artista:</span>
-                  <span className="text-text-primary">{m.artistName || 'Desconocido'}</span>
+                  <Link href={`/artists/${m.artistId}`} className="text-text-primary hover:text-accent hover:underline transition-colors">
+                    {m.artistName || 'Desconocido'}
+                  </Link>
                 </div>
               </div>
 
@@ -322,7 +325,9 @@ export default function MatricesPage() {
                     <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium mb-4">
                       <User className="w-3.5 h-3.5 text-accent-light" />
                       <span>Artista:</span>
-                      <span className="text-text-primary">{m.artistName || 'Desconocido'}</span>
+                      <Link href={`/artists/${m.artistId}`} className="text-text-primary hover:text-accent hover:underline transition-colors">
+                        {m.artistName || 'Desconocido'}
+                      </Link>
                     </div>
                   </div>
 
