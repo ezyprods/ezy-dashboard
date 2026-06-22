@@ -10,12 +10,17 @@ export function DialogProvider() {
   const [inputValue, setInputValue] = useState('');
 
   useEffect(() => {
-    setDialogListener((opts) => {
+    const handleDialogEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<DialogOptions>;
+      const opts = customEvent.detail;
       setOptions(opts);
       if (opts.type === 'prompt') {
         setInputValue(opts.defaultValue || '');
       }
-    });
+    };
+
+    window.addEventListener('custom-dialog', handleDialogEvent);
+    return () => window.removeEventListener('custom-dialog', handleDialogEvent);
   }, []);
 
   if (!options) return null;

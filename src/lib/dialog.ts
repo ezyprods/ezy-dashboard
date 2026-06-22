@@ -10,43 +10,85 @@ export type DialogOptions = {
   onCancel?: () => void;
 };
 
-type DialogListener = (options: DialogOptions) => void;
-let listener: DialogListener | null = null;
-
 export const setDialogListener = (l: DialogListener) => {
-  listener = l;
+  // Not used directly anymore, keeping signature for backwards compatibility
 };
 
 export const customConfirm = (message: string, title?: string): Promise<boolean> => {
   return new Promise((resolve) => {
-    if (!listener) {
-      resolve(window.confirm(message));
+    if (typeof window === 'undefined') {
+      resolve(false);
       return;
     }
-    listener({
-      type: 'confirm',
-      title,
-      message,
-      onConfirm: () => resolve(true),
-      onCancel: () => resolve(false),
+    
+    // Fallback to window.confirm if DialogProvider is missing after 1s
+    let handled = false;
+    const fallbackTimeout = setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        resolve(window.confirm(message));
+      }
+    }, 500);
+
+    const event = new CustomEvent('custom-dialog', {
+      detail: {
+        type: 'confirm',
+        title,
+        message,
+        onConfirm: () => {
+          if (handled) return;
+          handled = true;
+          clearTimeout(fallbackTimeout);
+          resolve(true);
+        },
+        onCancel: () => {
+          if (handled) return;
+          handled = true;
+          clearTimeout(fallbackTimeout);
+          resolve(false);
+        },
+      }
     });
+    window.dispatchEvent(event);
   });
 };
 
 export const customPrompt = (message: string, defaultValue?: string, title?: string): Promise<string | null> => {
   return new Promise((resolve) => {
-    if (!listener) {
-      resolve(window.prompt(message, defaultValue));
+    if (typeof window === 'undefined') {
+      resolve(null);
       return;
     }
-    listener({
-      type: 'prompt',
-      title,
-      message,
-      defaultValue,
-      onConfirm: (val) => resolve(val || null),
-      onCancel: () => resolve(null),
+    
+    let handled = false;
+    const fallbackTimeout = setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        resolve(window.prompt(message, defaultValue));
+      }
+    }, 500);
+
+    const event = new CustomEvent('custom-dialog', {
+      detail: {
+        type: 'prompt',
+        title,
+        message,
+        defaultValue,
+        onConfirm: (val: string | undefined) => {
+          if (handled) return;
+          handled = true;
+          clearTimeout(fallbackTimeout);
+          resolve(val || null);
+        },
+        onCancel: () => {
+          if (handled) return;
+          handled = true;
+          clearTimeout(fallbackTimeout);
+          resolve(null);
+        },
+      }
     });
+    window.dispatchEvent(event);
   });
 };
 
