@@ -387,10 +387,10 @@ export function CellComponent({
       e.preventDefault();
       e.stopPropagation();
       showMenu(e.clientX, e.clientY, [
-        { label: 'Pendiente', icon: 'Circle', action: () => handleUpdate({ status: 'todo' }) },
-        { label: 'En progreso', icon: 'Clock', action: () => handleUpdate({ status: 'in_progress' }) },
-        { label: 'Revisión', icon: 'Eye', action: () => handleUpdate({ status: 'review' }) },
-        { label: 'Hecho', icon: 'CheckCircle2', action: () => handleUpdate({ status: 'done' }) }
+        { label: 'Pendiente', icon: 'Circle', iconClassName: 'text-text-secondary', className: 'hover:text-text-secondary', action: () => handleUpdate({ status: 'todo' }) },
+        { label: 'En progreso', icon: 'Clock', iconClassName: 'text-warning', className: 'text-warning hover:bg-warning/10 hover:text-warning', action: () => handleUpdate({ status: 'in_progress' }) },
+        { label: 'Revisión', icon: 'Eye', iconClassName: 'text-info', className: 'text-info hover:bg-info/10 hover:text-info', action: () => handleUpdate({ status: 'review' }) },
+        { label: 'Hecho', icon: 'CheckCircle2', iconClassName: 'text-success', className: 'text-success hover:bg-success/10 hover:text-success', action: () => handleUpdate({ status: 'done' }) }
       ]);
     };
 

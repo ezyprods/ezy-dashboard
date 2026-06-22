@@ -8,6 +8,8 @@ export interface MenuItem {
   action?: () => void;
   variant?: 'default' | 'danger';
   separator?: boolean;
+  className?: string;
+  iconClassName?: string;
 }
 
 interface MenuState {

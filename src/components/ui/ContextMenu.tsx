@@ -23,6 +23,9 @@ import {
   ArrowRightLeft,
   Trash2,
   Edit3,
+  Circle,
+  Clock,
+  CheckCircle2,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -49,13 +52,16 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ArrowRightLeft,
   Trash2,
   Edit3,
+  Circle,
+  Clock,
+  CheckCircle2,
 };
 
-function MenuIcon({ name }: { name?: string }) {
+function MenuIcon({ name, className }: { name?: string; className?: string }) {
   if (!name) return null;
   const Icon = ICON_MAP[name];
   if (!Icon) return null;
-  return <Icon className="w-3.5 h-3.5 shrink-0" />;
+  return <Icon className={cn("w-3.5 h-3.5 shrink-0", className)} />;
 }
 
 export function GlobalContextMenu() {
@@ -235,10 +241,11 @@ export function GlobalContextMenu() {
               'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors duration-100 text-left',
               item.variant === 'danger'
                 ? 'text-error hover:bg-error/10'
-                : 'text-text-primary hover:bg-accent/10 hover:text-accent-light'
+                : 'text-text-primary hover:bg-accent/10 hover:text-accent-light',
+              item.className
             )}
           >
-            <MenuIcon name={item.icon} />
+            <MenuIcon name={item.icon} className={item.iconClassName} />
             {item.label}
           </button>
         );
