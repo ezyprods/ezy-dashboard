@@ -581,7 +581,7 @@ export function ProductionGridBoard({
                         icon: t.id === 'status' ? 'Circle' : t.id === 'file' ? 'Paperclip' : t.id === 'checklist' ? 'CheckSquare' : t.id === 'text' ? 'AlignLeft' : 'Calendar',
                         action: () => {
                           const id = Math.random().toString(36).substring(7);
-                          const updatedRows = grid.rows.map(r => ({ ...r, cells: { ...r.cells, [id]: { status: 'todo' } } }));
+                          const updatedRows = grid.rows.map(r => ({ ...r, cells: { ...r.cells, [id]: { status: 'todo' as FlexTaskStatus } } }));
                           saveGrid({ ...grid, columns: [...grid.columns, { id, name: t.label, type: t.id }], rows: updatedRows });
                         }
                       })));
