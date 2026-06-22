@@ -225,6 +225,21 @@ export function SmartUploadModal({
 
     if (initialFiles.length === 0 || isArtistsLoading) return;
 
+    const inlineSortedArtists = [...artists].sort((a, b) => {
+      let accessedA = 0, accessedB = 0;
+      if (typeof window !== 'undefined') {
+        const storedA = localStorage.getItem(`accessed_${a.id}`);
+        const storedB = localStorage.getItem(`accessed_${b.id}`);
+        const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        accessedA = storedA ? parseInt(storedA, 10) : (isNaN(timeA) ? 0 : timeA);
+        accessedB = storedB ? parseInt(storedB, 10) : (isNaN(timeB) ? 0 : timeB);
+        if (isNaN(accessedA)) accessedA = 0;
+        if (isNaN(accessedB)) accessedB = 0;
+      }
+      return accessedB - accessedA;
+    });
+
     // Filter out files that are already in the list
     const newFiles = initialFiles.filter(f => !items.some(item => item.file.name === f.name && item.file.size === f.size && item.file.lastModified === f.lastModified));
 
@@ -261,6 +276,9 @@ export function SmartUploadModal({
         if (bestArtistMatch) {
           detectedArtistId = bestArtistMatch.id;
           detectedArtistName = bestArtistMatch.name;
+        } else if (inlineSortedArtists.length > 0) {
+          detectedArtistId = inlineSortedArtists[0].id;
+          detectedArtistName = inlineSortedArtists[0].name;
         } else if (artists.length > 0) {
           detectedArtistId = artists[0].id;
           detectedArtistName = artists[0].name;

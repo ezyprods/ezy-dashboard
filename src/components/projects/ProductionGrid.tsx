@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, Plus, Trash2, CheckCircle2, Clock, Eye, Circle, GripVertical, Calendar, MessageSquare, Paperclip, Settings, Play, Download, X, Link } from 'lucide-react';
+import { Loader2, Plus, Trash2, CheckCircle2, Clock, Eye, Circle, GripVertical, Calendar, MessageSquare, Paperclip, Settings, Play, Download, X, Link, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { ProductionGrid, FlexTaskStatus, GridCell } from '@/types';
@@ -535,6 +535,23 @@ export function ProductionGridBoard({
               <option value="">-- Sin Proyecto Vinculado --</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
             </select>
+            {linkedProjectId && (() => {
+              const linkedProject = projects.find(p => p.id === linkedProjectId);
+              if (linkedProject?.driveFolderId) {
+                return (
+                  <a
+                    href={`https://drive.google.com/drive/folders/${linkedProject.driveFolderId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-secondary hover:text-accent transition-colors p-1"
+                    title="Abrir carpeta en Google Drive"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                );
+              }
+              return null;
+            })()}
           </div>
           <div className="flex items-center gap-4 w-full justify-between sm:justify-end">
             <div className="text-sm font-bold text-text-secondary">{progress}% Completado</div>
