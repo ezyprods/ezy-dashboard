@@ -50,7 +50,7 @@ export function GlobalMatricesWidget() {
           </span>
         </div>
         
-        <div className="p-3 flex-1 min-h-0 overflow-y-auto space-y-2 custom-scrollbar">
+        <div className="p-3 flex-1 min-h-0 overflow-y-auto scroll-smooth space-y-2 custom-scrollbar">
           {matrices.length === 0 ? (
             <div className="text-center py-8 text-xs text-text-secondary h-full flex flex-col items-center justify-center">
               <Table2 className="w-6 h-6 mx-auto mb-2 opacity-30" />

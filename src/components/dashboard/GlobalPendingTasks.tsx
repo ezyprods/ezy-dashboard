@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, KanbanSquare, Circle, Clock, AlertCircle, ArrowRight, CheckCircle2, Play, Download, ExternalLink, MoreHorizontal, Link as LinkIcon } from 'lucide-react';
+import { Loader2, KanbanSquare, Circle, Clock, AlertCircle, ArrowRight, CheckCircle2, Play, Download, ExternalLink, MoreHorizontal, Link as LinkIcon, GripVertical } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
@@ -71,15 +71,15 @@ function TaskCard({
     <div
       ref={setNodeRef}
       style={style}
-      {...(isOverlay ? {} : attributes)}
-      {...(isOverlay ? {} : listeners)}
+      {...(isOverlay ? {} : {})}
+      {...(isOverlay ? {} : {})}
       onContextMenu={handleContextMenu}
       className={cn(
         "relative p-3.5 rounded-xl border transition-all group block select-none",
         borderColor,
         "bg-surface hover:bg-surface-elevated",
         isDragging && !isOverlay ? "opacity-30" : "opacity-100",
-        isOverlay ? "shadow-2xl scale-105 cursor-grabbing" : "cursor-grab hover:-translate-y-0.5 hover:shadow-md"
+        isOverlay ? "shadow-2xl scale-105" : "hover:-translate-y-0.5 hover:shadow-md"
       )}
     >
       <div className="flex justify-between items-start mb-2">
@@ -103,13 +103,26 @@ function TaskCard({
       </div>
       
       <div className="flex items-start justify-between gap-2 mb-1">
-        <Link 
-          href={`/artists/${task.artistId}?tab=matrices`}
-          className="font-semibold text-text-primary text-sm line-clamp-2 leading-tight hover:text-accent transition-colors z-10"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {task.rowName}
-        </Link>
+        <div className="flex items-start gap-1.5 flex-1 min-w-0">
+          <button
+            {...(isOverlay ? {} : attributes)}
+            {...(isOverlay ? {} : listeners)}
+            className="text-text-secondary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-opacity shrink-0 cursor-grab active:cursor-grabbing mt-0.5"
+            title="Arrastrar para mover"
+            onPointerDown={(e) => {
+              if (isOverlay) e.stopPropagation();
+            }}
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+          <Link 
+            href={`/artists/${task.artistId}?tab=matrices`}
+            className="font-semibold text-text-primary text-sm line-clamp-2 leading-tight hover:text-accent transition-colors z-10"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {task.rowName}
+          </Link>
+        </div>
         
         {/* Linked File Actions */}
         {task.linkedFile && (
@@ -219,7 +232,7 @@ function StatusColumn({
         </span>
       </div>
       
-      <div className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-3">
+      <div className="flex-1 p-3 overflow-y-auto scroll-smooth custom-scrollbar space-y-3">
         {columnTasks.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-40 text-text-secondary min-h-[100px]">
             <CheckCircle2 className="w-8 h-8 mb-2" />
