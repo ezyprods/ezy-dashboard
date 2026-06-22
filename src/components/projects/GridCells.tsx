@@ -379,11 +379,27 @@ export function CellComponent({
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
+  const { showMenu } = useContextMenu();
   const handleUpdate = (updates: Partial<GridCell>) => onUpdate(rowId, colId, updates);
 
   if (colType === 'status') {
+    const handleStatusContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showMenu(e.clientX, e.clientY, [
+        { label: 'Pendiente', icon: 'Circle', action: () => handleUpdate({ status: 'todo' }) },
+        { label: 'En progreso', icon: 'Clock', action: () => handleUpdate({ status: 'in_progress' }) },
+        { label: 'Revisión', icon: 'Eye', action: () => handleUpdate({ status: 'review' }) },
+        { label: 'Hecho', icon: 'CheckCircle2', action: () => handleUpdate({ status: 'done' }) }
+      ]);
+    };
+
     return (
-      <td className="p-1.5 sm:p-3 border-b border-r border-border min-w-[100px] sm:min-w-[130px]">
+      <td 
+        className="p-1.5 sm:p-3 border-b border-r border-border min-w-[100px] sm:min-w-[130px] cursor-context-menu"
+        onContextMenu={handleStatusContextMenu}
+        data-context="ignore"
+      >
         <StatusCellUI status={(cellData.status as FlexTaskStatus) || 'todo'} onStatusChange={status => handleUpdate({ status })} />
       </td>
     );
@@ -478,7 +494,6 @@ export function CellComponent({
       onDrop={handleNativeDrop}
     >
       <div className="w-full relative">
-        {colType === 'status' && <StatusCellUI status={cellData.status || 'todo'} onStatusChange={s => handleUpdate({ status: s })} />}
         {colType === 'file' && (
           <FileCellUI 
             fileId={cellData.fileId} fileName={cellData.fileName} isUploading={isUploading}
