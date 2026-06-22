@@ -180,7 +180,7 @@ export default function ArtistPreviewsPage() {
               {/* Cover */}
               <div
                 className="w-full aspect-square bg-surface border-b border-border flex items-center justify-center overflow-hidden cursor-pointer relative"
-                onClick={() => window.open(`/previews/${release.id}`, '_blank')}
+                onClick={() => router.push(`/artists/${artistId}/releases/${release.id}/edit`)}
               >
                 {release.coverArtId ? (
                   <img
@@ -255,7 +255,7 @@ export default function ArtistPreviewsPage() {
                 {/* Edit */}
                 <button
                   onClick={() => router.push(`/artists/${artistId}/releases/${release.id}/edit`)}
-                  title="Editar"
+                  title="Entrar"
                   className="p-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-accent hover:border-accent/30 transition-all"
                 >
                   <Settings2 className="w-4 h-4" />

@@ -54,11 +54,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const drive = getDriveService();
   
   try {
-    await drive.files.update({
+    await drive.files.delete({
       fileId: id,
-      requestBody: {
-        trashed: true,
-      },
     });
     return NextResponse.json({ success: true });
   } catch (error: any) {
