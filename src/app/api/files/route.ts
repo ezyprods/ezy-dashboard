@@ -246,6 +246,14 @@ export async function POST(request: Request) {
       fields: 'id, name, webViewLink, webContentLink',
     });
 
+    // Make file public to allow direct streaming and bypass Vercel bandwidth
+    if (response.data.id) {
+      await drive.permissions.create({
+        fileId: response.data.id,
+        requestBody: { role: 'reader', type: 'anyone' }
+      }).catch(console.error);
+    }
+
     return NextResponse.json({ 
       success: true, 
       file: response.data 
