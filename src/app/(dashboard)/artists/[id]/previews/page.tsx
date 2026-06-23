@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import {
   ArrowLeft, Plus, Disc, Loader2, Play, Settings2,
   Shield, ShieldOff, Copy, CheckCircle2, ExternalLink,
-  Music, Eye, Trash2, Globe, Calendar, ListMusic, RefreshCw
+  Music, Eye, Trash2, Globe, Calendar, ListMusic, RefreshCw, X
 } from 'lucide-react';
 import type { Release } from '@/types';
 import { customConfirm, customPrompt } from '@/lib/dialog';
@@ -21,6 +21,8 @@ export default function ArtistPreviewsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newReleaseTitle, setNewReleaseTitle] = useState('');
 
   useEffect(() => {
     fetchReleases();
@@ -40,8 +42,9 @@ export default function ArtistPreviewsPage() {
     }
   };
 
-  const handleCreateRelease = async () => {
-    const title = await customPrompt('Nombre de la nueva Preview (Ej: EP Verano, Single Debut):');
+  const handleCreateReleaseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = newReleaseTitle.trim();
     if (!title) return;
 
     setIsCreating(true);
@@ -55,14 +58,10 @@ export default function ArtistPreviewsPage() {
       const data = await res.json();
       const releaseId = data.id || data.release?.id;
       if (releaseId) {
-        // Store the just-created release in sessionStorage so the edit page can use it
-        // immediately without waiting for Google Drive's indexing propagation delay
         try {
           const newRelease = { ...data, tracks: data.tracks || [] };
           sessionStorage.setItem(`release_cache_${releaseId}`, JSON.stringify(newRelease));
-        } catch {
-          // sessionStorage not available – the edit page will retry via Drive API
-        }
+        } catch {}
         router.push(`/artists/${artistId}/releases/${releaseId}/editor`);
       } else {
         throw new Error('No release ID returned');
@@ -70,7 +69,6 @@ export default function ArtistPreviewsPage() {
     } catch (err) {
       console.error(err);
       toast.error('Error creando el preview');
-    } finally {
       setIsCreating(false);
     }
   };
@@ -133,7 +131,7 @@ export default function ArtistPreviewsPage() {
           <Button variant="ghost" size="sm" onClick={fetchReleases} disabled={isLoading}>
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button onClick={handleCreateRelease} disabled={isCreating}>
+          <Button onClick={() => setShowCreateModal(true)} disabled={isCreating}>
             {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
             Nueva Preview
           </Button>
@@ -178,7 +176,7 @@ export default function ArtistPreviewsPage() {
           <p className="mb-6 max-w-md mx-auto text-sm">
             Crea pre-escuchas exclusivas para compartir con los artistas. Puedes hacer las públicas o mantenerlas privadas.
           </p>
-          <Button onClick={handleCreateRelease} disabled={isCreating}>
+          <Button onClick={() => setShowCreateModal(true)} disabled={isCreating}>
             <Plus className="w-4 h-4 mr-2" /> Crear mi primera Preview
           </Button>
         </div>
@@ -302,6 +300,50 @@ export default function ArtistPreviewsPage() {
                 "Previews / Lanzamientos" del portal del artista. Actívalo desde la pestaña <strong className="text-accent">Portal</strong>.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Preview Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in" onClick={() => !isCreating && setShowCreateModal(false)}>
+          <div className="glass bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => !isCreating && setShowCreateModal(false)} className="absolute top-4 right-4 text-text-secondary hover:text-text-primary p-1">
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h3 className="text-xl font-bold text-text-primary mb-2 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-accent" />
+              Nueva Preview
+            </h3>
+            
+            <p className="text-sm text-text-secondary mb-6">
+              Introduce el nombre de la nueva preview (ej: EP Verano, Single Debut, etc.) para empezar a configurarla.
+            </p>
+            
+            <form onSubmit={handleCreateReleaseSubmit}>
+              <div className="mb-6">
+                <input 
+                  autoFocus
+                  type="text"
+                  placeholder="Nombre de la Preview..."
+                  value={newReleaseTitle}
+                  onChange={(e) => setNewReleaseTitle(e.target.value)}
+                  disabled={isCreating}
+                  className="flex h-10 w-full rounded-md border border-border bg-surface-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+                />
+              </div>
+              
+              <div className="flex justify-end gap-3 mt-4">
+                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)} disabled={isCreating}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={!newReleaseTitle.trim() || isCreating}>
+                  {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  {isCreating ? 'Creando...' : 'Aceptar'}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

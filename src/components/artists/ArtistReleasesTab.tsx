@@ -33,7 +33,7 @@ export function ArtistReleasesTab({ artistId }: { artistId: string }) {
   };
 
   const handleCreateRelease = async () => {
-    const title = await customPrompt('Nombre del lanzamiento (Ej. Album Debut, Single Verano):');
+    const title = window.prompt('Nombre de la nueva Preview (Ej: EP Verano, Single Debut):');
     if (!title) return;
     
     setIsCreating(true);
