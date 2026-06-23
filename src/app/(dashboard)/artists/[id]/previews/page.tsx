@@ -55,6 +55,14 @@ export default function ArtistPreviewsPage() {
       const data = await res.json();
       const releaseId = data.id || data.release?.id;
       if (releaseId) {
+        // Store the just-created release in sessionStorage so the edit page can use it
+        // immediately without waiting for Google Drive's indexing propagation delay
+        try {
+          const newRelease = { ...data, tracks: data.tracks || [] };
+          sessionStorage.setItem(`release_cache_${releaseId}`, JSON.stringify(newRelease));
+        } catch {
+          // sessionStorage not available – the edit page will retry via Drive API
+        }
         router.push(`/artists/${artistId}/releases/${releaseId}/edit`);
       } else {
         throw new Error('No release ID returned');
@@ -66,6 +74,7 @@ export default function ArtistPreviewsPage() {
       setIsCreating(false);
     }
   };
+
 
   const togglePublic = async (releaseId: string, currentIsPublic: boolean) => {
     try {

@@ -62,20 +62,59 @@ export default function ReleaseEditorPage() {
     fetchRelease();
   }, [releaseId]);
 
-  const fetchRelease = async () => {
+  const fetchRelease = async (retries = 5) => {
     setIsLoading(true);
     try {
+      // Try to use the sessionStorage cache written by the "create preview" flow
+      // This avoids the Google Drive eventual-consistency delay on new releases
+      const cacheKey = `release_cache_${releaseId}`;
+      let cachedRelease: any = null;
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          cachedRelease = JSON.parse(cached);
+          sessionStorage.removeItem(cacheKey); // Use once, then discard
+        }
+      } catch { /* sessionStorage not available */ }
+
+      if (cachedRelease) {
+        // Use cached data immediately so the page loads without waiting for Drive
+        const release = { ...cachedRelease, tracks: cachedRelease.tracks || [] };
+        setRelease(release);
+        setShuffledIndices(Array.from({ length: release.tracks.length }, (_, i) => i));
+        if (cachedRelease.artistId) {
+          // Fetch artist name in the background (non-blocking)
+          fetch(`/api/artists/${cachedRelease.artistId}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d?.artist?.name) setArtistName(d.artist.name); })
+            .catch(() => {});
+        }
+        setIsLoading(false);
+        return;
+      }
+
       const res = await fetch(`/api/releases/${releaseId}`);
-      if (!res.ok) throw new Error('Error al cargar el lanzamiento');
+      if (res.status === 404 && retries > 0) {
+        // Google Drive has eventual consistency - the new config file may not be
+        // indexed yet. Wait 1.5s and retry.
+        await new Promise(r => setTimeout(r, 1500));
+        return fetchRelease(retries - 1);
+      }
+      if (!res.ok) throw new Error(`Error al cargar el lanzamiento (${res.status})`);
       const data = await res.json();
-      setRelease(data.release);
+      // Ensure tracks is always an array
+      const release = { ...data.release, tracks: data.release?.tracks || [] };
+      setRelease(release);
       if (data.artistName) setArtistName(data.artistName);
 
-      if (data.release?.tracks?.length > 0) {
-        setShuffledIndices(Array.from({ length: data.release.tracks.length }, (_, i) => i));
+      if (release.tracks.length > 0) {
+        setShuffledIndices(Array.from({ length: release.tracks.length }, (_, i) => i));
+      } else {
+        setShuffledIndices([]);
       }
-    } catch {
-      customAlert('Error al cargar el lanzamiento');
+    } catch (err: any) {
+      console.error('fetchRelease error:', err);
+      customAlert('Error al cargar el lanzamiento: ' + (err.message || 'Desconocido'));
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +164,7 @@ export default function ReleaseEditorPage() {
     
     setRelease(prev => {
       if (!prev) return prev;
-      const newTracks = [...prev.tracks, newTrack];
+      const newTracks = [...(prev.tracks || []), newTrack];
       setShuffledIndices(Array.from({ length: newTracks.length }, (_, i) => i));
       return { ...prev, tracks: newTracks };
     });
@@ -134,7 +173,7 @@ export default function ReleaseEditorPage() {
   const updateTrackTitle = (trackId: string, newTitle: string) => {
     setRelease(prev => {
       if (!prev) return prev;
-      return { ...prev, tracks: prev.tracks.map(t => t.id === trackId ? { ...t, title: newTitle } : t) };
+      return { ...prev, tracks: (prev.tracks || []).map(t => t.id === trackId ? { ...t, title: newTitle } : t) };
     });
   };
 
@@ -216,7 +255,7 @@ export default function ReleaseEditorPage() {
     if (!await customConfirm('¿Eliminar esta canción del lanzamiento?')) return;
     setRelease(prev => {
       if (!prev) return prev;
-      const newTracks = prev.tracks.filter(t => t.id !== trackId);
+      const newTracks = (prev.tracks || []).filter(t => t.id !== trackId);
       setShuffledIndices(Array.from({ length: newTracks.length }, (_, i) => i));
       if (currentTrackIndex === index) {
         setIsPlaying(false);
@@ -231,7 +270,7 @@ export default function ReleaseEditorPage() {
   const reorderTracks = (fromIndex: number, toIndex: number) => {
     setRelease(prev => {
       if (!prev) return prev;
-      const newTracks = [...prev.tracks];
+      const newTracks = [...(prev.tracks || [])];
       const [moved] = newTracks.splice(fromIndex, 1);
       newTracks.splice(toIndex, 0, moved);
 
