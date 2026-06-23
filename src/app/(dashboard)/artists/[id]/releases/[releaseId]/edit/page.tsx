@@ -653,7 +653,7 @@ export default function ReleaseEditorPage() {
         <div className="relative z-10 px-8 py-4 flex items-center gap-6 bg-gradient-to-b from-[#121212]/0 to-[#121212]">
           <button 
             onClick={togglePlay}
-            disabled={(release.tracks || []).length === 0}
+            disabled={(release?.tracks || []).length === 0}
             className="w-14 h-14 bg-[#1ed760] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isBuffering ? <Loader2 className="w-6 h-6 animate-spin text-black" /> : isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
@@ -698,9 +698,9 @@ export default function ReleaseEditorPage() {
           </div>
 
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={(release.tracks || []).map(t => t.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={(release?.tracks || []).map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="flex flex-col gap-1">
-                {(release.tracks || []).map((track, index) => {
+                {(release?.tracks || []).map((track, index) => {
                   const isTrackPlaying = currentTrackIndex === index;
                   return (
                     <SortableTrackItem
