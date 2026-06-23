@@ -45,7 +45,7 @@ export function ArtistReleasesTab({ artistId }: { artistId: string }) {
       });
       if (!res.ok) throw new Error('Error creating release');
       const data = await res.json();
-      router.push(`/artists/${artistId}/releases/${data.release.id}/edit`);
+      router.push(`/artists/${artistId}/releases/${data.release.id}/editor`);
     } catch (err) {
       console.error(err);
       customAlert('Error creando el lanzamiento');
@@ -104,7 +104,7 @@ export function ArtistReleasesTab({ artistId }: { artistId: string }) {
                   <h4 className="font-bold text-text-primary text-sm line-clamp-1">{release.title}</h4>
                   <p className="text-xs text-text-secondary mt-0.5">{release.tracks?.length || 0} canciones</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => router.push(`/artists/${artistId}/releases/${release.id}/edit`)} className="opacity-0 group-hover:opacity-100 h-8 w-8 text-text-secondary hover:text-accent">
+                <Button variant="ghost" size="icon" onClick={() => router.push(`/artists/${artistId}/releases/${release.id}/editor`)} className="opacity-0 group-hover:opacity-100 h-8 w-8 text-text-secondary hover:text-accent">
                   <Settings2 className="w-4 h-4" />
                 </Button>
               </div>
