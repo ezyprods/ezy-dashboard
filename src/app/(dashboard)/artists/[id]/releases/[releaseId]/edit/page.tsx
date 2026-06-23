@@ -8,6 +8,7 @@ import {
   Shuffle, Repeat, Repeat1, Clock, ArrowLeft, Save, Plus,
   Shield, ShieldOff, Copy, CheckCircle2, GripVertical, Trash2, Edit3, Image as ImageIcon
 } from 'lucide-react';
+import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -20,7 +21,6 @@ export default function ReleaseEditorPage() {
   const router = useRouter();
   const artistId = params?.id as string;
   const releaseId = params?.releaseId as string;
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [release, setRelease] = useState<Release | null>(null);
   const [artistName, setArtistName] = useState<string>('Unknown Artist');
@@ -35,15 +35,8 @@ export default function ReleaseEditorPage() {
 
   // Playback State
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
-  const [isDraggingProgress, setIsDraggingProgress] = useState(false);
-  const progressBarRef = useRef<HTMLDivElement>(null);
-
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
@@ -203,7 +196,6 @@ export default function ReleaseEditorPage() {
         newTracks = newTracks.map(t => t.id === track.id ? { ...t, previewFileId: mp3FileId } : t);
         setRelease(prev => prev ? { ...prev, tracks: newTracks } : null);
         
-        // Save release immediately so we don't lose progress if page crashes
         await fetch(`/api/releases/${releaseId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -243,7 +235,6 @@ export default function ReleaseEditorPage() {
       const [moved] = newTracks.splice(fromIndex, 1);
       newTracks.splice(toIndex, 0, moved);
 
-      // Adjust currently playing index if it shifted
       if (currentTrackIndex === fromIndex) {
         setCurrentTrackIndex(toIndex);
       } else if (currentTrackIndex > fromIndex && currentTrackIndex <= toIndex) {
@@ -267,7 +258,6 @@ export default function ReleaseEditorPage() {
       const newFileName = `Portada - ${cleanTitle} - v${version}.${ext}`;
       
       const formData = new FormData();
-      // Use filename in append to avoid new File() constructor errors on some browsers
       formData.append('file', croppedFile, newFileName);
       formData.append('parentId', release?.id || releaseId);
       formData.append('skipSimilarity', 'true');
@@ -333,8 +323,40 @@ export default function ReleaseEditorPage() {
     setRelease(prev => prev ? { ...prev, coverArtId: fileId } : null);
   };
 
-  // Playback logic
   const currentTrack = release?.tracks?.[currentTrackIndex];
+
+  const currentIndexInQueue = shuffledIndices.indexOf(currentTrackIndex);
+  let nextTrackIndex = -1;
+  if (currentIndexInQueue >= 0 && currentIndexInQueue < shuffledIndices.length - 1) {
+    nextTrackIndex = shuffledIndices[currentIndexInQueue + 1];
+  } else if (repeatMode === 'all' && shuffledIndices.length > 0) {
+    nextTrackIndex = shuffledIndices[0];
+  } else if (repeatMode === 'one' && currentTrack) {
+    nextTrackIndex = currentTrackIndex;
+  }
+  const nextTrack = nextTrackIndex !== -1 ? release?.tracks?.[nextTrackIndex] : null;
+
+  const currentTrackUrl = currentTrack ? `/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}` : null;
+  const nextTrackUrl = nextTrack ? `/api/audio/${nextTrack.previewFileId || nextTrack.newFileId}` : null;
+
+  const {
+    isPlaying,
+    isBuffering,
+    progress,
+    currentTime,
+    duration,
+    togglePlay,
+    play,
+    pause,
+    seekTo,
+    setIsPlaying
+  } = useAudioPlayer({
+    currentTrackUrl,
+    nextTrackUrl,
+    onTrackEnd: () => handleNext(true),
+    volume,
+    isMuted
+  });
 
   useEffect(() => {
     if ('mediaSession' in navigator && currentTrack && release) {
@@ -347,31 +369,12 @@ export default function ReleaseEditorPage() {
         ] : []
       });
 
-      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
-      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      navigator.mediaSession.setActionHandler('play', play);
+      navigator.mediaSession.setActionHandler('pause', pause);
       navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
-      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
+      navigator.mediaSession.setActionHandler('nexttrack', () => handleNext(false));
     }
-  }, [currentTrackIndex, release, artistName, currentTrack]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) {
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => setIsPlaying(false));
-      }
-    } else {
-      audio.pause();
-    }
-  }, [isPlaying, currentTrackIndex]);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [volume, isMuted]);
+  }, [currentTrackIndex, release, artistName, currentTrack, play, pause]);
 
   const toggleShuffle = () => {
     setIsShuffle(prev => {
@@ -400,11 +403,11 @@ export default function ReleaseEditorPage() {
     });
   };
 
-  const handleNext = () => {
+  const handleNext = (autoAdvance = false) => {
     if (!release?.tracks) return;
-    if (repeatMode === 'one' && audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play();
+    if (repeatMode === 'one' && autoAdvance) {
+      seekTo(0);
+      play();
       return;
     }
 
@@ -419,15 +422,15 @@ export default function ReleaseEditorPage() {
         setIsPlaying(true);
       } else {
         setIsPlaying(false);
-        if (audioRef.current) audioRef.current.currentTime = 0;
+        seekTo(0);
       }
     }
   };
 
   const handlePrev = () => {
     if (!release?.tracks) return;
-    if (audioRef.current && audioRef.current.currentTime > 3) {
-      audioRef.current.currentTime = 0;
+    if (currentTime > 3) {
+      seekTo(0);
       return;
     }
     if (history.length > 0) {
@@ -442,21 +445,13 @@ export default function ReleaseEditorPage() {
       setCurrentTrackIndex(shuffledIndices[currentIndexInQueue - 1]);
       setIsPlaying(true);
     } else {
-      if (audioRef.current) audioRef.current.currentTime = 0;
+      seekTo(0);
     }
-  };
-
-  const handleTimeUpdate = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const dur = audio.duration || 1;
-    setProgress((audio.currentTime / dur) * 100);
-    setCurrentTime(audio.currentTime);
   };
 
   const playTrack = (index: number) => {
     if (currentTrackIndex === index) {
-      setIsPlaying(prev => !prev);
+      togglePlay();
     } else {
       setHistory(prev => [...prev, currentTrackIndex]);
       setCurrentTrackIndex(index);
@@ -477,31 +472,7 @@ export default function ReleaseEditorPage() {
         case 'Space':
           e.preventDefault();
           if (release?.tracks && release.tracks.length > 0) {
-            setIsPlaying(prev => !prev);
-          }
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setVolume(prev => {
-            const next = Math.min(1, prev + 0.05);
-            if (next > 0) setIsMuted(false);
-            return next;
-          });
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          setVolume(prev => Math.max(0, prev - 0.05));
-          break;
-        case 'ArrowRight':
-          e.preventDefault();
-          if (audioRef.current) {
-            audioRef.current.currentTime = Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + 5);
-          }
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          if (audioRef.current) {
-            audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5);
+            togglePlay();
           }
           break;
         case 'KeyM':
@@ -514,38 +485,6 @@ export default function ReleaseEditorPage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [release?.tracks]);
-
-  const handleSeekDrag = (e: MouseEvent | React.MouseEvent) => {
-    if (!progressBarRef.current || !audioRef.current || !duration) return;
-    const rect = progressBarRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const percentage = x / rect.width;
-    audioRef.current.currentTime = percentage * duration;
-    setProgress(percentage * 100);
-    setCurrentTime(audioRef.current.currentTime);
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDraggingProgress) handleSeekDrag(e);
-    };
-    const handleMouseUp = () => {
-      if (isDraggingProgress) setIsDraggingProgress(false);
-    };
-
-    if (isDraggingProgress) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDraggingProgress, duration]);
-
-  const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
-    handleSeekDrag(e);
-  };
 
   const formatTime = (sec: number) => {
     if (!sec || isNaN(sec)) return '0:00';
@@ -582,18 +521,6 @@ export default function ReleaseEditorPage() {
           selectedFileIds={release.tracks?.map(t => t.originalFileId) || []}
           onClose={() => setIsPickerOpen(false)}
           onSelect={handleAddTrack}
-        />
-      )}
-
-      {/* Hidden audio */}
-      {currentTrack && (
-        <audio
-          ref={audioRef}
-          src={`/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}`}
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={handleNext}
-          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-          autoPlay={isPlaying}
         />
       )}
 
@@ -642,7 +569,6 @@ export default function ReleaseEditorPage() {
 
       {/* Main View Area */}
       <div className="flex-1 overflow-y-auto pb-24 relative hide-scrollbar">
-        {/* Dynamic Background Gradient */}
         <div className="absolute top-0 left-0 right-0 h-[400px] pointer-events-none opacity-40 z-0 overflow-hidden">
           {coverUrl && (
             <div 
@@ -653,7 +579,6 @@ export default function ReleaseEditorPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#121212]" />
         </div>
 
-        {/* Header Content */}
         <div className="relative z-10 px-8 pt-28 pb-8 flex items-end gap-6">
           <div className="flex flex-col gap-3">
             <div 
@@ -683,7 +608,6 @@ export default function ReleaseEditorPage() {
               />
             </div>
             
-            {/* Cover History */}
             {release.coverHistory && release.coverHistory.length > 1 && (
               <div className="flex gap-2 mt-1 max-w-[208px] overflow-x-auto hide-scrollbar pb-1">
                 {release.coverHistory.map((entry, idx) => (
@@ -707,7 +631,6 @@ export default function ReleaseEditorPage() {
           <div className="flex flex-col gap-2 flex-1 min-w-0">
             <span className="text-sm font-bold tracking-wider uppercase text-white/80">Editor de Álbum</span>
             
-            {/* Editable Title */}
             <input
               type="text"
               value={release.title}
@@ -727,33 +650,27 @@ export default function ReleaseEditorPage() {
           </div>
         </div>
 
-        {/* Action Bar */}
         <div className="relative z-10 px-8 py-4 flex items-center gap-6 bg-gradient-to-b from-[#121212]/0 to-[#121212]">
           <button 
-            onClick={() => {
-              if (currentTrackIndex === 0 && !isPlaying && (release.tracks || []).length > 0) playTrack(0);
-              else setIsPlaying(!isPlaying);
-            }}
+            onClick={togglePlay}
             disabled={(release.tracks || []).length === 0}
             className="w-14 h-14 bg-[#1ed760] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
+            {isBuffering ? <Loader2 className="w-6 h-6 animate-spin text-black" /> : isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
           </button>
           
-          {/* Convert MP3 Button */}
           {release?.tracks?.some(t => !t.previewFileId && (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav'))) && (
             <button
               onClick={optimizeTracksToMp3}
               disabled={conversionState.active}
-              className="flex items-center gap-2 px-4 py-2 bg-surface border border-border rounded-full text-sm font-semibold hover:bg-surface-hover hover:text-white transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-[#282828] border border-[#3e3e3e] rounded-full text-sm font-semibold hover:bg-[#3e3e3e] hover:text-white transition-all disabled:opacity-50"
             >
-              {conversionState.active ? <Loader2 className="w-4 h-4 animate-spin text-accent" /> : <Music className="w-4 h-4 text-accent" />}
+              {conversionState.active ? <Loader2 className="w-4 h-4 animate-spin text-[#1db954]" /> : <Music className="w-4 h-4 text-[#1db954]" />}
               {conversionState.active ? 'Optimizando...' : 'Generar MP3s Ultrarrápidos'}
             </button>
           )}
         </div>
         
-        {/* Conversion Progress Bar */}
         {conversionState.active && (
           <div className="px-8 pb-4">
             <div className="bg-[#181818] rounded-xl p-4 border border-[#282828] flex flex-col gap-2">
@@ -771,7 +688,6 @@ export default function ReleaseEditorPage() {
           </div>
         )}
 
-        {/* Tracklist Area */}
         <div className="relative z-10 px-8 pb-12">
           <div className="grid grid-cols-[30px_16px_1fr_40px] md:grid-cols-[30px_16px_1fr_auto_40px] gap-4 px-4 py-2 border-b border-[#282828] text-[#b3b3b3] text-sm font-medium mb-4">
             <div className="text-center"></div>
@@ -793,8 +709,8 @@ export default function ReleaseEditorPage() {
                       index={index}
                       isTrackPlaying={isTrackPlaying}
                       isPlaying={isPlaying}
+                      isBuffering={isBuffering}
                       playTrack={playTrack}
-                      togglePlayPause={() => setIsPlaying(!isPlaying)}
                       updateTrackTitle={updateTrackTitle}
                       removeTrack={removeTrack}
                       formatTime={formatTime}
@@ -822,8 +738,6 @@ export default function ReleaseEditorPage() {
 
       {/* Fixed Bottom Player Bar */}
       <div className="h-[90px] bg-[#181818] border-t border-[#282828] flex items-center justify-between px-2 md:px-4 z-50 shrink-0 gap-2 md:gap-0">
-        
-        {/* Left: Now Playing Info */}
         <div className="flex items-center gap-2 md:gap-3 w-[35%] md:w-[30%] md:min-w-[180px] overflow-hidden">
           {currentTrack ? (
             <>
@@ -831,12 +745,8 @@ export default function ReleaseEditorPage() {
                 {coverUrl ? <img src={coverUrl} alt="Cover" className="w-full h-full object-cover" /> : <Music className="w-6 h-6 text-[#b3b3b3]" />}
               </div>
               <div className="flex flex-col justify-center min-w-0">
-                <span className="text-sm text-white font-medium hover:underline cursor-pointer truncate">
-                  {currentTrack.title}
-                </span>
-                <span className="text-xs text-[#b3b3b3] hover:underline cursor-pointer hover:text-white transition-colors truncate">
-                  {artistName}
-                </span>
+                <span className="text-sm text-white font-medium truncate">{currentTrack.title}</span>
+                <span className="text-xs text-[#b3b3b3] truncate">{artistName}</span>
               </div>
             </>
           ) : (
@@ -844,7 +754,6 @@ export default function ReleaseEditorPage() {
           )}
         </div>
 
-        {/* Center: Player Controls */}
         <div className="flex flex-col items-center flex-1 max-w-[60%] md:max-w-[45%]">
           <div className="flex items-center gap-4 md:gap-6 mb-1.5">
             <button onClick={toggleShuffle} className={`p-1 transition-colors ${isShuffle ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}>
@@ -854,15 +763,12 @@ export default function ReleaseEditorPage() {
               <SkipBack className="w-5 h-5 fill-current" />
             </button>
             <button 
-              onClick={() => {
-                if (!currentTrack && release?.tracks?.length > 0) playTrack(0);
-                else setIsPlaying(!isPlaying);
-              }}
+              onClick={togglePlay}
               className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:scale-105 active:scale-95 transition-transform"
             >
-              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
+              {isBuffering ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
             </button>
-            <button onClick={handleNext} className="p-1 text-[#b3b3b3] hover:text-white transition-colors">
+            <button onClick={() => handleNext(false)} className="p-1 text-[#b3b3b3] hover:text-white transition-colors">
               <SkipForward className="w-5 h-5 fill-current" />
             </button>
             <button 
@@ -870,35 +776,29 @@ export default function ReleaseEditorPage() {
               className={`p-1 transition-colors relative ${repeatMode !== 'off' ? 'text-[#1db954]' : 'text-[#b3b3b3] hover:text-white'}`}
             >
               {repeatMode === 'one' ? <Repeat1 className="w-4 h-4" /> : <Repeat className="w-4 h-4" />}
-              {repeatMode !== 'off' && <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1db954]" />}
             </button>
           </div>
           <div className="flex items-center gap-2 w-full max-w-[600px]">
             <span className="text-xs text-[#a7a7a7] min-w-[40px] text-right tabular-nums">{formatTime(currentTime)}</span>
             <div 
-              ref={progressBarRef}
               className="flex-1 h-1 flex items-center cursor-pointer group relative py-3 -my-3"
-              onMouseDown={(e) => {
-                setIsDraggingProgress(true);
-                handleSeekDrag(e);
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                seekTo((x / rect.width) * duration);
               }}
             >
-              <div className="w-full h-1 bg-[#4d4d4d] rounded-full overflow-hidden pointer-events-none">
+              <div className="w-full h-1 bg-[#4d4d4d] rounded-full overflow-hidden">
                 <div 
-                  className={`h-full bg-white rounded-full transition-all duration-100 ease-linear ${isDraggingProgress ? 'bg-[#1db954]' : 'group-hover:bg-[#1db954]'}`}
+                  className="h-full bg-white rounded-full group-hover:bg-[#1db954] transition-all duration-100 ease-linear"
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <div 
-                className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow pointer-events-none transition-all duration-100 ease-linear ${isDraggingProgress ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                style={{ left: `calc(${progress}% - 6px)` }}
-              />
             </div>
             <span className="text-xs text-[#a7a7a7] min-w-[40px] tabular-nums">{formatTime(duration)}</span>
           </div>
         </div>
 
-        {/* Right: Volume & Extra Controls */}
         <div className="hidden md:flex items-center justify-end gap-3 w-[30%] min-w-[180px]">
           <div className="flex items-center gap-2 w-24">
             <button 
@@ -914,17 +814,16 @@ export default function ReleaseEditorPage() {
               step="0.01"
               value={isMuted ? 0 : volume}
               onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
-              className="w-full h-1 bg-[#4d4d4d] rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:bg-[#1db954] cursor-pointer"
+              className="w-full h-1 bg-[#4d4d4d] rounded-full appearance-none cursor-pointer"
             />
           </div>
         </div>
-
       </div>
     </div>
   );
 }
 
-function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack, togglePlayPause, updateTrackTitle, removeTrack, formatTime, duration }: any) {
+function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, isBuffering, playTrack, updateTrackTitle, removeTrack, formatTime, duration }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: track.id });
   
   const style = {
@@ -938,7 +837,7 @@ function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack,
       ref={setNodeRef}
       style={style}
       onDoubleClick={() => playTrack(index)}
-      className={`group grid grid-cols-[30px_16px_1fr_40px] md:grid-cols-[30px_16px_1fr_auto_40px] gap-4 px-4 py-2 rounded-md transition-colors items-center hover:bg-white/10 select-none ${isTrackPlaying ? 'bg-white/5' : ''} ${isDragging ? 'opacity-50 bg-white/20' : ''}`}
+      className={`group grid grid-cols-[30px_16px_1fr_40px] md:grid-cols-[30px_16px_1fr_auto_40px] gap-4 px-4 py-2 rounded-md items-center hover:bg-white/10 select-none ${isTrackPlaying ? 'bg-white/5' : ''} ${isDragging ? 'opacity-50 bg-white/20' : ''}`}
     >
       <div {...attributes} {...listeners} className="text-[#b3b3b3] cursor-grab active:cursor-grabbing opacity-50 hover:opacity-100 flex justify-center outline-none">
         <GripVertical className="w-4 h-4" />
@@ -948,19 +847,15 @@ function SortableTrackItem({ track, index, isTrackPlaying, isPlaying, playTrack,
         className="text-center text-sm flex items-center justify-center cursor-pointer w-6 h-6 relative mx-auto"
         onClick={(e) => {
           e.stopPropagation();
-          if (isTrackPlaying) togglePlayPause();
-          else playTrack(index);
+          playTrack(index);
         }}
       >
-        {isTrackPlaying && isPlaying ? (
+        {isTrackPlaying && isBuffering ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1db954]" />
+        ) : isTrackPlaying && isPlaying ? (
           <>
             <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5 group-hover:hidden" />
             <Pause className="w-4 h-4 hidden group-hover:block fill-current text-white" />
-          </>
-        ) : isTrackPlaying && !isPlaying ? (
-          <>
-            <span className="text-[#1db954] font-bold group-hover:hidden">{index + 1}</span>
-            <Play className="w-4 h-4 hidden group-hover:block fill-current text-white ml-1" />
           </>
         ) : (
           <>

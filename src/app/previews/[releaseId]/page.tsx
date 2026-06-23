@@ -7,6 +7,7 @@ import {
   Disc, Share2, AlertCircle, Music, Volume2, VolumeX, Volume1,
   Shuffle, Repeat, Repeat1, Clock, ChevronDown, MoreHorizontal, Heart
 } from 'lucide-react';
+import { useAudioPlayer } from '@/hooks/useAudioPlayer';
 
 export default function PublicPreviewPage() {
   const params = useParams();
@@ -20,10 +21,6 @@ export default function PublicPreviewPage() {
 
   // Playback State
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
@@ -62,6 +59,40 @@ export default function PublicPreviewPage() {
   };
 
   const currentTrack = release?.tracks?.[currentTrackIndex];
+  
+  // Calculate next track for preloading
+  const currentIndexInQueue = shuffledIndices.indexOf(currentTrackIndex);
+  let nextTrackIndex = -1;
+  if (currentIndexInQueue >= 0 && currentIndexInQueue < shuffledIndices.length - 1) {
+    nextTrackIndex = shuffledIndices[currentIndexInQueue + 1];
+  } else if (repeatMode === 'all' && shuffledIndices.length > 0) {
+    nextTrackIndex = shuffledIndices[0];
+  } else if (repeatMode === 'one' && currentTrack) {
+    nextTrackIndex = currentTrackIndex; // Preload itself (cached)
+  }
+  const nextTrack = nextTrackIndex !== -1 ? release?.tracks?.[nextTrackIndex] : null;
+
+  const currentTrackUrl = currentTrack ? `/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}` : null;
+  const nextTrackUrl = nextTrack ? `/api/audio/${nextTrack.previewFileId || nextTrack.newFileId}` : null;
+
+  const {
+    isPlaying,
+    isBuffering,
+    progress,
+    currentTime,
+    duration,
+    togglePlay,
+    play,
+    pause,
+    seekTo,
+    setIsPlaying
+  } = useAudioPlayer({
+    currentTrackUrl,
+    nextTrackUrl,
+    onTrackEnd: () => handleNext(true), // true implies auto-advance
+    volume,
+    isMuted
+  });
 
   // Media Session API
   useEffect(() => {
@@ -75,36 +106,12 @@ export default function PublicPreviewPage() {
         ] : []
       });
 
-      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
-      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      navigator.mediaSession.setActionHandler('play', play);
+      navigator.mediaSession.setActionHandler('pause', pause);
       navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
-      navigator.mediaSession.setActionHandler('nexttrack', handleNext);
+      navigator.mediaSession.setActionHandler('nexttrack', () => handleNext(false));
     }
-  }, [currentTrackIndex, release, artistName, currentTrack]);
-
-  // Audio Playback Effect
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (isPlaying) {
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.warn("Audio play failed:", err);
-          setIsPlaying(false);
-        });
-      }
-    } else {
-      audio.pause();
-    }
-  }, [isPlaying, currentTrackIndex]);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [volume, isMuted]);
+  }, [currentTrackIndex, release, artistName, currentTrack, play, pause]);
 
   // Shuffle toggle logic
   const toggleShuffle = () => {
@@ -136,13 +143,19 @@ export default function PublicPreviewPage() {
     });
   };
 
-  const handleNext = () => {
+  const handleNext = (autoAdvance = false) => {
     if (!release?.tracks) return;
     
     // Repeat one -> just seek to start and play
-    if (repeatMode === 'one' && audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play();
+    if (repeatMode === 'one') {
+      if (autoAdvance) {
+        // If auto-advancing, we don't change track, useAudioPlayer handles it? No, useAudioPlayer needs re-trigger
+        seekTo(0);
+        play();
+      } else {
+        seekTo(0);
+        play();
+      }
       return;
     }
 
@@ -158,7 +171,7 @@ export default function PublicPreviewPage() {
         setIsPlaying(true);
       } else {
         setIsPlaying(false);
-        if (audioRef.current) audioRef.current.currentTime = 0;
+        seekTo(0);
       }
     }
   };
@@ -166,8 +179,8 @@ export default function PublicPreviewPage() {
   const handlePrev = () => {
     if (!release?.tracks) return;
 
-    if (audioRef.current && audioRef.current.currentTime > 3) {
-      audioRef.current.currentTime = 0;
+    if (currentTime > 3) {
+      seekTo(0);
       return;
     }
 
@@ -184,21 +197,13 @@ export default function PublicPreviewPage() {
       setCurrentTrackIndex(shuffledIndices[currentIndexInQueue - 1]);
       setIsPlaying(true);
     } else {
-      if (audioRef.current) audioRef.current.currentTime = 0;
+      seekTo(0);
     }
-  };
-
-  const handleTimeUpdate = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const dur = audio.duration || 1;
-    setProgress((audio.currentTime / dur) * 100);
-    setCurrentTime(audio.currentTime);
   };
 
   const playTrack = (index: number) => {
     if (currentTrackIndex === index) {
-      setIsPlaying(prev => !prev);
+      togglePlay();
     } else {
       setHistory(prev => [...prev, currentTrackIndex]);
       setCurrentTrackIndex(index);
@@ -209,14 +214,6 @@ export default function PublicPreviewPage() {
         setShuffledIndices([index, ...remaining]);
       }
     }
-  };
-
-  const seekTo = (e: React.MouseEvent<HTMLDivElement>) => {
-    const audio = audioRef.current;
-    if (!audio || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pos = (e.clientX - rect.left) / rect.width;
-    audio.currentTime = pos * duration;
   };
 
   const formatTime = (sec: number) => {
@@ -254,18 +251,6 @@ export default function PublicPreviewPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#121212] text-white overflow-hidden selection:bg-[#1db954]/30 font-sans">
-      {/* Hidden audio */}
-      {currentTrack && (
-        <audio
-          ref={audioRef}
-          src={`/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}`}
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={handleNext}
-          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
-          autoPlay={isPlaying}
-        />
-      )}
-
       
       {/* Main View Area */}
       <div className="flex-1 overflow-y-auto pb-[72px] md:pb-24 relative hide-scrollbar">
@@ -327,11 +312,11 @@ export default function PublicPreviewPage() {
             <button 
               onClick={() => {
                 if (currentTrackIndex === 0 && !isPlaying) playTrack(0);
-                else setIsPlaying(!isPlaying);
+                else togglePlay();
               }}
               className="w-14 h-14 bg-[#1ed760] text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
             >
-              {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
+              {isBuffering ? <Loader2 className="w-6 h-6 animate-spin text-black" /> : isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
             </button>
           </div>
         </div>
@@ -357,7 +342,9 @@ export default function PublicPreviewPage() {
                   className={`group grid grid-cols-[1fr_40px] md:grid-cols-[16px_1fr_auto_40px] gap-3 md:gap-4 px-3 md:px-4 py-3 md:py-2.5 rounded-md cursor-pointer hover:bg-white/10 transition-colors items-center ${isTrackPlaying ? 'text-[#1db954]' : 'text-[#b3b3b3]'}`}
                 >
                   <div className="hidden md:flex text-center text-sm items-center justify-center">
-                    {isTrackPlaying && isPlaying ? (
+                    {isTrackPlaying && isBuffering ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1db954]" />
+                    ) : isTrackPlaying && isPlaying ? (
                       <img src="https://open.spotifycdn.com/cdn/images/equaliser-animated-green.f93a2fd4.gif" alt="playing" className="w-3.5 h-3.5" />
                     ) : isTrackPlaying && !isPlaying ? (
                       <span className="text-[#1db954]">{index + 1}</span>
@@ -423,13 +410,13 @@ export default function PublicPreviewPage() {
             <button 
               onClick={() => {
                 if (!currentTrack && release?.tracks?.length > 0) playTrack(0);
-                else setIsPlaying(!isPlaying);
+                else togglePlay();
               }}
               className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:scale-105 active:scale-95 transition-transform"
             >
-              {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
+              {isBuffering ? <Loader2 className="w-4 h-4 animate-spin text-black" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 ml-0.5 fill-current" />}
             </button>
-            <button onClick={handleNext} className="p-1 text-[#b3b3b3] hover:text-white transition-colors">
+            <button onClick={() => handleNext(false)} className="p-1 text-[#b3b3b3] hover:text-white transition-colors">
               <SkipForward className="w-5 h-5 fill-current" />
             </button>
             <button 
@@ -515,10 +502,10 @@ export default function PublicPreviewPage() {
             onClick={(e) => {
               e.stopPropagation();
               if (!currentTrack && release?.tracks?.length > 0) playTrack(0);
-              else setIsPlaying(!isPlaying);
+              else togglePlay();
             }}
           >
-            {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
+            {isBuffering ? <Loader2 className="w-6 h-6 animate-spin" /> : isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
           </button>
         </div>
         
@@ -590,13 +577,13 @@ export default function PublicPreviewPage() {
             <button 
               onClick={() => {
                 if (!currentTrack && release?.tracks?.length > 0) playTrack(0);
-                else setIsPlaying(!isPlaying);
+                else togglePlay();
               }}
               className="w-16 h-16 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
             >
-              {isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 ml-1 fill-current" />}
+              {isBuffering ? <Loader2 className="w-7 h-7 animate-spin text-black" /> : isPlaying ? <Pause className="w-7 h-7 fill-current" /> : <Play className="w-7 h-7 ml-1 fill-current" />}
             </button>
-            <button onClick={handleNext} className="p-2 text-white">
+            <button onClick={() => handleNext(false)} className="p-2 text-white">
               <SkipForward className="w-9 h-9 fill-current" />
             </button>
             <button 
