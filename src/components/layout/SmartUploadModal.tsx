@@ -123,8 +123,7 @@ function generateName(original: string, subType: string, artistName?: string): s
   const dateStr = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`;
 
   if (subType === 'bounce') {
-    const artistPrefix = artistName ? `${artistName} - ` : '';
-    return `${artistPrefix}${cleanName} [${dateStr}]${ext}`;
+    return `${cleanName} [${dateStr}]${ext}`;
   }
 
   return original;
