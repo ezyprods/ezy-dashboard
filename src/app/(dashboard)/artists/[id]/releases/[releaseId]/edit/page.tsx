@@ -15,6 +15,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Release, ReleaseTrack } from '@/types';
 import { TrackPickerModal } from '@/components/releases/TrackPickerModal';
 import { customAlert, customConfirm } from '@/lib/dialog';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 export default function ReleaseEditorPage() {
   const params = useParams();
@@ -736,30 +737,55 @@ export default function ReleaseEditorPage() {
             <div className="flex justify-end pr-8"><Clock className="w-4 h-4" /></div>
           </div>
 
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={(release?.tracks || []).map(t => t.id)} strategy={verticalListSortingStrategy}>
-              <div className="flex flex-col gap-1">
-                {(release?.tracks || []).map((track, index) => {
-                  const isTrackPlaying = currentTrackIndex === index;
-                  return (
-                    <SortableTrackItem
-                      key={track.id}
-                      track={track}
-                      index={index}
-                      isTrackPlaying={isTrackPlaying}
-                      isPlaying={isPlaying}
-                      isBuffering={isBuffering}
-                      playTrack={playTrack}
-                      updateTrackTitle={updateTrackTitle}
-                      removeTrack={removeTrack}
-                      formatTime={formatTime}
-                      duration={duration}
-                    />
-                  );
-                })}
+          <ErrorBoundary fallback={
+            <div className="flex flex-col gap-1">
+              {(release?.tracks || []).map((track, index) => (
+                <div key={track.id} className="grid grid-cols-[30px_16px_1fr_40px] gap-4 px-4 py-2 rounded-md items-center bg-white/5">
+                  <span className="text-[#b3b3b3]">{index + 1}</span>
+                  <Music className="w-4 h-4 text-[#b3b3b3]" />
+                  <span className="text-white truncate">{track.title}</span>
+                  <span className="text-[#b3b3b3] text-sm">--:--</span>
+                </div>
+              ))}
+              <div className="p-4 bg-error/10 text-error rounded-xl mt-4 text-sm">
+                Hubo un error interno cargando el sistema de arrastrar y soltar de dnd-kit. Por favor, asegúrate de haber ejecutado 'npm install' en la terminal para sincronizar las dependencias.
               </div>
-            </SortableContext>
-          </DndContext>
+            </div>
+          }>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={(release?.tracks || []).map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="flex flex-col gap-1">
+                  {(release?.tracks || []).map((track, index) => {
+                    const isTrackPlaying = currentTrackIndex === index;
+                    return (
+                      <SortableTrackItem
+                        key={track.id}
+                        track={track}
+                        index={index}
+                        isTrackPlaying={isTrackPlaying}
+                        isPlaying={isPlaying}
+                        isBuffering={isBuffering}
+                        playTrack={() => {
+                          if (isTrackPlaying) {
+                            togglePlay();
+                          } else {
+                            setCurrentTrackIndex(index);
+                            setIsPlaying(true);
+                          }
+                        }}
+                        updateTrackTitle={updateTrackTitle}
+                        removeTrack={() => {
+                          setRelease(prev => prev ? { ...prev, tracks: prev.tracks.filter(t => t.id !== track.id) } : null);
+                        }}
+                        formatTime={formatTime}
+                        duration={duration}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </ErrorBoundary>
 
           <div className="mt-6 px-4">
             <button 
