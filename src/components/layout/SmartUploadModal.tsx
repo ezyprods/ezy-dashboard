@@ -9,7 +9,6 @@ import { createPortal } from 'react-dom';
 import { findBestMatch } from '@/lib/utils';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
 import { useArtists } from '@/lib/hooks/useArtists';
-import { convertWavToMp3 } from '@/lib/audioEncoder';
 
 export interface SmartUploadFile {
   file: File;
@@ -481,16 +480,37 @@ export function SmartUploadModal({
 
         // WAV to MP3 Conversion for Bounces
         if (item.subType === 'bounce' && extension.toLowerCase() === '.wav') {
-          let lastReportedPercent = -1;
-          fileToProcess = await convertWavToMp3(item.file, (p) => {
-            const newPercent = 5 + Math.floor(p * 0.15); // up to 20%
-            if (newPercent !== lastReportedPercent) {
-              lastReportedPercent = newPercent;
+          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: 10 } : it));
+          
+          try {
+            const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+            const { fetchFile } = await import('@ffmpeg/util');
+
+            const ffmpeg = new FFmpeg();
+            
+            ffmpeg.on('progress', ({ progress }) => {
+              const newPercent = 10 + Math.floor(progress * 20); // 10% to 30% for conversion
               setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: newPercent } : it));
-            }
-          });
-          extension = '.mp3';
-          finalCustomName = finalCustomName.replace(/\.wav$/i, '') + '.mp3';
+            });
+
+            await ffmpeg.load({
+              coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+              wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
+            });
+
+            await ffmpeg.writeFile('input.wav', await fetchFile(item.file));
+            await ffmpeg.exec(['-i', 'input.wav', '-b:a', '320k', 'output.mp3']);
+            
+            const data = await ffmpeg.readFile('output.mp3');
+            const mp3Blob = new Blob([data], { type: 'audio/mpeg' });
+            
+            fileToProcess = new File([mp3Blob], item.file.name.replace(/\.wav$/i, '.mp3'), { type: 'audio/mpeg' });
+            extension = '.mp3';
+            finalCustomName = finalCustomName.replace(/\.wav$/i, '') + '.mp3';
+          } catch (ffmpegError) {
+            console.error('FFmpeg conversion error:', ffmpegError);
+            throw new Error('No se pudo convertir el archivo WAV a MP3. Verifica que el archivo no esté corrupto.');
+          }
         }
 
         const fileToReplaceId = await preCheckItem({ ...item, customName: finalCustomName }, finalFolderId);
