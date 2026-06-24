@@ -502,7 +502,7 @@ export function SmartUploadModal({
             await ffmpeg.exec(['-i', 'input.wav', '-b:a', '320k', 'output.mp3']);
             
             const data = await ffmpeg.readFile('output.mp3');
-            const mp3Blob = new Blob([data], { type: 'audio/mpeg' });
+            const mp3Blob = new Blob([data as any], { type: 'audio/mpeg' });
             
             fileToProcess = new File([mp3Blob], item.file.name.replace(/\.wav$/i, '.mp3'), { type: 'audio/mpeg' });
             extension = '.mp3';

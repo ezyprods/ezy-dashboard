@@ -286,7 +286,26 @@ export default function PortalPage() {
 
         {activeProject.bounces && activeProject.bounces.length > 0 ? (
           <div className="space-y-4">
-            {activeProject.bounces.map((file: any) => (
+            {[...activeProject.bounces].sort((a, b) => {
+              const parseDate = (filename: string) => {
+                const match = filename.match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
+                if (match) {
+                  const [, day, month, year] = match;
+                  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).getTime();
+                }
+                return 0;
+              };
+              const dateA = parseDate(a.name || '');
+              const dateB = parseDate(b.name || '');
+              
+              if (dateA !== dateB) {
+                return dateB - dateA; // Newest first
+              }
+              // Fallback to modifiedTime
+              const timeA = new Date(a.modifiedTime || 0).getTime();
+              const timeB = new Date(b.modifiedTime || 0).getTime();
+              return timeB - timeA;
+            }).map((file: any) => (
               <WaveformPlayer
                 key={file.id}
                 fileId={file.id}
