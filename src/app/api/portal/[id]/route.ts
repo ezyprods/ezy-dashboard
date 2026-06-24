@@ -36,7 +36,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // 2. Obtener los proyectos del artista
     const folders = await listFolders(id);
-    const ignoreFolders = ['Images', 'Documents', 'Contracts', 'Stems', 'Releases'];
+    const ignoreFolders = [
+      'Images', 'Documents', 'Contracts', 'Stems', 'Releases',
+      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones',
+      'Bounces', 'bounces'
+    ];
     const projectFolders = folders.filter(f => !ignoreFolders.includes(f.name || ''));
 
     // 3. Para cada proyecto, obtener sus Bounces y la lista de tareas
@@ -118,7 +122,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       }
       
       // Root Bounces folder
-      const bouncesFolder = folders.find(f => f.name?.toLowerCase() === 'bounces');
+      const bouncesFolder = folders.find(f => {
+        const nameLower = f.name?.toLowerCase() || '';
+        return nameLower === 'bounces' || nameLower === '02_bounces_y_grabaciones';
+      });
       if (bouncesFolder) {
         const queryBounces = `mimeType!='application/vnd.google-apps.folder' and '${bouncesFolder.id}' in parents and trashed=false`;
         const resB = await drive.files.list({ q: queryBounces, fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)', supportsAllDrives: true });
