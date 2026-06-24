@@ -23,8 +23,6 @@ export function DialogProvider() {
     return () => window.removeEventListener('custom-dialog', handleDialogEvent);
   }, []);
 
-  if (!options) return null;
-
   const handleConfirm = useCallback(() => {
     if (options?.onConfirm) {
       options.onConfirm(options.type === 'prompt' ? inputValue : undefined);
@@ -43,9 +41,6 @@ export function DialogProvider() {
       if (e.key === 'Escape') {
         handleCancel();
       } else if (e.key === 'Enter') {
-        // If it's a prompt, the input's own onKeyDown will handle it to avoid double-firing,
-        // but it's safe to call handleConfirm if we prevent default.
-        // Wait, actually, let's just handle it.
         if (options.type !== 'prompt') {
           e.preventDefault();
           handleConfirm();
@@ -56,6 +51,8 @@ export function DialogProvider() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [options, inputValue, handleConfirm, handleCancel]);
+
+  if (!options) return null;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in" onClick={handleCancel}>
