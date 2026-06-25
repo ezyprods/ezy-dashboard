@@ -20,12 +20,32 @@ export async function GET() {
     
     const artistsDb = artistsDbResult || [];
     
-    const validArtists = folders.map(folder => {
+    // Resolve last project for each artist folder in parallel
+    const validArtistsPromises = folders.map(async (folder) => {
       const syncedData = artistsDb.find(a => a.id === folder.id);
-      if (syncedData) {
-        return { ...syncedData, driveFolderId: folder.id! } as Artist;
+      
+      let lastProjectName = '';
+      try {
+        // Fetch project folders in parallel
+        const artistSubfolders = await listFolders(folder.id!);
+        const excludeFolders = ['Images', 'images', 'Bounces', 'bounces', 'Documents', 'documents', 'Contracts', 'contracts', 'Stems', 'stems'];
+        const projectFolders = artistSubfolders.filter(f => !excludeFolders.includes(f.name || ''));
+        
+        if (projectFolders.length > 0) {
+          // Sort by creation/update date, newest first. Drive returns createdTime.
+          // Since we want the latest project, sort by createdTime descending.
+          projectFolders.sort((a, b) => {
+            const timeA = a.createdTime ? new Date(a.createdTime).getTime() : 0;
+            const timeB = b.createdTime ? new Date(b.createdTime).getTime() : 0;
+            return timeB - timeA;
+          });
+          lastProjectName = projectFolders[0].name || '';
+        }
+      } catch (err) {
+        console.error(`Error resolving last project for artist ${folder.name}:`, err);
       }
-      return {
+
+      const artistBase = syncedData ? { ...syncedData, driveFolderId: folder.id! } : {
         id: folder.id!,
         name: folder.name!,
         genre: [],
@@ -35,8 +55,15 @@ export async function GET() {
         createdAt: folder.createdTime || new Date().toISOString(),
         updatedAt: folder.createdTime || new Date().toISOString(),
         driveFolderId: folder.id!,
+      };
+
+      return {
+        ...artistBase,
+        activeProject: lastProjectName ? `Último proyecto: ${lastProjectName}` : 'Sin proyectos',
       } as Artist;
     });
+
+    const validArtists = await Promise.all(validArtistsPromises);
 
     return NextResponse.json({ artists: validArtists });
   } catch (error: any) {

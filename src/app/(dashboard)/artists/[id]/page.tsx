@@ -16,6 +16,7 @@ import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { getProjectTypeIcon } from '@/lib/utils';
 import { ArtistReleasesTab } from '@/components/artists/ArtistReleasesTab';
 import { ArtistMatricesTab } from '@/components/artists/ArtistMatricesTab';
+import { ArtistCampaignsTab } from '@/components/artists/ArtistCampaignsTab';
 import { EditArtistModal } from "@/components/artists/EditArtistModal";
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import * as LucideIcons from 'lucide-react';
@@ -54,7 +55,7 @@ export default function ArtistDetailPage() {
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const tab = searchParams.get('tab');
-    if (tab && ['files', 'projects', 'matrices', 'portal'].includes(tab)) {
+    if (tab && ['files', 'projects', 'campaigns', 'matrices', 'portal'].includes(tab)) {
       setActiveTab(tab);
     }
     fetchArtist();
@@ -195,7 +196,7 @@ export default function ArtistDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">
-        {(['files', 'projects', 'matrices', 'portal'] as const).map(tab => (
+        {(['files', 'projects', 'campaigns', 'matrices', 'portal'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -205,10 +206,15 @@ export default function ArtistDetailPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
             }`}
           >
-            {tab === 'files' ? 'Archivos' : tab === 'projects' ? 'Proyectos' : tab === 'matrices' ? 'Matrices' : 'Portal'}
+            {tab === 'files' ? 'Archivos' : tab === 'projects' ? 'Proyectos' : tab === 'campaigns' ? 'Campañas' : tab === 'matrices' ? 'Matrices' : 'Portal'}
           </button>
         ))}
       </div>
+
+      {/* Tab Content: Campaigns */}
+      {activeTab === 'campaigns' && (
+        <ArtistCampaignsTab artistId={artistId} projects={projects} />
+      )}
 
       {/* Tab Content: Projects */}
       {activeTab === 'projects' && (

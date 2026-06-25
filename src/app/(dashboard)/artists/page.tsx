@@ -257,7 +257,7 @@ export default function ArtistsPage() {
                 
                 <div className="min-w-0 flex-1">
                   <h3 className="font-bold text-text-primary text-base leading-tight group-hover:text-accent transition-colors truncate">{artist.name}</h3>
-                  <p className="text-xs text-text-secondary mt-0.5 truncate">{artist.activeProject || 'Sin proyecto activo'}</p>
+                  <p className="text-xs text-text-secondary mt-0.5 truncate">{artist.activeProject || 'Sin proyectos'}</p>
                 </div>
               </div>
 

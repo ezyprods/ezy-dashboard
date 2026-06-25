@@ -72,7 +72,7 @@ function SortableRow({
   selectedCells,
   onToggleSelect,
 }: {
-  row: { id: string; name: string; cells: Record<string, GridCell>; linkedFile?: { id: string; name: string; webViewLink?: string; webContentLink?: string; mimeType?: string } };
+  row: { id: string; name: string; cells: Record<string, GridCell>; linkedFile?: { id: string; name: string; webViewLink?: string; webContentLink?: string; mimeType?: string; sourceProjectId?: string } };
   columns: { id: string; name: string; type?: ColumnType }[];
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
@@ -134,6 +134,18 @@ function SortableRow({
             className="font-medium text-sm bg-transparent border-none outline-none flex-1 min-w-0 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors cursor-context-menu" 
             title={localName}
           />
+          {row.linkedFile?.sourceProjectId && (() => {
+             const p = projects.find((x:any) => x.id === row.linkedFile!.sourceProjectId);
+             if (!p) return null;
+             return (
+               <span 
+                 className="text-[9px] px-1.5 py-0.5 rounded bg-surface-elevated border border-border/50 text-text-secondary truncate max-w-[100px] shrink-0" 
+                 title={`Archivo del proyecto: ${p.title}`}
+               >
+                 {p.title}
+               </span>
+             );
+          })()}
           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
             {row.linkedFile && (
               <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1 py-0.5 rounded border border-border/50">
@@ -217,8 +229,9 @@ export function ProductionGridBoard({
   const [commentingRow, setCommentingRow] = useState<{id: string, name: string} | null>(null);
   const [commentsText, setCommentsText] = useState('');
   
-  // Projects and Files logic
+  // Projects, Campaigns and Files logic
   const [projects, setProjects] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
   const [linkedProjectId, setLinkedProjectId] = useState<string>('');
   const [files, setFiles] = useState<any[]>([]);
 
@@ -237,6 +250,7 @@ export function ProductionGridBoard({
   useEffect(() => {
     fetchGrid();
     fetchProjects();
+    fetchCampaigns();
 
     const handleOpenLink = (e: any) => setLinkingRowId(e.detail.rowId);
     const handleUnlink = (e: any) => {
@@ -283,7 +297,7 @@ export function ProductionGridBoard({
   useEffect(() => {
     // Always fetch files — if no project linked, fetchFiles will only scan artist bounces
     fetchFiles(linkedProjectId);
-  }, [linkedProjectId]);
+  }, [linkedProjectId, campaigns]);
 
   const fetchGrid = async () => {
     setIsLoading(true);
@@ -310,12 +324,24 @@ export function ProductionGridBoard({
     } catch (e) { console.error(e); }
   };
 
+  const fetchCampaigns = async () => {
+    try {
+      const res = await fetch(`/api/artists/${artistId}/campaigns`);
+      if (res.ok) {
+        const data = await res.json();
+        setCampaigns(data.campaigns || []);
+      }
+    } catch (e) { console.error(e); }
+  };
+
   const fetchFiles = async (projId: string) => {
     try {
-      // ── 1. Deep-fetch all files from the linked project ──────────────────
+      // ── 1. Deep-fetch all files from the linked project or campaign ─────────
       let projectAudioFiles: any[] = [];
-      if (projId) {
-        const projectRes = await fetch(`/api/projects/${projId}`);
+      const campaign = campaigns.find(c => c.id === projId);
+
+      const fetchFromProject = async (id: string) => {
+        const projectRes = await fetch(`/api/projects/${id}`);
         if (projectRes.ok) {
           const data = await projectRes.json();
           // Flatten: root files + all files from every recursive sub-folder
@@ -323,11 +349,19 @@ export function ProductionGridBoard({
             ...(data.rootFiles || []),
             ...(data.folders ? data.folders.flatMap((f: any) => f.files || []) : [])
           ];
-          projectAudioFiles = allProjectFiles.filter((f: any) =>
+          return allProjectFiles.filter((f: any) =>
             f.mimeType?.startsWith('audio/') ||
             /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || '')
-          );
+          ).map(f => ({ ...f, sourceProjectId: id }));
         }
+        return [];
+      };
+
+      if (campaign) {
+        const results = await Promise.all(campaign.driveFolderIds.map((id: string) => fetchFromProject(id)));
+        projectAudioFiles = results.flat();
+      } else if (projId) {
+        projectAudioFiles = await fetchFromProject(projId);
       }
 
       // ── 2. Deep-fetch all audio from artist root (covers bounces etc.) ───
@@ -426,8 +460,9 @@ export function ProductionGridBoard({
               name: bestMatch.name,
               webViewLink: bestMatch.webViewLink,
               webContentLink: bestMatch.webContentLink,
-              mimeType: bestMatch.mimeType
-            };
+              mimeType: bestMatch.mimeType,
+              sourceProjectId: bestMatch.sourceProjectId // NEW
+            } as any;
             rowModified = true;
           }
 
@@ -646,14 +681,23 @@ export function ProductionGridBoard({
         </div>
         <div className="w-full sm:w-auto flex flex-col sm:items-end items-start gap-3">
           <div className="w-full sm:w-auto flex items-center gap-2 bg-surface-elevated px-3 py-1.5 rounded-lg border border-border">
-            <span className="text-xs font-bold text-text-secondary uppercase shrink-0">Proyecto:</span>
+            <span className="text-xs font-bold text-text-secondary uppercase shrink-0">Proyecto / Campaña:</span>
             <select 
               value={linkedProjectId} 
               onChange={(e) => handleLinkProject(e.target.value)}
               className="bg-transparent text-sm font-medium outline-none text-accent w-full sm:w-auto"
             >
-              <option value="">-- Sin Proyecto Vinculado --</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+              <option value="">-- Sin Vincular --</option>
+              {campaigns.length > 0 && (
+                <optgroup label="Campañas">
+                  {campaigns.map(c => <option key={c.id} value={c.id}>🎯 {c.name}</option>)}
+                </optgroup>
+              )}
+              {projects.length > 0 && (
+                <optgroup label="Proyectos Individuales">
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                </optgroup>
+              )}
             </select>
             {linkedProjectId && (() => {
               const linkedProject = projects.find(p => p.id === linkedProjectId);
@@ -780,7 +824,7 @@ export function ProductionGridBoard({
                       ...grid,
                       rows: grid.rows.map(r => r.id === linkingRowId ? { 
                         ...r, 
-                        linkedFile: { id: f.id, name: f.name, webViewLink: f.webViewLink, webContentLink: f.webContentLink, mimeType: f.mimeType } 
+                        linkedFile: { id: f.id, name: f.name, webViewLink: f.webViewLink, webContentLink: f.webContentLink, mimeType: f.mimeType, sourceProjectId: f.sourceProjectId } as any
                       } : r)
                     };
                     saveGrid(updatedGrid);
@@ -788,7 +832,14 @@ export function ProductionGridBoard({
                   }}
                   className="w-full flex items-center justify-between text-left p-2 rounded hover:bg-surface-elevated text-sm transition-colors border border-transparent hover:border-border"
                 >
-                  <span className="truncate pr-4">{f.name}</span>
+                  <div className="flex flex-col min-w-0 pr-4">
+                    <span className="truncate text-text-primary">{f.name}</span>
+                    {f.sourceProjectId && (
+                      <span className="text-[10px] text-text-secondary truncate mt-0.5">
+                        Del proyecto: {projects.find(p => p.id === f.sourceProjectId)?.title || 'Desconocido'}
+                      </span>
+                    )}
+                  </div>
                 </button>
               ))}
               {files.length === 0 && <p className="text-xs text-text-secondary italic text-center py-4">No se encontraron archivos de audio.</p>}

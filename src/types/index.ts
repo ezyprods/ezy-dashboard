@@ -4,6 +4,7 @@ export * from './payment';
 export * from './file';
 export * from './communication';
 export * from './portal';
+export * from './campaign';
 
 export interface CoverHistoryEntry {
   fileId: string;
