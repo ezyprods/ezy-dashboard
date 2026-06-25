@@ -64,7 +64,7 @@ export default function DashboardPage() {
   const alertMsg = pulseData.globalStats?.priorityAlerts?.[0] || 'El estudio esta al dia. No hay tareas urgentes.';
 
   return (
-    <div className="min-h-full h-auto lg:h-full flex flex-col gap-4 animate-fade-in overflow-x-hidden lg:overflow-hidden">
+    <div className="flex-1 w-full h-full min-h-0 flex flex-col gap-4 animate-fade-in overflow-x-hidden lg:overflow-hidden">
       <NewArtistModal isOpen={isNewArtistModalOpen} onClose={() => setIsNewArtistModalOpen(false)} />
       <QuickUploadModal isOpen={isQuickUploadOpen} onClose={() => setIsQuickUploadOpen(false)} artists={artists} />
       <NewProjectModal isOpen={isNewProjectOpen} onClose={() => setIsNewProjectOpen(false)} artists={artists} />
@@ -101,7 +101,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ROW 2: Bento Top */}
-      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-[clamp(180px,28vh,260px)] min-h-[200px]">
+      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-[min(24vh,220px)] min-h-[180px]">
 
         {/* Col 1: Quick Actions */}
         <div className="flex flex-col gap-2 h-full">
