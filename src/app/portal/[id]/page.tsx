@@ -190,19 +190,7 @@ export default function PortalPage() {
   const [activeReleaseId, setActiveReleaseId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'overview' | 'releases'>('overview');
 
-  useEffect(() => {
-    // Force light theme for portal page
-    const html = document.documentElement;
-    const isDark = html.classList.contains('dark');
-    html.classList.remove('dark');
-    html.classList.add('light');
-    return () => {
-      if (isDark) {
-        html.classList.remove('light');
-        html.classList.add('dark');
-      }
-    };
-  }, []);
+  // Theme is now enforced by ThemeContext based on route
 
   useEffect(() => {
     const fetchPortal = async () => {
@@ -216,6 +204,11 @@ export default function PortalPage() {
         }
         if (json.releases && json.releases.length > 0) {
           setActiveReleaseId(json.releases[0].id);
+        }
+        
+        // Update browser tab title
+        if (json.artist?.name) {
+          document.title = json.artist.name;
         }
       } catch (err) {
         console.error(err);
