@@ -158,7 +158,20 @@ export default function PortalPage() {
     const mod = visibleModules.find((m: any) => m.type === 'tasks');
     if (!mod) return null;
 
-    const matrices = data.sharedMatrices || [];
+    const isMatrixCompleted = (m: any) => {
+      const cols = m.productionGrid?.columns || [];
+      const rows = m.productionGrid?.rows || [];
+      if (cols.length === 0 || rows.length === 0) return false;
+      return rows.every((r: any) => 
+        cols.every((c: any) => {
+          if (c.type === 'file') return true; // file columns might not have 'done', ignore them or just check 'status'
+          return r.cells?.[c.id]?.status === 'done';
+        })
+      );
+    };
+
+    // Sólo mostrar matrices que NO estén 100% completadas (siempre visibles, sin importar la carpeta seleccionada)
+    const matrices = (data.sharedMatrices || []).filter((m: any) => !isMatrixCompleted(m));
     const projectTasks = activeProject?.tasks || [];
 
     let totalMatrixTasks = 0;
@@ -434,7 +447,7 @@ export default function PortalPage() {
   const mainModules = visibleModules.filter((m: any) => m.type === 'bounces' || m.type === 'tasks');
 
   return (
-    <div className="min-h-screen bg-background text-text-primary font-sans antialiased selection:bg-accent/30">
+    <div className="h-screen overflow-y-auto overflow-x-hidden bg-background text-text-primary font-sans antialiased selection:bg-accent/30 relative">
       {/* Ambient glow */}
       <div className="fixed top-0 left-0 right-0 h-96 bg-gradient-to-b from-[#6c5ce7]/8 to-transparent pointer-events-none z-0" />
       <div className="fixed top-40 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-accent/5 blur-[100px] rounded-full pointer-events-none z-0" />

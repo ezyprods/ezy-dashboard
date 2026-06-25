@@ -4,9 +4,8 @@ import type { PortalConfig } from '@/types';
 
 const DEFAULT_MODULES = [
   { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas Mezclas / Audios' },
-  { id: 'finances', type: 'finances', isVisible: false, order: 1, title: 'Resumen Financiero' },
-  { id: 'tasks', type: 'tasks', isVisible: true, order: 2, title: 'Estado del Trabajo' },
-  { id: 'releases', type: 'releases', isVisible: true, order: 3, title: 'Releases / Previews' }
+  { id: 'tasks', type: 'tasks', isVisible: true, order: 1, title: 'Estado del Trabajo' },
+  { id: 'releases', type: 'releases', isVisible: true, order: 2, title: 'Releases / Previews' }
 ];
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {

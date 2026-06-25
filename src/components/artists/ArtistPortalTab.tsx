@@ -83,7 +83,6 @@ export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
   const MODULE_LABELS: Record<string, { label: string; description: string; emoji: string }> = {
     bounces: { label: 'Mezclas / Audios', description: 'Reproductor de archivos de audio', emoji: '🎧' },
     releases: { label: 'Previews / Lanzamientos', description: 'Player de previews públicas', emoji: '💿' },
-    finances: { label: 'Resumen Financiero', description: 'Presupuesto y estado de pagos', emoji: '💳' },
     tasks: { label: 'Estado del Trabajo', description: 'Lista de tareas y progreso', emoji: '✅' },
     custom_text: { label: 'Texto Personalizado', description: 'Bloque de texto libre', emoji: '📝' },
     custom_link: { label: 'Enlace Personalizado', description: 'Enlace a recursos externos', emoji: '🔗' },
