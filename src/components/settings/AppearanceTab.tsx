@@ -28,26 +28,26 @@ export function AppearanceTab() {
               <button
                 key={mode.id}
                 onClick={() => setTheme(mode.id as 'light' | 'dark' | 'system')}
-                className={`relative flex flex-col items-center justify-center p-8 rounded-2xl border transition-all duration-300 group overflow-hidden ${
+                className={`relative flex flex-col items-center justify-center p-8 rounded-2xl border transition-all duration-500 group overflow-hidden ${
                   isSelected
-                    ? 'border-accent bg-accent/5'
-                    : 'border-border bg-surface hover:border-accent/50 hover:bg-surface-elevated'
+                    ? 'border-accent bg-accent/5 shadow-[0_0_20px_rgba(var(--accent),0.15)] ring-1 ring-accent/30'
+                    : 'border-border bg-surface hover:border-accent/40 hover:bg-surface-elevated hover:shadow-lg'
                 }`}
               >
                 {isSelected && (
-                  <div className="absolute inset-0 bg-accent/10 animate-pulse pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-tr from-accent/20 to-transparent opacity-50 pointer-events-none" />
                 )}
                 
-                <div className={`p-4 rounded-full mb-4 transition-transform duration-300 ${isSelected ? 'bg-accent/20 scale-110' : 'bg-surface-elevated group-hover:scale-110'}`}>
-                  <Icon className={`w-8 h-8 ${isSelected ? 'text-accent' : 'text-text-secondary'}`} />
+                <div className={`p-4 rounded-full mb-4 transition-all duration-500 relative z-10 ${isSelected ? 'bg-accent/20 scale-110 shadow-inner' : 'bg-surface-elevated group-hover:scale-110 group-hover:bg-accent/10'}`}>
+                  <Icon className={`w-8 h-8 transition-colors duration-500 ${isSelected ? 'text-accent' : 'text-text-secondary group-hover:text-accent/70'}`} />
                 </div>
                 
-                <span className={`font-semibold text-lg tracking-wide ${isSelected ? 'text-accent' : 'text-text-primary'}`}>
+                <span className={`font-semibold text-lg tracking-wide relative z-10 transition-colors duration-500 ${isSelected ? 'text-accent drop-shadow-sm' : 'text-text-primary'}`}>
                   {mode.label}
                 </span>
 
                 {isSelected && (
-                  <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-accent ring-4 ring-accent/20" />
+                  <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-accent ring-4 ring-accent/20 animate-pulse" />
                 )}
               </button>
             );

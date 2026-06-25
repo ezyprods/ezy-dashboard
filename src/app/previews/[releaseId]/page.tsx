@@ -38,6 +38,14 @@ export default function PublicPreviewPage() {
     fetchRelease();
   }, [releaseId]);
 
+  useEffect(() => {
+    if (artistName && artistName !== 'Unknown Artist') {
+      document.title = `${artistName} - ${release?.title || 'Preview'}`;
+    } else if (release?.title) {
+      document.title = release.title;
+    }
+  }, [artistName, release?.title]);
+
   const fetchRelease = async () => {
     setIsLoading(true);
     try {
@@ -63,17 +71,36 @@ export default function PublicPreviewPage() {
   // Calculate next track for preloading
   const currentIndexInQueue = shuffledIndices.indexOf(currentTrackIndex);
   let nextTrackIndex = -1;
-  if (currentIndexInQueue >= 0 && currentIndexInQueue < shuffledIndices.length - 1) {
-    nextTrackIndex = shuffledIndices[currentIndexInQueue + 1];
-  } else if (repeatMode === 'all' && shuffledIndices.length > 0) {
-    nextTrackIndex = shuffledIndices[0];
-  } else if (repeatMode === 'one' && currentTrack) {
-    nextTrackIndex = currentTrackIndex; // Preload itself (cached)
+  const preloadIndices: number[] = [];
+
+  if (currentIndexInQueue >= 0) {
+    if (currentIndexInQueue < shuffledIndices.length - 1) {
+      nextTrackIndex = shuffledIndices[currentIndexInQueue + 1];
+      preloadIndices.push(nextTrackIndex);
+      if (currentIndexInQueue < shuffledIndices.length - 2) {
+        preloadIndices.push(shuffledIndices[currentIndexInQueue + 2]);
+      }
+    } else if (repeatMode === 'all' && shuffledIndices.length > 0) {
+      nextTrackIndex = shuffledIndices[0];
+      preloadIndices.push(nextTrackIndex);
+    } else if (repeatMode === 'one' && currentTrack) {
+      nextTrackIndex = currentTrackIndex; // Preload itself (cached)
+    }
+    
+    // Add previous track to preload cache
+    if (currentIndexInQueue > 0) {
+      preloadIndices.push(shuffledIndices[currentIndexInQueue - 1]);
+    }
   }
   const nextTrack = nextTrackIndex !== -1 ? release?.tracks?.[nextTrackIndex] : null;
 
   const currentTrackUrl = currentTrack ? `/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}` : null;
   const nextTrackUrl = nextTrack ? `/api/audio/${nextTrack.previewFileId || nextTrack.newFileId}` : null;
+  
+  const preloadUrls = preloadIndices
+    .map(idx => release?.tracks?.[idx])
+    .filter(t => t != null)
+    .map(t => `/api/audio/${t!.previewFileId || t!.newFileId}`);
 
   const {
     isPlaying,
@@ -89,6 +116,7 @@ export default function PublicPreviewPage() {
   } = useAudioPlayer({
     currentTrackUrl,
     nextTrackUrl,
+    preloadUrls,
     onTrackEnd: () => handleNext(true), // true implies auto-advance
     volume,
     isMuted

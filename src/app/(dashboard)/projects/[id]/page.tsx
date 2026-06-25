@@ -452,6 +452,8 @@ export default function ProjectDetailPage() {
                           folders={folders}
                           onRefresh={fetchProject}
                           currentFolderId={folder.id}
+                          bpm={file.bpm}
+                          trackKey={file.key}
                           onContextMenu={(e) => {
                             e.preventDefault();
                             showMenu(e.clientX, e.clientY, [

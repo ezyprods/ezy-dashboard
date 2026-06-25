@@ -14,6 +14,7 @@ import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import { EditArtistModal } from "@/components/artists/EditArtistModal";
 import { MoreVertical } from "lucide-react";
+import { ArtistAvatar } from "@/components/ui/ArtistAvatar";
 
 
 export default function ArtistsPage() {
@@ -244,24 +245,11 @@ export default function ArtistsPage() {
                 </div>
               )}
               <div className={cn("flex items-center", viewMode === 'list' ? "gap-6 flex-1" : "gap-3")}>
-                <div 
-                  className={cn(
-                    "rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-inner",
-                    viewMode === 'grid' ? "w-14 h-14" : "w-10 h-10",
-                    "bg-gradient-to-br"
-                  )}
-                  style={{
-                    background: artist.photoUrl ? undefined : `linear-gradient(135deg, hsl(${(artist.name.charCodeAt(0) * 20) % 360}, 70%, 60%), hsl(${(artist.name.charCodeAt(artist.name.length - 1) * 30) % 360}, 70%, 40%))`
-                  }}
-                >
-                  {artist.photoUrl ? (
-                    <img src={artist.photoUrl} alt={artist.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
-                  ) : (
-                    <span className="font-bold text-white text-lg drop-shadow-md">
-                      {artist.name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
+                <ArtistAvatar 
+                  name={artist.name} 
+                  photoUrl={artist.photoUrl} 
+                  size={viewMode === 'grid' ? 'lg' : 'md'} 
+                />
                 
                 <div className="min-w-0 flex-1">
                   <h3 className="font-bold text-text-primary text-base leading-tight group-hover:text-accent transition-colors truncate">{artist.name}</h3>

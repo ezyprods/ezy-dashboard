@@ -59,7 +59,7 @@ export default function SettingsPage() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Navigation Sidebar */}
         <aside className="w-full md:w-64 shrink-0">
-          <nav className="flex md:flex-col gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-hide md:glass md:p-3 md:rounded-2xl md:border md:border-border/50 snap-x snap-mandatory md:snap-none">
+          <nav className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide snap-x snap-mandatory md:snap-none relative">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -68,14 +68,27 @@ export default function SettingsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`flex items-center gap-2.5 px-3 md:px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium whitespace-nowrap group snap-start min-h-[44px] shrink-0 md:shrink md:w-full ${
+                  className={cn(
+                    "relative flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 text-sm font-semibold whitespace-nowrap group snap-start min-h-[48px] shrink-0 md:shrink md:w-full overflow-hidden",
                     isActive
-                      ? 'bg-accent/10 text-accent border border-accent/20 shadow-sm'
-                      : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary border border-transparent'
-                  }`}
+                      ? "text-accent bg-accent/5 shadow-sm ring-1 ring-accent/20"
+                      : "text-text-secondary hover:bg-surface-elevated/50 hover:text-text-primary"
+                  )}
                 >
-                  <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'text-accent scale-110' : 'text-text-secondary group-hover:scale-110'}`} />
-                  {tab.label}
+                  {/* Active Indicator Line */}
+                  {isActive && (
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent shadow-[0_0_8px_rgba(var(--accent),0.6)]" />
+                  )}
+                  {/* Subtle hover/active glow */}
+                  {isActive && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-accent/10 to-transparent opacity-50" />
+                  )}
+                  
+                  <Icon className={cn(
+                    "w-5 h-5 transition-transform duration-300 relative z-10",
+                    isActive ? "scale-110 drop-shadow-md" : "group-hover:scale-110"
+                  )} />
+                  <span className="relative z-10">{tab.label}</span>
                 </button>
               );
             })}
@@ -84,9 +97,10 @@ export default function SettingsPage() {
 
         {/* Tab Content Area */}
         <main className="flex-1 min-w-0">
-          <div className="glass p-4 sm:p-6 md:p-8 rounded-2xl md:rounded-3xl border border-border/50 shadow-xl relative overflow-hidden">
+          <div className="bg-surface/80 backdrop-blur-2xl p-6 md:p-10 rounded-3xl border border-border/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative overflow-hidden transition-all duration-500 min-h-[500px]">
             {/* Ambient Background Glow */}
-            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-accent/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-accent/10 rounded-full blur-[100px] pointer-events-none opacity-60" />
+            <div className="absolute bottom-[-20%] left-[-10%] w-[300px] h-[300px] bg-purple-500/10 rounded-full blur-[80px] pointer-events-none opacity-40" />
             
             <div className="relative z-10">
               {renderTab()}

@@ -122,8 +122,16 @@ export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, web
   const userPermissions = permissions.filter(p => p.type === 'user');
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-surface-elevated w-full max-w-lg rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" 
+        style={{ willChange: 'opacity' }}
+        onClick={onClose}
+      />
+      <div 
+        className="relative z-10 bg-surface-elevated w-full max-w-lg rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh] animate-scale-in"
+        style={{ willChange: 'transform, opacity' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-3">

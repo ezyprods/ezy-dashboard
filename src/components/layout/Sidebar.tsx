@@ -19,24 +19,11 @@ const navItems = [
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [studioName, setStudioName] = useState('EZY Dashboard');
-
   useEffect(() => {
     if (isOpen && onClose) {
       onClose();
     }
   }, [pathname]);
-
-  useEffect(() => {
-    const loadStudioName = () => {
-      const saved = localStorage.getItem('ezy_studio_name');
-      if (saved) setStudioName(saved);
-    };
-    loadStudioName();
-    
-    window.addEventListener('ezy_studio_name_change', loadStudioName);
-    return () => window.removeEventListener('ezy_studio_name_change', loadStudioName);
-  }, []);
 
   return (
     <>
@@ -73,9 +60,6 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
               priority
             />
           </Link>
-          <div className="mt-3 text-xs font-medium text-text-secondary bg-surface-elevated px-3 py-1 rounded-full border border-border">
-            {studioName}
-          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">

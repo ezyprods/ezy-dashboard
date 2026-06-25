@@ -113,53 +113,61 @@ export function DriveTab() {
 
       {status && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="glass p-6 rounded-2xl flex flex-col gap-4">
-              <div className="flex items-center gap-4">
+            <div className="bg-surface border border-border rounded-3xl p-8 flex flex-col gap-6 shadow-lg relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-success/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none transition-transform group-hover:scale-150 duration-700" />
+              
+              <div className="flex items-center gap-5 relative z-10">
                 {status.user.photoLink ? (
-                  <img src={status.user.photoLink} alt="Avatar" className="w-12 h-12 rounded-full border border-border" />
+                  <img src={status.user.photoLink} alt="Avatar" className="w-16 h-16 rounded-full border-2 border-surface-elevated shadow-md" />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
-                    <Database className="w-6 h-6 text-accent" />
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center border border-accent/20 shadow-inner">
+                    <Database className="w-8 h-8 text-accent drop-shadow-sm" />
                   </div>
                 )}
                 <div>
-                  <div className="font-semibold text-text-primary flex items-center gap-2">
+                  <div className="font-bold text-text-primary text-lg flex items-center gap-2">
                     {status.user.displayName}
-                    <CheckCircle2 className="w-4 h-4 text-success" />
+                    <CheckCircle2 className="w-5 h-5 text-success drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
                   </div>
-                  <div className="text-sm text-text-secondary">{status.user.emailAddress}</div>
+                  <div className="text-sm text-text-secondary font-medium">{status.user.emailAddress}</div>
                 </div>
               </div>
-              <div className="text-xs text-success bg-success/10 px-3 py-1.5 rounded-full inline-flex w-max font-medium">
-                Conectado y Sincronizado
+              <div className="relative z-10">
+                <div className="text-xs text-success bg-success/10 border border-success/20 px-4 py-2 rounded-full inline-flex items-center gap-2 font-semibold shadow-sm animate-pulse-slow">
+                  <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                  Conectado y Sincronizado
+                </div>
               </div>
             </div>
 
-            <div className="glass p-6 rounded-2xl space-y-4">
-              <div className="flex justify-between items-end">
+            <div className="bg-surface border border-border rounded-3xl p-8 space-y-6 shadow-lg relative overflow-hidden group">
+              <div className="flex justify-between items-end relative z-10">
                 <div>
-                  <div className="text-sm text-text-secondary mb-1">Almacenamiento Usado</div>
-                  <div className="text-2xl font-bold text-text-primary">
+                  <div className="text-sm font-semibold text-text-secondary uppercase tracking-wider mb-2">Almacenamiento Usado</div>
+                  <div className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-text-primary to-text-secondary">
                     {formatBytes(status.storageQuota.usage)}
                   </div>
                 </div>
-                <div className="text-sm text-text-secondary">
+                <div className="text-sm font-medium text-text-secondary pb-1">
                   de {formatBytes(status.storageQuota.limit)}
                 </div>
               </div>
 
-              <div className="h-4 bg-surface-elevated rounded-full overflow-hidden border border-border/50 shadow-inner relative">
-                <div 
-                  className={`h-full transition-all duration-1000 ease-out relative overflow-hidden ${
-                    percentage > 95 ? 'bg-error' : percentage > 80 ? 'bg-warning' : 'bg-gradient-to-r from-accent to-accent-light'
-                  }`}
-                  style={{ width: `${percentage}%` }}
-                >
-                  <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite] -translate-x-full" style={{ backgroundImage: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)' }} />
+              <div className="relative z-10">
+                <div className="h-6 bg-surface-elevated rounded-full overflow-hidden border border-black/20 shadow-inner relative p-1">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden shadow-sm ${
+                      percentage > 95 ? 'bg-gradient-to-r from-error to-red-400' : percentage > 80 ? 'bg-gradient-to-r from-warning to-yellow-400' : 'bg-gradient-to-r from-accent to-accent-light'
+                    }`}
+                    style={{ width: `${percentage}%` }}
+                  >
+                    <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)] w-[200%] animate-[shimmer_2s_infinite]" />
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-between items-center text-xs text-text-secondary font-medium">
-                <span>{percentage}% utilizado</span>
+              
+              <div className="flex justify-between items-center text-xs font-semibold text-text-secondary uppercase tracking-wider relative z-10">
+                <span className={percentage > 80 ? (percentage > 95 ? 'text-error' : 'text-warning') : 'text-accent'}>{percentage}% utilizado</span>
                 <span>{formatBytes((limitBytes - usageBytes).toString())} libres</span>
               </div>
             </div>

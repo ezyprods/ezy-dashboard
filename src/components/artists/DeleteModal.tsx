@@ -84,8 +84,15 @@ export function DeleteModal({ isOpen, onClose, fileId, fileName, onDeleted, curr
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-surface-elevated w-full max-w-md rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" 
+        style={{ willChange: 'opacity' }}
+      />
+      <div 
+        className="relative z-10 bg-surface-elevated w-full max-w-md rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden animate-scale-in"
+        style={{ willChange: 'transform, opacity' }}
+      >
         
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border bg-surface/50">

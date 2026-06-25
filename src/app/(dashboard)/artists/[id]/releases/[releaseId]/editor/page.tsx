@@ -181,10 +181,7 @@ export default function ReleaseEditorPage() {
   const optimizeTracksToMp3 = async () => {
     try {
       const tracksToConvert = release?.tracks.filter(t => !t.previewFileId && (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav'))) || [];
-      if (tracksToConvert.length === 0) {
-        customAlert('Todas las pistas ya están optimizadas');
-        return;
-      }
+      if (tracksToConvert.length === 0) return;
 
       setConversionState({ active: true, progress: 0, trackTitle: 'Iniciando motor FFmpeg...' });
       
@@ -242,15 +239,21 @@ export default function ReleaseEditorPage() {
           body: JSON.stringify({ tracks: newTracks }),
         });
       }
-      
-      customAlert('Optimización completada. El reproductor cargará ultrarrápido.');
     } catch (err: any) {
       console.error(err);
-      customAlert('Error en la optimización: ' + (err.message || 'Desconocido'));
+      // We log the error but don't show an alert to not block UI since it's background
     } finally {
       setConversionState({ active: false, progress: 0, trackTitle: '' });
     }
   };
+
+  useEffect(() => {
+    if (!release?.tracks || conversionState.active) return;
+    const hasUnconverted = release.tracks.some(t => !t.previewFileId && (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav')));
+    if (hasUnconverted) {
+      optimizeTracksToMp3();
+    }
+  }, [release?.tracks, conversionState.active]);
 
   const removeTrack = async (trackId: string, index: number) => {
     if (!await customConfirm('¿Eliminar esta canción del lanzamiento?')) return;
@@ -367,17 +370,36 @@ export default function ReleaseEditorPage() {
 
   const currentIndexInQueue = shuffledIndices.indexOf(currentTrackIndex);
   let nextTrackIndex = -1;
-  if (currentIndexInQueue >= 0 && currentIndexInQueue < shuffledIndices.length - 1) {
-    nextTrackIndex = shuffledIndices[currentIndexInQueue + 1];
-  } else if (repeatMode === 'all' && shuffledIndices.length > 0) {
-    nextTrackIndex = shuffledIndices[0];
-  } else if (repeatMode === 'one' && currentTrack) {
-    nextTrackIndex = currentTrackIndex;
+  const preloadIndices: number[] = [];
+
+  if (currentIndexInQueue >= 0) {
+    if (currentIndexInQueue < shuffledIndices.length - 1) {
+      nextTrackIndex = shuffledIndices[currentIndexInQueue + 1];
+      preloadIndices.push(nextTrackIndex);
+      if (currentIndexInQueue < shuffledIndices.length - 2) {
+        preloadIndices.push(shuffledIndices[currentIndexInQueue + 2]);
+      }
+    } else if (repeatMode === 'all' && shuffledIndices.length > 0) {
+      nextTrackIndex = shuffledIndices[0];
+      preloadIndices.push(nextTrackIndex);
+    } else if (repeatMode === 'one' && currentTrack) {
+      nextTrackIndex = currentTrackIndex;
+    }
+    
+    // Add previous track to preload cache
+    if (currentIndexInQueue > 0) {
+      preloadIndices.push(shuffledIndices[currentIndexInQueue - 1]);
+    }
   }
   const nextTrack = nextTrackIndex !== -1 ? release?.tracks?.[nextTrackIndex] : null;
 
   const currentTrackUrl = currentTrack ? `/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}` : null;
   const nextTrackUrl = nextTrack ? `/api/audio/${nextTrack.previewFileId || nextTrack.newFileId}` : null;
+  
+  const preloadUrls = preloadIndices
+    .map(idx => release?.tracks?.[idx])
+    .filter(t => t != null)
+    .map(t => `/api/audio/${t!.previewFileId || t!.newFileId}`);
 
   const {
     isPlaying,
@@ -393,6 +415,7 @@ export default function ReleaseEditorPage() {
   } = useAudioPlayer({
     currentTrackUrl,
     nextTrackUrl,
+    preloadUrls,
     onTrackEnd: () => handleNext(true),
     volume,
     isMuted
@@ -698,17 +721,6 @@ export default function ReleaseEditorPage() {
           >
             {isBuffering ? <Loader2 className="w-6 h-6 animate-spin text-black" /> : isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 ml-1 fill-current" />}
           </button>
-          
-          {release?.tracks?.some(t => !t.previewFileId && (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav'))) && (
-            <button
-              onClick={optimizeTracksToMp3}
-              disabled={conversionState.active}
-              className="flex items-center gap-2 px-4 py-2 bg-[#282828] border border-[#3e3e3e] rounded-full text-sm font-semibold hover:bg-[#3e3e3e] hover:text-white transition-all disabled:opacity-50"
-            >
-              {conversionState.active ? <Loader2 className="w-4 h-4 animate-spin text-[#1db954]" /> : <Music className="w-4 h-4 text-[#1db954]" />}
-              {conversionState.active ? 'Optimizando...' : 'Generar MP3s Ultrarrápidos'}
-            </button>
-          )}
         </div>
         
         {conversionState.active && (

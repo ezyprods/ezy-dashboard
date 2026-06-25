@@ -32,6 +32,7 @@ export function Modal({ isOpen, onClose, title, description, children, className
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-background/90 animate-fade-in" 
+        style={{ willChange: 'opacity' }}
         onClick={onClose}
       />
       
@@ -41,6 +42,7 @@ export function Modal({ isOpen, onClose, title, description, children, className
           "relative z-50 w-full max-w-lg bg-surface-elevated rounded-xl shadow-2xl animate-slide-in border border-border max-h-[90vh] flex flex-col",
           className
         )}
+        style={{ willChange: 'transform, opacity' }}
       >
         <div className="flex items-center justify-between p-6 border-b border-border/50">
           <div>

@@ -28,6 +28,8 @@ interface DriveItem {
   versions?: DriveItem[];
   parentFolderId?: string;
   expiresAt?: number | null;
+  bpm?: string | number | null;
+  key?: string | null;
 }
 
 interface Breadcrumb {
@@ -888,6 +890,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           )}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                          {item.bpm && <span className="bg-accent/10 text-accent font-mono px-1.5 py-0.5 rounded border border-accent/20">{item.bpm} BPM</span>}
+                          {item.key && <span className="bg-blue-500/10 text-blue-500 font-mono px-1.5 py-0.5 rounded border border-blue-500/20">{item.key}</span>}
                           <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
                         </div>
                       </div>

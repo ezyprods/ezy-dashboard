@@ -283,8 +283,17 @@ export function ArtistCampaignsTab({ artistId, projects, onOpenMatrix }: ArtistC
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setIsModalOpen(false)}>
-          <div className="bg-surface-elevated w-full max-w-xl rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden max-h-[90vh]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" 
+            style={{ willChange: 'opacity' }}
+            onClick={() => setIsModalOpen(false)}
+          />
+          <div 
+            className="relative z-10 bg-surface-elevated w-full max-w-xl rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden max-h-[90vh] animate-scale-in" 
+            style={{ willChange: 'transform, opacity' }}
+            onClick={e => e.stopPropagation()}
+          >
             
             {/* Modal Header */}
             <div className="flex items-center justify-between p-5 border-b border-border">

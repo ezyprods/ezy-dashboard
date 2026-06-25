@@ -92,112 +92,113 @@ export default function DashboardPage() {
 
 
       {/* Action Center (Header) */}
-      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-text-primary tracking-tight">Centro de Comando</h1>
-          <div className="mt-2 space-y-1">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-end justify-between gap-4 glass p-6 rounded-3xl border border-border/60 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-accent/5 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
+        
+        <div className="relative z-10">
+          <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-text-primary to-text-secondary tracking-tight mb-2">
+            Centro de Comando
+          </h1>
+          <div className="space-y-1">
             {pulseData.globalStats?.priorityAlerts?.map((alert: string, i: number) => (
-              <p key={i} className={`text-sm flex items-center gap-2 ${i === 0 && alert.includes('Revisión') ? 'text-warning' : 'text-text-secondary'}`}>
-                {i === 0 && alert.includes('Revisión') ? <AlertCircle className="w-4 h-4" /> : <ChevronRight className="w-4 h-4 opacity-50" />}
+              <p key={i} className={`text-sm font-medium flex items-center gap-2 ${i === 0 && alert.includes('Revisión') ? 'text-warning' : 'text-text-secondary'}`}>
+                {i === 0 && alert.includes('Revisión') ? <AlertCircle className="w-4 h-4" /> : <ChevronRight className="w-4 h-4 text-accent/50" />}
                 {alert}
               </p>
             ))}
             {(!pulseData.globalStats?.priorityAlerts || pulseData.globalStats?.priorityAlerts.length === 0) && (
-              <p className="text-sm text-text-secondary flex items-center gap-2">
-                <ChevronRight className="w-4 h-4 opacity-50" />
-                Sincronizando el pulso del estudio...
+              <p className="text-sm font-medium text-text-secondary flex items-center gap-2">
+                <ChevronRight className="w-4 h-4 text-accent/50" />
+                El estudio está al día. No hay tareas urgentes.
               </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button onClick={() => setIsNewArtistModalOpen(true)} className="gap-2 shadow-lg shadow-accent/20">
-            <Plus className="w-4 h-4" /> Nuevo Artista
+        
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="flex gap-4 mr-4 px-4 py-2 bg-surface/50 rounded-2xl border border-border/50 backdrop-blur-md hidden md:flex">
+            <div className="flex flex-col items-center">
+              <span className="text-lg font-bold text-text-primary">{activeProjectsCount}</span>
+              <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Proyectos</span>
+            </div>
+            <div className="w-px bg-border/80" />
+            <div className="flex flex-col items-center">
+              <span className="text-lg font-bold text-accent">{artists.length}</span>
+              <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Artistas</span>
+            </div>
+          </div>
+          <Button onClick={() => setIsNewArtistModalOpen(true)} className="gap-2 shadow-[0_0_20px_rgba(var(--accent),0.3)] hover:shadow-[0_0_30px_rgba(var(--accent),0.5)] transition-all">
+            <Plus className="w-5 h-5" /> Nuevo Artista
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8 overflow-hidden">
-        {/* Left Column (Main Content) */}
-        <div className="lg:col-span-2 flex flex-col gap-6 min-h-0">
+      <div className="flex-1 flex flex-col gap-6 min-h-0 overflow-y-auto scrollbar-hide">
+        
+        {/* Top Grid: Quick Actions & Widgets */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
           
-          {/* Quick Actions */}
-          <div className="shrink-0 flex gap-4 overflow-x-auto pb-2 scrollbar-hide md:grid md:grid-cols-3">
-            <div onClick={() => setIsNewProjectOpen(true)} className="relative overflow-hidden glass p-5 md:p-6 rounded-[20px] border border-border hover:border-accent/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 min-w-[200px] md:min-w-0 shrink-0 md:shrink">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
-              <div className="relative z-10 flex flex-col h-full justify-between gap-4">
-                <div className="flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/10 text-accent flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner">
-                    <Music className="w-6 h-6" />
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg text-text-primary">Nuevo Proyecto</h3>
-                  <p className="text-sm text-text-secondary mt-0.5">Crear en cualquier artista</p>
-                </div>
+          {/* Quick Actions Strip */}
+          <div className="lg:col-span-1 flex flex-col gap-4">
+            <div onClick={() => setIsNewProjectOpen(true)} className="glass p-4 rounded-2xl border border-border hover:border-accent/40 cursor-pointer group hover:bg-surface-elevated transition-all flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-accent/10 text-accent flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Music className="w-6 h-6" />
               </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-text-primary text-sm">Nuevo Proyecto</h3>
+                <p className="text-xs text-text-secondary">Crear en cualquier artista</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
             </div>
 
-            <div onClick={() => setIsQuickUploadOpen(true)} className="relative overflow-hidden glass p-5 md:p-6 rounded-[20px] border border-border hover:border-blue-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/5 min-w-[200px] md:min-w-0 shrink-0 md:shrink">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
-              <div className="relative z-10 flex flex-col h-full justify-between gap-4">
-                <div className="flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10 text-blue-500 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner">
-                    <UploadCloud className="w-6 h-6" />
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg text-text-primary">Subida Rápida</h3>
-                  <p className="text-sm text-text-secondary mt-0.5">Sube a su carpeta Drive</p>
-                </div>
+            <div onClick={() => setIsQuickUploadOpen(true)} className="glass p-4 rounded-2xl border border-border hover:border-blue-500/40 cursor-pointer group hover:bg-surface-elevated transition-all flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <UploadCloud className="w-6 h-6" />
               </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-text-primary text-sm">Subida Rápida</h3>
+                <p className="text-xs text-text-secondary">Sube a su carpeta Drive</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
             </div>
 
-            <div onClick={() => router.push('/calendar')} className="relative overflow-hidden glass p-5 md:p-6 rounded-[20px] border border-border hover:border-emerald-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5 min-w-[200px] md:min-w-0 shrink-0 md:shrink">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
-              <div className="relative z-10 flex flex-col h-full justify-between gap-4">
-                <div className="flex items-center justify-between">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10 text-emerald-500 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner">
-                    <Calendar className="w-6 h-6" />
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
+            <div onClick={() => router.push('/calendar')} className="glass p-4 rounded-2xl border border-border hover:border-emerald-500/40 cursor-pointer group hover:bg-surface-elevated transition-all flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-text-primary text-sm">Calendario</h3>
+                <p className="text-xs text-text-secondary">Ver tu agenda inteligente</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+            </div>
+          </div>
+
+          {/* Widgets Grid */}
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6 h-full">
+            <div className="h-[260px] lg:h-full">
+               <GlobalMatricesWidget />
+            </div>
+            
+            <div className="relative h-[260px] lg:h-full">
+              <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/10 to-transparent rounded-[24px] blur opacity-50 pointer-events-none" />
+              <div className="relative bg-surface border border-border/60 rounded-[20px] overflow-hidden shadow-lg h-full flex flex-col">
+                <div className="p-4 border-b border-border/50 bg-surface-elevated/30 flex items-center gap-2 shrink-0">
+                  <Calendar className="w-4 h-4 text-blue-500" />
+                  <h3 className="font-bold text-sm text-text-primary uppercase tracking-wider">Próximos eventos</h3>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-lg text-text-primary">Calendario</h3>
-                  <p className="text-sm text-text-secondary mt-0.5">Ver tu agenda inteligente</p>
+                <div className="p-2 flex-1 overflow-hidden">
+                  <CalendarWidget />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Global Tasks Command Center in place of the old Artists Directory */}
-          <div className="flex-1 min-h-0 flex flex-col">
-            <GlobalPendingTasks />
-          </div>
         </div>
 
-        {/* Right Column (Widgets) */}
-        <div className="flex flex-col gap-6 min-h-0 h-full">
-          <div className="flex-1 min-h-0 flex flex-col">
-            <GlobalMatricesWidget />
-          </div>
-
-          <div className="relative">
-            <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/20 to-transparent rounded-[20px] blur opacity-50" />
-            <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl">
-              <div className="p-4 border-b border-border/50 bg-surface/50 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-blue-400" />
-                <h3 className="font-semibold text-sm">Próximos eventos</h3>
-              </div>
-              <div className="p-2">
-                <CalendarWidget />
-              </div>
-            </div>
-          </div>
-
-
+        {/* Global Tasks Kanban (Full Width) */}
+        <div className="flex-1 min-h-[500px]">
+          <GlobalPendingTasks />
         </div>
       </div>
     </div>

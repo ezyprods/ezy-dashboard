@@ -21,6 +21,7 @@ import { EditArtistModal } from "@/components/artists/EditArtistModal";
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import * as LucideIcons from 'lucide-react';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { ArtistAvatar } from "@/components/ui/ArtistAvatar";
 
 
 export default function ArtistDetailPage() {
@@ -136,13 +137,7 @@ export default function ArtistDetailPage() {
           
           {/* Left side: Avatar + Info */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-xl font-bold overflow-hidden shadow-sm shrink-0">
-              {artist.photoUrl ? (
-                <img src={artist.photoUrl} alt={artist.name || '?'} className="w-full h-full object-cover" />
-              ) : (
-                (artist.name || '?').charAt(0)
-              )}
-            </div>
+            <ArtistAvatar name={artist.name || '?'} photoUrl={artist.photoUrl} size="lg" className="w-11 h-11" />
             
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-3">

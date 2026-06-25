@@ -55,8 +55,17 @@ export function DialogProvider() {
   if (!options) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in" onClick={handleCancel}>
-      <div className="glass bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <div 
+        className="fixed inset-0 bg-background/80 backdrop-blur-sm animate-fade-in" 
+        style={{ willChange: 'opacity' }}
+        onClick={handleCancel}
+      />
+      <div 
+        className="relative z-10 glass bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-in" 
+        style={{ willChange: 'transform, opacity' }}
+        onClick={e => e.stopPropagation()}
+      >
         <button onClick={handleCancel} className="absolute top-4 right-4 text-text-secondary hover:text-text-primary p-1">
           <X className="w-5 h-5" />
         </button>

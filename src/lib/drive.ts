@@ -189,7 +189,7 @@ export async function fetchFoldersRecursively(drive: any, parentId: string, pare
   do {
     const response: any = await drive.files.list({
       q: `'${parentId}' in parents and trashed=false`,
-      fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)',
+      fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, size, appProperties)',
       orderBy: 'folder, name',
       pageSize: 1000,
       pageToken: pageToken,
@@ -208,7 +208,11 @@ export async function fetchFoldersRecursively(drive: any, parentId: string, pare
   const files = items.filter((f: any) => 
     f.mimeType !== 'application/vnd.google-apps.folder' && 
     !SYSTEM_FILES.includes(f.name)
-  );
+  ).map((f: any) => ({
+    ...f,
+    bpm: f.appProperties?.bpm || null,
+    key: f.appProperties?.key || null
+  }));
   rootFiles = files;
 
   // Carpetas directas

@@ -190,7 +190,7 @@ export default function ArtistPreviewsPage() {
               {/* Cover */}
               <div
                 className="w-full aspect-square bg-surface border-b border-border flex items-center justify-center overflow-hidden cursor-pointer relative"
-                onClick={() => router.push(`/artists/${artistId}/releases/${release.id}/editor`)}
+                onClick={() => window.open(`/previews/${release.id}`, '_blank')}
               >
                 {release.coverArtId ? (
                   <img
@@ -306,8 +306,17 @@ export default function ArtistPreviewsPage() {
 
       {/* Create Preview Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in" onClick={() => !isCreating && setShowCreateModal(false)}>
-          <div className="glass bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-fade-in"
+            style={{ willChange: 'opacity' }}
+            onClick={() => !isCreating && setShowCreateModal(false)}
+          />
+          <div 
+            className="glass bg-surface border border-border rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-slide-in" 
+            style={{ willChange: 'transform, opacity' }}
+            onClick={e => e.stopPropagation()}
+          >
             <button onClick={() => !isCreating && setShowCreateModal(false)} className="absolute top-4 right-4 text-text-secondary hover:text-text-primary p-1">
               <X className="w-5 h-5" />
             </button>

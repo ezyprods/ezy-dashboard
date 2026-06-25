@@ -271,19 +271,31 @@ export function SmartUploadModal({
         detectedArtistId = preselectedArtistId;
         detectedArtistName = artists.find(a => a.id === preselectedArtistId)?.name || '';
       } else {
-        const normalizedFile = f.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normalizedFile = f.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ');
+        const squashedFile = normalizedFile.replace(/\s+/g, '');
         
-        // Exact substring match
-        const exactMatch = inlineSortedArtists.find(a => {
-           const normArtist = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        // Pass 1: Exact substring match (handles regular spacing and underscores mapped to spaces)
+        let exactMatch = inlineSortedArtists.find(a => {
+           const normArtist = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ');
            return normalizedFile.includes(normArtist);
         });
+
+        // Pass 2: Squashed match (handles missing spaces in filename e.g. "Amory_Odio" vs "AmoryOdio")
+        // Only if artist name is > 3 chars to avoid false positives with short names like 'SAO' in 'pesao'
+        if (!exactMatch) {
+          exactMatch = inlineSortedArtists.find(a => {
+             const squashedArtist = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_\-\s]+/g, '');
+             if (squashedArtist.length <= 3) return false;
+             return squashedFile.includes(squashedArtist);
+          });
+        }
 
         if (exactMatch) {
           detectedArtistId = exactMatch.id;
           detectedArtistName = exactMatch.name;
         } else {
-          const bestArtistMatch = findBestMatch(f.name, inlineSortedArtists, (a: any) => a?.name || '', 0.5);
+          // Pass 3: Fuzzy match (lowered threshold to 0.4 to be slightly more forgiving)
+          const bestArtistMatch = findBestMatch(normalizedFile, inlineSortedArtists, (a: any) => a?.name?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ') || '', 0.4);
           if (bestArtistMatch) {
             detectedArtistId = bestArtistMatch.id;
             detectedArtistName = bestArtistMatch.name;
@@ -768,41 +780,32 @@ export function SmartUploadModal({
                 <div className="grid grid-cols-2 gap-3 mt-2">
                   <div>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
-                    <div className="relative">
-                      <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg pl-3 pr-10 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border appearance-none cursor-pointer">
-                        {sortedArtists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
-                    </div>
+                    <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
+                      {sortedArtists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
                   </div>
 
                   <div className={(item.subType === 'bounce' || preselectedFolderId) ? "opacity-50 pointer-events-none" : ""}>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
-                    <div className="relative">
-                      <select value={item.projectId} onChange={e => updateItem(item.id, { projectId: e.target.value })} className="w-full bg-surface-elevated border border-border/60 rounded-lg pl-3 pr-10 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border appearance-none cursor-pointer">
-                        {item.subType === 'bounce' ? (
-                           <option value="">Carpeta General (Artista)</option>
-                        ) : (
-                          projectList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)
-                        )}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
-                    </div>
+                    <select value={item.projectId} onChange={e => updateItem(item.id, { projectId: e.target.value })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
+                      {item.subType === 'bounce' ? (
+                         <option value="">Carpeta General (Artista)</option>
+                      ) : (
+                        projectList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)
+                      )}
+                    </select>
                   </div>
 
                   {item.mimeGroup === 'audio' && (
                     <div>
                       <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Tipo de Archivo</label>
-                      <div className="relative">
-                        <select value={item.subType} onChange={e => updateItem(item.id, { subType: e.target.value as any })} className="w-full bg-surface-elevated border border-border/60 rounded-lg pl-3 pr-10 py-2 text-sm focus:ring-1 focus:ring-accent outline-none text-text-primary transition-all hover:border-border appearance-none cursor-pointer">
-                          <option value="bounce">🎵 Bounce (Demo)</option>
-                          <option value="mix">🎛️ Mix</option>
-                          <option value="master">💿 Master (Final)</option>
-                          <option value="stem">🎸 Stem</option>
-                          <option value="none">📁 Otro Audio</option>
-                        </select>
-                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary pointer-events-none" />
-                      </div>
+                      <select value={item.subType} onChange={e => updateItem(item.id, { subType: e.target.value as any })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
+                        <option value="bounce">🎵 Bounce (Demo)</option>
+                        <option value="mix">🎛️ Mix</option>
+                        <option value="master">💿 Master (Final)</option>
+                        <option value="stem">✂️ Stem / Pista</option>
+                        <option value="none">📄 Ninguno (Subir tal cual)</option>
+                      </select>
                     </div>
                   )}
 

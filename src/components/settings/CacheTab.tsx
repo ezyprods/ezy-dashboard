@@ -76,58 +76,65 @@ export function CacheTab() {
           Gestiona el almacenamiento local de la aplicación y crea copias de seguridad de tus preferencias.
         </p>
 
-        <div className="space-y-4">
-          <div className="glass p-6 rounded-2xl border border-border flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-10 -mt-10 pointer-events-none" />
-            <div className="relative z-10">
-              <h3 className="font-medium text-text-primary mb-1 flex items-center gap-2">
-                <PackageOpen className="w-4 h-4 text-accent" />
+        <div className="space-y-6">
+          <div className="bg-surface border border-border rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-10 -mt-10 pointer-events-none group-hover:bg-accent/10 transition-colors duration-500" />
+            <div className="relative z-10 flex-1">
+              <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
+                <PackageOpen className="w-5 h-5 text-accent" />
                 Limpiar memoria temporal
               </h3>
-              <p className="text-sm text-text-secondary">
+              <p className="text-sm text-text-secondary leading-relaxed">
                 Forzará al sistema a descargar los datos reales desde Google Drive. No perderás archivos ni configuraciones.
               </p>
-              <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface border border-border/50 text-xs font-medium text-text-secondary">
-                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" /> Uso actual estimado: {cacheSize}
+              <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-elevated border border-border/60 text-xs font-semibold text-text-secondary shadow-inner">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
+                </span>
+                Uso actual: {cacheSize}
               </div>
             </div>
             
             <button
               onClick={handleClearCache}
               disabled={cleared}
-              className={`relative z-10 shrink-0 px-6 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2 ${
+              className={`relative z-10 shrink-0 px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 shadow-sm ${
                 cleared 
-                  ? 'bg-success/20 text-success border border-success/30' 
-                  : 'bg-surface hover:bg-surface-elevated text-text-primary border border-border hover:border-accent/50 hover:text-accent shadow-sm'
+                  ? 'bg-success/10 text-success border border-success/30 shadow-none' 
+                  : 'bg-surface hover:bg-error/10 text-text-primary border border-border hover:border-error/30 hover:text-error'
               }`}
             >
               {cleared ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-5 h-5 animate-in zoom-in" />
                   Caché Limpiada
                 </>
               ) : (
                 <>
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-5 h-5" />
                   Limpiar Caché
                 </>
               )}
             </button>
           </div>
 
-          <div className="glass p-6 rounded-2xl border border-border flex flex-col md:flex-row items-center justify-between gap-6">
-            <div>
-              <h3 className="font-medium text-text-primary mb-1">Copia de Seguridad Local</h3>
-              <p className="text-sm text-text-secondary">
+          <div className="bg-surface border border-border rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden shadow-sm hover:shadow-md transition-shadow group">
+            <div className="relative z-10 flex-1">
+              <h3 className="font-semibold text-text-primary mb-2 flex items-center gap-2">
+                <HardDrive className="w-5 h-5 text-accent" />
+                Copia de Seguridad Local
+              </h3>
+              <p className="text-sm text-text-secondary leading-relaxed">
                 Descarga un archivo con tus preferencias (estudio, notificaciones, apariencia) guardadas en este navegador.
               </p>
             </div>
             
             <button
               onClick={handleBackup}
-              className="shrink-0 px-6 py-2.5 rounded-xl font-medium transition-all flex items-center gap-2 bg-surface hover:bg-accent hover:text-white text-text-primary border border-border shadow-sm group"
+              className="relative z-10 shrink-0 px-6 py-3 rounded-xl font-bold transition-all duration-300 flex items-center gap-2 bg-surface hover:bg-accent hover:text-white text-text-primary border border-border hover:border-accent shadow-sm group-hover:shadow"
             >
-              <Download className="w-4 h-4 text-text-secondary group-hover:text-white transition-colors" />
+              <Download className="w-5 h-5 text-text-secondary group-hover:text-white transition-colors duration-300" />
               Exportar JSON
             </button>
           </div>

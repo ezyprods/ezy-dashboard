@@ -383,12 +383,15 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
 
       {/* Modal Nueva Matriz */}
       {isModalOpen && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          onClick={() => setIsModalOpen(false)}
-        >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div 
-            className="glass w-full max-w-md rounded-xl border border-border p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
+            style={{ willChange: 'opacity' }}
+            onClick={() => setIsModalOpen(false)}
+          />
+          <div 
+            className="relative z-10 glass w-full max-w-md rounded-xl border border-border p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+            style={{ willChange: 'transform, opacity' }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">

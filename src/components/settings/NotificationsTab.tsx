@@ -54,46 +54,46 @@ export function NotificationsTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* Sounds */}
-          <div className="glass p-6 rounded-2xl border border-border flex items-start justify-between gap-4">
+          <div className="bg-surface border border-border rounded-2xl p-6 transition-all duration-300 hover:border-accent/40 hover:shadow-lg flex items-start justify-between gap-4 group">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className={`p-2 rounded-lg ${soundEnabled ? 'bg-accent/10 text-accent' : 'bg-surface text-text-secondary'}`}>
+                <div className={`p-2 rounded-xl transition-colors duration-300 ${soundEnabled ? 'bg-accent/10 text-accent' : 'bg-surface-elevated text-text-secondary group-hover:bg-accent/5'}`}>
                   <Volume2 className="w-5 h-5" />
                 </div>
-                <h3 className="font-medium text-text-primary">Efectos de Sonido</h3>
+                <h3 className={`font-semibold transition-colors duration-300 ${soundEnabled ? 'text-accent' : 'text-text-primary'}`}>Efectos de Sonido</h3>
               </div>
-              <p className="text-sm text-text-secondary">
+              <p className="text-sm text-text-secondary leading-relaxed">
                 Reproducir sonidos sutiles al completar tareas en matrices o al recibir notificaciones en tiempo real.
               </p>
             </div>
             
             <button 
               onClick={toggleSound}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${soundEnabled ? 'bg-accent' : 'bg-surface-elevated border border-border'}`}
+              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${soundEnabled ? 'bg-accent shadow-[0_0_12px_rgba(var(--accent),0.5)]' : 'bg-surface-elevated border-2 border-border group-hover:border-accent/30'}`}
             >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${soundEnabled ? 'translate-x-2.5' : '-translate-x-2.5'}`} />
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out ${soundEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
 
           {/* Browser Alerts */}
-          <div className="glass p-6 rounded-2xl border border-border flex items-start justify-between gap-4">
+          <div className="bg-surface border border-border rounded-2xl p-6 transition-all duration-300 hover:border-success/40 hover:shadow-lg flex items-start justify-between gap-4 group">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className={`p-2 rounded-lg ${browserAlerts ? 'bg-success/10 text-success' : 'bg-surface text-text-secondary'}`}>
+                <div className={`p-2 rounded-xl transition-colors duration-300 ${browserAlerts ? 'bg-success/10 text-success' : 'bg-surface-elevated text-text-secondary group-hover:bg-success/5'}`}>
                   <BellRing className="w-5 h-5" />
                 </div>
-                <h3 className="font-medium text-text-primary">Notificaciones de Escritorio</h3>
+                <h3 className={`font-semibold transition-colors duration-300 ${browserAlerts ? 'text-success' : 'text-text-primary'}`}>Notificaciones de Escritorio</h3>
               </div>
-              <p className="text-sm text-text-secondary">
+              <p className="text-sm text-text-secondary leading-relaxed">
                 Recibe alertas directamente en tu navegador (incluso si la pestaña está en segundo plano) para pagos y nuevos clientes.
               </p>
             </div>
             
             <button 
               onClick={toggleAlerts}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${browserAlerts ? 'bg-success' : 'bg-surface-elevated border border-border'}`}
+              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2 focus-visible:ring-offset-background ${browserAlerts ? 'bg-success shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'bg-surface-elevated border-2 border-border group-hover:border-success/30'}`}
             >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${browserAlerts ? 'translate-x-2.5' : '-translate-x-2.5'}`} />
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out ${browserAlerts ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
 

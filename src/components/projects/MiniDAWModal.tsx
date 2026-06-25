@@ -469,17 +469,19 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return createPortal(
-    <div
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
-      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
-    >
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4">
+      <div 
+        className="fixed inset-0 animate-fade-in"
+        style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', willChange: 'opacity' }}
+        onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+      />
       <div
-        className="relative w-full bg-surface-elevated border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative z-10 w-full bg-surface-elevated border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         style={{
           maxWidth: '900px',
           maxHeight: '92dvh',
           animation: 'daw-slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+          willChange: 'transform, opacity'
         }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -62,8 +62,17 @@ export function CustomSortModal({ folderName, files, onClose, onSave }: CustomSo
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in p-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div 
+        className="fixed inset-0 bg-background/80 backdrop-blur-sm animate-fade-in" 
+        style={{ willChange: 'opacity' }}
+        onClick={onClose} 
+      />
+      <div 
+        className="relative z-10 w-full max-w-md bg-surface border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-in" 
+        style={{ willChange: 'transform, opacity' }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-bold text-text-primary">Orden Personalizado</h2>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary transition-colors">

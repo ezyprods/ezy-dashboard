@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseAudioPlayerProps {
   currentTrackUrl: string | null;
-  nextTrackUrl: string | null; // URL of the track to preload
+  nextTrackUrl?: string | null; // Kept for backward compatibility
+  preloadUrls?: string[]; // Array of URLs to preload aggressively
   onTrackEnd: () => void;
   volume?: number;
   isMuted?: boolean;
@@ -11,6 +12,7 @@ interface UseAudioPlayerProps {
 export function useAudioPlayer({ 
   currentTrackUrl, 
   nextTrackUrl, 
+  preloadUrls = [],
   onTrackEnd, 
   volume = 1, 
   isMuted = false 
@@ -23,7 +25,46 @@ export function useAudioPlayer({
   const [duration, setDuration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const preloadAudioRef = useRef<HTMLAudioElement | null>(null);
+  const preloadCache = useRef<Map<string, HTMLAudioElement>>(new Map());
+
+  // Consolidate preload URLs
+  const urlsToPreload = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const newPreloadSet = new Set<string>();
+    if (nextTrackUrl) newPreloadSet.add(nextTrackUrl);
+    preloadUrls.forEach(url => { if (url) newPreloadSet.add(url); });
+    urlsToPreload.current = newPreloadSet;
+
+    // Create new audio objects for URLs not yet in cache
+    newPreloadSet.forEach(url => {
+      if (!preloadCache.current.has(url) && url !== currentTrackUrl) {
+        const audio = new Audio(url);
+        audio.preload = 'auto';
+        audio.volume = 0; // Mute preloads
+        preloadCache.current.set(url, audio);
+      }
+    });
+
+    // Clean up old cached audios that are no longer needed
+    for (const [url, audio] of preloadCache.current.entries()) {
+      if (!newPreloadSet.has(url) && url !== currentTrackUrl) {
+        audio.removeAttribute('src');
+        audio.load();
+        preloadCache.current.delete(url);
+      }
+    }
+  }, [nextTrackUrl, preloadUrls, currentTrackUrl]);
+
+  // Clean up cache on unmount
+  useEffect(() => {
+    return () => {
+      for (const audio of preloadCache.current.values()) {
+        audio.removeAttribute('src');
+        audio.load();
+      }
+      preloadCache.current.clear();
+    };
+  }, []);
 
   // Initialize or update the main audio element when the track URL changes
   useEffect(() => {
@@ -36,35 +77,32 @@ export function useAudioPlayer({
     // Stop and clean up previous audio if it exists
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.removeAttribute('src');
-      audioRef.current.load();
+      // If we want to reuse it later, we could put it back in the cache, but usually we don't need to unless it's in the preload list
+      if (!urlsToPreload.current.has(audioRef.current.src)) {
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      }
     }
 
     // Did we already preload this exact URL?
-    if (preloadAudioRef.current && preloadAudioRef.current.src.includes(currentTrackUrl)) {
-      // Promote preloaded audio to main audio
-      audioRef.current = preloadAudioRef.current;
-      preloadAudioRef.current = null;
+    if (preloadCache.current.has(currentTrackUrl)) {
+      audioRef.current = preloadCache.current.get(currentTrackUrl)!;
+      preloadCache.current.delete(currentTrackUrl);
     } else {
-      // Create new audio instance
       audioRef.current = new Audio(currentTrackUrl);
     }
 
     const audio = audioRef.current;
     audio.volume = isMuted ? 0 : volume;
-    audio.preload = 'auto'; // Force browser to buffer
+    audio.preload = 'auto'; 
 
-    // Event Listeners
     const handleTimeUpdate = () => {
       if (!audio.duration) return;
       setCurrentTime(audio.currentTime);
       setProgress((audio.currentTime / audio.duration) * 100);
     };
 
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
-    };
-
+    const handleLoadedMetadata = () => setDuration(audio.duration);
     const handleWaiting = () => setIsBuffering(true);
     const handleCanPlay = () => setIsBuffering(false);
     const handlePlaying = () => setIsBuffering(false);
@@ -80,7 +118,6 @@ export function useAudioPlayer({
     audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('ended', handleEnded);
 
-    // If it was already playing, auto-play the new track
     if (isPlaying) {
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -100,32 +137,7 @@ export function useAudioPlayer({
       audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [currentTrackUrl]); // Only re-run when the track URL actually changes!
-
-  // Background preloading effect for the NEXT track
-  useEffect(() => {
-    if (!nextTrackUrl) {
-      if (preloadAudioRef.current) {
-        preloadAudioRef.current.removeAttribute('src');
-        preloadAudioRef.current.load();
-        preloadAudioRef.current = null;
-      }
-      return;
-    }
-
-    // Don't preload if it's already the current track (e.g. queue length 1)
-    if (currentTrackUrl === nextTrackUrl) return;
-
-    // Check if we already preloaded this track
-    if (preloadAudioRef.current && preloadAudioRef.current.src.includes(nextTrackUrl)) return;
-
-    // Create a hidden audio element to start buffering the next track
-    const preloadAudio = new Audio(nextTrackUrl);
-    preloadAudio.preload = 'auto';
-    preloadAudio.volume = 0; // Mute just in case
-    preloadAudioRef.current = preloadAudio;
-
-  }, [nextTrackUrl, currentTrackUrl]);
+  }, [currentTrackUrl]); // Notice we don't depend on isPlaying to avoid remounting, the start logic uses the current state
 
   // Handle Play/Pause changes from UI
   useEffect(() => {
@@ -140,7 +152,7 @@ export function useAudioPlayer({
     } else if (!isPlaying && !audio.paused) {
       audio.pause();
     }
-  }, [isPlaying]);
+  }, [isPlaying, currentTrackUrl]);
 
   // Handle Volume changes
   useEffect(() => {
@@ -149,18 +161,9 @@ export function useAudioPlayer({
     }
   }, [volume, isMuted]);
 
-  // Exposed Controls
-  const togglePlay = useCallback(() => {
-    setIsPlaying(prev => !prev);
-  }, []);
-
-  const play = useCallback(() => {
-    setIsPlaying(true);
-  }, []);
-
-  const pause = useCallback(() => {
-    setIsPlaying(false);
-  }, []);
+  const togglePlay = useCallback(() => setIsPlaying(prev => !prev), []);
+  const play = useCallback(() => setIsPlaying(true), []);
+  const pause = useCallback(() => setIsPlaying(false), []);
 
   const seekTo = useCallback((timeOrEvent: number | React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
