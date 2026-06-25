@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile, getDriveService } from '@/lib/drive';
 import type { Artist, ArtistConfig } from '@/types';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
 // Obtener detalle de un artista
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

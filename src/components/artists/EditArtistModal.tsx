@@ -12,13 +12,14 @@ import { Loader2 } from 'lucide-react';
 
 interface EditArtistModalProps {
   isOpen: boolean;
-  onClose: (saved?: boolean) => void;
+  onClose: (saved?: boolean, optimisticData?: Partial<Artist>) => void;
   artist: Artist;
 }
 
+import { toast } from 'sonner';
+
 export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProps) {
   const { updateArtist } = useArtists();
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -54,27 +55,29 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsLoading(true);
 
-    try {
-      const result = await updateArtist(artist.id, {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        genre: formData.genre.split(',').map(g => g.trim()).filter(Boolean),
-        services: selectedServices,
-      });
+    const updatedData = {
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      genre: formData.genre.split(',').map(g => g.trim()).filter(Boolean),
+      services: selectedServices,
+    };
 
-      if (result.success) {
-        onClose(true);
-      } else {
-        setError(result.error || 'Hubo un error al actualizar el artista');
+    onClose(true, updatedData);
+
+    toast.promise(
+      (async () => {
+        const result = await updateArtist(artist.id, updatedData);
+        if (!result.success) throw new Error(result.error);
+        return result;
+      })(),
+      {
+        loading: 'Guardando cambios en Google Drive...',
+        success: 'Perfil del artista actualizado correctamente',
+        error: (err) => `Error al guardar: ${err.message}`
       }
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error inesperado');
-    } finally {
-      setIsLoading(false);
-    }
+    );
   };
 
   return (
@@ -132,18 +135,11 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-border mt-6">
-          <Button type="button" variant="outline" onClick={() => onClose(false)} disabled={isLoading}>
+          <Button type="button" variant="outline" onClick={() => onClose(false)}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={isLoading || !formData.name}>
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              'Guardar Cambios'
-            )}
+          <Button type="submit" className="min-w-[120px] shadow-lg shadow-accent/20" disabled={!formData.name}>
+            Guardar Cambios
           </Button>
         </div>
       </form>
