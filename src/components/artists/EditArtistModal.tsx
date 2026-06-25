@@ -103,7 +103,6 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
-              disabled={isLoading}
             />
           </div>
 
@@ -116,7 +115,6 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
                 placeholder="correo@ejemplo.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
@@ -127,7 +125,6 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
                 placeholder="+34 600 000 000"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                disabled={isLoading}
               />
             </div>
           </div>
