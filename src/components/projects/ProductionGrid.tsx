@@ -69,6 +69,8 @@ function SortableRow({
   artistId,
   projectId,
   projects,
+  selectedCells,
+  onToggleSelect,
 }: {
   row: { id: string; name: string; cells: Record<string, GridCell>; linkedFile?: { id: string; name: string; webViewLink?: string; webContentLink?: string; mimeType?: string } };
   columns: { id: string; name: string; type?: ColumnType }[];
@@ -81,6 +83,8 @@ function SortableRow({
   artistId: string;
   projectId?: string;
   projects: any[];
+  selectedCells: Set<string>;
+  onToggleSelect: (rowId: string, colId: string, e: React.MouseEvent | React.PointerEvent) => void;
 }) {
   const { playTrack } = useAudio();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
@@ -182,6 +186,8 @@ function SortableRow({
           key={col.id} rowId={row.id} colId={col.id} colType={col.type as ColumnType} cellData={row.cells[col.id] || { status: 'todo' }}
           artistName={artistName} files={files} onUpdate={onCellUpdate} uploadTargetId={uploadTargetId}
           artistId={artistId} projectId={projectId} projects={projects} rowName={row.name}
+          isSelected={selectedCells.has(`${row.id}:${col.id}`)}
+          onToggleSelect={(e) => onToggleSelect(row.id, col.id, e)}
         />
       ))}
     </tr>
@@ -216,6 +222,13 @@ export function ProductionGridBoard({
   const [linkedProjectId, setLinkedProjectId] = useState<string>('');
   const [files, setFiles] = useState<any[]>([]);
 
+  // Selection logic
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set());
+  const [lastSelectedCellId, setLastSelectedCellId] = useState<string | null>(null);
+  const [selectionBox, setSelectionBox] = useState<{ start: {x:number, y:number}, end: {x:number, y:number}, active: boolean }>({ start:{x:0,y:0}, end:{x:0,y:0}, active: false });
+  const containerRef = useRef<HTMLTableElement>(null);
+  const selectionInitialSet = useRef<Set<string>>(new Set());
+
   // DND sensors
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -242,16 +255,30 @@ export function ProductionGridBoard({
       });
     };
 
+    const handleGlobalUp = () => {
+      if (selectionBox.active) setSelectionBox(prev => ({ ...prev, active: false }));
+    };
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedCells(new Set());
+        setLastSelectedCellId(null);
+      }
+    };
+
     window.addEventListener('open-link-modal', handleOpenLink);
     window.addEventListener('unlink-row-file', handleUnlink);
     window.addEventListener('open-comments-modal', handleOpenComments);
+    window.addEventListener('pointerup', handleGlobalUp);
+    window.addEventListener('keydown', handleGlobalKeyDown);
 
     return () => {
       window.removeEventListener('open-link-modal', handleOpenLink);
       window.removeEventListener('unlink-row-file', handleUnlink);
       window.removeEventListener('open-comments-modal', handleOpenComments);
+      window.removeEventListener('pointerup', handleGlobalUp);
+      window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [artistId, matrixId]);
+  }, [artistId, matrixId, linkedProjectId, projects.length, selectionBox.active]);
 
   useEffect(() => {
     // Always fetch files — if no project linked, fetchFiles will only scan artist bounces
@@ -453,6 +480,89 @@ export function ProductionGridBoard({
 
 
 
+  const handleToggleSelect = (rowId: string, colId: string, e: React.MouseEvent | React.PointerEvent) => {
+    const cellId = `${rowId}:${colId}`;
+    if (e.shiftKey && lastSelectedCellId) {
+      const [lastRowId, lastColId] = lastSelectedCellId.split(':');
+      const rIdx1 = grid.rows.findIndex(r => r.id === lastRowId);
+      const cIdx1 = grid.columns.findIndex(c => c.id === lastColId);
+      const rIdx2 = grid.rows.findIndex(r => r.id === rowId);
+      const cIdx2 = grid.columns.findIndex(c => c.id === colId);
+
+      if (rIdx1 !== -1 && cIdx1 !== -1 && rIdx2 !== -1 && cIdx2 !== -1) {
+        const minR = Math.min(rIdx1, rIdx2);
+        const maxR = Math.max(rIdx1, rIdx2);
+        const minC = Math.min(cIdx1, cIdx2);
+        const maxC = Math.max(cIdx1, cIdx2);
+
+        const newSet = new Set(selectedCells);
+        for (let r = minR; r <= maxR; r++) {
+          for (let c = minC; c <= maxC; c++) {
+            newSet.add(`${grid.rows[r].id}:${grid.columns[c].id}`);
+          }
+        }
+        setSelectedCells(newSet);
+      }
+    } else {
+      setSelectedCells(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(cellId)) newSet.delete(cellId);
+        else newSet.add(cellId);
+        return newSet;
+      });
+    }
+    setLastSelectedCellId(cellId);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLTableElement>) => {
+    if (e.button !== 0 || (!e.ctrlKey && !e.metaKey && !e.shiftKey)) return;
+    if (e.ctrlKey || e.metaKey) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      setSelectionBox({ start: {x,y}, end: {x,y}, active: true });
+      selectionInitialSet.current = new Set(selectedCells);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLTableElement>) => {
+    if (!selectionBox.active) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setSelectionBox(prev => ({ ...prev, end: {x,y} }));
+
+    const boxRect = {
+      left: Math.min(selectionBox.start.x, x) + rect.left,
+      right: Math.max(selectionBox.start.x, x) + rect.left,
+      top: Math.min(selectionBox.start.y, y) + rect.top,
+      bottom: Math.max(selectionBox.start.y, y) + rect.top,
+    };
+
+    const newSelection = new Set(selectionInitialSet.current);
+    const cellElements = document.querySelectorAll('[data-cell-id]');
+    
+    cellElements.forEach(el => {
+      const cellRect = el.getBoundingClientRect();
+      if (
+        cellRect.left < boxRect.right &&
+        cellRect.right > boxRect.left &&
+        cellRect.top < boxRect.bottom &&
+        cellRect.bottom > boxRect.top
+      ) {
+        const id = el.getAttribute('data-cell-id');
+        if (id) newSelection.add(id);
+      }
+    });
+    setSelectedCells(newSelection);
+    if (newSelection.size > 0) {
+      const last = Array.from(newSelection).pop();
+      if (last) setLastSelectedCellId(last);
+    }
+  };
+
   const addRow = () => {
     if (!newRowName.trim()) return;
     const newRow = { id: Math.random().toString(36).substring(7), name: newRowName.trim(), cells: {} };
@@ -481,7 +591,23 @@ export function ProductionGridBoard({
   };
 
   const handleCellUpdate = (rowId: string, colId: string, updates: Partial<any>) => {
+    const cellId = `${rowId}:${colId}`;
+    const isSelected = selectedCells.has(cellId);
+
     const newRows = grid.rows.map(r => {
+      if (isSelected && updates.status) {
+         let rowChanged = false;
+         const newCells = { ...r.cells };
+         for (const c of grid.columns) {
+           const id = `${r.id}:${c.id}`;
+           if (selectedCells.has(id)) {
+             newCells[c.id] = { ...(r.cells[c.id] || { status: 'todo' }), status: updates.status };
+             rowChanged = true;
+           }
+         }
+         if (rowChanged) return { ...r, cells: newCells };
+      }
+
       if (r.id !== rowId) return r;
       const updatedCell = { ...(r.cells[colId] || { status: 'todo' }), ...updates };
       return { ...r, cells: { ...r.cells, [colId]: updatedCell } };
@@ -554,9 +680,25 @@ export function ProductionGridBoard({
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border shadow-sm">
+      <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border shadow-sm relative">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColDragEnd}>
-          <table className="w-full text-left border-collapse">
+          <table 
+            ref={containerRef}
+            className="w-full text-left border-collapse select-none"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+          >
+            {selectionBox.active && (
+              <div 
+                className="absolute bg-accent/20 border border-accent pointer-events-none z-50 rounded"
+                style={{
+                  left: Math.min(selectionBox.start.x, selectionBox.end.x),
+                  top: Math.min(selectionBox.start.y, selectionBox.end.y),
+                  width: Math.abs(selectionBox.end.x - selectionBox.start.x),
+                  height: Math.abs(selectionBox.end.y - selectionBox.start.y),
+                }}
+              />
+            )}
             <thead>
               <tr>
                 <th className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 w-32 sm:w-64 min-w-[120px] sm:min-w-[200px]">
@@ -603,6 +745,7 @@ export function ProductionGridBoard({
                       key={row.id} row={row} columns={grid.columns} onDelete={deleteRow} onRename={renameRow} onCellUpdate={handleCellUpdate}
                       artistName={artistName} files={files} uploadTargetId={linkedProjectId || artistId}
                       artistId={artistId} projectId={linkedProjectId} projects={projects}
+                      selectedCells={selectedCells} onToggleSelect={handleToggleSelect}
                     />
                   ))}
                 </SortableContext>

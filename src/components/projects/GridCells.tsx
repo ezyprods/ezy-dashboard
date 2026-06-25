@@ -52,7 +52,17 @@ function MiniWaveform({ fileId, isPlaying }: { fileId: string; isPlaying: boolea
 }
 
 // --- Specialized Cells ---
-function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onStatusChange: (s: FlexTaskStatus) => void }) {
+function StatusCellUI({ 
+  status, 
+  onStatusChange, 
+  isSelected, 
+  onToggleSelect 
+}: { 
+  status: FlexTaskStatus; 
+  onStatusChange: (s: FlexTaskStatus) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (e: React.MouseEvent | React.PointerEvent) => void;
+}) {
   const [showRadial, setShowRadial] = useState(false);
   const [hovered, setHovered] = useState<FlexTaskStatus | null>(null);
   const [center, setCenter] = useState({ x: 0, y: 0 });
@@ -69,6 +79,12 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      if (onToggleSelect) onToggleSelect(e);
+      return;
+    }
+
     const target = e.currentTarget;
     startPos.current = { x: e.clientX, y: e.clientY };
     hasMoved.current = false;
@@ -181,6 +197,11 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
   };
 
   const handleClick = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     // If radial opened via long press, ignore this click
     if (isRadialOpenRef.current || showRadial) {
       e.preventDefault();
@@ -236,7 +257,7 @@ function StatusCellUI({ status, onStatusChange }: { status: FlexTaskStatus; onSt
   return (
     <div 
       ref={containerRef} 
-      className="relative flex items-center justify-center w-full cursor-context-menu" 
+      className={`relative flex items-center justify-center w-full cursor-context-menu rounded transition-all ${isSelected ? 'ring-2 ring-accent ring-offset-1 ring-offset-surface scale-[0.98]' : ''}`} 
       data-context="ignore"
       style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }} 
       onPointerDown={handlePointerDown} 
@@ -367,13 +388,15 @@ function DateCellUI({ dueDate, status, onUpdate }: any) {
 
 // --- Main Cell Component ---
 
-export function CellComponent({
-  rowId, colId, colType = 'status', cellData, artistName, files, onUpdate, uploadTargetId,
-  artistId, projectId, projects, rowName
+export function CellComponent({ 
+  rowId, colId, colType, cellData, artistName, files, onUpdate, uploadTargetId, artistId, projectId, projects, rowName,
+  isSelected, onToggleSelect
 }: {
-  rowId: string; colId: string; colType?: ColumnType; cellData: GridCell; artistName: string; files: any[];
-  onUpdate: (rowId: string, colId: string, updates: Partial<GridCell>) => void; uploadTargetId: string;
-  artistId: string; projectId?: string; projects?: any[]; rowName?: string;
+  rowId: string; colId: string; colType: ColumnType; cellData: GridCell; artistName: string; files: any[];
+  onUpdate: (rowId: string, colId: string, updates: Partial<GridCell>) => void;
+  uploadTargetId: string; artistId: string; projectId?: string; projects: any[]; rowName?: string;
+  isSelected?: boolean;
+  onToggleSelect?: (e: React.MouseEvent | React.PointerEvent) => void;
 }) {
   const [isUploading, setIsUploading] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
@@ -396,11 +419,13 @@ export function CellComponent({
 
     return (
       <td 
-        className="p-1.5 sm:p-3 border-b border-r border-border min-w-[100px] sm:min-w-[130px] cursor-context-menu"
+        className={`p-1.5 sm:p-3 border-b border-r border-border min-w-[100px] sm:min-w-[130px] cursor-context-menu ${isSelected ? 'bg-accent/10' : ''}`}
         onContextMenu={handleStatusContextMenu}
+        onClick={(e) => (e.ctrlKey || e.metaKey || e.shiftKey) && onToggleSelect?.(e)}
         data-context="ignore"
+        data-cell-id={`${rowId}:${colId}`}
       >
-        <StatusCellUI status={(cellData.status as FlexTaskStatus) || 'todo'} onStatusChange={status => handleUpdate({ status })} />
+        <StatusCellUI status={(cellData.status as FlexTaskStatus) || 'todo'} onStatusChange={status => handleUpdate({ status })} isSelected={isSelected} onToggleSelect={onToggleSelect} />
       </td>
     );
   }
@@ -489,9 +514,11 @@ export function CellComponent({
 
   return (
     <td 
-      className="p-1 sm:p-2 border-b border-r border-border text-center relative group/cell min-w-[120px] sm:min-w-[160px] max-w-[240px] align-middle"
+      className={`p-1 sm:p-2 border-b border-r border-border text-center relative group/cell min-w-[120px] sm:min-w-[160px] max-w-[240px] align-middle transition-colors ${isSelected ? 'bg-accent/10' : ''}`}
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onDrop={handleNativeDrop}
+      onClick={(e) => (e.ctrlKey || e.metaKey || e.shiftKey) && onToggleSelect?.(e)}
+      data-cell-id={`${rowId}:${colId}`}
     >
       <div className="w-full relative">
         {colType === 'file' && (
