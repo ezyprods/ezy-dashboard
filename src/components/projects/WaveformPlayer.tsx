@@ -404,13 +404,20 @@ export function WaveformPlayer({
                     {formatModificationTime(modifiedTime)}
                   </span>
                 )}
-                {bpm && (
-                  <span className="text-[10px] text-accent font-mono bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20 shrink-0" title="Tempo">
-                    {bpm} BPM
-                  </span>
-                )}
+                {bpm && (() => {
+                  const bpmNum = parseInt(String(bpm));
+                  const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                                   bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                                   bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                   'text-red-400 bg-red-500/10 border-red-500/20';
+                  return (
+                    <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border shrink-0 ${bpmColor} ${isThisTrackPlaying ? 'animate-pulse' : ''}`} title="Tempo (BPM)">
+                      {bpmNum} BPM
+                    </span>
+                  );
+                })()}
                 {trackKey && (
-                  <span className="text-[10px] text-blue-500 font-mono bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 shrink-0" title="Tonalidad">
+                  <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border text-violet-400 bg-violet-500/10 border-violet-500/20 shrink-0" title="Tonalidad musical">
                     {trackKey}
                   </span>
                 )}

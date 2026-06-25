@@ -832,7 +832,19 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         window.open(`/api/files/${item.id}?inline=true`, '_blank');
                       }
                     }}
-                    className="relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-all flex items-center gap-3 group cursor-pointer overflow-hidden"
+                    draggable={isAudio}
+                    onDragStart={isAudio ? (e) => {
+                      const cleanName = item.name.replace(/\.[^/.]+$/, '') + '.mp3';
+                      e.dataTransfer.effectAllowed = 'copy';
+                      e.dataTransfer.setData('text/plain', cleanName);
+                      // DownloadURL: Chrome uses this to let you drag a URL as a downloadable file
+                      e.dataTransfer.setData(
+                        'DownloadURL',
+                        `audio/mpeg:${cleanName}:${window.location.origin}/api/audio/${item.id}`
+                      );
+                    } : undefined}
+                    title={isAudio ? 'Arrastra a WhatsApp Web u otra pestaña para compartir' : undefined}
+                    className={`relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-all flex items-center gap-3 group cursor-pointer overflow-hidden ${isAudio ? 'drag-audio-item' : ''}`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {isAudio ? (
@@ -897,8 +909,15 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           )}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          {item.bpm && <span className="bg-accent/10 text-accent font-mono px-1.5 py-0.5 rounded border border-accent/20">{item.bpm} BPM</span>}
-                          {item.key && <span className="bg-blue-500/10 text-blue-500 font-mono px-1.5 py-0.5 rounded border border-blue-500/20">{item.key}</span>}
+                          {item.bpm && (() => {
+                            const bpmNum = parseInt(String(item.bpm));
+                            const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                                             bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                                             bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                             'text-red-400 bg-red-500/10 border-red-500/20';
+                            return <span className={`font-bold font-mono px-1.5 py-0.5 rounded border ${bpmColor}`}>{bpmNum} BPM</span>;
+                          })()}
+                          {item.key && <span className="font-bold font-mono text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{item.key}</span>}
                           <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
                         </div>
                       </div>
