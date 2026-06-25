@@ -40,7 +40,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         )}
       >
         <div className="h-32 flex flex-col items-center px-4 border-b border-border justify-center md:justify-start pt-6 pb-4">
-          <Link href="/dashboard" className="flex items-center w-full justify-center group relative">
+          <Link href="/dashboard" className="flex items-center w-full justify-center group relative translate-x-3">
             {/* Light Mode Logo */}
             <Image
               src="/logo-black-trimmed.png"
