@@ -244,7 +244,15 @@ export default function MatricesPage() {
           {matrices.map((m: any) => (
             <div 
               key={m.id} 
-              className="relative overflow-hidden glass rounded-[20px] p-6 border border-border hover:border-accent/50 transition-all duration-300 group flex flex-col justify-between min-h-[200px] hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5"
+              onClick={() => {
+                setActiveMatrix({
+                  id: m.id,
+                  name: m.name,
+                  artistId: m.artistId,
+                  artistName: m.artistName
+                });
+              }}
+              className="relative overflow-hidden glass rounded-[20px] p-6 border border-border hover:border-accent/50 transition-all duration-300 group flex flex-col justify-between min-h-[200px] hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 cursor-pointer"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10">
@@ -279,7 +287,7 @@ export default function MatricesPage() {
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-between items-center relative z-10 pt-4 border-t border-border/50">
+              <div className="mt-4 flex justify-end items-center relative z-10">
                 <button
                   onClick={(e) => {
                     e.preventDefault();
@@ -290,20 +298,6 @@ export default function MatricesPage() {
                   title="Eliminar Matriz"
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
-                <button 
-                  onClick={() => {
-                    setActiveMatrix({
-                      id: m.id,
-                      name: m.name,
-                      artistId: m.artistId,
-                      artistName: m.artistName
-                    });
-                  }}
-                  className="flex items-center gap-2 text-sm font-semibold text-accent hover:text-accent-light transition-colors group/btn"
-                >
-                  Abrir Matriz
-                  <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
                 </button>
               </div>
             </div>
