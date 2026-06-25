@@ -30,7 +30,7 @@ export default function DashboardPage() {
       .then(res => res.json())
       .then(data => {
         if (data.needsAuth) {
-          customAlert('El acceso a Google Drive ha caducado. Te redirigimos para que generes un nuevo token.');
+          customAlert('El acceso a Google Drive ha caducado. Razón: ' + (data.debugMessage || 'Desconocida') + '. Te redirigimos para que generes un nuevo token.');
           setTimeout(() => {
             window.location.href = '/api/auth/google-token?type=drive';
           }, 2000);
@@ -194,3 +194,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

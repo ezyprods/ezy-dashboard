@@ -9,7 +9,7 @@ export async function GET() {
     const [folders, artistsDbResult] = await Promise.all([
       listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {
         if (e.message?.includes('invalid_grant') || e.message?.includes('credentials')) {
-          throw new Error('AUTH_REQUIRED');
+          throw new Error('AUTH_REQUIRED|' + e.message);
         }
         throw e;
       }),
@@ -38,7 +38,7 @@ export async function GET() {
 
     return NextResponse.json({ artists: validArtists });
   } catch (error: any) {
-    if (error.message === 'AUTH_REQUIRED') {
+    if (error.message.startsWith('AUTH_REQUIRED|')) { const msg = error.message.split('|')[1];
       return NextResponse.json({ artists: [], needsAuth: true, error: 'Token de Google expirado o inválido. Debes reconectar.' });
     }
     console.error('API /artists GET error:', error);
@@ -100,4 +100,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
 

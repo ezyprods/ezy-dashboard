@@ -16,7 +16,7 @@ export function useArtists() {
         throw new Error(errorData.error || 'Failed to fetch artists');
       }
       const data = await res.json();
-        customAlert('El acceso a Google Drive ha caducado. Te redirigimos para que generes un nuevo token.');
+        customAlert('El acceso a Google Drive ha caducado. Razón: ' + (data.debugMessage || 'Desconocida') + '. Te redirigimos para que generes un nuevo token.');
         setTimeout(() => {
           window.location.href = '/api/auth/google-token?type=both';
         }, 2000);
@@ -92,3 +92,4 @@ export function useArtists() {
     archivedArtists,
   };
 }
+
