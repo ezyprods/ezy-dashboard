@@ -26,7 +26,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/dashboard/pulse?t=${Date.now()}`)
+    fetch(`/api/dashboard/status?t=${Date.now()}`)
       .then(res => res.json())
       .then(data => {
         if (data.needsAuth) {

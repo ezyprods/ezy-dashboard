@@ -10,7 +10,7 @@ export function useArtists() {
   const fetchArtists = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/artists?t=${Date.now()}`);
+      const res = await fetch(`/api/artists-list?t=${Date.now()}`);
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || 'Failed to fetch artists');
