@@ -9,7 +9,7 @@ export async function GET() {
     const [folders, artistsDbResult] = await Promise.all([
       listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {
         if (e.message?.includes('invalid_grant') || e.message?.includes('credentials')) {
-          throw new Error('AUTH_REQUIRED|' + e.message);
+          throw new Error('AUTH_REQUIRED');
         }
         throw e;
       }),
@@ -77,12 +77,11 @@ export async function GET() {
       }
     });
   } catch (error: any) {
-    if (error.message.startsWith('AUTH_REQUIRED|')) { const msg = error.message.split('|')[1];
-      return NextResponse.json({ artists: [], globalStats: null, needsAuth: true, error: 'Auth required', debugMessage: msg });
+    if (error.message === 'AUTH_REQUIRED') {
+      return NextResponse.json({ artists: [], globalStats: null, needsAuth: true, error: 'Auth required' });
     }
     console.error('API /dashboard/pulse GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch pulse', details: error.message }, { status: 500 });
   }
 }
-
 
