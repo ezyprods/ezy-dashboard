@@ -20,10 +20,10 @@ export const auth = betterAuth({
   baseURL: appURL,
   trustedOrigins,
 
-  // ── Sesión permanente: 1 año ─────────────────────────────────────────────
+  // ── Sesión permanente: prácticamente infinita ────────────────────────────
   session: {
-    expiresIn: 60 * 60 * 24 * 365,  // 1 año en segundos
-    updateAge: 60 * 60 * 24,          // Refrescar si han pasado +24h desde la última visita
+    expiresIn: 60 * 60 * 24 * 365 * 100,  // 100 años en segundos (prácticamente infinito)
+    updateAge: 60 * 60 * 24,          // Refrescar la cookie cada 24h para mantener el máximo que permite el navegador
     disableSessionRefresh: false,      // Asegurar que el refresco está ACTIVO
     cookieCache: {
       enabled: true,
