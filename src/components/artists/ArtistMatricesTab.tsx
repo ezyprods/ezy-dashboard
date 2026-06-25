@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, Music, Layers, CheckCircle2 } from 'lucide-react';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, Music, Layers, CheckCircle2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -98,19 +98,23 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
   };
 
   const togglePortalSharing = async (matrixId: string, shared: boolean) => {
+    // Optimistic UI update
+    setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, sharedInPortal: shared } : m));
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sharedInPortal: shared })
       });
-      if (res.ok) {
-        fetchMatrices();
-      } else {
+      if (!res.ok) {
+        // Revert on error
+        setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, sharedInPortal: !shared } : m));
         customAlert('Error al actualizar el estado de compartir');
       }
     } catch (e) {
       console.error(e);
+      // Revert on error
+      setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, sharedInPortal: !shared } : m));
     }
   };
 
@@ -255,24 +259,21 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
                 </div>
 
                 <div>
-                  <div 
-                    className="flex items-center gap-2 text-xs text-text-secondary border-t border-border/30 pt-3 mt-3 mb-4 w-fit"
-                    onClick={(e) => e.stopPropagation()}
+                  <button 
+                    className="flex items-center gap-2 text-xs text-text-primary border-t border-border/30 pt-3 mt-3 mb-4 w-fit group/cb"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      const current = m.sharedInPortal || false;
+                      await togglePortalSharing(m.id, !current);
+                    }}
                   >
-                    <input 
-                      type="checkbox" 
-                      id={`share-portal-active-${m.id}`}
-                      checked={m.sharedInPortal || false} 
-                      onChange={async (e) => {
-                        const checked = e.target.checked;
-                        await togglePortalSharing(m.id, checked);
-                      }}
-                      className="w-4 h-4 accent-accent cursor-pointer rounded"
-                    />
-                    <label htmlFor={`share-portal-active-${m.id}`} className="font-medium cursor-pointer select-none">
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${m.sharedInPortal ? 'bg-accent border-accent text-white' : 'border-neutral-400 bg-white dark:bg-surface group-hover/cb:border-accent'}`}>
+                      {m.sharedInPortal && <Check className="w-3 h-3" />}
+                    </div>
+                    <span className="font-medium select-none">
                       Compartir en Portal
-                    </label>
-                  </div>
+                    </span>
+                  </button>
 
                   <Button className="w-full" variant="secondary" onClick={(e) => {
                     e.stopPropagation();
