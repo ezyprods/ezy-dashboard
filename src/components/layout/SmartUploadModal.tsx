@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
 import { customConfirm } from '@/lib/dialog';
 import { createPortal } from 'react-dom';
@@ -38,120 +38,6 @@ interface SmartUploadModalProps {
   preselectedFolderId?: string; // If user drops inside DriveExplorer in a specific folder
 }
 
-// ─── BPM Detection via Web Audio API (Autocorrelation) ──────────────────────
-async function detectAudioFeatures(file: File): Promise<{ bpm: number | null; key: string | null }> {
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const AudioCtxClass: typeof AudioContext = (window as any).AudioContext || (window as any).webkitAudioContext;
-    const audioCtx = new AudioCtxClass();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    audioCtx.close();
-
-    const channelData = audioBuffer.getChannelData(0);
-    const sampleRate = audioBuffer.sampleRate;
-
-    // ── BPM via Onset/Energy Autocorrelation ─────────────────────────
-    // Downsample to a "novelty" function at ~43Hz (hop of 1024)
-    const hopSize = 1024;
-    const energyFrames: number[] = [];
-    for (let i = 0; i < channelData.length - hopSize; i += hopSize) {
-      let sum = 0;
-      for (let j = 0; j < hopSize; j++) {
-        sum += channelData[i + j] ** 2;
-      }
-      energyFrames.push(Math.sqrt(sum / hopSize));
-    }
-
-    // Onset strength: half-wave rectified diff of energy
-    const onset: number[] = [0];
-    for (let i = 1; i < energyFrames.length; i++) {
-      const diff = energyFrames[i] - energyFrames[i - 1];
-      onset.push(Math.max(0, diff));
-    }
-
-    // Autocorrelation of onset
-    const frameRate = sampleRate / hopSize;
-    const minBPM = 60, maxBPM = 180;
-    const minLag = Math.round((60 / maxBPM) * frameRate);
-    const maxLag = Math.round((60 / minBPM) * frameRate);
-    
-    let bestLag = minLag, bestCorr = -Infinity;
-    for (let lag = minLag; lag <= maxLag; lag++) {
-      let corr = 0;
-      for (let i = 0; i < onset.length - lag; i++) {
-        corr += onset[i] * onset[i + lag];
-      }
-      if (corr > bestCorr) {
-        bestCorr = corr;
-        bestLag = lag;
-      }
-    }
-
-    const rawBpm = (60 / bestLag) * frameRate;
-    let bpm = rawBpm;
-    // Normalize to 60-180 range
-    while (bpm > 180) bpm /= 2;
-    while (bpm < 60) bpm *= 2;
-    const finalBpm = energyFrames.length > 10 ? Math.round(bpm) : null;
-
-    // ── Key Detection via Krumhansl-Schmuckler Profiles ───────────────
-    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    
-    // Krumhansl major/minor key profiles
-    const majorProfile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
-    const minorProfile = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
-
-    // Build chromagram from middle 40% of the audio
-    const start = Math.floor(channelData.length * 0.3);
-    const sampleLen = Math.min(Math.floor(sampleRate * 4), channelData.length - start);
-    const sample = channelData.slice(start, start + sampleLen);
-
-    const chromagram = new Array(12).fill(0);
-    for (let n = 0; n < 12; n++) {
-      const freq = 261.63 * Math.pow(2, n / 12); // C4 = 261.63Hz
-      let real = 0, imag = 0;
-      // Sparse sampling for performance (every 8 samples)
-      for (let i = 0; i < sample.length; i += 8) {
-        const t = i / sampleRate;
-        const phase = 2 * Math.PI * freq * t;
-        real += sample[i] * Math.cos(phase);
-        imag += sample[i] * Math.sin(phase);
-      }
-      chromagram[n] = Math.sqrt(real * real + imag * imag);
-    }
-
-    // Normalize chromagram
-    const chromaMax = Math.max(...chromagram);
-    const normChroma = chromaMax > 0 ? chromagram.map(v => v / chromaMax) : chromagram;
-
-    // Pearson correlation with each major/minor key profile
-    function pearson(a: number[], b: number[]): number {
-      const meanA = a.reduce((x, y) => x + y, 0) / a.length;
-      const meanB = b.reduce((x, y) => x + y, 0) / b.length;
-      let num = 0, denA = 0, denB = 0;
-      for (let i = 0; i < a.length; i++) {
-        num += (a[i] - meanA) * (b[i] - meanB);
-        denA += (a[i] - meanA) ** 2;
-        denB += (b[i] - meanB) ** 2;
-      }
-      return denA > 0 && denB > 0 ? num / Math.sqrt(denA * denB) : 0;
-    }
-
-    let bestKey = 'C', bestScore = -Infinity, bestMode = 'maj';
-    for (let i = 0; i < 12; i++) {
-      const rotatedChroma = [...normChroma.slice(i), ...normChroma.slice(0, i)];
-      const majScore = pearson(rotatedChroma, majorProfile);
-      const minScore = pearson(rotatedChroma, minorProfile);
-      if (majScore > bestScore) { bestScore = majScore; bestKey = noteNames[i]; bestMode = 'maj'; }
-      if (minScore > bestScore) { bestScore = minScore; bestKey = noteNames[i]; bestMode = 'min'; }
-    }
-
-    const key = `${bestKey} ${bestMode === 'maj' ? 'Mayor' : 'Menor'}`;
-    return { bpm: finalBpm, key };
-  } catch {
-    return { bpm: null, key: null };
-  }
-}
 
 // ─── Name Generation ──────────────────────────────────────────────────────────
 function generateName(original: string, subType: string, artistName?: string): string {

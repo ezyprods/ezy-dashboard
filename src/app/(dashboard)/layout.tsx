@@ -9,6 +9,7 @@ import { PasswordGuard } from '@/components/layout/PasswordGuard';
 import { GlobalDragDropProvider } from '@/lib/contexts/GlobalDragDropContext';
 import { GlobalDropZone } from '@/components/layout/GlobalDropZone';
 import { MobileNavbar } from '@/components/layout/MobileNavbar';
+import { AudioMetadataWorker } from '@/components/layout/AudioMetadataWorker';
 
 export default function DashboardLayout({
   children,
@@ -31,6 +32,7 @@ export default function DashboardLayout({
             </div>
           </div>
           <MobileNavbar />
+          <AudioMetadataWorker />
           <GlobalDropZone />
           <GlobalContextMenu />
         </GlobalDragDropProvider>

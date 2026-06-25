@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAudio } from '@/lib/contexts/AudioContext';
+import { formatMusicalKey } from '@/lib/utils/audio';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2, Download, Share2, Scissors } from 'lucide-react';
 import { ShareModal } from '@/components/artists/ShareModal';
 import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
@@ -58,8 +59,8 @@ export function GlobalAudioPlayer() {
                     </span>
                   )}
                   {currentTrack.musicalKey && (
-                    <span className="text-[9px] font-mono px-1 py-0.5 rounded border text-violet-400 bg-violet-500/10 border-violet-500/20 whitespace-nowrap">
-                      {currentTrack.musicalKey}
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border text-violet-400 bg-violet-500/10 border-violet-500/20 whitespace-nowrap tracking-wide">
+                      {formatMusicalKey(currentTrack.musicalKey)}
                     </span>
                   )}
                 </div>
