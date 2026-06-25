@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -19,12 +19,24 @@ const navItems = [
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [studioName, setStudioName] = useState('EZY Dashboard');
 
   useEffect(() => {
     if (isOpen && onClose) {
       onClose();
     }
   }, [pathname]);
+
+  useEffect(() => {
+    const loadStudioName = () => {
+      const saved = localStorage.getItem('ezy_studio_name');
+      if (saved) setStudioName(saved);
+    };
+    loadStudioName();
+    
+    window.addEventListener('ezy_studio_name_change', loadStudioName);
+    return () => window.removeEventListener('ezy_studio_name_change', loadStudioName);
+  }, []);
 
   return (
     <>
@@ -40,15 +52,15 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
       >
-        <div className="h-28 flex items-center px-4 border-b border-border justify-center md:justify-start">
-          <Link href="/dashboard" className="flex items-center w-full justify-center mt-2">
+        <div className="h-32 flex flex-col items-center px-4 border-b border-border justify-center md:justify-start pt-6 pb-4">
+          <Link href="/dashboard" className="flex items-center w-full justify-center group relative">
             {/* Light Mode Logo */}
             <Image
               src="/logo-black-trimmed.png"
               alt="EZY"
               width={240}
               height={96}
-              className="logo-light h-14 w-auto object-contain"
+              className="logo-light h-12 w-auto object-contain transition-transform group-hover:scale-105"
               priority
             />
             {/* Dark Mode Logo (White) */}
@@ -57,10 +69,13 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
               alt="EZY"
               width={240}
               height={96}
-              className="logo-dark h-14 w-auto object-contain"
+              className="logo-dark h-12 w-auto object-contain transition-transform group-hover:scale-105"
               priority
             />
           </Link>
+          <div className="mt-3 text-xs font-medium text-text-secondary bg-surface-elevated px-3 py-1 rounded-full border border-border">
+            {studioName}
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
