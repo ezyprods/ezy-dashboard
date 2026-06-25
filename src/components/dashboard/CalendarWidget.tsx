@@ -27,7 +27,7 @@ export function CalendarWidget() {
 
   const fetchEvents = async () => {
     try {
-      const res = await fetch('/api/calendar?days=7');
+      const res = await fetch(`/api/calendar?days=7&t=${Date.now()}`);
       const data = await res.json();
       
       if (!res.ok) {

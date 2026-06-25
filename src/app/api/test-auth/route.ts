@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
+import { getDriveAuthClient, listFolders } from '@/lib/drive';
+import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +13,10 @@ export async function GET() {
 
   const activeToken = driveToken || generalToken;
 
-  let apiError = null;
+  let rawApiError = null;
   let filesCount = -1;
+  let listFoldersError = null;
+  let foldersCount = -1;
 
   try {
     const oauth2Client = new google.auth.OAuth2(
@@ -33,27 +37,35 @@ export async function GET() {
     });
     filesCount = res.data.files ? res.data.files.length : 0;
   } catch (e: any) {
-    apiError = {
-      message: e.message,
-      stack: e.stack,
-      code: e.code,
-      response: e.response?.data
-    };
+    rawApiError = { message: e.message, code: e.code };
+  }
+
+  try {
+    const folders = await listFolders(DRIVE_ROOT_FOLDER_ID);
+    foldersCount = folders.length;
+  } catch (e: any) {
+    listFoldersError = { message: e.message, code: e.code };
   }
 
   return NextResponse.json({
-    status: 'Diagnostics',
+    status: 'Diagnostics V2',
     tokens: {
       hasClientId: !!clientId,
       driveToken: driveToken ? `${driveToken.substring(0, 10)}... (length: ${driveToken.length})` : null,
-      generalToken: generalToken ? `${generalToken.substring(0, 10)}... (length: ${generalToken.length})` : null,
-      calendarToken: calendarToken ? `${calendarToken.substring(0, 10)}... (length: ${calendarToken.length})` : null,
       activeTokenUsed: activeToken ? `${activeToken.substring(0, 10)}...` : null,
+      folderId: DRIVE_ROOT_FOLDER_ID
     },
-    testCall: {
-      success: !apiError,
+    testCallRaw: {
+      success: !rawApiError,
       filesCount,
-      error: apiError
+      error: rawApiError
+    },
+    testListFolders: {
+      success: !listFoldersError,
+      foldersCount,
+      error: listFoldersError
     }
   });
 }
+
+
