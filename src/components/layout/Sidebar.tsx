@@ -39,7 +39,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0 md:shadow-none",
         )}
       >
-        <div className="h-32 flex flex-col items-center px-4 border-b border-border justify-center md:justify-start pt-6 pb-4">
+        <div className="h-32 flex flex-col items-center px-4 border-b border-border justify-center">
           <Link href="/dashboard" className="flex items-center w-full justify-center group relative -translate-x-2">
             {/* Light Mode Logo */}
             <Image
