@@ -127,7 +127,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       const res = await fetch(`/api/files?folderId=${folderId}`);
       if (!res.ok) throw new Error('Error al cargar elementos del panel secundario');
       const data = await res.json();
-      setExtraPanes(prev => prev.map(p => p.folderId === folderId ? { ...p, items: data.items || [], isLoading: false } : p));
+      const filteredItems = (data.items || []).filter((item: any) => !item.name?.endsWith('.json') && item.mimeType !== 'application/json');
+      setExtraPanes(prev => prev.map(p => p.folderId === folderId ? { ...p, items: filteredItems, isLoading: false } : p));
     } catch (err) {
       console.error('Error fetching pane items:', err);
       setExtraPanes(prev => prev.map(p => p.folderId === folderId ? { ...p, isLoading: false } : p));
@@ -194,7 +195,12 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       setFolderMap(map);
 
       // Filter to files only, sorted by modification time (or created time) descending
-      const filesOnly = allItems.filter((item: any) => item.mimeType !== 'application/vnd.google-apps.folder');
+      // Also filter out JSON files
+      const filesOnly = allItems.filter((item: any) => 
+        item.mimeType !== 'application/vnd.google-apps.folder' && 
+        !item.name?.endsWith('.json') && 
+        item.mimeType !== 'application/json'
+      );
       filesOnly.sort((a: any, b: any) => {
         const timeA = new Date(a.modifiedTime || a.createdTime || 0).getTime();
         const timeB = new Date(b.modifiedTime || b.createdTime || 0).getTime();
@@ -240,7 +246,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       const res = await fetch(`/api/files?folderId=${folderId}`);
       if (!res.ok) throw new Error('Error al cargar archivos');
       const data = await res.json();
-      setItems(data.items || []);
+      const filteredItems = (data.items || []).filter((item: any) => !item.name?.endsWith('.json') && item.mimeType !== 'application/json');
+      setItems(filteredItems);
     } catch (e: any) {
       customAlert(e.message);
     } finally {
