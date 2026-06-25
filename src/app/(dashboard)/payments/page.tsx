@@ -38,7 +38,7 @@ export default function PaymentsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
         <div className="glass rounded-xl p-6 border border-border">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-medium text-text-secondary">Ingresos Totales</h3>
@@ -46,7 +46,7 @@ export default function PaymentsPage() {
               <DollarSign className="w-5 h-5 text-success" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-text-primary">{totalIngresos.toFixed(2)}€</p>
+          <p className="text-xl md:text-3xl font-bold text-text-primary">{totalIngresos.toFixed(2)}€</p>
           <div className="flex items-center gap-1 mt-2 text-sm text-success">
             <ArrowUpRight className="w-4 h-4" /> <span>Recibido</span>
           </div>
@@ -59,15 +59,15 @@ export default function PaymentsPage() {
               <Clock className="w-5 h-5 text-warning" />
             </div>
           </div>
-          <p className="text-3xl font-bold text-text-primary">{totalPendiente.toFixed(2)}€</p>
+          <p className="text-xl md:text-3xl font-bold text-text-primary">{totalPendiente.toFixed(2)}€</p>
           <div className="flex items-center gap-1 mt-2 text-sm text-warning">
             <ArrowDownRight className="w-4 h-4" /> <span>Por recibir</span>
           </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="glass rounded-xl border border-border overflow-hidden">
+      {/* Table — Desktop only */}
+      <div className="glass rounded-xl border border-border overflow-hidden hidden md:block">
         <div className="p-4 border-b border-border/50 flex justify-between items-center bg-surface/50">
           <h3 className="font-medium text-lg">Historial de Pagos</h3>
         </div>
@@ -122,10 +122,13 @@ export default function PaymentsPage() {
                         </span>
                       </td>
                       <td className="p-4 text-right">
-                        {payment.status === 'pending' && (
-                          <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => updatePaymentStatus(payment.id, 'paid')}>
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Marcar Pagado
-                          </Button>
+                        {payment.status !== 'paid' && (
+                          <button
+                            onClick={() => updatePaymentStatus(payment.id, 'paid')}
+                            className="text-xs text-success hover:bg-success/10 px-3 py-1.5 rounded-lg transition-colors font-medium border border-success/20"
+                          >
+                            Marcar Pagado
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -135,6 +138,63 @@ export default function PaymentsPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Cards — visible only on mobile */}
+      <div className="md:hidden space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-lg">Historial de Pagos</h3>
+          <span className="text-xs text-text-secondary">{payments.length} registros</span>
+        </div>
+        {payments.length === 0 ? (
+          <div className="glass rounded-2xl p-10 text-center border border-dashed border-border">
+            <DollarSign className="w-10 h-10 text-text-secondary mx-auto mb-3 opacity-40" />
+            <p className="font-medium text-text-primary">Sin pagos registrados</p>
+            <p className="text-sm text-text-secondary mt-1">Registra tu primer cobro</p>
+            <Button onClick={() => setIsModalOpen(true)} className="mt-4">
+              <Plus className="w-4 h-4 mr-2" /> Registrar Pago
+            </Button>
+          </div>
+        ) : (
+          payments.map(payment => {
+            const status = PAYMENT_STATUS_CONFIG[payment.status];
+            return (
+              <div key={payment.id} className="glass rounded-2xl border border-border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-bold text-text-primary truncate">{getArtistName(payment.artistId)}</p>
+                    <p className="text-sm text-text-secondary truncate mt-0.5">{payment.concept}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-lg text-text-primary">{payment.amount.toFixed(2)}€</p>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: status.bgColor, color: status.color }}>
+                      {status.label}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-text-secondary border-t border-border/50 pt-2">
+                  <div className="flex items-center gap-1.5">
+                    {payment.method === 'cash' ? <Banknote className="w-3.5 h-3.5" /> :
+                     payment.method === 'transfer' ? <ArrowRightLeft className="w-3.5 h-3.5" /> :
+                     payment.method === 'bizum' ? <Smartphone className="w-3.5 h-3.5" /> :
+                     <CreditCard className="w-3.5 h-3.5" />}
+                    {PAYMENT_METHOD_LABELS[payment.method]}
+                    <span className="text-border mx-1">·</span>
+                    {new Date(payment.date).toLocaleDateString()}
+                  </div>
+                  {payment.status !== 'paid' && (
+                    <button
+                      onClick={() => updatePaymentStatus(payment.id, 'paid')}
+                      className="text-xs text-success font-semibold px-3 py-1.5 rounded-lg bg-success/10 border border-success/20 min-h-[36px]"
+                    >
+                      ✓ Pagado
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

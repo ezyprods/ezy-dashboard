@@ -92,9 +92,9 @@ export default function DashboardPage() {
 
 
       {/* Action Center (Header) */}
-      <div className="shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-6">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary tracking-tight">Centro de Comando</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-text-primary tracking-tight">Centro de Comando</h1>
           <div className="mt-2 space-y-1">
             {pulseData.globalStats?.priorityAlerts?.map((alert: string, i: number) => (
               <p key={i} className={`text-sm flex items-center gap-2 ${i === 0 && alert.includes('Revisión') ? 'text-warning' : 'text-text-secondary'}`}>
@@ -117,13 +117,13 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-8 overflow-hidden">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8 overflow-hidden">
         {/* Left Column (Main Content) */}
         <div className="lg:col-span-2 flex flex-col gap-6 min-h-0">
           
           {/* Quick Actions */}
-          <div className="shrink-0 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div onClick={() => setIsNewProjectOpen(true)} className="relative overflow-hidden glass p-6 rounded-[20px] border border-border hover:border-accent/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5">
+          <div className="shrink-0 flex gap-4 overflow-x-auto pb-2 scrollbar-hide md:grid md:grid-cols-3">
+            <div onClick={() => setIsNewProjectOpen(true)} className="relative overflow-hidden glass p-5 md:p-6 rounded-[20px] border border-border hover:border-accent/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 min-w-[200px] md:min-w-0 shrink-0 md:shrink">
               <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10 flex flex-col h-full justify-between gap-4">
                 <div className="flex items-center justify-between">
@@ -139,7 +139,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div onClick={() => setIsQuickUploadOpen(true)} className="relative overflow-hidden glass p-6 rounded-[20px] border border-border hover:border-blue-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/5">
+            <div onClick={() => setIsQuickUploadOpen(true)} className="relative overflow-hidden glass p-5 md:p-6 rounded-[20px] border border-border hover:border-blue-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/5 min-w-[200px] md:min-w-0 shrink-0 md:shrink">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10 flex flex-col h-full justify-between gap-4">
                 <div className="flex items-center justify-between">
@@ -155,7 +155,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div onClick={() => router.push('/calendar')} className="relative overflow-hidden glass p-6 rounded-[20px] border border-border hover:border-emerald-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5">
+            <div onClick={() => router.push('/calendar')} className="relative overflow-hidden glass p-5 md:p-6 rounded-[20px] border border-border hover:border-emerald-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5 min-w-[200px] md:min-w-0 shrink-0 md:shrink">
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10 flex flex-col h-full justify-between gap-4">
                 <div className="flex items-center justify-between">

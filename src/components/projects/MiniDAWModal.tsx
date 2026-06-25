@@ -470,15 +470,15 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
   // ─── Render ────────────────────────────────────────────────────────────────
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
       <div
-        className="relative w-full bg-surface-elevated border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative w-full bg-surface-elevated border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         style={{
           maxWidth: '900px',
-          maxHeight: '90vh',
+          maxHeight: '92dvh',
           animation: 'daw-slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -516,7 +516,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
 
           <button
             onClick={handleClose}
-            className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+            className="p-2.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Cerrar Mini-DAW"
           >
             <X className="w-5 h-5" />
@@ -524,7 +524,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
         </div>
 
         {/* ── Body ───────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-5">
 
           {/* Loading state */}
           {isLoading && (
@@ -712,7 +712,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                           stopPlayback();
                           setPlayhead(0);
                         }}
-                        className="w-full accent-accent h-1.5 rounded-full"
+                      className="w-full accent-accent h-4 md:h-1.5 rounded-full cursor-pointer"
                       />
                     </div>
                     <div>
@@ -732,7 +732,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                           stopPlayback();
                           setPlayhead(0);
                         }}
-                        className="w-full accent-accent h-1.5 rounded-full"
+                      className="w-full accent-accent h-4 md:h-1.5 rounded-full cursor-pointer"
                       />
                     </div>
                     <p className="text-[10px] text-text-secondary/60 italic">

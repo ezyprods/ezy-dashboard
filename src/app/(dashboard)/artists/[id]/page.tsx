@@ -132,11 +132,11 @@ export default function ArtistDetailPage() {
       <div className="glass rounded-xl p-5 border border-border relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[80px] rounded-full pointer-events-none" />
         
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative z-10 w-full">
+        <div className="flex flex-col gap-4 relative z-10 w-full">
           
           {/* Left side: Avatar + Info */}
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="w-12 h-12 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-xl font-bold overflow-hidden shadow-sm shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-xl font-bold overflow-hidden shadow-sm shrink-0">
               {artist.photoUrl ? (
                 <img src={artist.photoUrl} alt={artist.name || '?'} className="w-full h-full object-cover" />
               ) : (
@@ -156,7 +156,7 @@ export default function ArtistDetailPage() {
           </div>
           
           {/* Right side: Actions */}
-          <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide w-full">
             <Button variant="outline" size="sm" onClick={() => setIsEditArtistModalOpen(true)} className="h-8 text-xs shrink-0">
               <LucideIcons.Edit3 className="w-3.5 h-3.5 mr-1.5" />
               Editar Perfil
@@ -195,12 +195,12 @@ export default function ArtistDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">
+      <div className="flex items-center gap-4 md:gap-6 border-b border-border/50 px-1 overflow-x-auto mt-6 md:mt-8 scrollbar-hide">
         {(['files', 'projects', 'campaigns', 'matrices', 'portal'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 border-b-2 transition-colors whitespace-nowrap capitalize ${
+            className={`pb-3 pt-1 border-b-2 transition-colors whitespace-nowrap capitalize text-sm min-h-[44px] flex items-end ${
               activeTab === tab 
                 ? 'border-accent text-text-primary font-medium' 
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'

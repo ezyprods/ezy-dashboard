@@ -71,6 +71,7 @@ html.light {
 html {
   scroll-behavior: smooth;
   color-scheme: dark;
+  overflow: hidden;
 }
 
 html.light {
@@ -83,6 +84,7 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -159,6 +161,38 @@ html.light .logo-dark {
     transform: translateY(-2px);
     box-shadow: 0 8px 30px var(--card-shadow);
     border-color: rgba(108, 92, 231, 0.3);
+  }
+}
+
+/* ===== MOBILE UTILITIES ===== */
+@layer utilities {
+  /* Hide scrollbar while keeping scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe area padding for iPhone notch/home bar */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Touch-friendly minimum target size */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Bottom sheet overlay styles */
+  .bottom-sheet {
+    border-radius: 1.5rem 1.5rem 0 0;
+    width: 100%;
   }
 }
 

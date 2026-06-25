@@ -370,12 +370,12 @@ export function WaveformPlayer({
         <div className="flex items-center gap-3 w-full">
           <button
             className={cn(
-              'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm hover:scale-105',
+              'w-10 h-10 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm hover:scale-105',
               isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
             )}
             onClick={handlePlayClick}
           >
-            {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+            {isThisTrackPlaying ? <Pause className="w-4 h-4 md:w-3.5 md:h-3.5 fill-current" /> : <Play className="w-4 h-4 md:w-3.5 md:h-3.5 fill-current ml-0.5" />}
           </button>
 
           <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -433,41 +433,96 @@ export function WaveformPlayer({
             )}
           </div>
         
-          {/* Action Buttons */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          {/* Action Buttons — always visible on mobile, hover-reveal on desktop */}
+          <div className="flex items-center gap-0.5 md:gap-1.5 shrink-0">
             {isUpdating ? (
               <Loader2 className="w-4 h-4 animate-spin text-accent mr-2" />
             ) : (
               <>
-                {!isPortal && <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>}
+                {!isPortal && (
+                  <button
+                    onClick={startCommenting}
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all lg:opacity-0 lg:group-hover/audio:opacity-100"
+                    title="Comentar"
+                  >
+                    <MessageSquare className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </button>
+                )}
                 {!isPortal && !paywallLocked && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setIsMiniDAWOpen(true); }}
-                    className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface transition-all lg:opacity-0 lg:group-hover/audio:opacity-100"
                     title="Abrir en Mini-DAW (editor de audio)"
                   >
-                    <Scissors className="w-3.5 h-3.5" />
+                    <Scissors className="w-4 h-4 md:w-3.5 md:h-3.5" />
                   </button>
                 )}
-                {!isPortal && <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>}
-                {!isPortal && <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>}
-                
-                {paywallLocked ? (
-                  <button onClick={(e) => { e.stopPropagation(); customAlert('Descarga bloqueada. Tienes pagos pendientes.'); }} className="p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all" title="Pago pendiente"><Lock className="w-3.5 h-3.5" /></button>
-                ) : (
-                  <a href={`/api/audio/${activeId}`} download={activeName} onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Download className="w-3.5 h-3.5" /></a>
+                {!isPortal && (
+                  <button
+                    onClick={startRename}
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface transition-all hidden sm:flex lg:opacity-0 lg:group-hover/audio:opacity-100"
+                    title="Renombrar"
+                  >
+                    <Edit3 className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </button>
+                )}
+                {!isPortal && folders.length > 0 && (
+                  <button
+                    onClick={handleMove}
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface transition-all hidden sm:flex lg:opacity-0 lg:group-hover/audio:opacity-100"
+                    title="Mover"
+                  >
+                    <FolderInput className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </button>
                 )}
                 
-                {!isPortal && <button onClick={handleDelete} className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
-                <a href={`/api/audio/${activeId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface"><ExternalLink className="w-3.5 h-3.5" /></a>
+                {paywallLocked ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); customAlert('Descarga bloqueada. Tienes pagos pendientes.'); }}
+                    className="p-2 md:p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 transition-all"
+                    title="Pago pendiente"
+                  >
+                    <Lock className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </button>
+                ) : (
+                  <a
+                    href={`/api/audio/${activeId}`}
+                    download={activeName}
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface transition-all lg:opacity-0 lg:group-hover/audio:opacity-100"
+                    title="Descargar"
+                  >
+                    <Download className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </a>
+                )}
+                
+                {!isPortal && (
+                  <button
+                    onClick={handleDelete}
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-error/10 transition-all hidden sm:flex lg:opacity-0 lg:group-hover/audio:opacity-100"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </button>
+                )}
+                <a
+                  href={`/api/audio/${activeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
+                  title="Abrir en nueva pestaña"
+                >
+                  <ExternalLink className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                </a>
               </>
             )}
           </div>
         </div>
 
-        {/* Thin Progress Bar */}
+        {/* Progress Bar — taller on mobile for touch */}
         <div 
-          className="w-full h-1 bg-border/40 rounded-full cursor-pointer relative overflow-hidden group/progress"
+          className="w-full h-3 md:h-1 bg-border/40 rounded-full cursor-pointer relative overflow-hidden group/progress"
           onClick={(e) => {
             e.stopPropagation();
             if (!isThisTrackActive || duration === 0) return;

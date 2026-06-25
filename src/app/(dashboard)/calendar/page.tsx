@@ -62,6 +62,19 @@ export default function CalendarPage() {
   const [showMonthYearSelector, setShowMonthYearSelector] = useState(false);
   const calendarGridRef = useRef<HTMLDivElement>(null);
   const lastScrollTimeRef = useRef(0);
+  const [viewMode, setViewMode] = useState<'month' | 'list'>('list');
+  const [isMobileView, setIsMobileView] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobileView(mobile);
+      setViewMode(mobile ? 'list' : 'month');
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const fetchEvents = useCallback(async () => {
     setIsLoading(true);
@@ -386,11 +399,30 @@ export default function CalendarPage() {
           </h1>
           <p className="text-text-secondary mt-1">Agenda interactiva sincronizada con Google Calendar.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View mode toggle */}
+          <div className="flex rounded-lg overflow-hidden border border-border">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                viewMode === 'list' ? 'bg-accent text-white' : 'bg-surface-elevated text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" /> Lista
+            </button>
+            <button
+              onClick={() => setViewMode('month')}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5 border-l border-border ${
+                viewMode === 'month' ? 'bg-accent text-white' : 'bg-surface-elevated text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              <CalendarIcon className="w-3.5 h-3.5" /> Mes
+            </button>
+          </div>
           <Button onClick={() => { setEditEvent(null); setInitialDate(undefined); setShowNewEvent(true); }} className="gap-2">
-            <Plus className="w-4 h-4" /> Nuevo Evento
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nuevo Evento</span><span className="sm:hidden">Nuevo</span>
           </Button>
-          <a href="https://calendar.google.com" target="_blank" rel="noreferrer">
+          <a href="https://calendar.google.com" target="_blank" rel="noreferrer" className="hidden md:block">
             <Button variant="outline" className="gap-2">
               <ExternalLink className="w-4 h-4" /> Google Calendar
             </Button>
@@ -428,7 +460,146 @@ export default function CalendarPage() {
         editEvent={editEvent}
       />
 
-      {/* Main Layout: Grid (Left/Center) | Sidebar (Right) */}
+      {/* ── LIST VIEW ── (default on mobile, toggle on desktop) */}
+      {viewMode === 'list' ? (
+        <div className="space-y-2 animate-fade-in">
+          {/* Month navigation for list view */}
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <span className="text-base font-bold capitalize">
+                {format(currentMonth, 'MMMM yyyy', { locale: es })}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { const today = new Date(); setCurrentMonth(today); setSelectedDate(today); }}
+              className="gap-2 text-accent font-semibold bg-accent/10 hover:bg-accent/20 border border-accent/20 text-xs"
+            >
+              <CalendarDays className="w-4 h-4" /> Hoy
+            </Button>
+          </div>
+
+          {/* Events grouped by day */}
+          {(() => {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth();
+            const daysInMonth = getDaysInMonth(currentMonth);
+            const days = Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1));
+            const daysWithEvents = days.map(date => ({
+              date,
+              events: getEventsForDate(date),
+            })).filter(d => d.events.length > 0);
+
+            if (daysWithEvents.length === 0) {
+              return (
+                <div className="glass rounded-2xl p-12 text-center border border-dashed border-border">
+                  <CalendarIcon className="w-12 h-12 text-text-secondary mx-auto mb-3 opacity-40" />
+                  <p className="font-semibold text-text-primary">Sin eventos este mes</p>
+                  <p className="text-sm text-text-secondary mt-1">Crea un nuevo evento para empezar</p>
+                  <Button
+                    className="mt-4"
+                    onClick={() => { setEditEvent(null); setInitialDate(undefined); setShowNewEvent(true); }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Nuevo Evento
+                  </Button>
+                </div>
+              );
+            }
+
+            return daysWithEvents.map(({ date, events }) => {
+              const isTodayDate = isSameDay(date, new Date());
+              const isPast = date < new Date(new Date().setHours(0,0,0,0));
+              return (
+                <div key={date.toISOString()} className="animate-fade-in">
+                  {/* Day header */}
+                  <div className={`flex items-center gap-3 px-1 mb-2 mt-4 first:mt-0`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                      isTodayDate ? 'bg-accent text-white shadow-lg shadow-accent/30' : 'bg-surface-elevated text-text-secondary border border-border'
+                    }`}>
+                      {format(date, 'd')}
+                    </div>
+                    <div>
+                      <p className={`font-semibold text-sm capitalize ${
+                        isTodayDate ? 'text-accent' : isPast ? 'text-text-secondary' : 'text-text-primary'
+                      }`}>
+                        {isTodayDate ? 'Hoy' : format(date, 'EEEE', { locale: es })}
+                      </p>
+                      <p className="text-xs text-text-secondary capitalize">{format(date, 'd MMMM', { locale: es })}</p>
+                    </div>
+                    <div className="flex-1 h-px bg-border/50" />
+                    <button
+                      onClick={() => { setInitialDate(format(date, 'yyyy-MM-dd')); setEditEvent(null); setShowNewEvent(true); }}
+                      className="p-2 text-text-secondary hover:text-accent hover:bg-accent/10 rounded-lg transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
+                      title="Añadir evento"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Events for this day */}
+                  <div className="space-y-2 pl-0">
+                    {events.map(event => {
+                      const detectedArtist = detectArtist(event.summary);
+                      return (
+                        <div
+                          key={event.id}
+                          onContextMenu={(e) => handleEventContextMenu(e, event)}
+                          className={`glass rounded-2xl p-4 border transition-all cursor-pointer group ${
+                            detectedArtist ? 'border-accent/30 bg-accent/5 hover:border-accent/50' : 'border-border/60 hover:border-border'
+                          } ${isPast ? 'opacity-60' : ''}`}
+                          onClick={() => setSelectedDate(date)}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-1 self-stretch rounded-full shrink-0 ${
+                              detectedArtist ? 'bg-accent' : 'bg-border'
+                            }`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                                  detectedArtist ? 'bg-accent/10 text-accent' : 'bg-surface-elevated text-text-secondary'
+                                }`}>
+                                  {format(parseISO(event.start), 'HH:mm')} — {format(parseISO(event.end), 'HH:mm')}
+                                </span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDelete(event.id); }}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-text-secondary hover:text-error hover:bg-error/10 rounded-lg min-h-[36px] min-w-[36px] flex items-center justify-center"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <h4 className={`font-bold text-sm leading-tight ${
+                                detectedArtist ? 'text-text-primary' : 'text-text-primary'
+                              }`}>{event.summary}</h4>
+                              {event.description && (
+                                <p className="text-xs text-text-secondary mt-1 line-clamp-2">{event.description}</p>
+                              )}
+                              {detectedArtist && (
+                                <div className="mt-2">
+                                  <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full border border-accent/20 font-medium">
+                                    🎤 {detectedArtist.name}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            });
+          })()}
+        </div>
+      ) : (
+      /* ── MONTH GRID VIEW ── */
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         
         {/* INTERACTIVE CALENDAR GRID */}
@@ -719,6 +890,7 @@ export default function CalendarPage() {
         </div>
 
       </div>
+      )}
     </div>
   );
 }

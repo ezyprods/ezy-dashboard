@@ -73,7 +73,7 @@ function GlobalTimerPopover({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="absolute right-0 mt-2 w-72 glass rounded-xl shadow-xl border border-border z-50 p-4 animate-slide-in">
+    <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] glass rounded-xl shadow-xl border border-border z-50 p-4 animate-slide-in">
       <div className="flex items-center justify-between mb-3">
         <h4 className="font-bold text-sm text-text-primary flex items-center gap-2">
           <Timer className="w-4 h-4 text-accent" />
@@ -163,7 +163,7 @@ function QuickActionsPopover({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="absolute right-0 mt-2 w-52 glass rounded-xl shadow-xl border border-border z-50 p-2 animate-slide-in">
+    <div className="absolute right-0 mt-2 w-52 max-w-[calc(100vw-2rem)] glass rounded-xl shadow-xl border border-border z-50 p-2 animate-slide-in">
       {actions.map((action) => (
         <button
           key={action.label}
@@ -230,61 +230,64 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <CommandMenu />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 md:gap-2">
         <ThemeToggle />
 
-        {/* ── Timer ── */}
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative cursor-pointer"
-            onClick={() => toggle('timer')}
-            aria-label="Cronómetro"
-          >
-            <Timer className="w-5 h-5" />
-            {timerRunning && (
-              <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface animate-pulse" />
+        {/* ── Timer + Calendar + Plus: Desktop only ── */}
+        <div className="hidden sm:flex items-center gap-1">
+          {/* ── Timer ── */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative cursor-pointer min-h-[44px] min-w-[44px]"
+              onClick={() => toggle('timer')}
+              aria-label="Cronómetro"
+            >
+              <Timer className="w-5 h-5" />
+              {timerRunning && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface animate-pulse" />
+              )}
+            </Button>
+            {activePopover === 'timer' && (
+              <GlobalTimerPopover onClose={() => setActivePopover(null)} />
             )}
-          </Button>
-          {activePopover === 'timer' && (
-            <GlobalTimerPopover onClose={() => setActivePopover(null)} />
-          )}
-        </div>
+          </div>
 
-        {/* ── Calendar ── */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="cursor-pointer"
-          onClick={() => router.push('/calendar')}
-          aria-label="Calendario"
-        >
-          <CalendarDays className="w-5 h-5" />
-        </Button>
-
-        {/* ── Plus (Quick Actions) ── */}
-        <div className="relative">
+          {/* ── Calendar ── */}
           <Button
             variant="ghost"
             size="icon"
-            className="cursor-pointer"
-            onClick={() => toggle('plus')}
-            aria-label="Acciones rápidas"
+            className="cursor-pointer min-h-[44px] min-w-[44px]"
+            onClick={() => router.push('/calendar')}
+            aria-label="Calendario"
           >
-            <Plus className="w-5 h-5" />
+            <CalendarDays className="w-5 h-5" />
           </Button>
-          {activePopover === 'plus' && (
-            <QuickActionsPopover onClose={() => setActivePopover(null)} />
-          )}
+
+          {/* ── Plus (Quick Actions) ── */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="cursor-pointer min-h-[44px] min-w-[44px]"
+              onClick={() => toggle('plus')}
+              aria-label="Acciones rápidas"
+            >
+              <Plus className="w-5 h-5" />
+            </Button>
+            {activePopover === 'plus' && (
+              <QuickActionsPopover onClose={() => setActivePopover(null)} />
+            )}
+          </div>
         </div>
 
-        {/* ── Bell (Notifications) ── */}
+        {/* ── Bell (Notifications) ── always visible */}
         <div className="relative">
           <Button
             variant="ghost"
             size="icon"
-            className="relative cursor-pointer"
+            className="relative cursor-pointer min-h-[44px] min-w-[44px]"
             onClick={() => toggle('bell')}
             aria-label="Notificaciones"
           >
@@ -292,7 +295,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
             <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface" />
           </Button>
           {activePopover === 'bell' && (
-            <div className="absolute right-0 mt-2 w-64 glass rounded-xl shadow-xl border border-border z-50 p-4 animate-slide-in">
+            <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] glass rounded-xl shadow-xl border border-border z-50 p-4 animate-slide-in">
               <h4 className="font-bold text-sm mb-2 text-text-primary">Notificaciones</h4>
               <div className="flex flex-col items-center justify-center py-6 text-center">
                 <Bell className="w-8 h-8 text-text-secondary opacity-50 mb-2" />
@@ -303,8 +306,8 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         </div>
 
         {/* ── Profile ── */}
-        <div className="relative flex items-center gap-3 border-l border-border pl-4 ml-2 group cursor-pointer">
-          <div className="w-9 h-9 rounded-full bg-surface-elevated border border-border flex items-center justify-center overflow-hidden">
+        <div className="relative flex items-center gap-3 border-l border-border pl-3 ml-1 group cursor-pointer">
+          <div className="w-9 h-9 rounded-full bg-surface-elevated border border-border flex items-center justify-center overflow-hidden min-h-[36px] min-w-[36px]">
             <span className="text-sm font-medium">P</span>
           </div>
           <div className="hidden md:block">
@@ -313,7 +316,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
           </div>
 
           {/* Profile Dropdown - hover-based */}
-          <div className="absolute right-0 top-full mt-2 w-48 glass rounded-xl shadow-xl border border-border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 p-2">
+          <div className="absolute right-0 top-full mt-2 w-48 max-w-[calc(100vw-2rem)] glass rounded-xl shadow-xl border border-border opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 p-2">
             <button
               onClick={async () => {
                 const { authClient } = await import('@/lib/auth-client');

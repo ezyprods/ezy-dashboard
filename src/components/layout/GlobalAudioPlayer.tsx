@@ -30,7 +30,7 @@ export function GlobalAudioPlayer() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-50 flex flex-col md:flex-row items-stretch md:items-center p-3 md:py-0 md:px-6 h-auto md:h-24 animate-slide-up shadow-2xl gap-2 md:gap-0">
+    <div className="fixed bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-50 flex flex-col md:flex-row items-stretch md:items-center p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:py-0 md:px-6 h-auto md:h-24 animate-slide-up shadow-2xl gap-2 md:gap-0">
       
       {/* Top half on mobile / Left column on desktop */}
       <div className="flex items-center justify-between md:w-1/4 md:min-w-[200px] overflow-hidden gap-3">
@@ -70,12 +70,12 @@ export function GlobalAudioPlayer() {
           <button 
             onClick={togglePlay}
             disabled={isLoading}
-            className="w-8 h-8 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center disabled:opacity-70"
+            className="w-11 h-11 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center disabled:opacity-70 touch-target"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
           </button>
-          <button onClick={closePlayer} className="text-text-secondary hover:text-error p-1">
-            <X className="w-4 h-4" />
+          <button onClick={closePlayer} className="text-text-secondary hover:text-error p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
+            <X className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -113,7 +113,7 @@ export function GlobalAudioPlayer() {
             max={duration || 100}
             value={currentTime}
             onChange={handleSeek}
-            className="flex-1 h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer accent-accent"
+            className="flex-1 h-3 md:h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 md:[&::-webkit-slider-thumb]:w-2.5 md:[&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer accent-accent"
           />
           
           <span className="text-[9px] font-medium text-text-secondary w-8 font-mono">

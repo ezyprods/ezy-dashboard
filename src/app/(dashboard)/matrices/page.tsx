@@ -205,7 +205,7 @@ export default function MatricesPage() {
           </div>
         </div>
         
-        <div className="glass rounded-xl p-6 border border-border">
+        <div className="glass rounded-xl p-3 md:p-6 border border-border">
           <ProductionGridBoard 
             artistId={activeMatrix.artistId} 
             matrixId={activeMatrix.id} 
@@ -219,13 +219,14 @@ export default function MatricesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in pb-20">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Matrices de Producción Globales</h1>
-          <p className="text-sm text-text-secondary mt-1">Crea, visualiza y gestiona las tareas y fases de todos tus artistas de forma unificada.</p>
+          <h1 className="text-xl md:text-2xl font-bold text-text-primary">Matrices de Producción</h1>
+          <p className="text-sm text-text-secondary mt-1 hidden sm:block">Crea, visualiza y gestiona las tareas y fases de todos tus artistas de forma unificada.</p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" /> Nueva Matriz
+        <Button onClick={() => setIsModalOpen(true)} size="sm" className="shrink-0">
+          <Plus className="w-4 h-4 mr-1.5" /> Nueva
         </Button>
       </div>
 

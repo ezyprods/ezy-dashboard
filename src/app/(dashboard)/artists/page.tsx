@@ -104,10 +104,10 @@ export default function ArtistsPage() {
       )}
 
       {/* Header section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary">Artistas</h1>
-          <p className="text-text-secondary mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-text-primary">Artistas</h1>
+          <p className="text-text-secondary mt-1 hidden sm:block">
             Gestiona los artistas con los que trabajas y sus carpetas de Drive.
           </p>
         </div>
@@ -121,8 +121,8 @@ export default function ArtistsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 glass rounded-xl p-2 border border-border">
-        <div className="relative w-full sm:w-96">
+      <div className="flex flex-col xs:flex-row items-stretch gap-3 glass rounded-xl p-2 border border-border">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
           <Input 
             placeholder="Buscar artista por nombre o género..." 
@@ -132,7 +132,7 @@ export default function ArtistsPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 px-2 w-full sm:w-auto border-t sm:border-t-0 sm:border-l border-border pt-2 sm:pt-0">
+        <div className="flex items-center gap-2 px-2 shrink-0">
           <select 
             className="bg-surface border border-border text-text-secondary text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-accent"
             value={sortBy}

@@ -695,7 +695,11 @@ export function ProductionGridBoard({
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border shadow-sm relative">
+      {/* Mobile scroll hint */}
+      <div className="relative">
+        {/* Fade indicator for horizontal scroll */}
+        <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-background/80 to-transparent z-10 md:hidden rounded-r-xl" />
+      <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border shadow-sm relative" style={{ touchAction: 'pan-x pan-y' }}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColDragEnd}>
           <table 
             ref={containerRef}
@@ -779,6 +783,7 @@ export function ProductionGridBoard({
           </table>
         </DndContext>
       </div>
+      </div>{/* end scroll wrapper */}
 
       {linkingRowId && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setLinkingRowId(null)}>
