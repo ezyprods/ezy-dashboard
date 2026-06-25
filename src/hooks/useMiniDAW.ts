@@ -19,6 +19,7 @@ export interface DAWState {
   gain: number;
   errorMessage: string | null;
   exportProgress: number; // 0–1
+  loadProgress: number; // 0-1
   downloadUrl: string | null;
   outputFileName: string;
 }
@@ -44,6 +45,7 @@ export function useMiniDAW(): UseMiniDAWReturn {
   const [gain, setGain] = useState(1.0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [exportProgress, setExportProgress] = useState(0);
+  const [loadProgress, setLoadProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [outputFileName, setOutputFileName] = useState('export');
 
@@ -79,11 +81,15 @@ export function useMiniDAW(): UseMiniDAWReturn {
     return () => { cleanup(); };
   }, [cleanup]);
 
+// Global cache to persist decoded audio between modal opens
+const globalAudioCache = new Map<string, AudioBuffer>();
+
   const loadAudio = useCallback(async (fileId: string, fileName: string) => {
     // Reset state before loading
     setStatus('loading');
     setErrorMessage(null);
     setExportProgress(0);
+    setLoadProgress(0);
     setDownloadUrl(null);
     lastDownloadUrlRef.current = null;
     audioBufferRef.current = null;
@@ -98,6 +104,16 @@ export function useMiniDAW(): UseMiniDAWReturn {
     abortControllerRef.current = controller;
 
     try {
+      if (globalAudioCache.has(fileId)) {
+        const cached = globalAudioCache.get(fileId)!;
+        audioBufferRef.current = cached;
+        setDuration(cached.duration);
+        setTrimStart(0);
+        setTrimEnd(cached.duration);
+        setStatus('ready');
+        return;
+      }
+
       const response = await fetch(`/api/audio/${fileId}`, {
         signal: controller.signal,
       });
@@ -106,7 +122,39 @@ export function useMiniDAW(): UseMiniDAWReturn {
         throw new Error(`No se pudo cargar el audio (HTTP ${response.status})`);
       }
 
-      const arrayBuffer = await response.arrayBuffer();
+      // Stream the response to show progress
+      const contentLengthHeader = response.headers.get('Content-Length');
+      const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+      
+      let arrayBuffer: ArrayBuffer;
+      
+      if (totalBytes > 0 && response.body) {
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let receivedBytes = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            receivedBytes += value.length;
+            setLoadProgress(receivedBytes / totalBytes);
+          }
+        }
+        
+        // Combine chunks
+        const combined = new Uint8Array(receivedBytes);
+        let pos = 0;
+        for (const chunk of chunks) {
+          combined.set(chunk, pos);
+          pos += chunk.length;
+        }
+        arrayBuffer = combined.buffer;
+      } else {
+        // Fallback if no content-length
+        arrayBuffer = await response.arrayBuffer();
+      }
 
       if (controller.signal.aborted) return;
 
@@ -117,6 +165,9 @@ export function useMiniDAW(): UseMiniDAWReturn {
       const decoded = await offlineCtx.decodeAudioData(arrayBuffer);
 
       if (controller.signal.aborted) return;
+
+      // Save to cache
+      globalAudioCache.set(fileId, decoded);
 
       audioBufferRef.current = decoded;
       setDuration(decoded.duration);
@@ -240,6 +291,7 @@ export function useMiniDAW(): UseMiniDAWReturn {
     gain,
     errorMessage,
     exportProgress,
+    loadProgress,
     downloadUrl,
     outputFileName,
     audioBuffer: audioBufferRef.current,

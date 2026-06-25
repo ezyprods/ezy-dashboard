@@ -526,7 +526,13 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                 <div className="absolute inset-0 rounded-full border-2 border-accent/20" />
                 <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-accent animate-spin" />
                 <div className="absolute inset-2 rounded-full bg-accent/5 flex items-center justify-center">
-                  <Loader2 className="w-6 h-6 text-accent animate-spin" />
+                  {daw.status === 'loading' && daw.loadProgress > 0 ? (
+                    <span className="text-[10px] font-mono font-bold text-accent">
+                      {Math.round(daw.loadProgress * 100)}%
+                    </span>
+                  ) : (
+                    <Loader2 className="w-6 h-6 text-accent animate-spin" />
+                  )}
                 </div>
               </div>
               <p className="text-sm text-text-secondary">
