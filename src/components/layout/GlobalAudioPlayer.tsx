@@ -48,7 +48,23 @@ export function GlobalAudioPlayer() {
             )}
           </div>
           <div className="overflow-hidden">
-            <p className="text-xs md:text-sm font-bold text-text-primary truncate" title={currentTrack.name}>{currentTrack.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs md:text-sm font-bold text-text-primary truncate" title={currentTrack.name}>{currentTrack.name}</p>
+              {(currentTrack.bpm || currentTrack.musicalKey) && (
+                <div className="flex items-center gap-1 shrink-0">
+                  {currentTrack.bpm && (
+                    <span className="text-[9px] font-mono px-1 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 whitespace-nowrap">
+                      {currentTrack.bpm} BPM
+                    </span>
+                  )}
+                  {currentTrack.musicalKey && (
+                    <span className="text-[9px] font-mono px-1 py-0.5 rounded border text-violet-400 bg-violet-500/10 border-violet-500/20 whitespace-nowrap">
+                      {currentTrack.musicalKey}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             {currentTrack.pathSegments && currentTrack.pathSegments.length > 0 ? (
               <p className="text-[10px] md:text-xs text-text-secondary truncate flex items-center gap-1">
                 {currentTrack.pathSegments.map((seg, i) => (

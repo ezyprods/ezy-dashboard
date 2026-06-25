@@ -9,6 +9,8 @@ export interface AudioTrack {
   artistName?: string;
   coverArt?: string;
   pathSegments?: { name: string; url?: string; onClick?: () => void }[];
+  bpm?: string | number;
+  musicalKey?: string;
 }
 
 interface AudioContextType {

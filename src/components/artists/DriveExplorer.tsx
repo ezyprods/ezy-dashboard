@@ -292,7 +292,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           if (currentTrack?.id === item.id) {
             togglePlay();
           } else {
-            playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
+            playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
           }
         } else if (isBrowserCompatible(item.mimeType)) {
           window.open(`/api/files/${item.id}?inline=true`, '_blank');
@@ -821,7 +821,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         if (isThisTrackActive) {
                           togglePlay();
                         } else {
-                          playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs) });
+                          playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
                         }
                       } else if (isBrowserCompatible(item.mimeType)) {
                         const openUrl = `/api/files/${item.id}?inline=true`;
@@ -859,7 +859,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                               togglePlay();
                             } else {
                               const safeName = item.name || 'Audio';
-                              playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs) });
+                              playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
                             }
                           }}
                         >
