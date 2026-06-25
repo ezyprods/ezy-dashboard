@@ -64,7 +64,7 @@ export default function DashboardPage() {
   const alertMsg = pulseData.globalStats?.priorityAlerts?.[0] || 'El estudio esta al dia. No hay tareas urgentes.';
 
   return (
-    <div className="flex-1 w-full h-full min-h-0 flex flex-col gap-4 animate-fade-in overflow-x-hidden lg:overflow-hidden">
+    <div className="flex-1 w-full h-auto min-h-full lg:h-full lg:min-h-0 flex flex-col gap-4 md:gap-6 animate-fade-in overflow-x-hidden lg:overflow-hidden pb-4 lg:pb-0">
       <NewArtistModal isOpen={isNewArtistModalOpen} onClose={() => setIsNewArtistModalOpen(false)} />
       <QuickUploadModal isOpen={isQuickUploadOpen} onClose={() => setIsQuickUploadOpen(false)} artists={artists} />
       <NewProjectModal isOpen={isNewProjectOpen} onClose={() => setIsNewProjectOpen(false)} artists={artists} />

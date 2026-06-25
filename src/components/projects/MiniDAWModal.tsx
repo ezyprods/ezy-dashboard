@@ -476,7 +476,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
         onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
       />
       <div
-        className="relative z-10 w-full bg-surface-elevated border border-border rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative z-10 w-full bg-surface-elevated border border-border rounded-t-[32px] sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]"
         style={{
           maxWidth: '900px',
           maxHeight: '92dvh',
@@ -485,6 +485,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="w-12 h-1.5 bg-border/80 rounded-full mx-auto mt-3 mb-1 sm:hidden shrink-0" />
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 shrink-0">
           <div className="flex items-center gap-3">

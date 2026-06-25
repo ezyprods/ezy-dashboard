@@ -28,10 +28,10 @@ export function Modal({ isOpen, onClose, title, description, children, className
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-end md:justify-center p-0 md:p-4">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-background/90 animate-fade-in" 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" 
         style={{ willChange: 'opacity' }}
         onClick={onClose}
       />
@@ -39,12 +39,13 @@ export function Modal({ isOpen, onClose, title, description, children, className
       {/* Content */}
       <div 
         className={cn(
-          "relative z-50 w-full max-w-lg bg-surface-elevated rounded-xl shadow-2xl animate-slide-in border border-border max-h-[90vh] flex flex-col",
+          "relative z-10 w-full md:max-w-lg bg-surface-elevated rounded-t-[32px] md:rounded-2xl shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.3)] md:shadow-2xl animate-slide-up md:animate-scale-in border-t md:border border-border max-h-[92vh] md:max-h-[90vh] flex flex-col pb-[env(safe-area-inset-bottom)]",
           className
         )}
         style={{ willChange: 'transform, opacity' }}
       >
-        <div className="flex items-center justify-between p-6 border-b border-border/50">
+        <div className="w-12 h-1.5 bg-border/80 rounded-full mx-auto mt-3 mb-1 md:hidden shrink-0" />
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border/50 shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
             {description && (

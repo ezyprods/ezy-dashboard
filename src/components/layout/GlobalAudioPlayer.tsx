@@ -35,7 +35,7 @@ export function GlobalAudioPlayer() {
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-50 flex flex-col md:flex-row items-stretch md:items-center p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:py-0 md:px-6 h-auto md:h-24 animate-slide-up shadow-2xl gap-2 md:gap-0">
+      <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+68px)] md:bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-50 flex flex-col md:flex-row items-stretch md:items-center p-3 md:py-0 md:px-6 h-auto md:h-24 animate-slide-up shadow-2xl gap-2 md:gap-0">
       
       {/* Top half on mobile / Left column on desktop */}
       <div className="flex items-center justify-between md:w-1/4 md:min-w-[200px] overflow-hidden gap-3">
