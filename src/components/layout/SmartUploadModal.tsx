@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
