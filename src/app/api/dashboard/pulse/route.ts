@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, listFolders } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
@@ -83,3 +84,4 @@ export async function GET() {
     return NextResponse.json({ error: 'Failed to fetch pulse', details: error.message }, { status: 500 });
   }
 }
+

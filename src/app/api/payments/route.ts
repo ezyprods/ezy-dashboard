@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile, getDriveService } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
@@ -63,3 +64,4 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Failed to update payment', details: error.message }, { status: 500 });
   }
 }
+

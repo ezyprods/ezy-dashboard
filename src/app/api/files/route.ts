@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 import { Readable } from 'stream';
@@ -326,3 +327,4 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Failed to update file', details: error.message }, { status: 500 });
   }
 }
+

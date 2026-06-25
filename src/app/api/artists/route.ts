@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { listFolders, findAndReadJsonFile, createFolder, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID, ARTIST_FOLDER_STRUCTURE } from '@/lib/constants';
@@ -99,3 +100,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

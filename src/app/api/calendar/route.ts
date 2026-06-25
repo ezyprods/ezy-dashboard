@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { getCalendarAuthClient } from '@/lib/drive';
@@ -94,3 +95,4 @@ export async function POST(request: Request) {
     );
   }
 }
+
