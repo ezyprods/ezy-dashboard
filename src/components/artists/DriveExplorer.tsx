@@ -12,6 +12,7 @@ import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import { ShareModal } from './ShareModal';
 import { DeleteModal } from './DeleteModal';
 import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
+import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 
 interface DriveItem {
   id: string;
@@ -849,7 +850,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       <div className="flex-1 min-w-0 pr-2">
                         <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
                           <span className="truncate block">{item.name || 'Sin Título'}</span>
-                          {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3 h-3 text-accent opacity-70 shrink-0" /></span>}
+                          {item.expiresAt && <RealtimeCountdown expiresAt={item.expiresAt} />}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
                           <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
@@ -1055,7 +1056,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
                             <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
                               {item.name || 'Sin Título'}
-                              {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
+                              {item.expiresAt && <RealtimeCountdown expiresAt={item.expiresAt} />}
                             </div>
                             {!isFolder && (
                               <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
@@ -1223,7 +1224,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                             <div className="flex-1 min-w-0 mr-14 flex flex-col justify-center">
                               <div className="font-medium text-text-primary text-xs flex items-center gap-2">
                                 <span className="truncate block">{item.name || 'Sin Título'}</span>
-                                {item.expiresAt && <span title={`Expira: ${new Date(item.expiresAt).toLocaleString()}`}><Timer className="w-3.5 h-3.5 text-accent opacity-70 shrink-0" /></span>}
+                                {item.expiresAt && <RealtimeCountdown expiresAt={item.expiresAt} />}
                               </div>
                               {!isFolder && (
                                 <div className="text-[9px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
