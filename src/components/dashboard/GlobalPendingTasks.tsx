@@ -205,19 +205,24 @@ function StatusColumn({
     <div 
       ref={setNodeRef}
       className={cn(
-        "flex flex-col h-full min-h-0 rounded-3xl overflow-hidden transition-all duration-300 relative",
-        isOver ? "bg-surface-elevated/80 shadow-[inset_0_0_0_1px_rgba(108,92,231,0.2)]" : "bg-surface-elevated/30 border border-transparent hover:border-border/50"
+        "flex flex-col h-full min-h-0 rounded-[24px] overflow-hidden transition-all duration-300 relative border backdrop-blur-xl",
+        isOver ? "bg-surface/80 border-accent shadow-[0_0_30px_rgba(var(--accent),0.15)]" : "bg-surface/40 border-border/60 hover:border-border/80 shadow-lg"
       )}
     >
-      <div className={cn("px-5 py-4 flex items-center justify-between z-10 relative", bgColor)}>
-        <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+      {/* Ambient background glow based on column */}
+      <div className={cn(
+        "absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 rounded-full blur-[60px] opacity-20 pointer-events-none",
+        id === 'todo' ? "bg-text-secondary" : id === 'in_progress' ? "bg-warning" : "bg-blue-500"
+      )} />
+
+      <div className={cn("px-5 py-4 flex items-center justify-between z-10 relative border-b border-border/40", bgColor)}>
         <div className="flex items-center gap-2.5 relative z-10">
-          <div className={cn("p-1.5 rounded-lg bg-surface/50 shadow-sm", textColor)}>
+          <div className={cn("p-1.5 rounded-lg shadow-inner bg-surface/80 border border-border/50", textColor)}>
             {icon}
           </div>
           <h3 className={cn("font-bold text-[15px] tracking-tight", textColor)}>{title}</h3>
         </div>
-        <span className={cn("text-xs px-3 py-1 rounded-full font-bold bg-background/80 backdrop-blur-md shadow-sm relative z-10", textColor)}>
+        <span className={cn("text-xs px-3 py-1 rounded-full font-bold bg-surface border border-border/50 shadow-sm relative z-10", textColor)}>
           {columnTasks.length}
         </span>
       </div>
@@ -373,7 +378,7 @@ export function GlobalPendingTasks() {
 
   if (isLoading) {
     return (
-      <div className="glass rounded-[24px] border border-border p-8 min-h-[400px] flex flex-col items-center justify-center animate-pulse h-full">
+      <div className="glass rounded-[24px] border border-border p-8 flex flex-col items-center justify-center animate-pulse h-full">
         <Loader2 className="w-8 h-8 animate-spin text-accent mb-4" />
         <p className="text-text-secondary font-medium">Cargando centro de tareas...</p>
       </div>
@@ -385,10 +390,10 @@ export function GlobalPendingTasks() {
   const reviewTasks = tasks.filter(t => t.status === 'review');
 
   return (
-    <div className="glass rounded-[24px] border border-border p-6 shadow-xl relative overflow-hidden flex flex-col h-full">
+    <div className="glass rounded-[24px] border border-border p-5 shadow-xl relative overflow-hidden flex flex-col h-full">
       <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
       
-      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 shrink-0">
+      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 shrink-0">
         <div>
           <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
             <KanbanSquare className="w-5 h-5 text-accent" />

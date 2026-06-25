@@ -27,12 +27,14 @@ export function GlobalMatricesWidget() {
 
   if (isLoading) {
     return (
-      <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl animate-pulse">
-        <div className="p-4 border-b border-border/50 bg-surface/50 flex items-center gap-2">
-          <Table2 className="w-4 h-4 text-accent" />
-          <h3 className="font-semibold text-sm">Matrices Activas</h3>
+      <div className="relative bg-surface/80 backdrop-blur-xl rounded-[24px] border border-border/60 overflow-hidden shadow-lg h-full animate-pulse flex flex-col">
+        <div className="p-4 border-b border-border/50 bg-gradient-to-b from-surface-elevated/50 to-surface/50 flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-accent/10">
+            <Table2 className="w-4 h-4 text-accent" />
+          </div>
+          <h3 className="font-bold text-sm text-text-primary">Matrices Activas</h3>
         </div>
-        <div className="p-6 flex flex-col items-center justify-center min-h-[150px]">
+        <div className="flex-1 flex flex-col items-center justify-center">
           <Loader2 className="w-5 h-5 animate-spin text-accent" />
           <p className="text-xs text-text-secondary mt-2">Cargando matrices...</p>
         </div>
@@ -41,15 +43,17 @@ export function GlobalMatricesWidget() {
   }
 
   return (
-    <div className="relative h-full flex flex-col min-h-0">
-      <div className="absolute -inset-0.5 bg-gradient-to-b from-accent/20 to-transparent rounded-[20px] blur opacity-50" />
-      <div className="relative bg-surface-elevated rounded-[18px] border border-border/50 overflow-hidden shadow-xl flex flex-col h-full min-h-0">
-        <div className="p-4 border-b border-border/50 bg-surface/50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Table2 className="w-4 h-4 text-accent" />
-            <h3 className="font-semibold text-sm">Matrices Activas</h3>
+    <div className="relative h-full flex flex-col min-h-0 w-full">
+      <div className="absolute -inset-0.5 bg-gradient-to-b from-accent/20 to-transparent rounded-[24px] blur opacity-40 pointer-events-none" />
+      <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[24px] overflow-hidden shadow-lg h-full flex flex-col group hover:border-accent/30 transition-colors min-h-0">
+        <div className="p-4 border-b border-border/50 bg-gradient-to-b from-surface-elevated/50 to-surface/50 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-accent/10 text-accent shadow-inner">
+              <Table2 className="w-4 h-4" />
+            </div>
+            <h3 className="font-bold text-sm text-text-primary tracking-tight">Matrices Activas</h3>
           </div>
-          <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold">
+          <span className="text-[10px] bg-accent/10 text-accent px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
             {matrices.length}
           </span>
         </div>
