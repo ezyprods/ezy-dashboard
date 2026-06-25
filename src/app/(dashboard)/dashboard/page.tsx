@@ -30,10 +30,11 @@ export default function DashboardPage() {
       .then(res => res.json())
       .then(data => {
         if (data.needsAuth) {
-          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Redirigiendo para reconectar...');
+          customAlert('El acceso a Google Drive ha caducado. Te redirigimos para que generes un nuevo token.');
           setTimeout(() => {
-            window.location.href = '/api/auth/google';
+            window.location.href = '/api/auth/google-token?type=drive';
           }, 2000);
+          setIsLoading(false);
           return;
         }
         setPulseData(data);

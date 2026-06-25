@@ -58,9 +58,9 @@ export default function MatricesPage() {
         const artistsData = await artistsRes.json();
 
         if (artistsData.needsAuth || matricesData.needsAuth) {
-          customAlert('Tu sesión de Google Drive ha expirado por seguridad. Redirigiendo para reconectar...');
+          customAlert('El acceso a Google Drive ha caducado. Te redirigimos para que generes un nuevo token.');
           setTimeout(() => {
-            window.location.href = '/api/auth/google';
+            window.location.href = '/api/auth/google-token?type=both';
           }, 2000);
           return;
         }
