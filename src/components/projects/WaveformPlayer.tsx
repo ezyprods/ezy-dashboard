@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Pause, Play, Download, Trash2, Edit3, FolderInput, ExternalLink, MessageSquare, X, Loader2, Lock } from 'lucide-react';
+import { Pause, Play, Download, Trash2, Edit3, FolderInput, ExternalLink, MessageSquare, X, Loader2, Lock, Scissors } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { MiniDAWModal } from './MiniDAWModal';
+import { DAWErrorBoundary } from './DAWErrorBoundary';
 
 
 interface WaveformPlayerProps {
@@ -19,6 +21,8 @@ interface WaveformPlayerProps {
   isPortal?: boolean;
   paywallLocked?: boolean;
   modifiedTime?: string;
+  bpm?: number | string | null;
+  trackKey?: string | null;
 }
 
 const BAR_COUNT = 70; // Fewer, thicker bars for minimalist look
@@ -47,7 +51,9 @@ export function WaveformPlayer({
   versions,
   isPortal = false,
   paywallLocked = false,
-  modifiedTime
+  modifiedTime,
+  bpm,
+  trackKey
 }: WaveformPlayerProps) {
   const { currentTrack, isPlaying, duration, currentTime, playTrack, togglePlay, seek } = useAudio();
 
@@ -68,6 +74,7 @@ export function WaveformPlayer({
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
+  const [isMiniDAWOpen, setIsMiniDAWOpen] = useState(false);
 
   // Comments
   const [commentTime, setCommentTime] = useState<number | null>(null);
@@ -347,6 +354,7 @@ export function WaveformPlayer({
   };
 
   return (
+    <>
     <div className="flex flex-col gap-2 w-full min-w-0">
       <div
         draggable
@@ -392,8 +400,18 @@ export function WaveformPlayer({
                   {displayName}
                 </span>
                 {modifiedTime && (
-                  <span className="text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0" title="Fecha de modificación">
+                  <span className="hidden sm:inline-block text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0" title="Fecha de modificación">
                     {formatModificationTime(modifiedTime)}
+                  </span>
+                )}
+                {bpm && (
+                  <span className="text-[10px] text-accent font-mono bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20 shrink-0" title="Tempo">
+                    {bpm} BPM
+                  </span>
+                )}
+                {trackKey && (
+                  <span className="text-[10px] text-blue-500 font-mono bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 shrink-0" title="Tonalidad">
+                    {trackKey}
                   </span>
                 )}
                 {versions && versions.length > 1 && (
@@ -422,6 +440,15 @@ export function WaveformPlayer({
             ) : (
               <>
                 {!isPortal && <button onClick={startCommenting} className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><MessageSquare className="w-3.5 h-3.5" /></button>}
+                {!isPortal && !paywallLocked && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setIsMiniDAWOpen(true); }}
+                    className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"
+                    title="Abrir en Mini-DAW (editor de audio)"
+                  >
+                    <Scissors className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 {!isPortal && <button onClick={startRename} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><Edit3 className="w-3.5 h-3.5" /></button>}
                 {!isPortal && <button onClick={handleMove} className="p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface opacity-60 lg:opacity-0 lg:group-hover/audio:opacity-100 transition-all"><FolderInput className="w-3.5 h-3.5" /></button>}
                 
@@ -491,5 +518,17 @@ export function WaveformPlayer({
         </div>
       )}
     </div>
+
+    {/* Mini-DAW Modal — rendered via portal to document.body, isolated from stacking context */}
+    {isMiniDAWOpen && (
+      <DAWErrorBoundary onClose={() => setIsMiniDAWOpen(false)}>
+        <MiniDAWModal
+          fileId={activeId}
+          fileName={activeName}
+          onClose={() => setIsMiniDAWOpen(false)}
+        />
+      </DAWErrorBoundary>
+    )}
+    </>
   );
 }
