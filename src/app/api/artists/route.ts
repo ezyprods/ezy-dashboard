@@ -59,7 +59,7 @@ export async function GET() {
 
       return {
         ...artistBase,
-        activeProject: lastProjectName ? `Último proyecto: ${lastProjectName}` : 'Sin proyectos',
+        activeProject: lastProjectName ? lastProjectName : 'Sin proyectos',
       } as Artist;
     });
 
