@@ -7,7 +7,7 @@ import { APP_NAME } from '@/lib/constants';
 
 const AUTH_KEY = 'ezy_dashboard_secure_auth';
 const AUTH_PASSWORD = '20923954Aa*';
-const REMEMBER_DURATION = 365 * 24 * 60 * 60 * 1000; // 365 days (1 year)
+const REMEMBER_DURATION = 399 * 24 * 60 * 60 * 1000; // 399 días (máximo permitido por navegadores)
 
 function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -61,9 +61,10 @@ export function PasswordGuard({ children }: { children: React.ReactNode }) {
     }
     
     if (activeAuthTime) {
-      // Keep both in sync to prevent logout if one gets cleared
-      localStorage.setItem(AUTH_KEY, activeAuthTime);
-      setCookie(AUTH_KEY, activeAuthTime, 365);
+      // Renovar el timestamp en cada visita → la cookie nunca caduca mientras se use
+      const nowStr = Date.now().toString();
+      localStorage.setItem(AUTH_KEY, nowStr);
+      setCookie(AUTH_KEY, nowStr, 399);
       setIsAuthenticated(true);
     } else {
       setIsAuthenticated(false);
@@ -75,7 +76,7 @@ export function PasswordGuard({ children }: { children: React.ReactNode }) {
     if (passwordInput === AUTH_PASSWORD) {
       const nowStr = Date.now().toString();
       localStorage.setItem(AUTH_KEY, nowStr);
-      setCookie(AUTH_KEY, nowStr, 365);
+      setCookie(AUTH_KEY, nowStr, 399);
       setIsAuthenticated(true);
       setError('');
     } else {
@@ -134,7 +135,7 @@ export function PasswordGuard({ children }: { children: React.ReactNode }) {
             </form>
             
             <p className="text-[10px] text-text-secondary">
-              Se recordará este dispositivo durante 1 año para tu comodidad.
+              Se recordará este dispositivo de forma permanente para tu comodidad.
             </p>
           </div>
         </div>
