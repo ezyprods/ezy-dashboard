@@ -1,38 +1,34 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const publicRoutes = ['/login', '/portal'];
+// Rutas que son SIEMPRE públicas (portales, auth de Google para Drive/Calendar, assets)
+const PUBLIC_PREFIXES = [
+  '/api/auth',   // Better-auth handlers
+  '/api/portal', // Portal público de artistas
+  '/api/audio',  // Audio streaming
+  '/portal',     // Página del portal
+  '/login',      // Página de login (ya no necesaria como puerta, pero existe)
+  '/_next',
+  '/favicon',
+  '/icon',
+];
 
-export async function proxy(request: NextRequest) {
-  const path = request.nextUrl.pathname;
-  
-  // Ignorar assets y api routes (excepto auth)
-  if (
-    path.startsWith('/_next') ||
-    path.startsWith('/favicon.ico') ||
-    path.match(/\.(png|jpg|jpeg|svg|css|js)$/)
-  ) {
+// El acceso al dashboard está controlado exclusivamente por PasswordGuard (contraseña del estudio).
+// Este proxy solo gestiona rutas públicas vs. el resto; NO bloquea por sesión de Google.
+export function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Siempre dejar pasar rutas públicas
+  if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
 
-  const isPublicRoute = publicRoutes.some(route => path.startsWith(route));
-  
-  // Comprobar si hay sesión (usamos la cookie de better-auth)
-  const sessionToken = request.cookies.get('better-auth.session_token');
-  
-  // Si no es ruta pública y no hay sesión, redirigir a login
-  if (!isPublicRoute && !sessionToken && !path.startsWith('/api/auth')) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-  
-  // Si es login y ya hay sesión, redirigir a dashboard
-  if (path === '/login' && sessionToken) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
+  // Dejar pasar todo lo demás — PasswordGuard en el layout gestiona el acceso
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|.*\\.(?:ico|png|jpg|jpeg|svg|webp|gif|woff|woff2|ttf|otf|mp3|wav|ogg)$).*)',
+  ],
 };
