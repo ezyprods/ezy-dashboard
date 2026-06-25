@@ -850,7 +850,39 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       <div className="flex-1 min-w-0 pr-2">
                         <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
                           <span className="truncate block">{item.name || 'Sin Título'}</span>
-                          {item.expiresAt && <RealtimeCountdown expiresAt={item.expiresAt} />}
+                          {item.expiresAt && (
+                            <RealtimeCountdown 
+                              expiresAt={item.expiresAt} 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                showMenu(e.clientX, e.clientY, [
+                                  {
+                                    label: 'Eliminar ya',
+                                    icon: 'Trash2',
+                                    action: () => setDeleteModalFile(item)
+                                  },
+                                  {
+                                    label: 'Cancelar eliminación',
+                                    icon: 'Undo',
+                                    action: async () => {
+                                      try {
+                                        const res = await fetch(`/api/files/${item.id}/expiration`, {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ expiresInMs: null })
+                                        });
+                                        if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                        fetchItems(currentFolderId);
+                                        fetchRecentFiles();
+                                      } catch(err: any) {
+                                        customAlert(err.message);
+                                      }
+                                    }
+                                  }
+                                ]);
+                              }}
+                            />
+                          )}
                         </div>
                         <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
                           <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
@@ -1056,7 +1088,39 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
                             <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
                               {item.name || 'Sin Título'}
-                              {item.expiresAt && <RealtimeCountdown expiresAt={item.expiresAt} />}
+                              {item.expiresAt && (
+                                <RealtimeCountdown 
+                                  expiresAt={item.expiresAt} 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    showMenu(e.clientX, e.clientY, [
+                                      {
+                                        label: 'Eliminar ya',
+                                        icon: 'Trash2',
+                                        action: () => setDeleteModalFile(item)
+                                      },
+                                      {
+                                        label: 'Cancelar eliminación',
+                                        icon: 'Undo',
+                                        action: async () => {
+                                          try {
+                                            const res = await fetch(`/api/files/${item.id}/expiration`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ expiresInMs: null })
+                                            });
+                                            if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                            fetchItems(currentFolderId);
+                                            fetchRecentFiles();
+                                          } catch(err: any) {
+                                            customAlert(err.message);
+                                          }
+                                        }
+                                      }
+                                    ]);
+                                  }}
+                                />
+                              )}
                             </div>
                             {!isFolder && (
                               <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
@@ -1224,7 +1288,39 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                             <div className="flex-1 min-w-0 mr-14 flex flex-col justify-center">
                               <div className="font-medium text-text-primary text-xs flex items-center gap-2">
                                 <span className="truncate block">{item.name || 'Sin Título'}</span>
-                                {item.expiresAt && <RealtimeCountdown expiresAt={item.expiresAt} />}
+                                {item.expiresAt && (
+                                  <RealtimeCountdown 
+                                    expiresAt={item.expiresAt} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      showMenu(e.clientX, e.clientY, [
+                                        {
+                                          label: 'Eliminar ya',
+                                          icon: 'Trash2',
+                                          action: () => setDeleteModalFile(item)
+                                        },
+                                        {
+                                          label: 'Cancelar eliminación',
+                                          icon: 'Undo',
+                                          action: async () => {
+                                            try {
+                                              const res = await fetch(`/api/files/${item.id}/expiration`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ expiresInMs: null })
+                                              });
+                                              if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                              fetchItems(currentFolderId);
+                                              fetchRecentFiles();
+                                            } catch(err: any) {
+                                              customAlert(err.message);
+                                            }
+                                          }
+                                        }
+                                      ]);
+                                    }}
+                                  />
+                                )}
                               </div>
                               {!isFolder && (
                                 <div className="text-[9px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">

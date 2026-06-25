@@ -5,9 +5,10 @@ import { Timer } from 'lucide-react';
 
 interface RealtimeCountdownProps {
   expiresAt: number;
+  onClick?: (e: React.MouseEvent) => void;
 }
 
-export function RealtimeCountdown({ expiresAt }: RealtimeCountdownProps) {
+export function RealtimeCountdown({ expiresAt, onClick }: RealtimeCountdownProps) {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isExpired, setIsExpired] = useState(false);
 
@@ -46,11 +47,12 @@ export function RealtimeCountdown({ expiresAt }: RealtimeCountdownProps) {
 
   return (
     <span 
-      className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border ${
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border transition-colors ${
         isExpired 
           ? 'bg-error/10 text-error border-error/20' 
           : 'bg-accent/10 text-accent border-accent/20'
-      }`}
+      } ${onClick ? 'cursor-pointer hover:opacity-80 active:scale-95' : ''}`}
       title={`Expira: ${new Date(expiresAt).toLocaleString()}`}
     >
       <Timer className="w-3 h-3 shrink-0 opacity-70" />
