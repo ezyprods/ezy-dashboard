@@ -247,7 +247,7 @@ export default function PortalPage() {
         <div className="max-w-md w-full p-8 rounded-2xl border border-red-500/20 bg-red-500/5 text-center space-y-4 backdrop-blur-xl">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
           <h1 className="text-2xl font-bold">Portal no disponible</h1>
-          <p className="text-text-secondary text-sm">El enlace no es válido, ha caducado o el artista no está configurado.</p>
+          <p className="text-text-secondary text-sm">El artista no está configurado o el enlace no es válido. Si crees que es un error, contacta a tu productor.</p>
         </div>
       </div>
     );
