@@ -211,6 +211,22 @@ export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
                     className="bg-transparent text-sm font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/50 rounded px-1 -ml-1 w-full max-w-xs transition-colors"
                   />
                   <p className="text-[10px] text-text-secondary mt-0.5">{info.description}</p>
+                  
+                  {mod.type === 'releases' && (
+                    <div className="mt-3 pt-3 border-t border-border/40">
+                      <label className="flex items-center gap-2 cursor-pointer group w-max">
+                        <input
+                          type="checkbox"
+                          checked={mod.config?.allowArtistEdit || false}
+                          onChange={(e) => updateModule(mod.id, { config: { ...mod.config, allowArtistEdit: e.target.checked } })}
+                          className="w-3.5 h-3.5 rounded border-border/60 text-accent focus:ring-accent focus:ring-offset-surface bg-surface-elevated cursor-pointer"
+                        />
+                        <span className="text-[11px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">
+                          Permitir al artista editar portada, lista y orden de canciones
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 {/* Visibility toggle */}
