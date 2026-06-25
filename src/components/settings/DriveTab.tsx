@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Database, AlertCircle, Loader2, CheckCircle2 } from 'lucide-react';
+import { Database, AlertCircle, Loader2, CheckCircle2, RefreshCw } from 'lucide-react';
 
 interface DriveStatus {
   user: {
@@ -20,6 +20,7 @@ interface DriveStatus {
 export function DriveTab() {
   const [status, setStatus] = useState<DriveStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,7 +40,13 @@ export function DriveTab() {
       setError(err.message || 'Error al conectar con Google Drive');
     } finally {
       setLoading(false);
+      setSyncing(false);
     }
+  };
+
+  const handleForceSync = () => {
+    setSyncing(true);
+    fetchDriveStatus();
   };
 
   const formatBytes = (bytesStr?: string) => {
@@ -84,16 +91,27 @@ export function DriveTab() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div>
-        <h2 className="text-xl font-semibold text-text-primary mb-2 flex items-center gap-2">
-          <Database className="w-5 h-5 text-accent" />
-          Google Drive
-        </h2>
-        <p className="text-text-secondary text-sm mb-6">
-          Gestiona el estado de tu conexión con Google Drive y revisa el almacenamiento disponible para tus proyectos.
-        </p>
+      <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-text-primary mb-2 flex items-center gap-2">
+            <Database className="w-5 h-5 text-accent" />
+            Google Drive
+          </h2>
+          <p className="text-text-secondary text-sm">
+            Gestiona el estado de tu conexión con Google Drive y revisa el almacenamiento disponible para tus proyectos.
+          </p>
+        </div>
+        <button 
+          onClick={handleForceSync}
+          disabled={syncing}
+          className="flex items-center gap-2 px-4 py-2 bg-surface hover:bg-surface-elevated border border-border hover:border-accent/50 rounded-xl text-sm font-medium transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin text-accent' : 'text-text-secondary'}`} />
+          Sincronizar ahora
+        </button>
+      </div>
 
-        {status && (
+      {status && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="glass p-6 rounded-2xl flex flex-col gap-4">
               <div className="flex items-center gap-4">
@@ -130,19 +148,23 @@ export function DriveTab() {
                 </div>
               </div>
 
-              <div className="h-3 bg-surface-elevated rounded-full overflow-hidden">
+              <div className="h-4 bg-surface-elevated rounded-full overflow-hidden border border-border/50 shadow-inner relative">
                 <div 
-                  className={`h-full ${progressColor} transition-all duration-1000 ease-out`}
+                  className={`h-full transition-all duration-1000 ease-out relative overflow-hidden ${
+                    percentage > 95 ? 'bg-error' : percentage > 80 ? 'bg-warning' : 'bg-gradient-to-r from-accent to-accent-light'
+                  }`}
                   style={{ width: `${percentage}%` }}
-                />
+                >
+                  <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite] -translate-x-full" style={{ backgroundImage: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)' }} />
+                </div>
               </div>
-              <div className="text-xs text-text-secondary text-right">
-                {percentage}% utilizado
+              <div className="flex justify-between items-center text-xs text-text-secondary font-medium">
+                <span>{percentage}% utilizado</span>
+                <span>{formatBytes((limitBytes - usageBytes).toString())} libres</span>
               </div>
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

@@ -1,28 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Palette, Database, Shield, HardDrive } from 'lucide-react';
+import { Settings, Palette, Database, Shield, HardDrive, User, Bell } from 'lucide-react';
 import { AppearanceTab } from '@/components/settings/AppearanceTab';
 import { DriveTab } from '@/components/settings/DriveTab';
 import { SecurityTab } from '@/components/settings/SecurityTab';
 import { CacheTab } from '@/components/settings/CacheTab';
+import { ProfileTab } from '@/components/settings/ProfileTab';
+import { NotificationsTab } from '@/components/settings/NotificationsTab';
 
-type TabType = 'appearance' | 'drive' | 'cache' | 'security';
+type TabType = 'profile' | 'appearance' | 'notifications' | 'drive' | 'cache' | 'security';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('appearance');
+  const [activeTab, setActiveTab] = useState<TabType>('profile');
 
   const tabs = [
+    { id: 'profile', label: 'Perfil del Estudio', icon: User },
     { id: 'appearance', label: 'Apariencia', icon: Palette },
-    { id: 'drive', label: 'Integraciones', icon: Database },
-    { id: 'cache', label: 'Caché', icon: HardDrive },
+    { id: 'notifications', label: 'Alertas y Sonido', icon: Bell },
+    { id: 'drive', label: 'Google Drive', icon: Database },
+    { id: 'cache', label: 'Datos y Caché', icon: HardDrive },
     { id: 'security', label: 'Seguridad', icon: Shield },
   ] as const;
 
   const renderTab = () => {
     switch (activeTab) {
+      case 'profile':
+        return <ProfileTab />;
       case 'appearance':
         return <AppearanceTab />;
+      case 'notifications':
+        return <NotificationsTab />;
       case 'drive':
         return <DriveTab />;
       case 'cache':
@@ -51,7 +59,7 @@ export default function SettingsPage() {
       <div className="flex flex-col md:flex-row gap-8">
         {/* Navigation Sidebar */}
         <aside className="w-full md:w-64 shrink-0">
-          <nav className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+          <nav className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide md:glass md:p-3 md:rounded-2xl md:border md:border-border/50">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -60,13 +68,13 @@ export default function SettingsPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium whitespace-nowrap ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium whitespace-nowrap group ${
                     isActive
-                      ? 'bg-accent/10 text-accent border border-accent/20'
-                      : 'text-text-secondary hover:bg-surface hover:text-text-primary border border-transparent'
+                      ? 'bg-accent/10 text-accent border border-accent/20 shadow-sm'
+                      : 'text-text-secondary hover:bg-surface-elevated hover:text-text-primary border border-transparent'
                   }`}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-accent' : 'text-text-secondary'}`} />
+                  <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'text-accent scale-110' : 'text-text-secondary group-hover:scale-110'}`} />
                   {tab.label}
                 </button>
               );

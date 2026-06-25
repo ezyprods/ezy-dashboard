@@ -35,26 +35,41 @@ export function SecurityTab() {
               </div>
             </div>
             
-            <div className="mt-4 p-4 bg-surface-elevated rounded-xl text-sm text-text-secondary">
-              Para cambiar la contraseña, debes acceder al código fuente:
-              <ul className="list-disc pl-5 mt-2 space-y-1">
-                <li>Abre el archivo <code className="text-accent bg-accent/10 px-1 py-0.5 rounded">src/components/layout/PasswordGuard.tsx</code></li>
-                <li>Modifica la constante <code className="text-accent bg-accent/10 px-1 py-0.5 rounded">AUTH_PASSWORD</code></li>
+            <div className="mt-4 p-4 bg-surface-elevated rounded-xl text-sm text-text-secondary border border-border/50">
+              <p className="mb-3">Para cambiar la contraseña, debes acceder al código fuente:</p>
+              <ol className="list-decimal pl-5 space-y-3">
+                <li>
+                  Abre el archivo:
+                  <div className="mt-1">
+                    <code className="text-accent bg-accent/10 px-2 py-1 rounded block w-full overflow-x-auto whitespace-nowrap text-xs border border-accent/20">
+                      src/components/layout/PasswordGuard.tsx
+                    </code>
+                  </div>
+                </li>
+                <li>
+                  Modifica la constante:
+                  <div className="mt-1">
+                    <code className="text-accent bg-accent/10 px-2 py-1 rounded inline-block text-xs border border-accent/20">
+                      AUTH_PASSWORD
+                    </code>
+                  </div>
+                </li>
                 <li>Guarda los cambios y realiza un despliegue (Deploy)</li>
-              </ul>
+              </ol>
             </div>
           </div>
 
-          <div className="glass p-6 rounded-2xl border border-border flex flex-col justify-between">
-            <div>
+          <div className="p-6 rounded-2xl border-2 border-error/20 bg-error/5 flex flex-col justify-between relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-error/10 blur-3xl rounded-full -mr-10 -mt-10 pointer-events-none" />
+            <div className="relative z-10">
               <div className="flex items-start gap-4 mb-4">
-                <div className="p-3 bg-error/10 rounded-xl border border-error/20">
+                <div className="p-3 bg-error/10 rounded-xl border border-error/30 shadow-sm">
                   <LogOut className="w-6 h-6 text-error" />
                 </div>
                 <div>
-                  <h3 className="font-medium text-text-primary">Revocar Acceso</h3>
-                  <p className="text-sm text-text-secondary mt-1">
-                    Cierra la sesión en este navegador. Se te volverá a pedir la contraseña global del estudio la próxima vez que intentes entrar.
+                  <h3 className="font-bold text-error">Revocar Acceso</h3>
+                  <p className="text-sm text-error/80 mt-1">
+                    Cierra la sesión en este navegador. Se te volverá a pedir la contraseña global del estudio la próxima vez que intentes entrar. Útil si estás en un ordenador público.
                   </p>
                 </div>
               </div>
@@ -62,10 +77,10 @@ export function SecurityTab() {
             
             <button
               onClick={handleLogout}
-              className="w-full py-3 mt-4 rounded-xl font-medium bg-surface hover:bg-error/10 text-error border border-error/20 hover:border-error/50 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 mt-4 rounded-xl font-bold bg-error hover:bg-error/90 text-white shadow-lg shadow-error/20 transition-all flex items-center justify-center gap-2 relative z-10 hover:scale-[1.02]"
             >
               <LogOut className="w-4 h-4" />
-              Cerrar Sesión en este dispositivo
+              Cerrar Sesión Segura
             </button>
           </div>
         </div>

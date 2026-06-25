@@ -74,18 +74,17 @@ function TaskCard({
     <div
       ref={setNodeRef}
       style={style}
-      {...(isOverlay ? {} : {})}
-      {...(isOverlay ? {} : {})}
       onContextMenu={handleContextMenu}
       className={cn(
-        "relative p-3.5 rounded-xl border transition-all group block select-none",
+        "relative p-4 rounded-2xl border transition-all duration-300 group block select-none overflow-hidden",
         borderColor,
         "bg-surface hover:bg-surface-elevated",
-        isDragging && !isOverlay ? "opacity-30" : "opacity-100",
-        isOverlay ? "shadow-2xl scale-105" : "hover:-translate-y-0.5 hover:shadow-md"
+        isDragging && !isOverlay ? "opacity-40 scale-95" : "opacity-100",
+        isOverlay ? "shadow-2xl shadow-black/10 scale-105 rotate-2 cursor-grabbing" : "hover:-translate-y-1 hover:shadow-lg hover:shadow-black/5"
       )}
     >
-      <div className="flex justify-between items-start mb-2">
+      <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+      <div className="relative z-10 flex justify-between items-start mb-3">
         <Link 
           href={`/artists/${task.artistId}`}
           className="text-[10px] font-bold tracking-wider uppercase bg-surface-elevated px-2 py-0.5 rounded text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors truncate max-w-[120px] z-10"
@@ -228,16 +227,19 @@ function StatusColumn({
     <div 
       ref={setNodeRef}
       className={cn(
-        "flex flex-col h-full min-h-0 bg-surface-elevated/50 rounded-2xl border overflow-hidden shadow-inner transition-colors",
-        isOver ? "border-accent/50 bg-surface-elevated/80" : "border-border/50"
+        "flex flex-col h-full min-h-0 rounded-3xl overflow-hidden transition-all duration-300 relative",
+        isOver ? "bg-surface-elevated/80 shadow-[inset_0_0_0_1px_rgba(108,92,231,0.2)]" : "bg-surface-elevated/30 border border-transparent hover:border-border/50"
       )}
     >
-      <div className={cn("p-4 border-b border-border/50 flex items-center justify-between", bgColor)}>
-        <div className="flex items-center gap-2">
-          {icon}
-          <h3 className={cn("font-bold text-sm", textColor)}>{title}</h3>
+      <div className={cn("px-5 py-4 flex items-center justify-between z-10 relative", bgColor)}>
+        <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+        <div className="flex items-center gap-2.5 relative z-10">
+          <div className={cn("p-1.5 rounded-lg bg-surface/50 shadow-sm", textColor)}>
+            {icon}
+          </div>
+          <h3 className={cn("font-bold text-[15px] tracking-tight", textColor)}>{title}</h3>
         </div>
-        <span className={cn("text-xs px-2.5 py-1 rounded-full font-bold bg-background/50 backdrop-blur-sm shadow-sm", textColor)}>
+        <span className={cn("text-xs px-3 py-1 rounded-full font-bold bg-background/80 backdrop-blur-md shadow-sm relative z-10", textColor)}>
           {columnTasks.length}
         </span>
       </div>

@@ -37,11 +37,12 @@ export function CommandMenu() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="hidden md:flex items-center justify-between flex-1 max-w-md px-3 py-1.5 text-sm text-text-secondary bg-surface border border-border rounded-lg hover:border-accent/50 hover:bg-surface-elevated transition-colors mx-4"
+        className="flex items-center justify-between flex-1 md:max-w-md px-3 py-1.5 text-sm text-text-secondary bg-surface border border-border rounded-lg hover:border-accent/50 hover:bg-surface-elevated transition-colors mx-2 md:mx-4"
       >
         <div className="flex items-center gap-2">
           <Search className="w-4 h-4" />
-          <span>Buscar artista, proyecto...</span>
+          <span className="hidden xs:inline">Buscar artista, proyecto...</span>
+          <span className="xs:hidden">Buscar...</span>
         </div>
         <kbd className="hidden lg:inline-flex items-center font-sans text-[10px] font-medium text-text-secondary bg-surface-elevated border border-border rounded px-1.5 shadow-sm">
           {isMac ? '⌘K' : 'Ctrl K'}
@@ -49,7 +50,7 @@ export function CommandMenu() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-background/80 backdrop-blur-sm animate-fade-in" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh] md:pt-[15vh] bg-background/80 backdrop-blur-sm animate-fade-in p-4" onClick={() => setOpen(false)}>
           <div className="w-full max-w-2xl bg-surface border border-border rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <Command className="flex flex-col h-full w-full bg-transparent">
               <div className="flex items-center border-b border-border px-4" cmdk-input-wrapper="">

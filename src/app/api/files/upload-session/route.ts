@@ -3,7 +3,7 @@ import { getDriveAuthClient } from '@/lib/drive';
 
 export async function POST(request: Request) {
   try {
-    const { name, mimeType, parentId, fileId } = await request.json();
+    const { name, mimeType, parentId, fileId, appProperties } = await request.json();
 
     if (!name || !parentId) {
       if (!fileId) {
@@ -31,7 +31,12 @@ export async function POST(request: Request) {
        method = 'POST';
     }
 
-    const bodyData = fileId ? {} : { name, parents: [parentId] };
+    const bodyData: any = fileId ? {} : { name, parents: [parentId] };
+    
+    // Si pasamos appProperties (como BPM, Key, etc), los guardamos
+    if (appProperties && Object.keys(appProperties).length > 0) {
+      bodyData.appProperties = appProperties;
+    }
 
     // Extract origin from request to forward it to Google for CORS
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

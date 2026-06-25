@@ -244,14 +244,22 @@ export default function ArtistsPage() {
                 </div>
               )}
               <div className={cn("flex items-center", viewMode === 'list' ? "gap-6 flex-1" : "gap-3")}>
-                <div className={cn(
-                  "rounded-full bg-surface border-2 border-border flex items-center justify-center overflow-hidden shrink-0",
-                  viewMode === 'grid' ? "w-12 h-12" : "w-10 h-10 border-none"
-                )}>
+                <div 
+                  className={cn(
+                    "rounded-full flex items-center justify-center overflow-hidden shrink-0 shadow-inner",
+                    viewMode === 'grid' ? "w-14 h-14" : "w-10 h-10",
+                    "bg-gradient-to-br"
+                  )}
+                  style={{
+                    background: artist.photoUrl ? undefined : `linear-gradient(135deg, hsl(${(artist.name.charCodeAt(0) * 20) % 360}, 70%, 60%), hsl(${(artist.name.charCodeAt(artist.name.length - 1) * 30) % 360}, 70%, 40%))`
+                  }}
+                >
                   {artist.photoUrl ? (
                     <img src={artist.photoUrl} alt={artist.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                   ) : (
-                    <span className="font-bold text-sm text-text-secondary">{artist.name.charAt(0)}</span>
+                    <span className="font-bold text-white text-lg drop-shadow-md">
+                      {artist.name.charAt(0).toUpperCase()}
+                    </span>
                   )}
                 </div>
                 

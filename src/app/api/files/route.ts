@@ -66,7 +66,9 @@ export async function GET(request: Request) {
           allItems.push({ 
             ...file, 
             parentFolderId: folderId,
-            expiresAt 
+            expiresAt,
+            bpm: file.appProperties?.bpm || null,
+            key: file.appProperties?.key || null
           });
           
           if (file.mimeType === 'application/vnd.google-apps.folder' && file.id) {
@@ -106,7 +108,9 @@ export async function GET(request: Request) {
 
       validItems.push({
         ...f,
-        expiresAt
+        expiresAt,
+        bpm: f.appProperties?.bpm || null,
+        key: f.appProperties?.key || null
       });
     }
 

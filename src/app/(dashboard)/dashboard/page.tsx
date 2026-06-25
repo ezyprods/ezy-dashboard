@@ -123,26 +123,52 @@ export default function DashboardPage() {
           
           {/* Quick Actions */}
           <div className="shrink-0 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div onClick={() => setIsNewProjectOpen(true)} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
-              <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <Music className="w-5 h-5" />
+            <div onClick={() => setIsNewProjectOpen(true)} className="relative overflow-hidden glass p-6 rounded-[20px] border border-border hover:border-accent/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
+              <div className="relative z-10 flex flex-col h-full justify-between gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/10 text-accent flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner">
+                    <Music className="w-6 h-6" />
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg text-text-primary">Nuevo Proyecto</h3>
+                  <p className="text-sm text-text-secondary mt-0.5">Crear en cualquier artista</p>
+                </div>
               </div>
-              <h3 className="font-semibold text-text-primary">Nuevo Proyecto</h3>
-              <p className="text-sm text-text-secondary mt-1">Crear en cualquier artista</p>
             </div>
-            <div onClick={() => setIsQuickUploadOpen(true)} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <UploadCloud className="w-5 h-5" />
+
+            <div onClick={() => setIsQuickUploadOpen(true)} className="relative overflow-hidden glass p-6 rounded-[20px] border border-border hover:border-blue-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/5">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
+              <div className="relative z-10 flex flex-col h-full justify-between gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10 text-blue-500 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg text-text-primary">Subida Rápida</h3>
+                  <p className="text-sm text-text-secondary mt-0.5">Sube a su carpeta Drive</p>
+                </div>
               </div>
-              <h3 className="font-semibold text-text-primary">Subida Rápida</h3>
-              <p className="text-sm text-text-secondary mt-1">Sube a su carpeta Drive</p>
             </div>
-            <div onClick={() => router.push('/calendar')} className="glass p-5 rounded-2xl border border-border hover:border-accent/50 transition-all duration-300 cursor-pointer group">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <Calendar className="w-5 h-5" />
+
+            <div onClick={() => router.push('/calendar')} className="relative overflow-hidden glass p-6 rounded-[20px] border border-border hover:border-emerald-500/50 transition-all duration-500 cursor-pointer group hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-500/5">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
+              <div className="relative z-10 flex flex-col h-full justify-between gap-4">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10 text-emerald-500 flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3 shadow-inner">
+                    <Calendar className="w-6 h-6" />
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-text-secondary opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg text-text-primary">Calendario</h3>
+                  <p className="text-sm text-text-secondary mt-0.5">Ver tu agenda inteligente</p>
+                </div>
               </div>
-              <h3 className="font-semibold text-text-primary">Calendario</h3>
-              <p className="text-sm text-text-secondary mt-1">Ver tu agenda inteligente</p>
             </div>
           </div>
 

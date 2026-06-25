@@ -15,51 +15,43 @@ export function AppearanceTab() {
           Personaliza el aspecto visual de {APP_NAME} según tus preferencias o el entorno de tu estudio.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={() => setTheme('light')}
-            className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-300 ${
-              theme === 'light'
-                ? 'border-accent bg-accent/10 shadow-[0_0_20px_rgba(108,92,231,0.15)]'
-                : 'border-border bg-surface hover:border-accent/50 hover:bg-surface-elevated'
-            }`}
-          >
-            <Sun className={`w-8 h-8 mb-4 ${theme === 'light' ? 'text-accent' : 'text-text-secondary'}`} />
-            <span className={`font-medium ${theme === 'light' ? 'text-accent' : 'text-text-primary'}`}>Claro</span>
-            {theme === 'light' && (
-              <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-accent" />
-            )}
-          </button>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+          {[
+            { id: 'light', label: 'Claro', icon: Sun },
+            { id: 'dark', label: 'Oscuro', icon: Moon },
+            { id: 'system', label: 'Sistema', icon: Monitor }
+          ].map((mode) => {
+            const isSelected = theme === mode.id;
+            const Icon = mode.icon;
+            
+            return (
+              <button
+                key={mode.id}
+                onClick={() => setTheme(mode.id as 'light' | 'dark' | 'system')}
+                className={`relative flex flex-col items-center justify-center p-8 rounded-2xl border transition-all duration-300 group overflow-hidden ${
+                  isSelected
+                    ? 'border-accent bg-accent/5'
+                    : 'border-border bg-surface hover:border-accent/50 hover:bg-surface-elevated'
+                }`}
+              >
+                {isSelected && (
+                  <div className="absolute inset-0 bg-accent/10 animate-pulse pointer-events-none" />
+                )}
+                
+                <div className={`p-4 rounded-full mb-4 transition-transform duration-300 ${isSelected ? 'bg-accent/20 scale-110' : 'bg-surface-elevated group-hover:scale-110'}`}>
+                  <Icon className={`w-8 h-8 ${isSelected ? 'text-accent' : 'text-text-secondary'}`} />
+                </div>
+                
+                <span className={`font-semibold text-lg tracking-wide ${isSelected ? 'text-accent' : 'text-text-primary'}`}>
+                  {mode.label}
+                </span>
 
-          <button
-            onClick={() => setTheme('dark')}
-            className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-300 ${
-              theme === 'dark'
-                ? 'border-accent bg-accent/10 shadow-[0_0_20px_rgba(108,92,231,0.15)]'
-                : 'border-border bg-surface hover:border-accent/50 hover:bg-surface-elevated'
-            }`}
-          >
-            <Moon className={`w-8 h-8 mb-4 ${theme === 'dark' ? 'text-accent' : 'text-text-secondary'}`} />
-            <span className={`font-medium ${theme === 'dark' ? 'text-accent' : 'text-text-primary'}`}>Oscuro</span>
-            {theme === 'dark' && (
-              <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-accent" />
-            )}
-          </button>
-
-          <button
-            onClick={() => setTheme('system')}
-            className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-300 ${
-              theme === 'system'
-                ? 'border-accent bg-accent/10 shadow-[0_0_20px_rgba(108,92,231,0.15)]'
-                : 'border-border bg-surface hover:border-accent/50 hover:bg-surface-elevated'
-            }`}
-          >
-            <Monitor className={`w-8 h-8 mb-4 ${theme === 'system' ? 'text-accent' : 'text-text-secondary'}`} />
-            <span className={`font-medium ${theme === 'system' ? 'text-accent' : 'text-text-primary'}`}>Sistema</span>
-            {theme === 'system' && (
-              <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-accent" />
-            )}
-          </button>
+                {isSelected && (
+                  <div className="absolute top-4 right-4 w-3 h-3 rounded-full bg-accent ring-4 ring-accent/20" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

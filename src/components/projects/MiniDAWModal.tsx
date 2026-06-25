@@ -795,9 +795,9 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                   Exportar
                 </h3>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 items-end gap-4">
                   {/* Output file name */}
-                  <div className="flex-1">
+                  <div className="w-full md:col-span-1 lg:col-span-2">
                     <label className="text-xs text-text-secondary mb-1 block">Nombre del archivo</label>
                     <input
                       type="text"
@@ -809,13 +809,13 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                   </div>
 
                   {/* Format selector */}
-                  <div>
+                  <div className="w-full">
                     <label className="text-xs text-text-secondary mb-1 block">Formato</label>
                     <div className="flex rounded-lg overflow-hidden border border-border/60">
                       <button
                         onClick={() => setExportFormat('wav')}
                         className={cn(
-                          'px-4 py-2 text-sm font-mono font-bold transition-colors',
+                          'flex-1 py-2 text-sm font-mono font-bold transition-colors text-center',
                           exportFormat === 'wav'
                             ? 'bg-accent text-white'
                             : 'bg-surface-elevated text-text-secondary hover:text-text-primary'
@@ -826,7 +826,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                       <button
                         onClick={() => setExportFormat('mp3')}
                         className={cn(
-                          'px-4 py-2 text-sm font-mono font-bold transition-colors border-l border-border/60',
+                          'flex-1 py-2 text-sm font-mono font-bold transition-colors border-l border-border/60 text-center',
                           exportFormat === 'mp3'
                             ? 'bg-accent text-white'
                             : 'bg-surface-elevated text-text-secondary hover:text-text-primary'
@@ -838,21 +838,21 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                   </div>
 
                   {/* Export / Download button */}
-                  <div>
+                  <div className="w-full">
                     {isDone ? (
                       <button
                         onClick={triggerDownload}
-                        className="flex items-center gap-2 px-5 py-2 rounded-lg bg-success text-white font-semibold text-sm hover:bg-success/90 transition-colors shadow-lg"
+                        className="flex w-full items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-success text-white font-semibold text-sm hover:bg-success/90 transition-colors shadow-lg"
                       >
                         <Download className="w-4 h-4" />
-                        Descargar .{exportFormat}
+                        Descargar
                       </button>
                     ) : (
                       <button
                         onClick={() => daw.exportAudio(exportFormat)}
                         disabled={!isReady || isProcessing}
                         className={cn(
-                          'flex items-center gap-2 px-5 py-2 rounded-lg font-semibold text-sm transition-all shadow-lg',
+                          'flex w-full items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-lg',
                           isReady && !isProcessing
                             ? 'bg-accent text-white hover:bg-accent/90 hover:scale-[1.02]'
                             : 'bg-surface-elevated text-text-secondary cursor-not-allowed opacity-60'
@@ -860,7 +860,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                       >
                         {isProcessing
                           ? <><Loader2 className="w-4 h-4 animate-spin" /> Procesando…</>
-                          : <><Scissors className="w-4 h-4" /> Renderizar y exportar</>
+                          : <><Scissors className="w-4 h-4" /> Exportar</>
                         }
                       </button>
                     )}

@@ -522,6 +522,10 @@ export function SmartUploadModal({
         if (!finalName.endsWith(extension)) finalName += extension;
         const renamedFile = new File([fileToProcess], finalName, { type: fileToProcess.type });
 
+        const appProps: any = {};
+        if (item.bpm) appProps.bpm = item.bpm.toString();
+        if (item.key) appProps.key = item.key;
+
         const sessionRes = await fetch('/api/files/upload-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -529,7 +533,8 @@ export function SmartUploadModal({
              name: finalName,
              mimeType: renamedFile.type || 'application/octet-stream',
              parentId: finalFolderId,
-             fileId: fileToReplaceId
+             fileId: fileToReplaceId,
+             appProperties: appProps
           })
         });
 

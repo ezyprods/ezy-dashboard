@@ -18,6 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 import { CellComponent, COL_TYPES, STATUS_CONFIG } from './GridCells';
+import { CampaignSelector } from './CampaignSelector';
 import type { ColumnType } from '@/types';
 
 // --- Sortable Column Header ---
@@ -680,43 +681,13 @@ export function ProductionGridBoard({
           <p className="text-sm text-text-secondary">Trackeo modular por canción y fase.</p>
         </div>
         <div className="w-full sm:w-auto flex flex-col sm:items-end items-start gap-3">
-          <div className="w-full sm:w-auto flex items-center gap-2 bg-surface-elevated px-3 py-1.5 rounded-lg border border-border">
-            <span className="text-xs font-bold text-text-secondary uppercase shrink-0">Proyecto / Campaña:</span>
-            <select 
-              value={linkedProjectId} 
-              onChange={(e) => handleLinkProject(e.target.value)}
-              className="bg-transparent text-sm font-medium outline-none text-accent w-full sm:w-auto"
-            >
-              <option value="">-- Sin Vincular --</option>
-              {campaigns.length > 0 && (
-                <optgroup label="Campañas">
-                  {campaigns.map(c => <option key={c.id} value={c.id}>🎯 {c.name}</option>)}
-                </optgroup>
-              )}
-              {projects.length > 0 && (
-                <optgroup label="Proyectos Individuales">
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                </optgroup>
-              )}
-            </select>
-            {linkedProjectId && (() => {
-              const linkedProject = projects.find(p => p.id === linkedProjectId);
-              if (linkedProject?.driveFolderId) {
-                return (
-                  <a
-                    href={`https://drive.google.com/drive/folders/${linkedProject.driveFolderId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-text-secondary hover:text-accent transition-colors p-1"
-                    title="Abrir carpeta en Google Drive"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                );
-              }
-              return null;
-            })()}
-          </div>
+          <CampaignSelector 
+            linkedProjectId={linkedProjectId} 
+            campaigns={campaigns} 
+            projects={projects} 
+            onLinkProject={handleLinkProject} 
+            onOpenCampaignModal={() => customAlert('Funcionalidad de crear campaña en desarrollo. Ve a Artistas > Campañas por ahora.')} 
+          />
           <div className="flex items-center gap-4 w-full justify-between sm:justify-end">
             <div className="text-sm font-bold text-text-secondary">{progress}% Completado</div>
             {isSaving && <Loader2 className="w-4 h-4 animate-spin text-accent" />}

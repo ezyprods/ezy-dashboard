@@ -239,49 +239,71 @@ export default function MatricesPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {matrices.map((m: any) => (
             <div 
               key={m.id} 
-              className="glass rounded-xl p-5 border border-border hover:border-accent/50 transition-all group relative flex flex-col justify-between min-h-[180px]"
+              className="relative overflow-hidden glass rounded-[20px] p-6 border border-border hover:border-accent/50 transition-all duration-300 group flex flex-col justify-between min-h-[200px] hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5"
             >
-              <div>
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Table2 className="w-5 h-5 text-accent shrink-0" />
-                    <h4 className="font-bold text-base text-text-primary truncate">{m.name}</h4>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/10 flex items-center justify-center shrink-0 text-accent group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                      <Table2 className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-lg text-text-primary truncate">{m.name}</h3>
+                      <div className="flex items-center gap-1.5 text-xs text-text-secondary mt-0.5">
+                        <User className="w-3.5 h-3.5" />
+                        <span className="truncate">Artista: <span className="font-medium text-text-primary">{m.artistName || 'Desconocido'}</span></span>
+                      </div>
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => handleDeleteMatrix(m.artistId, m.id)} 
-                    className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                    title="Eliminar Matriz"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1 bg-success/10 text-success border border-success/20 px-2 py-1 rounded-md text-[10px] font-bold tracking-wide uppercase shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    Activa
+                  </div>
                 </div>
                 
-                <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium mb-4">
-                  <User className="w-3.5 h-3.5 text-accent-light" />
-                  <span>Artista:</span>
-                  <Link href={`/artists/${m.artistId}`} className="text-text-primary hover:text-accent hover:underline transition-colors">
-                    {m.artistName || 'Desconocido'}
-                  </Link>
+                <div className="flex flex-wrap gap-2 text-xs mt-4">
+                  <span className="flex items-center gap-1 text-text-secondary bg-surface-elevated px-2 py-1 rounded-md border border-border">
+                    <FileText className="w-3 h-3" />
+                    {m.projectId ? 'Sincronizada' : 'Sincronizada'}
+                  </span>
+                  <span className="flex items-center gap-1 text-text-secondary bg-surface-elevated px-2 py-1 rounded-md border border-border">
+                    <Check className="w-3 h-3" />
+                    Trackeo Activo
+                  </span>
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-4 text-[10px] text-text-secondary">
-                  <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Sinc. Drive</span>
-                  <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Trackeo</span>
-                </div>
-                
-                <Button 
-                  className="w-full text-xs h-8" 
-                  variant="secondary" 
-                  onClick={() => setActiveMatrix({ id: m.id, name: m.name, artistId: m.artistId, artistName: m.artistName })}
+              <div className="mt-6 flex justify-between items-center relative z-10 pt-4 border-t border-border/50">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteMatrix(m.artistId, m.id);
+                  }}
+                  className="p-2 text-text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  title="Eliminar Matriz"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                    setActiveMatrix({
+                      id: m.id,
+                      name: m.name,
+                      artistId: m.artistId,
+                      artistName: m.artistName
+                    });
+                  }}
+                  className="flex items-center gap-2 text-sm font-semibold text-accent hover:text-accent-light transition-colors group/btn"
                 >
                   Abrir Matriz
-                </Button>
+                  <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                </button>
               </div>
             </div>
           ))}

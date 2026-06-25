@@ -37,9 +37,15 @@ interface UseMiniDAWReturn extends DAWState {
   cleanup: () => void;
 }
 
+// Global FFmpeg cache
+let cachedCoreURL: string | null = null;
+let cachedWasmURL: string | null = null;
+let isPreloadingFFmpeg = false;
+
 export function useMiniDAW(): UseMiniDAWReturn {
   const [status, setStatus] = useState<DAWStatus>('idle');
   const [duration, setDuration] = useState(0);
+
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(0);
   const [gain, setGain] = useState(1.0);
@@ -80,6 +86,27 @@ export function useMiniDAW(): UseMiniDAWReturn {
   useEffect(() => {
     return () => { cleanup(); };
   }, [cleanup]);
+
+  // Preload FFmpeg silently in the background
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!cachedCoreURL && !isPreloadingFFmpeg && typeof SharedArrayBuffer !== 'undefined') {
+      isPreloadingFFmpeg = true;
+      import('@ffmpeg/util').then(({ toBlobURL }) => {
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+        Promise.all([
+          toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm')
+        ]).then(([core, wasm]) => {
+          cachedCoreURL = core;
+          cachedWasmURL = wasm;
+        }).catch(err => {
+          console.error('[useMiniDAW] Failed to preload FFmpeg', err);
+          isPreloadingFFmpeg = false;
+        });
+      });
+    }
+  }, []);
 
 // Global cache to persist decoded audio between modal opens
 const globalAudioCache = new Map<string, AudioBuffer>();
@@ -235,9 +262,12 @@ const globalAudioCache = new Map<string, AudioBuffer>();
       });
 
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+      const coreURL = cachedCoreURL || await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = cachedWasmURL || await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+
       await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        coreURL,
+        wasmURL,
       });
 
       // Write the ALREADY TRIMMED AND GAINED wav to FFmpeg

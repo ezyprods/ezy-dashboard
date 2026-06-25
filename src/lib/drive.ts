@@ -283,6 +283,8 @@ export async function listFiles(parentId: string): Promise<DriveFile[]> {
     parentFolderId: parentId,
     fileType: getFileType(file.mimeType!),
     expiresAt: file.appProperties?.expiresAt ? parseInt(file.appProperties.expiresAt, 10) : undefined,
+    bpm: file.appProperties?.bpm || undefined,
+    key: file.appProperties?.key || undefined,
   }));
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 type Theme = 'dark' | 'light' | 'system';
 
@@ -15,6 +16,8 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [resolvedTheme, setResolvedTheme] = useState<'dark' | 'light'>('dark');
+  const pathname = usePathname();
+  const isPortal = pathname?.startsWith('/portal');
 
   // Load from local storage on mount
   useEffect(() => {
@@ -39,6 +42,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = window.document.documentElement;
     root.classList.remove('light', 'dark');
 
+    if (isPortal) {
+      root.classList.add('light');
+      root.style.colorScheme = 'light';
+      setResolvedTheme('light');
+      return;
+    }
+
     let currentTheme: 'dark' | 'light' = 'dark';
 
     if (theme === 'system') {
@@ -54,7 +64,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     root.style.colorScheme = currentTheme;
     setResolvedTheme(currentTheme);
 
-  }, [theme]);
+  }, [theme, isPortal]);
 
   // Listen for system changes if set to system
   useEffect(() => {
