@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer, X } from 'lucide-react';
+import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer, X, Scissors } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -13,6 +13,8 @@ import { ShareModal } from './ShareModal';
 import { DeleteModal } from './DeleteModal';
 import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
+import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
+import { DAWErrorBoundary } from '@/components/projects/DAWErrorBoundary';
 
 interface DriveItem {
   id: string;
@@ -85,6 +87,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   const [shareModalFile, setShareModalFile] = useState<DriveItem | null>(null);
   const [deleteModalFile, setDeleteModalFile] = useState<DriveItem | null>(null);
   const [pendingUploadFiles, setPendingUploadFiles] = useState<{files: File[], targetFolderId: string} | null>(null);
+  const [miniDAWFile, setMiniDAWFile] = useState<{id: string, name: string} | null>(null);
 
   // Recent files state
   const [recentFiles, setRecentFiles] = useState<DriveItem[]>([]);
@@ -892,6 +895,15 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
                     {/* Action buttons on hover */}
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0">
+                      {isAudio && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }}
+                          className="p-1.5 text-text-secondary hover:text-accent-light hover:bg-surface rounded-md transition-colors"
+                          title="Abrir en Mini-DAW"
+                        >
+                          <Scissors className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleOpenFileLocation(item.parentFolderId); }}
                         className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
@@ -1077,6 +1089,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                               fetchRecentFiles();
                             }}
                             modifiedTime={item.modifiedTime || item.createdTime}
+                            bpm={item.bpm}
+                            trackKey={item.key}
                           />
                         </div>
                       ) : (
@@ -1436,6 +1450,15 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         />
       )}
 
+      {miniDAWFile && (
+        <DAWErrorBoundary onClose={() => setMiniDAWFile(null)}>
+          <MiniDAWModal
+            fileId={miniDAWFile.id}
+            fileName={miniDAWFile.name}
+            onClose={() => setMiniDAWFile(null)}
+          />
+        </DAWErrorBoundary>
+      )}
     </div>
   );
 }

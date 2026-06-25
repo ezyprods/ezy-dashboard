@@ -6,6 +6,7 @@ import {
   useState,
   useCallback,
   useLayoutEffect,
+  useMemo,
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -193,6 +194,28 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
     };
   }, [stopPlayback]);
 
+  // ── Precompute waveform peaks ──────────────────────────────────────────────
+  const peaks = useMemo(() => {
+    const buffer = daw.audioBuffer;
+    if (!buffer) return [];
+    
+    const channelData = buffer.getChannelData(0);
+    const BAR_COUNT = Math.max(100, Math.floor(canvasWidth / 3));
+    const blockSize = Math.floor(channelData.length / BAR_COUNT);
+    const result = new Float32Array(BAR_COUNT);
+    
+    for (let i = 0; i < BAR_COUNT; i++) {
+      let peak = 0;
+      const base = i * blockSize;
+      for (let j = 0; j < blockSize; j++) {
+        const v = Math.abs(channelData[base + j]);
+        if (v > peak) peak = v;
+      }
+      result[i] = Math.min(peak * 1.4, 1);
+    }
+    return result;
+  }, [daw.audioBuffer, canvasWidth]);
+
   // ── Draw waveform on canvas ────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -234,20 +257,12 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
     }
 
     // ── Waveform bars ──────────────────────────────────────────────────────
-    const channelData = buffer.getChannelData(0);
-    const BAR_COUNT = Math.max(100, Math.floor(canvasWidth / 3));
-    const blockSize = Math.floor(channelData.length / BAR_COUNT);
+    const BAR_COUNT = peaks.length;
     const barW = canvasWidth / BAR_COUNT;
     const waveY = RULER_HEIGHT;
 
     for (let i = 0; i < BAR_COUNT; i++) {
-      let peak = 0;
-      const base = i * blockSize;
-      for (let j = 0; j < blockSize; j++) {
-        const v = Math.abs(channelData[base + j]);
-        if (v > peak) peak = v;
-      }
-      const amp = Math.min(peak * 1.4, 1);
+      const amp = peaks[i];
       const barH = Math.max(2, amp * WAVEFORM_HEIGHT);
       const x = i * barW;
       const timeAtBar = (i / BAR_COUNT) * buffer.duration;
@@ -332,7 +347,7 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
       ctx.lineTo(phX, RULER_HEIGHT + 10);
       ctx.fill();
     }
-  }, [daw.audioBuffer, daw.status, daw.trimStart, daw.trimEnd, canvasWidth, playhead]);
+  }, [daw.audioBuffer, daw.status, daw.trimStart, daw.trimEnd, canvasWidth, playhead, peaks]);
 
   // ── Canvas pointer events (dragging handles) ──────────────────────────────
   const getTimeAtX = useCallback(
