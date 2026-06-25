@@ -1,8 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAudio } from '@/lib/contexts/AudioContext';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2, Download, Share2, Scissors } from 'lucide-react';
+import { ShareModal } from '@/components/artists/ShareModal';
+import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -13,6 +15,8 @@ function formatTime(seconds: number): string {
 
 export function GlobalAudioPlayer() {
   const { currentTrack, isPlaying, duration, currentTime, togglePlay, seek, volume, setVolume, closePlayer, isLoading } = useAudio();
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isMiniDAWOpen, setIsMiniDAWOpen] = useState(false);
 
   if (!currentTrack) return null;
 
@@ -30,7 +34,8 @@ export function GlobalAudioPlayer() {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-50 flex flex-col md:flex-row items-stretch md:items-center p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:py-0 md:px-6 h-auto md:h-24 animate-slide-up shadow-2xl gap-2 md:gap-0">
+    <>
+      <div className="fixed bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-50 flex flex-col md:flex-row items-stretch md:items-center p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:py-0 md:px-6 h-auto md:h-24 animate-slide-up shadow-2xl gap-2 md:gap-0">
       
       {/* Top half on mobile / Left column on desktop */}
       <div className="flex items-center justify-between md:w-1/4 md:min-w-[200px] overflow-hidden gap-3">
@@ -67,6 +72,17 @@ export function GlobalAudioPlayer() {
         
         {/* Mobile controls */}
         <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-1 mr-1">
+            <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light p-1.5" title="Abrir en Mini-DAW">
+              <Scissors className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => setIsShareModalOpen(true)} className="text-text-secondary hover:text-accent p-1.5" title="Compartir">
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+            <a href={`/api/files/${currentTrack.id}?download=true`} download={currentTrack.name} className="text-text-secondary hover:text-text-primary p-1.5" title="Descargar">
+              <Download className="w-3.5 h-3.5" />
+            </a>
+          </div>
           <button 
             onClick={togglePlay}
             disabled={isLoading}
@@ -124,6 +140,18 @@ export function GlobalAudioPlayer() {
 
       {/* Right side: volume and close (desktop only) */}
       <div className="hidden md:flex w-1/4 min-w-[200px] items-center justify-end gap-4">
+        <div className="flex items-center gap-3 border-r border-border/50 pr-4">
+          <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir en Mini-DAW">
+            <Scissors className="w-4 h-4" />
+          </button>
+          <button onClick={() => setIsShareModalOpen(true)} className="text-text-secondary hover:text-accent transition-colors" title="Compartir">
+            <Share2 className="w-4 h-4" />
+          </button>
+          <a href={`/api/files/${currentTrack.id}?download=true`} download={currentTrack.name} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar">
+            <Download className="w-4 h-4" />
+          </a>
+        </div>
+        
         <div className="flex items-center gap-2 w-32 group">
           <button onClick={toggleMute} className="text-text-secondary hover:text-text-primary">
             {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -145,5 +173,24 @@ export function GlobalAudioPlayer() {
       </div>
 
     </div>
+      
+      {/* Modals */}
+      {isShareModalOpen && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          fileId={currentTrack.id}
+          fileName={currentTrack.name}
+        />
+      )}
+      
+      {isMiniDAWOpen && (
+        <MiniDAWModal
+          fileId={currentTrack.id}
+          fileName={currentTrack.name}
+          onClose={() => setIsMiniDAWOpen(false)}
+        />
+      )}
+    </>
   );
 }

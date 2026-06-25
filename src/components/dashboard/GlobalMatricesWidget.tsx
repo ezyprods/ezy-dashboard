@@ -6,24 +6,9 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 
-export function GlobalMatricesWidget() {
-  const [matrices, setMatrices] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export function GlobalMatricesWidget({ matrices, isLoading }: { matrices: any[], isLoading: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   useSmoothScroll(scrollRef, [isLoading]);
-
-  useEffect(() => {
-    fetch('/api/dashboard/matrices')
-      .then(res => res.json())
-      .then(data => {
-        setMatrices(data.matrices || []);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error('Error fetching global matrices', err);
-        setIsLoading(false);
-      });
-  }, []);
 
   if (isLoading) {
     return (

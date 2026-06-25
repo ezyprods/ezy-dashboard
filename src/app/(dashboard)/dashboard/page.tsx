@@ -23,7 +23,9 @@ export default function DashboardPage() {
 
   const [pulseData, setPulseData] = useState<{ artists: Artist[]; globalStats: any }>({ artists: [], globalStats: null });
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [matrices, setMatrices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMatricesLoading, setIsMatricesLoading] = useState(true);
 
   useEffect(() => {
     fetch(`/api/dashboard/pulse?t=${Date.now()}`)
@@ -45,9 +47,20 @@ export default function DashboardPage() {
         console.error('Failed to load dashboard pulse', err);
         setIsLoading(false);
       });
+
+    fetch('/api/dashboard/matrices')
+      .then(res => res.json())
+      .then(data => {
+        setMatrices(data.matrices || []);
+        setIsMatricesLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching global matrices', err);
+        setIsMatricesLoading(false);
+      });
   }, []);
 
-  const activeProjectsCount = pulseData.globalStats?.totalActiveProjects || 0;
+  const activeProjectsCount = matrices.length;
   const alertMsg = pulseData.globalStats?.priorityAlerts?.[0] || 'El estudio esta al dia. No hay tareas urgentes.';
 
   return (
@@ -140,7 +153,7 @@ export default function DashboardPage() {
 
         {/* Col 2: Matrices Activas */}
         <div className="h-full min-h-0 overflow-hidden">
-          <GlobalMatricesWidget />
+            <GlobalMatricesWidget matrices={matrices} isLoading={isMatricesLoading} />
         </div>
 
         {/* Col 3: Proximos Eventos */}
