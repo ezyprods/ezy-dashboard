@@ -691,11 +691,11 @@ export function SmartUploadModal({
   ));
 
   const modal = (
-    <div className="fixed bottom-4 right-4 z-[500] pointer-events-none p-4 flex flex-col items-end justify-end">
+    <div className="fixed inset-x-4 bottom-4 md:inset-x-auto md:right-4 z-[500] pointer-events-none flex flex-col items-center md:items-end justify-end">
       
       <div className={isConfiguring
-        ? "pointer-events-auto glass w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"
-        : "pointer-events-auto glass w-[380px] max-h-[70vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] transition-all duration-300"}>
+        ? "pointer-events-auto glass w-full sm:w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"
+        : "pointer-events-auto glass w-full sm:w-[380px] max-h-[70vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] transition-all duration-300"}>
         
         {/* Header */}
         {isConfiguring ? (

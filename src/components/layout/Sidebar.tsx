@@ -35,8 +35,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
       )}
       <aside 
         className={cn(
-          "w-64 border-r border-border bg-surface flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 md:z-auto transition-transform duration-300",
-          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          "bg-surface border-r border-border flex flex-col h-[100dvh] fixed md:sticky top-0 left-0 z-50 md:z-auto transition-transform duration-300 w-[85vw] max-w-[320px] md:w-64",
+          isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0 md:shadow-none",
         )}
       >
         <div className="h-32 flex flex-col items-center px-4 border-b border-border justify-center md:justify-start pt-6 pb-4">
@@ -73,7 +73,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative overflow-hidden text-left",
+                  "w-full flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-base md:text-sm font-medium transition-all duration-200 group relative overflow-hidden text-left",
                   isActive 
                     ? "text-white bg-accent/10" 
                     : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"

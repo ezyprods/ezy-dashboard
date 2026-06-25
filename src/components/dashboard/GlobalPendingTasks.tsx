@@ -424,39 +424,45 @@ export function GlobalPendingTasks() {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10 flex-1 min-h-0">
-          <StatusColumn
-            id="todo"
-            title="Pendientes"
-            icon={<Circle className="w-4 h-4 text-text-secondary" />}
-            columnTasks={todoTasks}
-            bgColor="bg-surface-elevated/30"
-            textColor="text-text-primary"
-            borderColor="border-border/60 hover:border-text-secondary/50"
-            onUpdateStatus={updateTaskStatus}
-          />
+        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide lg:grid lg:grid-cols-3 gap-4 lg:gap-6 relative z-10 flex-1 min-h-[450px] lg:min-h-0 pb-4 lg:pb-0 -mx-5 px-5 lg:mx-0 lg:px-0">
+          <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full">
+            <StatusColumn
+              id="todo"
+              title="Pendientes"
+              icon={<Circle className="w-4 h-4 text-text-secondary" />}
+              columnTasks={todoTasks}
+              bgColor="bg-surface-elevated/30"
+              textColor="text-text-primary"
+              borderColor="border-border/60 hover:border-text-secondary/50"
+              onUpdateStatus={updateTaskStatus}
+            />
+          </div>
           
-          <StatusColumn
-            id="in_progress"
-            title="En Progreso"
-            icon={<Clock className="w-4 h-4 text-warning" />}
-            columnTasks={inProgressTasks}
-            bgColor="bg-warning/10"
-            textColor="text-warning"
-            borderColor="border-warning/20 hover:border-warning/50"
-            onUpdateStatus={updateTaskStatus}
-          />
+          <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full">
+            <StatusColumn
+              id="in_progress"
+              title="En Progreso"
+              icon={<Clock className="w-4 h-4 text-warning" />}
+              columnTasks={inProgressTasks}
+              bgColor="bg-warning/10"
+              textColor="text-warning"
+              borderColor="border-warning/20 hover:border-warning/50"
+              onUpdateStatus={updateTaskStatus}
+            />
+          </div>
           
-          <StatusColumn
-            id="review"
-            title="En Revisión"
-            icon={<AlertCircle className="w-4 h-4 text-blue-400" />}
-            columnTasks={reviewTasks}
-            bgColor="bg-blue-500/10"
-            textColor="text-blue-400"
-            borderColor="border-blue-500/20 hover:border-blue-500/50"
-            onUpdateStatus={updateTaskStatus}
-          />
+          <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full">
+            <StatusColumn
+              id="review"
+              title="En Revisión"
+              icon={<AlertCircle className="w-4 h-4 text-blue-400" />}
+              columnTasks={reviewTasks}
+              bgColor="bg-blue-500/10"
+              textColor="text-blue-400"
+              borderColor="border-blue-500/20 hover:border-blue-500/50"
+              onUpdateStatus={updateTaskStatus}
+            />
+          </div>
         </div>
 
         <DragOverlay dropAnimation={{ duration: 250, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>

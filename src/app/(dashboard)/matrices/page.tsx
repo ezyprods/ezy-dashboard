@@ -205,7 +205,7 @@ export default function MatricesPage() {
           </div>
         </div>
         
-        <div className="glass rounded-xl p-3 md:p-6 border border-border">
+        <div className="glass rounded-xl p-3 md:p-6 border border-border overflow-x-auto custom-scrollbar w-full relative">
           <ProductionGridBoard 
             artistId={activeMatrix.artistId} 
             matrixId={activeMatrix.id} 

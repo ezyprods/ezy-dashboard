@@ -111,11 +111,11 @@ export function CommandMenu() {
 
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-start justify-center pt-[8vh] bg-background/70 backdrop-blur-md animate-in fade-in duration-150 p-4"
+          className="fixed inset-0 z-50 flex items-start justify-center md:pt-[10vh] md:px-4 bg-background/60 backdrop-blur-sm animate-fade-in"
           onClick={handleClose}
         >
           <div
-            className="w-full max-w-2xl bg-surface/95 backdrop-blur-xl border border-border/60 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/10"
+            className="w-full h-full md:h-auto max-w-2xl bg-surface/95 backdrop-blur-xl md:border border-border/60 md:rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/10 flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Search Input */}

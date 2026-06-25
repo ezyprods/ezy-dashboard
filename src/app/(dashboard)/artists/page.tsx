@@ -122,7 +122,7 @@ export default function ArtistsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col xs:flex-row items-stretch gap-3 glass rounded-xl p-2 border border-border">
+      <div className="flex flex-col sm:flex-row items-stretch gap-3 glass rounded-xl p-2 md:p-3 border border-border">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
           <Input 
@@ -133,7 +133,7 @@ export default function ArtistsPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 px-2 shrink-0">
+        <div className="flex items-center justify-between sm:justify-end gap-2 px-2 sm:px-0 shrink-0">
           <select 
             className="bg-surface border border-border text-text-secondary text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-accent"
             value={sortBy}
@@ -143,7 +143,7 @@ export default function ArtistsPage() {
             <option value="name-asc">Nombre (A-Z)</option>
             <option value="name-desc">Nombre (Z-A)</option>
           </select>
-          <div className="flex items-center bg-surface-elevated rounded-lg p-1 ml-1">
+          <div className="flex items-center bg-surface-elevated rounded-lg p-1 ml-1 shrink-0">
             <button 
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-surface shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}

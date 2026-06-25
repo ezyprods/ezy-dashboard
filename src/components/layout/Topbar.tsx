@@ -222,8 +222,8 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
     >
       <div className="flex items-center flex-1">
         {/* Mobile menu button */}
-        <Button variant="ghost" size="icon" className="md:hidden mr-2" onClick={onMenuClick}>
-          <Menu className="w-5 h-5" />
+        <Button variant="ghost" size="icon" className="md:hidden mr-2 min-h-[44px] min-w-[44px]" onClick={onMenuClick}>
+          <Menu className="w-6 h-6" />
         </Button>
 
         {/* Global Search */}

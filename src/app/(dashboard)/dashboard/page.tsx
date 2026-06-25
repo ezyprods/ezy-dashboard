@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/Button";
@@ -51,7 +51,7 @@ export default function DashboardPage() {
   const alertMsg = pulseData.globalStats?.priorityAlerts?.[0] || 'El estudio esta al dia. No hay tareas urgentes.';
 
   return (
-    <div className="h-full flex flex-col gap-4 animate-fade-in overflow-hidden">
+    <div className="min-h-full h-auto lg:h-full flex flex-col gap-4 animate-fade-in overflow-x-hidden lg:overflow-hidden">
       <NewArtistModal isOpen={isNewArtistModalOpen} onClose={() => setIsNewArtistModalOpen(false)} />
       <QuickUploadModal isOpen={isQuickUploadOpen} onClose={() => setIsQuickUploadOpen(false)} artists={artists} />
       <NewProjectModal isOpen={isNewProjectOpen} onClose={() => setIsNewProjectOpen(false)} artists={artists} />
@@ -87,8 +87,8 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {/* ROW 2: Bento Top — fixed proportional height */}
-      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'clamp(180px, 28vh, 260px)' }}>
+      {/* ROW 2: Bento Top */}
+      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-[clamp(180px,28vh,260px)] min-h-[200px]">
 
         {/* Col 1: Quick Actions */}
         <div className="flex flex-col gap-2 h-full">
@@ -160,8 +160,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ROW 3: Kanban — takes ALL remaining height */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      {/* ROW 3: Kanban */}
+      <div className="flex-1 min-h-[500px] lg:min-h-0 lg:overflow-hidden">
         <GlobalPendingTasks />
       </div>
     </div>

@@ -391,7 +391,7 @@ export function WaveformPlayer({
                 className="w-full bg-surface-elevated/50 border border-accent/50 rounded px-2 py-0.5 text-[13px] font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
               />
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span 
                   className={cn('text-[13px] font-semibold truncate transition-colors cursor-text', isThisTrackActive ? 'text-accent' : 'text-text-primary hover:text-accent')} 
                   title={displayName}
