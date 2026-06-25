@@ -197,14 +197,33 @@ const globalAudioCache = new Map<string, AudioBuffer>();
     setErrorMessage(null);
 
     try {
-      // Guard: check SharedArrayBuffer availability (requires cross-origin isolation)
+      // 1. JS Encoder: Process trim and gain natively in JS
+      // This is instant and avoids memory spikes.
+      const optimizedWavBytes = audioBufferToWav(buffer, trimStart, trimEnd, gain);
+
+      if (format === 'wav') {
+        // Zero-Dependency WAV Export! Bypass FFmpeg completely.
+        const blob = new Blob([optimizedWavBytes], { type: 'audio/wav' });
+        
+        if (lastDownloadUrlRef.current) URL.revokeObjectURL(lastDownloadUrlRef.current);
+        const url = URL.createObjectURL(blob);
+        lastDownloadUrlRef.current = url;
+        
+        setDownloadUrl(url);
+        setExportProgress(1);
+        setStatus('done');
+        return;
+      }
+
+      // --- FFmpeg processing ONLY for MP3 ---
+
+      // Guard: check SharedArrayBuffer availability
       if (typeof SharedArrayBuffer === 'undefined') {
         throw new Error(
-          'SharedArrayBuffer no está disponible. Asegúrate de que el servidor envía los headers Cross-Origin-Opener-Policy y Cross-Origin-Embedder-Policy correctos.'
+          'SharedArrayBuffer no está disponible para exportar a MP3. Revisa los headers COOP/COEP.'
         );
       }
 
-      // Lazy-load FFmpeg only when actually needed
       const { FFmpeg } = await import('@ffmpeg/ffmpeg');
       const { fetchFile, toBlobURL } = await import('@ffmpeg/util');
 
@@ -215,60 +234,43 @@ const globalAudioCache = new Map<string, AudioBuffer>();
         setExportProgress(Math.min(progress, 0.99));
       });
 
-      // Load FFmpeg core (WASM) — uses CDN with crossOriginIsolated
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
       await ffmpeg.load({
         coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
       });
 
-      // Write the raw audio buffer to FFmpeg's virtual FS as WAV
-      const inputBytes = audioBufferToWav(buffer);
-      await ffmpeg.writeFile('input.wav', new Uint8Array(inputBytes));
+      // Write the ALREADY TRIMMED AND GAINED wav to FFmpeg
+      await ffmpeg.writeFile('input.wav', new Uint8Array(optimizedWavBytes));
 
-      const trimDuration = trimEnd - trimStart;
-      const outputFile = `output.${format}`;
+      const outputFile = 'output.mp3';
 
-      // Build FFmpeg command
+      // FFmpeg only needs to convert format, no -ss, -t, or -af needed!
       const args = [
-        '-ss', trimStart.toFixed(4),
-        '-t', trimDuration.toFixed(4),
         '-i', 'input.wav',
-        '-af', `volume=${gain.toFixed(4)}`,
+        '-codec:a', 'libmp3lame', 
+        '-q:a', '2',
+        outputFile
       ];
-
-      if (format === 'mp3') {
-        args.push('-codec:a', 'libmp3lame', '-q:a', '2');
-      } else {
-        args.push('-c:a', 'pcm_s16le');
-      }
-
-      args.push(outputFile);
 
       await ffmpeg.exec(args);
 
       const data = await ffmpeg.readFile(outputFile);
-      const mimeType = format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
-      // Cast through ArrayBuffer to satisfy TypeScript's BlobPart constraint
-      const blob = new Blob([(data as Uint8Array).buffer as ArrayBuffer], { type: mimeType });
+      const blob = new Blob([(data as Uint8Array).buffer as ArrayBuffer], { type: 'audio/mpeg' });
 
-      // Clean up old object URL before creating new one
-      if (lastDownloadUrlRef.current) {
-        URL.revokeObjectURL(lastDownloadUrlRef.current);
-      }
-
+      if (lastDownloadUrlRef.current) URL.revokeObjectURL(lastDownloadUrlRef.current);
+      
       const url = URL.createObjectURL(blob);
       lastDownloadUrlRef.current = url;
       setDownloadUrl(url);
       setExportProgress(1);
       setStatus('done');
 
-      // Clean up FFmpeg instance
       try { ffmpeg.terminate(); } catch (_) {}
       ffmpegRef.current = null;
     } catch (err: any) {
       console.error('[useMiniDAW] exportAudio error:', err);
-      setErrorMessage(err?.message ?? 'Error durante el procesamiento con FFmpeg.');
+      setErrorMessage(err?.message ?? 'Error durante la exportación.');
       setStatus('error');
     }
   }, [trimStart, trimEnd, gain]);
@@ -309,10 +311,19 @@ const globalAudioCache = new Map<string, AudioBuffer>();
 
 // ─── Utility: Encode AudioBuffer → WAV (PCM s16le) in the browser ─────────────
 // We do this ourselves to avoid a large dependency just for encoding.
-function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
+// Optimization: Only encodes the specified time range and applies gain directly in JS!
+function audioBufferToWav(buffer: AudioBuffer, trimStart: number, trimEnd: number, gain: number): ArrayBuffer {
   const numChannels = Math.min(buffer.numberOfChannels, 2);
   const sampleRate = buffer.sampleRate;
-  const numSamples = buffer.length;
+  
+  // Calculate start and end samples
+  const startSample = Math.floor(trimStart * sampleRate);
+  const endSample = Math.ceil(trimEnd * sampleRate);
+  let numSamples = endSample - startSample;
+  
+  if (numSamples <= 0) numSamples = 1; // Fallback
+  if (startSample + numSamples > buffer.length) numSamples = buffer.length - startSample;
+
   const bitsPerSample = 16;
   const blockAlign = (numChannels * bitsPerSample) / 8;
   const byteRate = sampleRate * blockAlign;
@@ -341,11 +352,12 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
   writeString(view, 36, 'data');
   view.setUint32(40, dataSize, true);
 
-  // Interleave channels
+  // Interleave channels and apply gain natively
   let offset = 44;
   for (let i = 0; i < numSamples; i++) {
+    const sampleIndex = startSample + i;
     for (let ch = 0; ch < numChannels; ch++) {
-      const sample = buffer.getChannelData(ch)[i];
+      const sample = buffer.getChannelData(ch)[sampleIndex] * gain;
       const clamped = Math.max(-1, Math.min(1, sample));
       view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
       offset += 2;

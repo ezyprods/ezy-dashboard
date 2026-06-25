@@ -61,10 +61,12 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
   const playStartAtRef = useRef(0); // AudioContext.currentTime when play started
   const playOffsetRef = useRef(0); // offset in decoded buffer
 
-  // Canvas
+  // Canvas & Zoom
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [canvasWidth, setCanvasWidth] = useState(800);
+  const [viewportWidth, setViewportWidth] = useState(800);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const canvasWidth = Math.floor(viewportWidth * zoomLevel);
 
   // Drag state for trim handles
   const draggingRef = useRef<'start' | 'end' | 'playhead' | null>(null);
@@ -84,10 +86,10 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       const w = entry.contentRect.width;
-      if (w > 0) setCanvasWidth(Math.floor(w));
+      if (w > 0) setViewportWidth(Math.floor(w));
     });
     ro.observe(el);
-    setCanvasWidth(el.clientWidth || 800);
+    setViewportWidth(el.clientWidth || 800);
     return () => ro.disconnect();
   }, []);
 
@@ -376,9 +378,14 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
       } else if (hitEnd) {
         draggingRef.current = 'end';
       } else {
-        // Click to set playhead
+        // Click to set playhead (auto-play scrub if playing)
         const t = getTimeAtX(x) - daw.trimStart;
         setPlayhead(Math.max(0, t));
+        if (isPlaying) {
+          stopPlayback();
+          // Small timeout to allow state to settle before restarting
+          setTimeout(() => handlePlay(), 10);
+        }
         return;
       }
 
@@ -575,17 +582,21 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
               {/* ── Waveform Canvas ───────────────────────────────────────── */}
               <div
                 ref={containerRef}
-                className="w-full rounded-xl overflow-hidden border border-border/60 bg-[#0d0d14] relative cursor-crosshair select-none"
+                className="w-full rounded-xl overflow-x-auto overflow-y-hidden border border-border/60 bg-[#0d0d14] relative scroll-smooth custom-scrollbar"
                 style={{ height: `${WAVEFORM_HEIGHT + RULER_HEIGHT}px` }}
               >
-                <canvas
-                  ref={canvasRef}
-                  className="absolute inset-0"
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerLeave={handlePointerUp}
-                />
+                <div 
+                  className="relative cursor-crosshair select-none"
+                  style={{ width: `${canvasWidth}px`, height: '100%' }}
+                >
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute top-0 left-0"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                  />
 
                 {/* Trim time tooltips (always visible) */}
                 {isReady && daw.audioBuffer && (
@@ -609,49 +620,70 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
                       {formatTime(daw.trimEnd)}
                     </div>
                   </>
-                )}
+                  )}
+                </div>
               </div>
 
-              {/* ── Transport ─────────────────────────────────────────────── */}
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={skipToStart}
-                  disabled={!isReady}
-                  className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors disabled:opacity-30"
-                  title="Ir al inicio"
-                >
-                  <SkipBack className="w-4 h-4" />
-                </button>
+              {/* ── Transport & Zoom ─────────────────────────────────────────────── */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Zoom Control */}
+                <div className="flex items-center gap-3 bg-surface rounded-xl px-4 py-2 border border-border/60 shadow-sm">
+                  <span className="text-[10px] text-text-secondary font-bold uppercase tracking-widest">Zoom</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={20}
+                    step={1}
+                    value={zoomLevel}
+                    onChange={(e) => setZoomLevel(parseInt(e.target.value))}
+                    className="w-20 accent-accent h-1.5 rounded-full"
+                  />
+                  <span className="text-[10px] font-mono text-text-primary w-5 text-right">{zoomLevel}x</span>
+                </div>
 
-                <button
-                  onClick={handlePlay}
-                  disabled={!isReady}
-                  className={cn(
-                    'w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-105',
-                    isPlaying
-                      ? 'bg-accent/80 text-white shadow-accent/30'
-                      : 'bg-accent text-white shadow-accent/40'
-                  )}
-                  title={isPlaying ? 'Pausar (Space)' : 'Reproducir (Space)'}
-                >
-                  {isPlaying
-                    ? <Pause className="w-5 h-5 fill-current" />
-                    : <Play className="w-5 h-5 fill-current ml-0.5" />}
-                </button>
+                {/* Transport */}
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    onClick={skipToStart}
+                    disabled={!isReady}
+                    className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors disabled:opacity-30"
+                    title="Ir al inicio"
+                  >
+                    <SkipBack className="w-4 h-4" />
+                  </button>
 
-                <button
-                  onClick={skipToEnd}
-                  disabled={!isReady}
-                  className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors disabled:opacity-30"
-                  title="Ir al final"
-                >
-                  <SkipForward className="w-4 h-4" />
-                </button>
+                  <button
+                    onClick={handlePlay}
+                    disabled={!isReady}
+                    className={cn(
+                      'w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-105',
+                      isPlaying
+                        ? 'bg-accent/80 text-white shadow-accent/30'
+                        : 'bg-accent text-white shadow-accent/40'
+                    )}
+                    title={isPlaying ? 'Pausar (Space)' : 'Reproducir (Space)'}
+                  >
+                    {isPlaying
+                      ? <Pause className="w-5 h-5 fill-current" />
+                      : <Play className="w-5 h-5 fill-current ml-0.5" />}
+                  </button>
+
+                  <button
+                    onClick={skipToEnd}
+                    disabled={!isReady}
+                    className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface transition-colors disabled:opacity-30"
+                    title="Ir al final"
+                  >
+                    <SkipForward className="w-4 h-4" />
+                  </button>
+                </div>
 
                 {/* Playhead position */}
-                <span className="text-xs font-mono text-text-secondary ml-2">
-                  {formatTime(daw.trimStart + playhead)} / {formatTime(daw.trimEnd)}
-                </span>
+                <div className="bg-surface rounded-xl px-4 py-2 border border-border/60 shadow-sm min-w-[130px] text-center hidden sm:block">
+                  <span className="text-xs font-mono text-text-secondary">
+                    <span className="text-text-primary font-bold">{formatTime(daw.trimStart + playhead)}</span> / {formatTime(daw.trimEnd)}
+                  </span>
+                </div>
               </div>
 
               {/* ── Trim & Gain Controls ──────────────────────────────────── */}
