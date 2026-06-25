@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Settings, Palette, Database, Shield, HardDrive, User, Bell } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { AppearanceTab } from '@/components/settings/AppearanceTab';
 import { DriveTab } from '@/components/settings/DriveTab';
 import { SecurityTab } from '@/components/settings/SecurityTab';
