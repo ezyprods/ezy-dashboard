@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/Button";
-import { Plus, UploadCloud, AlertCircle, Loader2, Music, Play, TrendingUp, Calendar, LayoutDashboard, ChevronRight, Users } from "lucide-react";
+import { Plus, UploadCloud, AlertCircle, Loader2, Music, Play, Calendar, LayoutDashboard, ChevronRight, Users } from "lucide-react";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
 import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
@@ -171,24 +171,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="glass rounded-2xl p-6 border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-error flex items-center gap-2">
-                Pagos pendientes
-              </h2>
-            </div>
-            {pulseData.globalStats?.totalPendingPayments > 0 ? (
-              <div className="flex flex-col items-center justify-center py-6 text-sm text-center bg-error/5 rounded-xl border border-dashed border-error/20">
-                <p className="text-error font-bold text-2xl mb-1">{pulseData.globalStats.totalPendingPayments}€</p>
-                <p className="text-text-secondary">en cobros atrasados</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-6 text-sm text-text-secondary text-center bg-surface/30 rounded-xl border border-dashed border-border">
-                <TrendingUp className="w-8 h-8 text-success/50 mb-3" />
-                <p className="text-success">Todo al día. No hay pagos pendientes.</p>
-              </div>
-            )}
-          </div>
+
         </div>
       </div>
     </div>
