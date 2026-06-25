@@ -1,4 +1,6 @@
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 import { NextResponse } from 'next/server';
 import { listFolders, findAndReadJsonFile, createFolder, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID, ARTIST_FOLDER_STRUCTURE } from '@/lib/constants';
