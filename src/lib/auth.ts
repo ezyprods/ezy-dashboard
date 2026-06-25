@@ -20,10 +20,12 @@ export const auth = betterAuth({
   baseURL: appURL,
   trustedOrigins,
 
-  // ── Sesión permanente: prácticamente infinita ────────────────────────────
+  // ── Sesión permanente: 399 días (máximo permitido por navegadores es 400) ──
+  // Cada vez que el usuario visita la página, updateAge renueva la cookie,
+  // por lo que en la práctica la sesión NUNCA caduca.
   session: {
-    expiresIn: 60 * 60 * 24 * 365 * 10,  // 10 años en segundos (valor seguro para evitar errores 500)
-    updateAge: 60 * 60 * 24,          // Refrescar la cookie cada 24h para mantener el máximo que permite el navegador
+    expiresIn: 60 * 60 * 24 * 399,    // 399 días en segundos (< 400 días = límite de los navegadores)
+    updateAge: 60 * 60 * 24,          // Refrescar la cookie cada 24h → reinicia los 399 días
     disableSessionRefresh: false,      // Asegurar que el refresco está ACTIVO
     cookieCache: {
       enabled: true,
