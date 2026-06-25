@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight } from 'lucide-react';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, Music, Layers, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -193,41 +193,97 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {activeMatrices.map(m => (
-            <div key={m.id} className="glass rounded-xl p-5 border border-border hover:border-accent/50 transition-all group relative">
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-2">
-                  <Table2 className="w-5 h-5 text-accent" />
-                  <h4 className="font-bold text-lg text-text-primary">{m.name}</h4>
+          {activeMatrices.map(m => {
+            const grid = m.productionGrid;
+            const rowCount = grid?.rows?.length || 0;
+            const colCount = grid?.columns?.length || 0;
+            let completedTasks = 0;
+            const totalTasks = rowCount * colCount;
+            if (rowCount > 0 && colCount > 0 && grid.rows) {
+              grid.rows.forEach((row: any) => {
+                grid.columns.forEach((col: any) => {
+                  const cell = row.cells?.[col.id];
+                  if (cell && cell.status === 'done') {
+                    completedTasks++;
+                  }
+                });
+              });
+            }
+            const completionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+            return (
+              <div 
+                key={m.id} 
+                onClick={() => setActiveMatrixId(m.id)}
+                className="glass rounded-xl p-5 border border-border hover:border-accent/50 transition-all group relative cursor-pointer hover:shadow-lg hover:shadow-accent/5 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Table2 className="w-5 h-5 text-accent shrink-0" />
+                      <h4 className="font-bold text-lg text-text-primary truncate">{m.name}</h4>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteMatrix(m.id);
+                      }} 
+                      className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                      title="Eliminar Matriz"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  {/* Useful dynamic stats / functional icons */}
+                  <div className="flex flex-wrap gap-2 text-xs text-text-secondary mb-6">
+                    <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
+                      <Music className="w-3.5 h-3.5 text-accent" />
+                      <span>{rowCount} {rowCount === 1 ? 'Tema' : 'Temas'}</span>
+                    </div>
+                    <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
+                      <Layers className="w-3.5 h-3.5 text-accent" />
+                      <span>{colCount} {colCount === 1 ? 'Fase' : 'Fases'}</span>
+                    </div>
+                    {totalTasks > 0 && (
+                      <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                        <span>{completionPercent}%</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <button onClick={() => deleteMatrix(m.id)} className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-              
-              <div className="flex items-center gap-4 text-xs text-text-secondary mb-6">
-                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Sinc. Google Calendar</span>
-                <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Fases Personalizables</span>
-              </div>
 
-              <div className="flex items-center justify-between text-xs text-text-secondary border-t border-border/30 pt-3 mt-3 mb-4">
-                <span className="font-medium">Compartir en Portal</span>
-                <input 
-                  type="checkbox" 
-                  checked={m.sharedInPortal || false} 
-                  onChange={async (e) => {
-                    const checked = e.target.checked;
-                    await togglePortalSharing(m.id, checked);
-                  }}
-                  className="w-4 h-4 accent-accent cursor-pointer rounded"
-                />
-              </div>
+                <div>
+                  <div 
+                    className="flex items-center gap-2 text-xs text-text-secondary border-t border-border/30 pt-3 mt-3 mb-4 w-fit"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input 
+                      type="checkbox" 
+                      id={`share-portal-active-${m.id}`}
+                      checked={m.sharedInPortal || false} 
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        await togglePortalSharing(m.id, checked);
+                      }}
+                      className="w-4 h-4 accent-accent cursor-pointer rounded"
+                    />
+                    <label htmlFor={`share-portal-active-${m.id}`} className="font-medium cursor-pointer select-none">
+                      Compartir en Portal
+                    </label>
+                  </div>
 
-              <Button className="w-full" variant="secondary" onClick={() => setActiveMatrixId(m.id)}>
-                Abrir Matriz
-              </Button>
-            </div>
-          ))}
+                  <Button className="w-full" variant="secondary" onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMatrixId(m.id);
+                  }}>
+                    Abrir Matriz
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -245,42 +301,80 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
           
           {showCompleted && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-4 duration-300">
-              {completedMatrices.map((m: any) => (
-                <div 
-                  key={m.id} 
-                  className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between opacity-70 hover:opacity-100 bg-surface/50"
-                >
-                  <div>
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Table2 className="w-5 h-5 text-success shrink-0" />
-                        <h4 className="font-bold text-lg text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
-                      </div>
-                      <button 
-                        onClick={() => deleteMatrix(m.id)} 
-                        className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                        title="Eliminar Matriz"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+              {completedMatrices.map((m: any) => {
+                const grid = m.productionGrid;
+                const rowCount = grid?.rows?.length || 0;
+                const colCount = grid?.columns?.length || 0;
+                let completedTasks = 0;
+                const totalTasks = rowCount * colCount;
+                if (rowCount > 0 && colCount > 0 && grid.rows) {
+                  grid.rows.forEach((row: any) => {
+                    grid.columns.forEach((col: any) => {
+                      const cell = row.cells?.[col.id];
+                      if (cell && cell.status === 'done') {
+                        completedTasks++;
+                      }
+                    });
+                  });
+                }
+                const completionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-                  <div className="space-y-3 mt-4">
-                    <div className="flex items-center gap-4 text-[10px] text-text-secondary">
-                      <span className="text-success font-medium">Completada</span>
+                return (
+                  <div 
+                    key={m.id} 
+                    onClick={() => setActiveMatrixId(m.id)}
+                    className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between opacity-80 hover:opacity-100 bg-surface/50 cursor-pointer hover:shadow-lg hover:shadow-success/5"
+                  >
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Table2 className="w-5 h-5 text-success shrink-0" />
+                          <h4 className="font-bold text-lg text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
+                        </div>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteMatrix(m.id);
+                          }} 
+                          className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                          title="Eliminar Matriz"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Useful dynamic stats / functional icons for completed ones */}
+                      <div className="flex flex-wrap gap-2 text-xs text-text-secondary mb-6">
+                        <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
+                          <Music className="w-3.5 h-3.5 text-success" />
+                          <span>{rowCount} {rowCount === 1 ? 'Tema' : 'Temas'}</span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
+                          <Layers className="w-3.5 h-3.5 text-success" />
+                          <span>{colCount} {colCount === 1 ? 'Fase' : 'Fases'}</span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                          <span>Completada ({completionPercent}%)</span>
+                        </div>
+                      </div>
                     </div>
-                    
-                    <Button 
-                      className="w-full text-xs h-8" 
-                      variant="outline" 
-                      onClick={() => setActiveMatrixId(m.id)}
-                    >
-                      Ver Matriz
-                    </Button>
+
+                    <div className="space-y-3 mt-2">
+                      <Button 
+                        className="w-full text-xs h-8" 
+                        variant="outline" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMatrixId(m.id);
+                        }}
+                      >
+                        Ver Matriz
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

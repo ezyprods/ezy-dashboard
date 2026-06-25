@@ -3,6 +3,7 @@ import { AudioProvider } from "@/lib/contexts/AudioContext";
 import { ContextMenuProvider } from "@/lib/contexts/ContextMenuContext";
 import { GlobalAudioPlayer } from "@/components/layout/GlobalAudioPlayer";
 import { DialogProvider } from "@/components/ui/DialogProvider";
+import { ThemeProvider } from "@/lib/contexts/ThemeContext";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -25,8 +26,9 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var t = localStorage.getItem('theme');
-                  if (t === 'light') {
+                  var t = localStorage.getItem('ezy_theme');
+                  var isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  if (t === 'light' || (t === 'system' && !isSystemDark)) {
                     document.documentElement.classList.remove('dark');
                     document.documentElement.classList.add('light');
                   }
@@ -37,14 +39,16 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <ContextMenuProvider>
-          <AudioProvider>
-            {children}
-            <GlobalAudioPlayer />
-            <DialogProvider />
-            <Toaster theme="dark" position="bottom-right" className="!font-sans" />
-          </AudioProvider>
-        </ContextMenuProvider>
+        <ThemeProvider>
+          <ContextMenuProvider>
+            <AudioProvider>
+              {children}
+              <GlobalAudioPlayer />
+              <DialogProvider />
+              <Toaster theme="dark" position="bottom-right" className="!font-sans" />
+            </AudioProvider>
+          </ContextMenuProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -12,7 +12,6 @@ const navItems = [
   { name: 'Artistas', href: '/artists', icon: Users },
   { name: 'Matrices', href: '/matrices', icon: Grid },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
-  { name: 'Pagos', href: '/payments', icon: CreditCard },
   { name: 'Comunicaciones', href: '/communications', icon: MessageSquare },
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];

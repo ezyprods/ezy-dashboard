@@ -13,11 +13,9 @@ import { CustomSortModal } from '@/components/projects/CustomSortModal';
 import { DriveExplorer } from '@/components/artists/DriveExplorer';
 import { ArtistPortalTab } from '@/components/artists/ArtistPortalTab';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
-import { NotesEditor } from '@/components/notes/NotesEditor';
 import { getProjectTypeIcon } from '@/lib/utils';
 import { ArtistReleasesTab } from '@/components/artists/ArtistReleasesTab';
 import { ArtistMatricesTab } from '@/components/artists/ArtistMatricesTab';
-import { ArtistPaymentsTab } from '@/components/artists/ArtistPaymentsTab';
 import { EditArtistModal } from "@/components/artists/EditArtistModal";
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import * as LucideIcons from 'lucide-react';
@@ -56,7 +54,7 @@ export default function ArtistDetailPage() {
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const tab = searchParams.get('tab');
-    if (tab && ['files', 'projects', 'matrices', 'notes', 'payments', 'portal'].includes(tab)) {
+    if (tab && ['files', 'projects', 'matrices', 'portal'].includes(tab)) {
       setActiveTab(tab);
     }
     fetchArtist();
@@ -197,7 +195,7 @@ export default function ArtistDetailPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-6 border-b border-border/50 px-2 overflow-x-auto mt-8">
-        {(['files', 'projects', 'matrices', 'notes', 'payments', 'portal'] as const).map(tab => (
+        {(['files', 'projects', 'matrices', 'portal'] as const).map(tab => (
           <button 
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -207,7 +205,7 @@ export default function ArtistDetailPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
             }`}
           >
-            {tab === 'files' ? 'Archivos' : tab === 'projects' ? 'Proyectos' : tab === 'matrices' ? 'Matrices' : tab === 'notes' ? 'Notas' : tab === 'payments' ? 'Pagos' : 'Portal'}
+            {tab === 'files' ? 'Archivos' : tab === 'projects' ? 'Proyectos' : tab === 'matrices' ? 'Matrices' : 'Portal'}
           </button>
         ))}
       </div>
@@ -394,27 +392,9 @@ export default function ArtistDetailPage() {
         </div>
       )}
 
-      {/* Tab Content: Notes */}
-      {activeTab === 'notes' && (
-        <div className="animate-fade-in space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-semibold">Bloc de Notas</h3>
-            <p className="text-sm text-text-secondary">Guarda referencias, acordes, progreso...</p>
-          </div>
-          <div className="animate-fade-in">
-            <NotesEditor endpoint={`/api/artists/${artistId}/notes`} />
-          </div>
-        </div>
-      )}
-
       {/* Tab Content: Matrices */}
       {activeTab === 'matrices' && (
         <ArtistMatricesTab artistId={artistId} artistName={artist?.name} />
-      )}
-
-      {/* Tab Content: Payments */}
-      {activeTab === 'payments' && (
-        <ArtistPaymentsTab artistId={artistId} />
       )}
 
       {/* Tab Content: Files (Drive Explorer) */}
@@ -428,7 +408,7 @@ export default function ArtistDetailPage() {
       )}
 
       {/* Tab Content: Placeholder for others */}
-      {activeTab !== 'projects' && activeTab !== 'notes' && activeTab !== 'matrices' && activeTab !== 'payments' && activeTab !== 'files' && activeTab !== 'portal' && (
+      {activeTab !== 'projects' && activeTab !== 'matrices' && activeTab !== 'files' && activeTab !== 'portal' && (
         <div className="glass rounded-xl p-12 text-center text-text-secondary border border-border animate-fade-in">
           <h3 className="text-lg font-medium text-text-primary mb-2 capitalize">Módulo de {activeTab}</h3>
           <p className="max-w-md mx-auto">Esta sección se está construyendo actualmente.</p>

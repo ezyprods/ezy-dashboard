@@ -335,9 +335,22 @@ export function WaveformPlayer({
     customAlert('Comentario añadido');
   };
 
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    const fileUrl = `${window.location.origin}/api/audio/${activeId}`;
+    const safeName = activeName.replace(/[^a-z0-9_.\-\[\] ]/gi, '_');
+    
+    // Standard format for dragging out of the browser to OS/WhatsApp
+    e.dataTransfer.setData('DownloadURL', `audio/mpeg:${safeName}:${fileUrl}`);
+    e.dataTransfer.setData('text/plain', fileUrl);
+    e.dataTransfer.setData('text/uri-list', fileUrl);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <div className="flex flex-col gap-2 w-full min-w-0">
       <div
+        draggable
+        onDragStart={handleDragStart}
         onContextMenu={onContextMenu}
         className={cn(
           'py-2 px-3 rounded-xl border bg-surface-elevated/40 flex items-center justify-between gap-4 transition-all group/audio shadow-sm hover:shadow-md hover:bg-surface-elevated/70',
