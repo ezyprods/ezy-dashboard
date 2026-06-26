@@ -182,7 +182,7 @@ export default function ArtistDetailPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => artist?.folderId && window.open(`https://drive.google.com/drive/folders/${artist.folderId}`, '_blank')} 
+              onClick={() => window.open(`https://drive.google.com/drive/folders/${artistId}`, '_blank')} 
               className="shrink-0 h-8 text-xs px-3 bg-blue-500/10 text-blue-500 border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-500"
               title="Abrir carpeta en Google Drive"
             >
