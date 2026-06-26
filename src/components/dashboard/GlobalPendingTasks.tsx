@@ -424,7 +424,7 @@ export function GlobalPendingTasks() {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide lg:grid lg:grid-cols-3 gap-4 lg:gap-6 relative z-10 flex-1 min-h-[450px] lg:min-h-0 pb-4 lg:pb-0 -mx-5 px-5 lg:mx-0 lg:px-0">
+        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide lg:grid lg:grid-cols-3 gap-4 lg:gap-6 relative z-10 flex-1 h-[500px] lg:h-auto lg:min-h-0 pb-4 lg:pb-0 -mx-5 px-5 lg:mx-0 lg:px-0">
           <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
             <StatusColumn
               id="todo"

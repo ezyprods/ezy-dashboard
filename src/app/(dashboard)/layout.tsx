@@ -17,12 +17,32 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStart === null) return;
+    const touchEnd = e.changedTouches[0].clientX;
+    const isSwipeRight = touchEnd - touchStart > 50;
+    // Only open if the swipe started near the left edge (e.g. within 40px)
+    if (isSwipeRight && touchStart < 40) {
+      setIsSidebarOpen(true);
+    }
+    setTouchStart(null);
+  };
 
   return (
     <ContextMenuProvider>
       <PasswordGuard>
         <GlobalDragDropProvider>
-          <div className="flex h-screen overflow-hidden bg-background">
+          <div 
+            className="flex h-screen overflow-hidden bg-background"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
             <div className="flex flex-col flex-1 w-full overflow-hidden min-h-0">
               <Topbar onMenuClick={() => setIsSidebarOpen(true)} />

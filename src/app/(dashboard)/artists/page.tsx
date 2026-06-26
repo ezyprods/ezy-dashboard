@@ -194,7 +194,7 @@ export default function ArtistsPage() {
       ) : (
         <div className={
           viewMode === 'grid' 
-            ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" 
+            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4" 
             : "space-y-3"
         }>
           {filteredArtists.map((artist) => (
@@ -227,8 +227,8 @@ export default function ArtistsPage() {
               }}
               data-context="artist"
               data-artist-id={artist.id}
-              className={`bg-surface-elevated border card-hover cursor-pointer group rounded-xl overflow-hidden relative transition-all duration-150 ${
-                viewMode === 'list' ? 'flex items-center p-4 gap-6' : 'p-3 md:p-4 flex flex-col gap-2 md:gap-3'
+              className={`bg-surface-elevated border card-hover cursor-pointer group rounded-2xl overflow-hidden relative transition-all duration-300 ${
+                viewMode === 'list' ? 'flex items-center p-4 gap-6' : 'p-4 md:p-5 flex flex-col items-center justify-center text-center gap-3 shadow-sm hover:shadow-md'
               } ${
                 hoveredArtistId === artist.id
                   ? 'border-accent ring-2 ring-accent/30 scale-[1.02] shadow-lg shadow-accent/10'
@@ -244,16 +244,18 @@ export default function ArtistsPage() {
                   </div>
                 </div>
               )}
-              <div className={cn("flex items-center", viewMode === 'list' ? "gap-6 flex-1" : "gap-3")}>
-                <ArtistAvatar 
-                  name={artist.name} 
-                  photoUrl={artist.photoUrl} 
-                  size={viewMode === 'grid' ? 'lg' : 'md'} 
-                />
+              <div className={cn("flex", viewMode === 'list' ? "items-center gap-6 flex-1" : "flex-col items-center justify-center w-full gap-3 pt-1")}>
+                <div className={cn("transition-transform duration-300 group-hover:scale-105", viewMode === 'grid' && "drop-shadow-md")}>
+                  <ArtistAvatar 
+                    name={artist.name} 
+                    photoUrl={artist.photoUrl} 
+                    size={viewMode === 'grid' ? 'lg' : 'md'} 
+                  />
+                </div>
                 
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-bold text-text-primary text-base leading-tight group-hover:text-accent transition-colors truncate">{artist.name}</h3>
-                  <p className="text-xs text-text-secondary mt-0.5 truncate">{artist.activeProject || 'Sin proyectos'}</p>
+                <div className="min-w-0 w-full">
+                  <h3 className="font-bold text-text-primary text-sm sm:text-base leading-tight group-hover:text-accent transition-colors truncate">{artist.name}</h3>
+                  <p className="text-[10px] sm:text-xs text-text-secondary mt-1 truncate font-medium bg-surface/50 inline-block px-2 py-0.5 rounded-full">{artist.activeProject || 'Sin proyectos'}</p>
                 </div>
               </div>
 
