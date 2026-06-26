@@ -179,15 +179,15 @@ export default function ArtistDetailPage() {
                 <Copy className="w-3.5 h-3.5" />
               </button>
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => window.open(`https://drive.google.com/drive/folders/${artistId}`, '_blank')} 
-              className="shrink-0 h-8 text-xs px-3 bg-blue-500/10 text-blue-500 border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-500"
+            <a 
+              href={`https://drive.google.com/drive/folders/${artistId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 shrink-0 h-8 text-xs px-3 bg-blue-500/10 text-blue-500 border border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-500"
               title="Abrir carpeta en Google Drive"
             >
               <LucideIcons.HardDrive className="w-3.5 h-3.5 mr-1.5" /> Drive
-            </Button>
+            </a>
             <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-8 text-xs px-3">
               <Headphones className="w-3.5 h-3.5 mr-1.5" /> Gestor Previews
             </Button>
