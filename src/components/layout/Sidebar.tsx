@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { name: 'Artistas', href: '/artists', icon: Users },
   { name: 'Matrices', href: '/matrices', icon: Grid },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
+  { name: 'Herramientas', href: '/tools', icon: Settings },
   { name: 'Comunicaciones', href: '/communications', icon: MessageSquare },
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];

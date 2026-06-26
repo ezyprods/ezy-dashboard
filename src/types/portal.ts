@@ -16,6 +16,7 @@ export interface PortalConfig {
   createdAt: string;
   theme?: 'dark' | 'light' | 'custom';
   accentColor?: string;
+  enableTools?: boolean;
   modules?: PortalModule[];
 }
 

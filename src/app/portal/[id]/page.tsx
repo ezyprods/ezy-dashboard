@@ -6,9 +6,10 @@ import {
   Loader2, Music, CheckCircle2, Circle, Headphones, CreditCard,
   AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
   SkipForward, SkipBack, ChevronRight, Lock, Download, ExternalLink,
-  Star, Clock, TrendingUp, ListMusic, Eye
+  Star, Clock, TrendingUp, ListMusic, Eye, Wrench
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
+import { MusicDownloader } from '@/components/tools/MusicDownloader';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { isBrowserCompatible } from '@/lib/utils';
 
@@ -22,7 +23,7 @@ export default function PortalPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [activeReleaseId, setActiveReleaseId] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<'overview' | 'releases'>('overview');
+  const [activeSection, setActiveSection] = useState<'overview' | 'releases' | 'tools'>('overview');
 
   // Theme is now enforced by ThemeContext based on route
 
@@ -470,6 +471,7 @@ export default function PortalPage() {
             {[
               { key: 'overview', label: 'Overview', icon: TrendingUp },
               ...(data.releases?.length > 0 ? [{ key: 'releases', label: 'Previews', icon: ListMusic }] : []),
+              ...(data.config?.enableTools ? [{ key: 'tools', label: 'Herramientas', icon: Wrench }] : []),
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -669,6 +671,12 @@ export default function PortalPage() {
           </div>
         )}
 
+        {/* ── TOOLS SECTION ── */}
+        {activeSection === 'tools' && (
+          <div className="animate-fade-in mt-8 max-w-[1600px] w-[95%] mx-auto pb-20">
+            <MusicDownloader toolUrl="http://localhost:3000" />
+          </div>
+        )}
 
       </main>
 

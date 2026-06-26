@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Search, Loader2, Music, Check, ChevronRight, Folder, FileAudio, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { customAlert } from '@/lib/dialog';
@@ -32,6 +32,7 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSelectingId, setIsSelectingId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(50);
 
   useEffect(() => {
     fetchFolderItems(currentFolderId);
@@ -90,9 +91,22 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
     }
   };
 
-  const filteredItems = items.filter(item => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredItems = useMemo(() => {
+    if (!searchQuery) return items;
+    const q = searchQuery.toLowerCase();
+    return items.filter(item => item.name.toLowerCase().includes(q));
+  }, [items, searchQuery]);
+
+  const displayItems = filteredItems.slice(0, visibleCount);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollHeight - target.scrollTop <= target.clientHeight + 150) {
+      if (visibleCount < filteredItems.length) {
+        setVisibleCount(prev => prev + 50);
+      }
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
@@ -146,14 +160,17 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
               type="text" 
               placeholder="Buscar en esta carpeta..." 
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setVisibleCount(50);
+              }}
               className="w-full bg-[#282828] border-none rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#1db954] text-white placeholder:text-[#b3b3b3]"
             />
           </div>
         </div>
 
         {/* List Content */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2" onScroll={handleScroll}>
           {isLoading ? (
             <div className="flex justify-center py-16">
               <Loader2 className="w-8 h-8 animate-spin text-[#1db954]" />
@@ -163,18 +180,18 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
               <Folder className="w-12 h-12 mb-3 opacity-20" />
               <p>Carpeta vacía o sin coincidencias.</p>
             </div>
-          ) : (
-            filteredItems.map(item => {
-              const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
-              const isAlreadySelected = selectedFileIds.includes(item.id);
+            <div className="space-y-1">
+              {displayItems.map(item => {
+                const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+                const isAlreadySelected = selectedFileIds.includes(item.id);
 
-              return (
-                <div 
-                  key={item.id} 
-                  className={`flex items-center justify-between p-2 rounded-lg hover:bg-white/10 transition-colors group ${
-                    isFolder || !isAlreadySelected ? 'cursor-pointer' : 'opacity-60 pointer-events-none'
-                  } ${isSelectingId === item.id ? 'opacity-50 pointer-events-none' : ''}`}
-                  onClick={() => {
+                return (
+                  <div 
+                    key={item.id} 
+                    className={`flex items-center justify-between p-2 rounded-lg hover:bg-white/10 transition-colors group ${
+                      isFolder || !isAlreadySelected ? 'cursor-pointer' : 'opacity-60 pointer-events-none'
+                    } ${isSelectingId === item.id ? 'opacity-50 pointer-events-none' : ''}`}
+                    onClick={() => {
                     if (isFolder) navigateToFolder(item.id, item.name);
                     else if (!isAlreadySelected) handleSelect(item.id, item.name);
                   }}

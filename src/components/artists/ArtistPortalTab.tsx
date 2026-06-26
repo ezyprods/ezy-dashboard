@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import {
   Loader2, Eye, EyeOff, ArrowUp, ArrowDown, Layout,
-  ExternalLink, Copy, CheckCircle2, Globe
+  ExternalLink, Copy, CheckCircle2, Globe, Wrench
 } from 'lucide-react';
 import { customAlert } from '@/lib/dialog';
 import type { PortalConfig, PortalModule } from '@/types';
@@ -149,6 +149,34 @@ export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
               Ver
             </a>
           </div>
+        </div>
+      </div>
+
+      {/* Tools Access Toggle */}
+      <div className="glass rounded-xl border border-border p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <Wrench className="w-4 h-4 text-accent" />
+              Acceso a Herramientas (SoundBox)
+            </h3>
+            <p className="text-xs text-text-secondary mt-1">
+              Permite a este artista acceder a la pestaña de descarga y conversión de música desde su portal.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+            <input 
+              type="checkbox" 
+              className="sr-only peer"
+              checked={config.enableTools || false}
+              onChange={(e) => {
+                const newConfig = { ...config, enableTools: e.target.checked };
+                setConfig(newConfig);
+                saveConfig(newConfig);
+              }}
+            />
+            <div className="w-11 h-6 bg-surface-elevated peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-secondary peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent border border-border/50"></div>
+          </label>
         </div>
       </div>
 
