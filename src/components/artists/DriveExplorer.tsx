@@ -294,7 +294,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           } else {
             playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
           }
-        } else if (isBrowserCompatible(item.mimeType)) {
+        } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
           window.open(`/api/files/${item.id}?inline=true`, '_blank');
         } else if (item.webViewLink) {
           window.open(item.webViewLink, '_blank');
@@ -823,7 +823,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         } else {
                           playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
                         }
-                      } else if (isBrowserCompatible(item.mimeType)) {
+                      } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
                         const openUrl = `/api/files/${item.id}?inline=true`;
                         window.open(openUrl, '_blank');
                       } else if (item.webViewLink) {
@@ -1100,7 +1100,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         e.stopPropagation();
                         if (isFolder) {
                           navigateTo(item.id, item.name);
-                        } else if (isBrowserCompatible(item.mimeType)) {
+                        } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
                           window.open(`/api/files/${item.id}?inline=true`, '_blank');
                         } else if (item.webViewLink) {
                           window.open(item.webViewLink, '_blank');
@@ -1305,7 +1305,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                           e.stopPropagation();
                           if (isFolder) {
                             navigatePaneTo(idx, item.id, item.name);
-                          } else if (isBrowserCompatible(item.mimeType)) {
+                          } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
                             window.open(`/api/files/${item.id}?inline=true`, '_blank');
                           } else if (item.webViewLink) {
                             window.open(item.webViewLink, '_blank');
