@@ -130,14 +130,14 @@ export default function ArtistDetailPage() {
       </div>
 
       {/* Header Profile */}
-      <div className="glass rounded-xl p-5 border border-border relative overflow-hidden">
+      <div className="glass rounded-xl p-4 md:p-5 border border-border relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[80px] rounded-full pointer-events-none" />
         
         <div className="flex flex-col gap-4 relative z-10 w-full">
           
           {/* Left side: Avatar + Info */}
           <div className="flex items-center gap-3 min-w-0">
-            <ArtistAvatar name={artist.name || '?'} photoUrl={artist.photoUrl} size="lg" className="w-11 h-11" />
+            <ArtistAvatar name={artist.name || '?'} photoUrl={artist.photoUrl} size="md" className="w-10 h-10 md:w-12 md:h-12" />
             
             <div className="flex flex-col min-w-0">
               <div className="flex items-center gap-3">
@@ -151,8 +151,8 @@ export default function ArtistDetailPage() {
           </div>
           
           {/* Right side: Actions */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide w-full">
-            <Button variant="outline" size="sm" onClick={() => setIsEditArtistModalOpen(true)} className="h-8 text-xs shrink-0">
+          <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide w-full">
+            <Button variant="outline" size="sm" onClick={() => setIsEditArtistModalOpen(true)} className="h-8 text-xs shrink-0 px-2 md:px-3">
               <LucideIcons.Edit3 className="w-3.5 h-3.5 mr-1.5" />
               Editar Perfil
             </Button>
@@ -190,7 +190,7 @@ export default function ArtistDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-4 md:gap-6 border-b border-border/50 px-1 overflow-x-auto mt-6 md:mt-8 scrollbar-hide">
+      <div className="flex items-center gap-3 md:gap-6 border-b border-border/50 px-1 overflow-x-auto mt-4 md:mt-8 scrollbar-hide">
         {(['files', 'projects', 'campaigns', 'matrices', 'portal'] as const).map(tab => (
           <button 
             key={tab}

@@ -91,10 +91,10 @@ export function GlobalDropZone() {
   const isArtistsList = pathname === '/artists';
 
   // Don't show global overlay when on the artists list page (Cards handle it)
-  // DriveExplorer will handle its own drops by appearing above this overlay (z-index)
+  // DriveExplorer will handle its own drops directly
   // Also, disable in the Preview Editor so users can drag cover images without triggering global upload
   const isPreviewEditor = pathname.includes('/releases/') && pathname.includes('/editor');
-  const shouldShowOverlay = isDraggingFiles && !isArtistsList && !isPreviewEditor;
+  const shouldShowOverlay = isDraggingFiles && !isArtistsList && !isPreviewEditor && !isFilesTab;
 
   const handleGenericDrop = (e: React.DragEvent) => {
     e.preventDefault();

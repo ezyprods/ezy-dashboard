@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon } from 'lucide-react';
 import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
-import { customConfirm } from '@/lib/dialog';
+import { customConfirm, customPrompt, customAlert } from '@/lib/dialog';
 import { createPortal } from 'react-dom';
 import { findBestMatch } from '@/lib/utils';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
@@ -727,11 +727,54 @@ export function SmartUploadModal({
 
                   <div className={(item.subType === 'bounce' || preselectedFolderId) ? "opacity-50 pointer-events-none" : ""}>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
-                    <select value={item.projectId} onChange={e => updateItem(item.id, { projectId: e.target.value })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
+                    <select 
+                      value={item.projectId} 
+                      onChange={async e => {
+                        if (e.target.value === '__NEW__') {
+                          const projName = await customPrompt('Introduce el nombre del nuevo proyecto:', '', 'Nuevo Proyecto');
+                          if (!projName || !projName.trim()) {
+                            // User cancelled, reset visually to original state by triggering a no-op update
+                            updateItem(item.id, {});
+                            return;
+                          }
+                          try {
+                            const res = await fetch('/api/folders', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ name: projName.trim(), parentId: item.artistId })
+                            });
+                            if (!res.ok) throw new Error('Error al crear proyecto');
+                            const data = await res.json();
+                            const newFolderId = data.folderId || data.id;
+                            
+                            setArtistFoldersCache(prev => {
+                              const existing = prev[item.artistId] || [];
+                              return {
+                                ...prev,
+                                [item.artistId]: [...existing, { id: newFolderId, name: projName.trim(), mimeType: 'application/vnd.google-apps.folder' }]
+                              };
+                            });
+                            
+                            updateItem(item.id, { projectId: newFolderId });
+                            customAlert('Proyecto creado correctamente');
+                          } catch (err) {
+                            customAlert('Error al crear el proyecto. Revisa tu conexión.');
+                            updateItem(item.id, {});
+                          }
+                        } else {
+                          updateItem(item.id, { projectId: e.target.value });
+                        }
+                      }} 
+                      className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary"
+                    >
                       {item.subType === 'bounce' ? (
                          <option value="">Carpeta General (Artista)</option>
                       ) : (
-                        projectList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)
+                        <>
+                          <option value="">(Selecciona un proyecto)</option>
+                          {projectList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          <option value="__NEW__" className="font-bold text-accent">+ Crear nuevo proyecto...</option>
+                        </>
                       )}
                     </select>
                   </div>

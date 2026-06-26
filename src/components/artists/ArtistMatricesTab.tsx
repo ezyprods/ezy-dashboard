@@ -219,10 +219,10 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
               <div 
                 key={m.id} 
                 onClick={() => setActiveMatrixId(m.id)}
-                className="glass rounded-xl p-5 border border-border hover:border-accent/50 transition-all group relative cursor-pointer hover:shadow-lg hover:shadow-accent/5 flex flex-col justify-between"
+                className="glass rounded-xl p-4 md:p-5 border border-border hover:border-accent/50 transition-all group relative cursor-pointer hover:shadow-lg hover:shadow-accent/5 flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex justify-between items-start mb-3 md:mb-4">
                     <div className="flex items-center gap-2 min-w-0">
                       <Table2 className="w-5 h-5 text-accent shrink-0" />
                       <h4 className="font-bold text-lg text-text-primary truncate">{m.name}</h4>
@@ -240,8 +240,8 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
                   </div>
                   
                   {/* Useful dynamic stats / functional icons */}
-                  <div className="flex flex-wrap gap-2 text-xs text-text-secondary mb-6">
-                    <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
+                  <div className="flex flex-wrap gap-1.5 md:gap-2 text-xs text-text-secondary mb-4 md:mb-6">
+                    <div className="flex items-center gap-1 bg-surface/30 px-2 py-1 md:px-2.5 md:py-1 rounded-md border border-border/10">
                       <Music className="w-3.5 h-3.5 text-accent" />
                       <span>{rowCount} {rowCount === 1 ? 'Tema' : 'Temas'}</span>
                     </div>
@@ -260,7 +260,7 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
 
                 <div>
                   <button 
-                    className="flex items-center gap-2 text-xs text-text-primary border-t border-border/30 pt-3 mt-3 mb-4 w-fit group/cb"
+                    className="flex items-center gap-2 text-xs text-text-primary border-t border-border/30 pt-3 mt-2 md:mt-3 mb-3 md:mb-4 w-fit group/cb"
                     onClick={async (e) => {
                       e.stopPropagation();
                       const current = m.sharedInPortal || false;
@@ -274,13 +274,6 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
                       Compartir en Portal
                     </span>
                   </button>
-
-                  <Button className="w-full" variant="secondary" onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveMatrixId(m.id);
-                  }}>
-                    Abrir Matriz
-                  </Button>
                 </div>
               </div>
             );
@@ -361,17 +354,8 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
                       </div>
                     </div>
 
-                    <div className="space-y-3 mt-2">
-                      <Button 
-                        className="w-full text-xs h-8" 
-                        variant="outline" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMatrixId(m.id);
-                        }}
-                      >
-                        Ver Matriz
-                      </Button>
+                    <div className="space-y-3 mt-2 hidden">
+                      {/* Button removed */}
                     </div>
                   </div>
                 );

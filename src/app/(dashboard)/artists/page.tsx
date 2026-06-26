@@ -91,7 +91,7 @@ export default function ArtistsPage() {
     });
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
+    <div className="space-y-4 md:space-y-6 animate-fade-in pb-10">
       <NewArtistModal 
         isOpen={isNewArtistModalOpen} 
         onClose={() => setIsNewArtistModalOpen(false)} 
@@ -107,7 +107,7 @@ export default function ArtistsPage() {
       {/* Header section */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-text-primary">Artistas</h1>
+          <h1 className="text-xl md:text-3xl font-bold text-text-primary">Artistas</h1>
           <p className="text-text-secondary mt-1 hidden sm:block">
             Gestiona los artistas con los que trabajas y sus carpetas de Drive.
           </p>
@@ -228,7 +228,7 @@ export default function ArtistsPage() {
               data-context="artist"
               data-artist-id={artist.id}
               className={`bg-surface-elevated border card-hover cursor-pointer group rounded-xl overflow-hidden relative transition-all duration-150 ${
-                viewMode === 'list' ? 'flex items-center p-4 gap-6' : 'p-4 flex flex-col gap-3'
+                viewMode === 'list' ? 'flex items-center p-4 gap-6' : 'p-3 md:p-4 flex flex-col gap-2 md:gap-3'
               } ${
                 hoveredArtistId === artist.id
                   ? 'border-accent ring-2 ring-accent/30 scale-[1.02] shadow-lg shadow-accent/10'

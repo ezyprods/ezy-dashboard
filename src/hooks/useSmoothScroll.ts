@@ -9,6 +9,7 @@ export function useSmoothScroll(ref: RefObject<HTMLElement | null>, deps: any[] 
     let currentY = el.scrollTop;
     let animationFrameId: number;
     let isAnimating = false;
+    let lastTime = performance.now();
 
     const handleWheel = (e: WheelEvent) => {
       // Allow native scrolling for horizontal, zooming, or trackpads (deltaY usually small like < 20 for trackpads)
@@ -26,6 +27,7 @@ export function useSmoothScroll(ref: RefObject<HTMLElement | null>, deps: any[] 
       if (!isAnimating) {
         isAnimating = true;
         currentY = el.scrollTop;
+        lastTime = performance.now();
         animate();
       }
     };
@@ -36,9 +38,6 @@ export function useSmoothScroll(ref: RefObject<HTMLElement | null>, deps: any[] 
         return;
       }
 
-      const maxScroll = el.scrollHeight - el.clientHeight;
-      targetY = Math.max(0, Math.min(targetY, maxScroll));
-
       const diff = targetY - currentY;
 
       // When close enough, stop animating
@@ -48,9 +47,26 @@ export function useSmoothScroll(ref: RefObject<HTMLElement | null>, deps: any[] 
         return;
       }
 
-      // Smooth interpolation (lower = smoother/slower, higher = faster)
-      currentY += diff * 0.15;
+      // Smooth interpolation independent of frame rate
+      // 0.15 was originally frame-based, assuming 60fps (~16.6ms).
+      // We can use a time delta to adjust the multiplier.
+      const now = performance.now();
+      const delta = Math.min(now - lastTime, 32); // cap at 32ms to avoid huge jumps
+      lastTime = now;
+
+      // Factor adjusted for 60fps baseline (16.6ms)
+      const factor = 1 - Math.pow(1 - 0.15, delta / 16.66);
+      
+      currentY += diff * factor;
+      
+      // Update DOM
       el.scrollTop = currentY;
+
+      // If the browser natively clamped it because scrollHeight shrank, sync our variables
+      if (Math.abs(el.scrollTop - currentY) > 1) {
+        currentY = el.scrollTop;
+        targetY = currentY;
+      }
 
       animationFrameId = requestAnimationFrame(animate);
     };

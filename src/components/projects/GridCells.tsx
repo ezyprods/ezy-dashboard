@@ -268,12 +268,12 @@ function StatusCellUI({
       onContextMenu={handleContextMenu}
     >
       <button 
-        className={`w-full py-2 flex justify-center items-center rounded transition-colors ${cfg.bgColor} hover:brightness-110`} 
+        className={`w-full py-1 sm:py-2 flex justify-center items-center rounded transition-colors ${cfg.bgColor} hover:brightness-110`} 
         title={cfg.label} 
         type="button" 
         style={{ pointerEvents: 'none' }}
       >
-        <Icon className={`w-5 h-5 ${cfg.color}`} />
+        <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${cfg.color}`} />
       </button>
 
       {showRadial && typeof document !== 'undefined' && createPortal(
@@ -322,7 +322,7 @@ function FileCellUI({ fileId, fileName, artistName, isUploading, onPlay, isPlayi
     return (
       <div 
         onClick={isAudioFile ? onPlay : onUploadClick} 
-        className={`flex items-center justify-between p-1.5 rounded border transition-all cursor-pointer ${isPlaying ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-elevated border-border text-text-primary hover:border-accent/50'}`}
+        className={`flex items-center justify-between p-1 sm:p-1.5 rounded border transition-all cursor-pointer ${isPlaying ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-elevated border-border text-text-primary hover:border-accent/50'}`}
         title={fileName}
       >
         <div className="flex items-center gap-1.5 overflow-hidden">
@@ -349,7 +349,7 @@ function ChecklistCellUI({ checklist = [], onOpenManager }: any) {
   const progress = total === 0 ? 0 : Math.round((done / total) * 100);
   
   return (
-    <div onClick={onOpenManager} className="cursor-pointer group flex flex-col gap-1 w-full p-1.5 rounded bg-surface border border-border hover:border-accent/50 transition-colors">
+    <div onClick={onOpenManager} className="cursor-pointer group flex flex-col gap-1 w-full p-1 sm:p-1.5 rounded bg-surface border border-border hover:border-accent/50 transition-colors">
       <div className="flex justify-between items-center text-[10px] font-bold text-text-secondary group-hover:text-text-primary">
         <span className="flex items-center gap-1">
           <ListTodo className="w-3 h-3" /> Tareas
@@ -419,7 +419,7 @@ export function CellComponent({
 
     return (
       <td 
-        className={`p-1.5 sm:p-3 border-b border-r border-border min-w-[100px] sm:min-w-[130px] cursor-context-menu ${isSelected ? 'bg-accent/10' : ''}`}
+        className={`p-1 sm:p-3 border-b border-r border-border min-w-[70px] sm:min-w-[130px] cursor-context-menu ${isSelected ? 'bg-accent/10' : ''}`}
         onContextMenu={handleStatusContextMenu}
         onClick={(e) => (e.ctrlKey || e.metaKey || e.shiftKey) && onToggleSelect?.(e)}
         data-context="ignore"
@@ -514,7 +514,7 @@ export function CellComponent({
 
   return (
     <td 
-      className={`p-1 sm:p-2 border-b border-r border-border text-center relative group/cell min-w-[120px] sm:min-w-[160px] max-w-[240px] align-middle transition-colors ${isSelected ? 'bg-accent/10' : ''}`}
+      className={`p-1 sm:p-2 border-b border-r border-border text-center relative group/cell min-w-[90px] sm:min-w-[160px] max-w-[240px] align-middle transition-colors ${isSelected ? 'bg-accent/10' : ''}`}
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onDrop={handleNativeDrop}
       onClick={(e) => (e.ctrlKey || e.metaKey || e.shiftKey) && onToggleSelect?.(e)}

@@ -35,7 +35,7 @@ function SortableColHeader({ col, onDelete, onRename }: { col: { id: string; nam
     <th
       ref={setNodeRef}
       style={style}
-      className={`p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 group relative ${col.type === 'status' ? 'min-w-[100px] sm:min-w-[130px]' : 'min-w-[120px] sm:min-w-[150px]'}`}
+      className={`p-1 sm:p-3 border-b border-r border-border bg-surface/50 group relative ${col.type === 'status' ? 'min-w-[70px] sm:min-w-[130px]' : 'min-w-[90px] sm:min-w-[150px]'}`}
     >
       <div className="flex items-center justify-center gap-1.5">
         <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity shrink-0">
@@ -122,8 +122,8 @@ function SortableRow({
 
   return (
     <tr ref={setNodeRef} style={style} className={`group/row transition-colors ${isDragging ? 'bg-surface-elevated shadow-lg' : 'hover:bg-surface/30'}`}>
-      <td className="p-1.5 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 min-w-[280px] sm:min-w-[380px] max-w-[400px]">
-        <div className="flex items-center gap-2 min-w-[200px]">
+      <td className="p-1 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 w-40 sm:w-64 min-w-[160px] sm:min-w-[250px] max-w-[160px] sm:max-w-[400px]">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
           <input 
             value={localName} 
@@ -674,9 +674,9 @@ export function ProductionGridBoard({
   const progress = totalCells === 0 ? 0 : Math.round((doneCells / totalCells) * 100);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-4">
-        <div>
+    <div className="space-y-4 md:space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-3 sm:gap-4">
+        <div className="hidden sm:block">
           <h3 className="text-xl font-bold">{matrixName}</h3>
           <p className="text-sm text-text-secondary">Trackeo modular por canción y fase.</p>
         </div>
@@ -720,7 +720,7 @@ export function ProductionGridBoard({
             )}
             <thead>
               <tr>
-                <th className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 w-32 sm:w-64 min-w-[120px] sm:min-w-[200px]">
+                <th className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 w-40 sm:w-64 min-w-[160px] sm:min-w-[250px] max-w-[160px] sm:max-w-[400px]">
                   <div className="flex items-center gap-1">
                     <Input placeholder="Nueva fila..." value={newRowName} onChange={e => setNewRowName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addRow()} className="h-7 text-xs bg-transparent w-full" />
                     <Button size="sm" variant="ghost" onClick={addRow} disabled={!newRowName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>

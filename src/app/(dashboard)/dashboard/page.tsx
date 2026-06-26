@@ -64,7 +64,7 @@ export default function DashboardPage() {
   const alertMsg = pulseData.globalStats?.priorityAlerts?.[0] || 'El estudio esta al dia. No hay tareas urgentes.';
 
   return (
-    <div className="flex-1 w-full h-auto min-h-full lg:h-full lg:min-h-0 flex flex-col gap-4 md:gap-6 animate-fade-in overflow-x-hidden lg:overflow-hidden pb-4 lg:pb-0">
+    <div className="flex-1 w-full h-auto min-h-full lg:h-full lg:min-h-0 flex flex-col gap-3 md:gap-6 animate-fade-in overflow-x-hidden lg:overflow-hidden pb-4 lg:pb-0">
       <NewArtistModal isOpen={isNewArtistModalOpen} onClose={() => setIsNewArtistModalOpen(false)} />
       <QuickUploadModal isOpen={isQuickUploadOpen} onClose={() => setIsQuickUploadOpen(false)} artists={artists} />
       <NewProjectModal isOpen={isNewProjectOpen} onClose={() => setIsNewProjectOpen(false)} artists={artists} />
@@ -73,7 +73,7 @@ export default function DashboardPage() {
       <div className="shrink-0 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
           <div className="min-w-0">
-            <h1 className="text-2xl font-black text-text-primary tracking-tight leading-none">
+            <h1 className="text-xl md:text-2xl font-black text-text-primary tracking-tight leading-none">
               Centro de Comando
             </h1>
             <p className="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
@@ -107,10 +107,10 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-2 h-full">
           <div
             onClick={() => setIsNewProjectOpen(true)}
-            className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-accent/50 cursor-pointer group transition-all flex items-center gap-3 px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
+            className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-accent/50 cursor-pointer group transition-all flex items-center gap-3 p-3 md:px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
           >
             <div className="absolute top-0 right-0 w-20 h-20 bg-accent/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/20 text-accent flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner relative z-10 shrink-0">
+            <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/20 text-accent flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner relative z-10 shrink-0">
               <Music className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0 relative z-10">
@@ -122,10 +122,10 @@ export default function DashboardPage() {
 
           <div
             onClick={() => setIsQuickUploadOpen(true)}
-            className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-blue-500/50 cursor-pointer group transition-all flex items-center gap-3 px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
+            className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-blue-500/50 cursor-pointer group transition-all flex items-center gap-3 p-3 md:px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
           >
             <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/20 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner relative z-10 shrink-0">
+            <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/20 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner relative z-10 shrink-0">
               <UploadCloud className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0 relative z-10">
@@ -137,10 +137,10 @@ export default function DashboardPage() {
 
           <div
             onClick={() => router.push('/calendar')}
-            className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-emerald-500/50 cursor-pointer group transition-all flex items-center gap-3 px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
+            className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-emerald-500/50 cursor-pointer group transition-all flex items-center gap-3 p-3 md:px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
           >
             <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/20 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner relative z-10 shrink-0">
+            <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/20 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner relative z-10 shrink-0">
               <Calendar className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0 relative z-10">
