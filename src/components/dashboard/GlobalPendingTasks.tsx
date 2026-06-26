@@ -87,7 +87,7 @@ function TaskCard({
       
       <div className="relative z-10 flex flex-col gap-1.5">
         <div className="flex justify-between items-start gap-2">
-          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
             <button
               {...(isOverlay ? {} : attributes)}
               {...(isOverlay ? {} : listeners)}
@@ -98,10 +98,28 @@ function TaskCard({
             </button>
             <Link 
               href={`/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}`}
-              className="font-semibold text-text-primary text-sm line-clamp-1 hover:text-accent transition-colors z-10"
+              className="font-semibold text-text-primary text-[13px] hover:text-accent transition-colors z-10"
               onPointerDown={(e) => e.stopPropagation()}
             >
               {task.rowName}
+            </Link>
+            
+            <span className="text-border/80 text-[10px] mx-0.5">|</span>
+
+            <Link 
+              href={`/artists/${task.artistId}`}
+              className="text-[9px] font-bold tracking-wider uppercase bg-surface-elevated px-1.5 py-0.5 rounded text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors truncate max-w-[80px] z-10 shrink-0"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {task.artistName}
+            </Link>
+            <span className="text-[10px] text-text-secondary/50 shrink-0">•</span>
+            <Link 
+              href={task.projectId ? `/projects/${task.projectId}` : `/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}`}
+              className="text-[9px] font-medium text-text-secondary hover:text-accent transition-colors truncate max-w-[90px] z-10 shrink-0"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {task.matrixName}
             </Link>
           </div>
           <button 
@@ -112,24 +130,6 @@ function TaskCard({
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
-        </div>
-
-        <div className="flex items-center gap-1.5 flex-wrap pl-5">
-          <Link 
-            href={`/artists/${task.artistId}`}
-            className="text-[9px] font-bold tracking-wider uppercase bg-surface-elevated px-1.5 py-0.5 rounded text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors truncate max-w-[100px] z-10"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {task.artistName}
-          </Link>
-          <span className="text-[10px] text-text-secondary/50">•</span>
-          <Link 
-            href={task.projectId ? `/projects/${task.projectId}` : `/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}`}
-            className="text-[10px] font-medium text-text-secondary hover:text-accent transition-colors truncate max-w-[100px] z-10"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {task.matrixName}
-          </Link>
         </div>
 
         <div className="flex items-center justify-between mt-1 pl-5">

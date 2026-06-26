@@ -935,6 +935,13 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         </button>
                       )}
                       <button
+                        onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
+                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
+                        title="Descargar/Ver"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={(e) => { e.stopPropagation(); handleOpenFileLocation(item.parentFolderId); }}
                         className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
                         title="Abrir ubicación"

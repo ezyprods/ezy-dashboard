@@ -725,7 +725,7 @@ export function SmartUploadModal({
                     </select>
                   </div>
 
-                  <div className={(item.subType === 'bounce' || preselectedFolderId) ? "opacity-50 pointer-events-none" : ""}>
+                  <div className={item.subType === 'bounce' ? "opacity-50 pointer-events-none" : ""}>
                     <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
                     <select 
                       value={item.projectId} 

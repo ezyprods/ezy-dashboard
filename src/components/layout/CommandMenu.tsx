@@ -153,9 +153,8 @@ export function CommandMenu() {
         </div>
       </div>
 
-      {/* Dropdown Results */}
       {open && (
-        <div className="absolute top-full mt-2 left-0 w-full z-50 bg-[#15151c] border border-border/80 rounded-xl shadow-2xl overflow-hidden ring-1 ring-black/20 flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="absolute top-full mt-2 left-0 w-full z-50 bg-surface-elevated border border-border/80 rounded-xl shadow-2xl overflow-hidden ring-1 ring-black/20 flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="max-h-[60vh] overflow-y-auto p-2 custom-scrollbar">
 
             {/* ── Dynamic Search Results ── */}
@@ -326,7 +325,7 @@ export function CommandMenu() {
                     <div className="h-px bg-border/50 my-2 mx-3" />
                     <div>
                       <p className="text-[10px] font-bold text-text-secondary/60 uppercase tracking-widest px-3 py-2">Ir a Artista</p>
-                      {activeArtists.slice(0, 6).map(artist => (
+                      {activeArtists.map(artist => (
                         <button
                           key={artist.id}
                           onClick={() => runCommand(() => router.push(`/artists/${artist.id}`))}
