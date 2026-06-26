@@ -376,6 +376,9 @@ export function SmartUploadModal({
     return undefined;
   };
 
+  const [isHovering, setIsHovering] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20);
+
   const handleUpload = async () => {
     const itemsToUpload = items.filter(i => i.uploadStatus === 'pending');
     if (itemsToUpload.length === 0) return;
@@ -617,8 +620,18 @@ export function SmartUploadModal({
         )}
 
         {/* Files list */}
-        <div className={`flex-1 overflow-y-auto ${isConfiguring ? 'px-4 py-4 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}>
-          {items.map(item => {
+        <div 
+          className={`flex-1 overflow-y-auto ${isConfiguring ? 'px-4 py-4 space-y-4' : 'px-4 py-3 space-y-2'} bg-background/30 custom-scrollbar`}
+          onScroll={(e) => {
+            const target = e.currentTarget;
+            if (target.scrollHeight - target.scrollTop <= target.clientHeight + 150) {
+              if (visibleCount < items.length) {
+                setVisibleCount(prev => prev + 20);
+              }
+            }
+          }}
+        >
+          {items.slice(0, visibleCount).map(item => {
             const currentArtistFolders = artistFoldersCache[item.artistId] || [];
             const projectList = currentArtistFolders.filter((f: any) => f?.name && !['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(f.name));
 
