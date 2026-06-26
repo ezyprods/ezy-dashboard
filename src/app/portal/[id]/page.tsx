@@ -674,7 +674,7 @@ export default function PortalPage() {
         {/* ── TOOLS SECTION ── */}
         {activeSection === 'tools' && (
           <div className="animate-fade-in mt-8 max-w-[1600px] w-[95%] mx-auto pb-20">
-            <MusicDownloader toolUrl="http://localhost:3000" />
+            <MusicDownloader />
           </div>
         )}
 

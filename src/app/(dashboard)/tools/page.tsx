@@ -10,7 +10,7 @@ export default function ToolsPage() {
         </p>
       </div>
 
-      <MusicDownloader toolUrl="http://localhost:3000" />
+      <MusicDownloader />
     </div>
   );
 }

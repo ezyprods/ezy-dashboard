@@ -8,7 +8,7 @@ interface MusicDownloaderProps {
   toolUrl?: string; // e.g. http://localhost:3000
 }
 
-export function MusicDownloader({ toolUrl = 'http://localhost:3000' }: MusicDownloaderProps) {
+export function MusicDownloader({ toolUrl = process.env.NEXT_PUBLIC_SOUNDBOX_URL || 'http://localhost:3000' }: MusicDownloaderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
