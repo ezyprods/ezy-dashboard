@@ -19,32 +19,19 @@ export function MusicDownloader() {
     try {
       // Usar la API pública de Cobalt.tools directamente desde el navegador (IP residencial)
       // Esto evita el bloqueo de Datacenters de Vercel (Sign in to confirm you're not a bot)
-      const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
+      const res = await fetch('/api/tools/cobalt', {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          url: url,
-          isAudioOnly: true,
-          aFormat: 'mp3'
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
       });
 
-      if (!cobaltRes.ok) {
-        // Fallback to new API format if needed
-        throw new Error('El servicio de descarga está saturado o bloqueado. Intenta más tarde.');
-      }
-
-      const data = await cobaltRes.json();
+      const data = await res.json();
       
-      if (data.status === 'error') {
-        throw new Error(data.text || 'Error extrayendo audio de YouTube');
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Error extrayendo audio de YouTube');
       }
 
-      // Cobalt nos devuelve la URL directa de descarga
-      const downloadUrl = data.url;
+      const downloadUrl = data.downloadUrl;
 
       if (!downloadUrl) {
          throw new Error('No se recibió la URL de descarga');
