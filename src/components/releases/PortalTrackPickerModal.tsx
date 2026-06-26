@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { X, Search, Music, Check } from 'lucide-react';
 
 interface PortalTrackPickerModalProps {
@@ -13,6 +13,7 @@ interface PortalTrackPickerModalProps {
 export function PortalTrackPickerModal({ bounces, selectedFileIds = [], onClose, onSelect }: PortalTrackPickerModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSelectingId, setIsSelectingId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(50);
 
   const handleSelect = async (fileId: string, fileName: string) => {
     setIsSelectingId(fileId);
@@ -23,9 +24,22 @@ export function PortalTrackPickerModal({ bounces, selectedFileIds = [], onClose,
     }
   };
 
-  const filteredItems = bounces.filter(item => 
-    (item.name || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredItems = useMemo(() => {
+    if (!searchQuery) return bounces;
+    const q = searchQuery.toLowerCase();
+    return bounces.filter(item => (item.name || '').toLowerCase().includes(q));
+  }, [bounces, searchQuery]);
+
+  const displayItems = filteredItems.slice(0, visibleCount);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollHeight - target.scrollTop <= target.clientHeight + 150) {
+      if (visibleCount < filteredItems.length) {
+        setVisibleCount(prev => prev + 50);
+      }
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4">
@@ -55,13 +69,16 @@ export function PortalTrackPickerModal({ bounces, selectedFileIds = [], onClose,
               type="text"
               placeholder="Buscar por nombre..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setVisibleCount(50);
+              }}
               className="w-full pl-9 pr-4 py-2.5 bg-surface-elevated border border-border/50 rounded-xl text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="flex-1 overflow-y-auto p-2" onScroll={handleScroll}>
           {filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-text-secondary p-8 text-center opacity-50">
               <Music className="w-12 h-12 mb-4" />
@@ -69,7 +86,7 @@ export function PortalTrackPickerModal({ bounces, selectedFileIds = [], onClose,
             </div>
           ) : (
             <div className="space-y-1">
-              {filteredItems.map(item => {
+              {displayItems.map(item => {
                 const isSelected = selectedFileIds.includes(item.id);
                 return (
                   <button
