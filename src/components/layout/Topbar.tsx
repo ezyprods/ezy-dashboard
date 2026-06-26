@@ -180,7 +180,7 @@ function QuickActionsPopover({ onClose }: { onClose: () => void }) {
 
 // ─── Topbar ──────────────────────────────────────────────────────────────────
 
-type ActivePopover = 'timer' | 'bell' | 'plus' | null;
+type ActivePopover = 'timer' | 'plus' | null;
 
 export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter();
@@ -282,28 +282,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
           </div>
         </div>
 
-        {/* ── Bell (Notifications) ── always visible */}
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative cursor-pointer min-h-[44px] min-w-[44px]"
-            onClick={() => toggle('bell')}
-            aria-label="Notificaciones"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface" />
-          </Button>
-          {activePopover === 'bell' && (
-            <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] glass rounded-xl shadow-xl border border-border z-50 p-4 animate-slide-in">
-              <h4 className="font-bold text-sm mb-2 text-text-primary">Notificaciones</h4>
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <Bell className="w-8 h-8 text-text-secondary opacity-50 mb-2" />
-                <p className="text-xs text-text-secondary">No tienes notificaciones nuevas.</p>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Removed unused Bell Notifications */}
 
       </div>
     </header>
