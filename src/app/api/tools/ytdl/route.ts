@@ -47,8 +47,8 @@ const downloadFile = (url: string, dest: string): Promise<void> => {
 const ensureBinaries = async () => {
   const tmpDir = os.tmpdir();
   const isWin = os.platform() === 'win32';
-  const ytdlpPath = path.join(tmpDir, isWin ? 'yt-dlp.exe' : 'yt-dlp');
-  const ffmpegPath = path.join(tmpDir, isWin ? 'ffmpeg.exe' : 'ffmpeg');
+  const ytdlpPath = `${tmpDir}/${isWin ? 'yt-dlp.exe' : 'yt-dlp'}`;
+  const ffmpegPath = `${tmpDir}/${isWin ? 'ffmpeg.exe' : 'ffmpeg'}`;
 
   if (!fs.existsSync(ytdlpPath)) {
     console.log('Downloading yt-dlp...');
