@@ -130,7 +130,7 @@ export function MusicDownloader() {
   };
 
   return (
-    <div className="w-full h-full min-h-[60vh] bg-surface border border-border/50 rounded-2xl overflow-hidden shadow-2xl flex flex-col items-center justify-center p-8 relative">
+    <div className="w-full max-w-3xl mx-auto py-24 bg-surface border border-border/50 rounded-2xl overflow-hidden shadow-2xl flex flex-col items-center justify-center p-8 relative">
       <div className="absolute top-0 left-0 w-full h-64 bg-accent/5 blur-[100px] rounded-full pointer-events-none" />
       
       <div className="max-w-xl w-full z-10 text-center space-y-8">
