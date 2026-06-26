@@ -17,55 +17,13 @@ export function MusicDownloader() {
     setProgress(0);
 
     try {
-      // Llamada directa a la API v7 de Cobalt desde el cliente (evita bloqueos de Vercel)
-      const COBALT_INSTANCES = [
-        'https://api.cobalt.tools/',
-        'https://cobalt.kwiatekgames.pl/',
-        'https://co.wuk.sh/',
-        'https://cobalt.q0.ooguy.com/'
-      ];
-
-      let downloadUrl = null;
-      let lastError = null;
-
-      for (const instance of COBALT_INSTANCES) {
-        try {
-          const res = await fetch(instance, {
-            method: 'POST',
-            headers: { 
-              'Accept': 'application/json',
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify({ 
-              url: url,
-              downloadMode: 'audio',
-              audioFormat: 'mp3'
-            })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status !== 'error' && !data.error && data.url) {
-              downloadUrl = data.url;
-              break; // Success!
-            }
-          }
-        } catch (e: any) {
-          lastError = e.message;
-        }
-      }
-
-      if (!downloadUrl) {
-        throw new Error('Todos los servidores públicos están saturados. Inténtalo más tarde.');
-      }
-
-      if (!downloadUrl) {
-         throw new Error('No se recibió la URL de descarga');
-      }
-
-      setStatus('downloading');
-
-      // Descargamos el archivo directamente para no bloquear la pestaña
+      // Usar nuestra API nativa de Vercel que descargará yt-dlp y ffmpeg al vuelo
+      // Redirigir directamente el navegador al endpoint GET
+      // Esto delega toda la gestión del archivo y la memoria al navegador (Descarga nativa)
+      
+      const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(url)}`;
+      
+      // Creamos un link oculto y forzamos el clic para que el navegador inicie la descarga
       const a = document.createElement('a');
       a.href = downloadUrl;
       a.target = '_blank';
