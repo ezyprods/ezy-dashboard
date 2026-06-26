@@ -1,36 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Loader2, Download, CheckCircle2, AlertCircle, Play } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 export function MusicDownloader() {
   const [url, setUrl] = useState('');
-  const [status, setStatus] = useState<'idle' | 'extracting' | 'downloading' | 'converting' | 'done' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'extracting' | 'downloading' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
-  
-  const ffmpegRef = useRef<any>(null);
-
-  const loadFFmpeg = async () => {
-    if (ffmpegRef.current) return ffmpegRef.current;
-    const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-    const { toBlobURL } = await import('@ffmpeg/util');
-    const ffmpeg = new FFmpeg();
-    
-    ffmpeg.on('progress', ({ progress, time }) => {
-      setProgress(Math.round(progress * 100));
-    });
-
-    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-    await ffmpeg.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
-    
-    ffmpegRef.current = ffmpeg;
-    return ffmpeg;
-  };
 
   const handleDownload = async () => {
     if (!url.trim()) return;
@@ -39,87 +17,53 @@ export function MusicDownloader() {
     setProgress(0);
 
     try {
-      // 1. Extract Info
-      const extractRes = await fetch('/api/tools/extract', {
+      // Usar la API pública de Cobalt.tools directamente desde el navegador (IP residencial)
+      // Esto evita el bloqueo de Datacenters de Vercel (Sign in to confirm you're not a bot)
+      const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: url,
+          isAudioOnly: true,
+          aFormat: 'mp3'
+        })
       });
+
+      if (!cobaltRes.ok) {
+        // Fallback to new API format if needed
+        throw new Error('El servicio de descarga está saturado o bloqueado. Intenta más tarde.');
+      }
+
+      const data = await cobaltRes.json();
       
-      const info = await extractRes.json();
-      if (!extractRes.ok) throw new Error(info.error || 'Error extrayendo info del video');
+      if (data.status === 'error') {
+        throw new Error(data.text || 'Error extrayendo audio de YouTube');
+      }
+
+      // Cobalt nos devuelve la URL directa de descarga
+      const downloadUrl = data.url;
+
+      if (!downloadUrl) {
+         throw new Error('No se recibió la URL de descarga');
+      }
 
       setStatus('downloading');
 
-      // 2. Download Stream via Proxy
-      const proxyUrl = `/api/tools/proxy?url=${encodeURIComponent(info.directUrl)}`;
-      const streamRes = await fetch(proxyUrl);
-      if (!streamRes.ok) throw new Error('Error al descargar el flujo de audio');
-
-      const contentLength = streamRes.headers.get('content-length');
-      const total = contentLength ? parseInt(contentLength, 10) : 0;
-      let loaded = 0;
-
-      const reader = streamRes.body?.getReader();
-      if (!reader) throw new Error('No stream body');
-
-      const chunks: Uint8Array[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          loaded += value.length;
-          if (total) {
-            setProgress(Math.round((loaded / total) * 100));
-          }
-        }
-      }
-
-      // Merge chunks
-      const totalLength = chunks.reduce((acc, val) => acc + val.length, 0);
-      const audioData = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const chunk of chunks) {
-        audioData.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      // 3. Convert to MP3
-      setStatus('converting');
-      setProgress(0);
-      
-      const ffmpeg = await loadFFmpeg();
-      const inputName = `input.${info.format || 'webm'}`;
-      
-      await ffmpeg.writeFile(inputName, audioData);
-      
-      // Convert
-      await ffmpeg.exec(['-i', inputName, '-vn', '-ab', '192k', '-ar', '44100', '-y', 'output.mp3']);
-      
-      const data = await ffmpeg.readFile('output.mp3');
-      const blob = new Blob([data], { type: 'audio/mp3' });
-      
-      // Cleanup FFmpeg FS
-      await ffmpeg.deleteFile(inputName);
-      await ffmpeg.deleteFile('output.mp3');
-
-      // 4. Download to User
-      const downloadUrl = URL.createObjectURL(blob);
+      // Descargamos el archivo directamente para no bloquear la pestaña
       const a = document.createElement('a');
       a.href = downloadUrl;
-      const safeTitle = info.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      a.download = `${safeTitle}.mp3`;
+      a.target = '_blank';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
 
       setStatus('done');
       setTimeout(() => {
         setStatus('idle');
         setUrl('');
-        setProgress(0);
       }, 3000);
 
     } catch (err: any) {
@@ -161,13 +105,12 @@ export function MusicDownloader() {
             {status === 'error' && <><AlertCircle className="w-4 h-4 mr-2" /> Reintentar</>}
             {status === 'done' && <><CheckCircle2 className="w-4 h-4 mr-2" /> ¡Completado!</>}
             {status === 'extracting' && <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>}
-            {(status === 'downloading' || status === 'converting') && <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {progress}%</>}
+            {status === 'downloading' && <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Descargando...</>}
           </Button>
         </div>
 
-        {status === 'extracting' && <p className="text-sm text-text-secondary animate-pulse">Obteniendo metadatos del video...</p>}
-        {status === 'downloading' && <p className="text-sm text-text-secondary animate-pulse">Descargando audio de alta calidad... ({progress}%)</p>}
-        {status === 'converting' && <p className="text-sm text-accent animate-pulse font-medium">Convirtiendo a MP3... ({progress}%)</p>}
+        {status === 'extracting' && <p className="text-sm text-text-secondary animate-pulse">Conectando con el motor anti-bot...</p>}
+        {status === 'downloading' && <p className="text-sm text-text-secondary animate-pulse">Descargando audio...</p>}
         {status === 'error' && <p className="text-sm text-danger font-medium">{errorMsg}</p>}
 
       </div>
