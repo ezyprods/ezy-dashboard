@@ -513,7 +513,7 @@ export function WaveformPlayer({
                   </button>
                 )}
                 <a
-                  href={`/api/audio/${activeId}`}
+                  href={`https://drive.google.com/file/d/${activeId}/view`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
