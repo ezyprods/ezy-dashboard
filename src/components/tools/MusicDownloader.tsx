@@ -17,21 +17,47 @@ export function MusicDownloader() {
     setProgress(0);
 
     try {
-      // Usar la API pública de Cobalt.tools directamente desde el navegador (IP residencial)
-      // Esto evita el bloqueo de Datacenters de Vercel (Sign in to confirm you're not a bot)
-      const res = await fetch('/api/tools/cobalt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
+      // Llamada directa a la API v7 de Cobalt desde el cliente (evita bloqueos de Vercel)
+      const COBALT_INSTANCES = [
+        'https://api.cobalt.tools/',
+        'https://cobalt.kwiatekgames.pl/',
+        'https://co.wuk.sh/',
+        'https://cobalt.q0.ooguy.com/'
+      ];
 
-      const data = await res.json();
-      
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Error extrayendo audio de YouTube');
+      let downloadUrl = null;
+      let lastError = null;
+
+      for (const instance of COBALT_INSTANCES) {
+        try {
+          const res = await fetch(instance, {
+            method: 'POST',
+            headers: { 
+              'Accept': 'application/json',
+              'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify({ 
+              url: url,
+              downloadMode: 'audio',
+              audioFormat: 'mp3'
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status !== 'error' && !data.error && data.url) {
+              downloadUrl = data.url;
+              break; // Success!
+            }
+          }
+        } catch (e: any) {
+          lastError = e.message;
+        }
       }
 
-      const downloadUrl = data.downloadUrl;
+      if (!downloadUrl) {
+        throw new Error('Todos los servidores públicos están saturados. Inténtalo más tarde.');
+      }
 
       if (!downloadUrl) {
          throw new Error('No se recibió la URL de descarga');
