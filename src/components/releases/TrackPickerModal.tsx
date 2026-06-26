@@ -233,7 +233,8 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
                   )}
                 </div>
               );
-            })
+            })}
+            </div>
           )}
         </div>
       </div>
