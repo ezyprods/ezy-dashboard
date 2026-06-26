@@ -180,6 +180,7 @@ export function TrackPickerModal({ artistId, selectedFileIds = [], onClose, onSe
               <Folder className="w-12 h-12 mb-3 opacity-20" />
               <p>Carpeta vacía o sin coincidencias.</p>
             </div>
+          ) : (
             <div className="space-y-1">
               {displayItems.map(item => {
                 const isFolder = item.mimeType === 'application/vnd.google-apps.folder';

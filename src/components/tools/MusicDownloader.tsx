@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { Loader2, Download, CheckCircle2, AlertCircle, Youtube } from 'lucide-react';
+import { Loader2, Download, CheckCircle2, AlertCircle, Play } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 export function MusicDownloader() {
@@ -136,7 +136,7 @@ export function MusicDownloader() {
       <div className="max-w-xl w-full z-10 text-center space-y-8">
         <div>
           <div className="w-16 h-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Youtube className="w-8 h-8 text-accent" />
+            <Play className="w-8 h-8 text-accent" />
           </div>
           <h2 className="text-3xl font-bold text-text-primary mb-3">SoundBox Cloud</h2>
           <p className="text-text-secondary">Descarga audios de YouTube rápidamente y conviértelos a MP3 directamente en tu navegador, sin historial y a máxima velocidad.</p>
