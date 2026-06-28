@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 
 export default function MatricesPage() {
+  const router = useRouter();
   const [matrices, setMatrices] = useState<any[]>([]);
   const [completedMatrices, setCompletedMatrices] = useState<any[]>([]);
   const [artists, setArtists] = useState<any[]>([]);
@@ -179,22 +181,25 @@ export default function MatricesPage() {
     const newName = await customPrompt('Introduce el nuevo nombre para la matriz:', currentName, 'Renombrar Matriz');
     if (!newName || newName === currentName) return;
     
+    // Optimistic Update
+    setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, name: newName } : m));
+    setCompletedMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, name: newName } : m));
+    if (activeMatrix && activeMatrix.id === matrixId) {
+      setActiveMatrix({ ...activeMatrix, name: newName });
+    }
+
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName })
       });
-      if (res.ok) {
-        await fetchData();
-        if (activeMatrix && activeMatrix.id === matrixId) {
-          setActiveMatrix({ ...activeMatrix, name: newName });
-        }
-      } else {
-        customAlert('Error al renombrar la matriz');
+      if (!res.ok) {
+        throw new Error('Error al renombrar la matriz');
       }
     } catch (e) {
-      customAlert('Error de conexión');
+      customAlert('Error de conexión al renombrar la matriz');
+      fetchData(); // revert
     }
   };
 
@@ -221,7 +226,11 @@ export default function MatricesPage() {
           </Button>
           <ChevronRight className="w-4 h-4 text-text-secondary" />
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-secondary font-medium px-2 py-0.5 bg-surface border border-border rounded">
+            <span 
+              className="text-xs text-text-secondary font-medium px-2 py-0.5 bg-surface border border-border rounded cursor-pointer hover:bg-accent/10 hover:text-accent hover:border-accent/30 transition-colors"
+              onClick={() => router.push(`/artists/${activeMatrix.artistId}`)}
+              title="Ir al perfil del artista"
+            >
               {activeMatrix.artistName}
             </span>
             <div 
@@ -286,7 +295,7 @@ export default function MatricesPage() {
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10">
-                <div className="flex justify-between items-start mb-4">
+                <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/10 flex items-center justify-center shrink-0 text-accent group-hover:scale-110 transition-transform duration-300 shadow-inner">
                       <Table2 className="w-5 h-5" />
@@ -295,7 +304,7 @@ export default function MatricesPage() {
                       <h3 className="font-bold text-lg text-text-primary truncate">{m.name}</h3>
                       <div className="flex items-center gap-1.5 text-xs text-text-secondary mt-0.5">
                         <User className="w-3.5 h-3.5" />
-                        <span className="truncate">Artista: <span className="font-medium text-text-primary">{m.artistName || 'Desconocido'}</span></span>
+                        <span className="truncate">Artista: <span className="font-medium text-text-primary hover:text-accent cursor-pointer transition-colors" onClick={(e) => { e.stopPropagation(); router.push(`/artists/${m.artistId}`); }} title="Ir al perfil del artista">{m.artistName || 'Desconocido'}</span></span>
                       </div>
                     </div>
                   </div>
@@ -305,41 +314,43 @@ export default function MatricesPage() {
                   </div>
                 </div>
                 
-                <div className="flex flex-wrap gap-2 text-xs mt-4">
-                  <span className="flex items-center gap-1 text-text-secondary bg-surface-elevated px-2 py-1 rounded-md border border-border">
-                    <FileText className="w-3 h-3" />
-                    {m.projectId ? 'Sincronizada' : 'Sincronizada'}
-                  </span>
-                  <span className="flex items-center gap-1 text-text-secondary bg-surface-elevated px-2 py-1 rounded-md border border-border">
-                    <Check className="w-3 h-3" />
-                    Trackeo Activo
-                  </span>
-                </div>
-              </div>
+                <div className="flex justify-between items-end mt-4 relative z-10">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="flex items-center gap-1 text-text-secondary bg-surface-elevated px-2 py-1 rounded-md border border-border">
+                      <FileText className="w-3 h-3" />
+                      {m.projectId ? 'Sincronizada' : 'Sincronizada'}
+                    </span>
+                    <span className="flex items-center gap-1 text-text-secondary bg-surface-elevated px-2 py-1 rounded-md border border-border">
+                      <Check className="w-3 h-3" />
+                      Trackeo Activo
+                    </span>
+                  </div>
 
-              <div className="mt-4 flex justify-end items-center gap-2 relative z-10">
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleRenameMatrix(m.artistId, m.id, m.name);
-                  }}
-                  className="p-2 text-text-secondary hover:text-accent hover:bg-accent/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                  title="Renombrar Matriz"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleDeleteMatrix(m.artistId, m.id);
-                  }}
-                  className="p-2 text-text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                  title="Eliminar Matriz"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleRenameMatrix(m.artistId, m.id, m.name);
+                      }}
+                      className="p-1.5 text-text-secondary hover:text-accent hover:bg-accent/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                      title="Renombrar Matriz"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDeleteMatrix(m.artistId, m.id);
+                      }}
+                      className="p-1.5 text-text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                      title="Eliminar Matriz"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
