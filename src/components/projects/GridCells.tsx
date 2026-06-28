@@ -703,7 +703,7 @@ export const MemoizedCellComponent = React.memo(CellComponent, (prev, next) => {
     prev.cellData.status === next.cellData.status &&
     prev.cellData.fileId === next.cellData.fileId &&
     prev.cellData.textValue === next.cellData.textValue &&
-    prev.cellData.dateValue === next.cellData.dateValue &&
+    prev.cellData.dueDate === next.cellData.dueDate &&
     prev.cellData.checklist === next.cellData.checklist &&
     prev.colId === next.colId &&
     prev.rowId === next.rowId &&
