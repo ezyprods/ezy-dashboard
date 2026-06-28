@@ -708,49 +708,47 @@ export function SmartUploadModal({
                   </div>
                 </div>
               ) : item.uploadStatus === 'done' && (
-                <div className="flex items-center gap-2 mt-3">
-                  <div className="flex items-center justify-between gap-2 w-full mt-2">
-                    <div className="flex items-center gap-2 text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-lg w-full">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-xs font-semibold">Completado</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        className="whitespace-nowrap"
-                        onClick={() => {
-                          onClose();
-                          router.push(`/artists/${item.artistId}`);
-                        }}
-                      >
-                        <User className="w-3.5 h-3.5 mr-1.5" />
-                        Abrir Perfil
-                      </Button>
+                <div className="flex flex-col gap-2 mt-3 w-full">
+                  <div className="flex items-center justify-center gap-2 text-emerald-500 bg-emerald-500/10 px-3 py-2 rounded-lg w-full border border-emerald-500/20">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-semibold">Subida completada</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 w-full">
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => {
+                        onClose();
+                        router.push(`/artists/${item.artistId}`);
+                      }}
+                    >
+                      <User className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                      Ver Perfil
+                    </Button>
 
-                      {/* Option to Open Matrix if linked */}
-                      {(() => {
-                        if (!item.projectId) return null;
-                        const linkedMatrix = artistMatricesCache[item.artistId]?.find(m => m.projectId === item.projectId);
-                        if (!linkedMatrix) return null;
-                        
-                        return (
-                          <Button 
-                            variant="secondary" 
-                            size="sm" 
-                            className="whitespace-nowrap"
-                            onClick={() => {
-                              onClose();
-                              router.push(`/artists/${item.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`);
-                            }}
-                          >
-                            <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5" />
-                            Abrir Matriz
-                          </Button>
-                        );
-                      })()}
-                    </div>
+                    {/* Option to Open Matrix if linked */}
+                    {(() => {
+                      if (!item.projectId) return null;
+                      const linkedMatrix = artistMatricesCache[item.artistId]?.find(m => m.projectId === item.projectId);
+                      if (!linkedMatrix) return null;
+                      
+                      return (
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="flex-1"
+                          onClick={() => {
+                            onClose();
+                            router.push(`/artists/${item.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`);
+                          }}
+                        >
+                          <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                          Ver Matriz
+                        </Button>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
