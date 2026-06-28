@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check } from 'lucide-react';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -171,7 +171,30 @@ export default function MatricesPage() {
         customAlert('Error al eliminar la matriz');
       }
     } catch (e) {
-      console.error(e);
+      customAlert('Error de conexión al eliminar la matriz');
+    }
+  };
+
+  const handleRenameMatrix = async (artistId: string, matrixId: string, currentName: string) => {
+    const newName = await customPrompt('Introduce el nuevo nombre para la matriz:', currentName, 'Renombrar Matriz');
+    if (!newName || newName === currentName) return;
+    
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (res.ok) {
+        await fetchData();
+        if (activeMatrix && activeMatrix.id === matrixId) {
+          setActiveMatrix({ ...activeMatrix, name: newName });
+        }
+      } else {
+        customAlert('Error al renombrar la matriz');
+      }
+    } catch (e) {
+      customAlert('Error de conexión');
     }
   };
 
@@ -201,7 +224,14 @@ export default function MatricesPage() {
             <span className="text-xs text-text-secondary font-medium px-2 py-0.5 bg-surface border border-border rounded">
               {activeMatrix.artistName}
             </span>
-            <h2 className="font-bold text-text-primary text-xl">{activeMatrix.name}</h2>
+            <div 
+              className="flex items-center gap-2 group/title cursor-pointer hover:bg-surface border border-transparent hover:border-border px-2 py-1 -ml-2 rounded transition-all" 
+              onClick={() => handleRenameMatrix(activeMatrix.artistId, activeMatrix.id, activeMatrix.name)}
+              title="Renombrar Matriz"
+            >
+              <h2 className="font-bold text-text-primary text-xl">{activeMatrix.name}</h2>
+              <Pencil className="w-4 h-4 text-text-secondary opacity-0 group-hover/title:opacity-100 transition-opacity" />
+            </div>
           </div>
         </div>
         
@@ -252,7 +282,7 @@ export default function MatricesPage() {
                   artistName: m.artistName
                 });
               }}
-              className="relative overflow-hidden glass rounded-[20px] p-6 border border-border hover:border-accent/50 transition-all duration-300 group flex flex-col justify-between min-h-[200px] hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 cursor-pointer"
+              className="relative overflow-hidden glass rounded-[20px] p-5 border border-border hover:border-accent/50 transition-all duration-300 group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 cursor-pointer"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10">
@@ -287,7 +317,18 @@ export default function MatricesPage() {
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end items-center relative z-10">
+              <div className="mt-4 flex justify-end items-center gap-2 relative z-10">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleRenameMatrix(m.artistId, m.id, m.name);
+                  }}
+                  className="p-2 text-text-secondary hover:text-accent hover:bg-accent/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  title="Renombrar Matriz"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
                 <button
                   onClick={(e) => {
                     e.preventDefault();
