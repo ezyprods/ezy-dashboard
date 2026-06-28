@@ -335,7 +335,7 @@ export function SmartUploadModal({
     if (item.subType === 'bounce') {
       const aFolders = await fetchArtistFolders(item.artistId);
       const bouncesFolder = aFolders.find((f: any) => f?.name?.toLowerCase()?.includes('bounce') || f?.name === FOLDER_NAME_MAP['Bounces']);
-      return bouncesFolder ? bouncesFolder.id : `CREATE_FOLDER::${FOLDER_NAME_MAP['Bounces']}::${item.artistId}`;
+      return bouncesFolder ? bouncesFolder.id : item.artistId;
     }
 
     if (item.subType === 'master' && item.projectId) return item.projectId;
@@ -344,7 +344,7 @@ export function SmartUploadModal({
       const pFolders = await fetchProjectFolders(item.projectId);
       let mappedName = FOLDER_NAME_MAP[item.subType.charAt(0).toUpperCase() + item.subType.slice(1) as keyof typeof FOLDER_NAME_MAP];
       const specificFolder = pFolders.find((f: any) => f?.name?.toLowerCase() === item.subType || f?.name === mappedName);
-      return specificFolder ? specificFolder.id : `CREATE_FOLDER::${mappedName || item.subType}::${item.projectId}`;
+      return specificFolder ? specificFolder.id : item.projectId;
     }
 
     return item.artistId || '';

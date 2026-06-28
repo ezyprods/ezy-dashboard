@@ -39,22 +39,14 @@ export async function POST(request: Request) {
     const mappedFolderName = (FOLDER_NAME_MAP as any)[folderType || ''] || folderType;
 
     if (folderType === 'Bounces') {
-      // For Bounces, always use or create a Bounces folder in the Artist root
+      // For Bounces, try to find a Bounces folder in the Artist root
       const subfolders = await listFolders(artistId);
       const match = subfolders.find((f) => f.name?.toLowerCase() === 'bounces');
       if (match) {
         targetFolderId = match.id!;
       } else {
-        const response = await drive.files.create({
-          requestBody: {
-            name: 'Bounces',
-            mimeType: 'application/vnd.google-apps.folder',
-            parents: [artistId],
-          },
-          fields: 'id',
-          supportsAllDrives: true,
-        });
-        targetFolderId = response.data.id!;
+        // Fallback to artist root instead of auto-creating Bounces
+        targetFolderId = artistId;
       }
     } else {
       // Standard logic for other folder types
