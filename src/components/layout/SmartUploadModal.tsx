@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon } from 'lucide-react';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon, User } from 'lucide-react';
 import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
 import { customConfirm, customPrompt, customAlert } from '@/lib/dialog';
@@ -692,36 +692,65 @@ export function SmartUploadModal({
                   <div className="w-full h-2 bg-surface-elevated rounded-full overflow-hidden border border-border/50">
                     <div className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(108,92,231,0.5)]" style={{ width: `${item.uploadProgress || 0}%` }} />
                   </div>
+                  <div className="flex justify-end mt-3">
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      className="whitespace-nowrap"
+                      onClick={() => {
+                        onClose();
+                        router.push(`/artists/${item.artistId}`);
+                      }}
+                    >
+                      <User className="w-3.5 h-3.5 mr-1.5" />
+                      Abrir Perfil
+                    </Button>
+                  </div>
                 </div>
               ) : item.uploadStatus === 'done' && (
                 <div className="flex items-center gap-2 mt-3">
-                  <div className="flex items-center justify-between gap-2 w-full">
+                  <div className="flex items-center justify-between gap-2 w-full mt-2">
                     <div className="flex items-center gap-2 text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-lg w-full">
                       <CheckCircle2 className="w-4 h-4" />
                       <span className="text-xs font-semibold">Completado</span>
                     </div>
                     
-                    {/* Option to Open Matrix if linked */}
-                    {(() => {
-                      if (!item.projectId) return null;
-                      const linkedMatrix = artistMatricesCache[item.artistId]?.find(m => m.projectId === item.projectId);
-                      if (!linkedMatrix) return null;
-                      
-                      return (
-                        <Button 
-                          variant="secondary" 
-                          size="sm" 
-                          className="whitespace-nowrap flex-shrink-0"
-                          onClick={() => {
-                            onClose();
-                            router.push(`/artists/${item.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`);
-                          }}
-                        >
-                          <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5" />
-                          Abrir Matriz
-                        </Button>
-                      );
-                    })()}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="whitespace-nowrap"
+                        onClick={() => {
+                          onClose();
+                          router.push(`/artists/${item.artistId}`);
+                        }}
+                      >
+                        <User className="w-3.5 h-3.5 mr-1.5" />
+                        Abrir Perfil
+                      </Button>
+
+                      {/* Option to Open Matrix if linked */}
+                      {(() => {
+                        if (!item.projectId) return null;
+                        const linkedMatrix = artistMatricesCache[item.artistId]?.find(m => m.projectId === item.projectId);
+                        if (!linkedMatrix) return null;
+                        
+                        return (
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="whitespace-nowrap"
+                            onClick={() => {
+                              onClose();
+                              router.push(`/artists/${item.artistId}?tab=matrices&matrixId=${linkedMatrix.id}`);
+                            }}
+                          >
+                            <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5" />
+                            Abrir Matriz
+                          </Button>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               )}
