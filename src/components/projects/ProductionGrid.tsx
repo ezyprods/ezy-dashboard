@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Plus, Trash2, CheckCircle2, Clock, Eye, Circle, GripVertical, Calendar, MessageSquare, Paperclip, Settings, Play, Download, X, Link, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { CellComponent, COL_TYPES, STATUS_CONFIG } from './GridCells';
+import { MemoizedCellComponent as CellComponent, COL_TYPES, STATUS_CONFIG } from './GridCells';
 import { CampaignSelector } from './CampaignSelector';
 import type { ColumnType } from '@/types';
 
@@ -242,6 +242,13 @@ export function ProductionGridBoard({
   const [selectionBox, setSelectionBox] = useState<{ start: {x:number, y:number}, end: {x:number, y:number}, active: boolean }>({ start:{x:0,y:0}, end:{x:0,y:0}, active: false });
   const containerRef = useRef<HTMLTableElement>(null);
   const selectionInitialSet = useRef<Set<string>>(new Set());
+
+  // Refs for callbacks to avoid stale closures
+  const gridRef = useRef(grid);
+  useEffect(() => { gridRef.current = grid; }, [grid]);
+  
+  const selectedCellsRef = useRef(selectedCells);
+  useEffect(() => { selectedCellsRef.current = selectedCells; }, [selectedCells]);
 
   // DND sensors
   const sensors = useSensors(
@@ -516,14 +523,17 @@ export function ProductionGridBoard({
 
 
 
-  const handleToggleSelect = (rowId: string, colId: string, e: React.MouseEvent | React.PointerEvent) => {
+  const handleToggleSelect = useCallback((rowId: string, colId: string, e: React.MouseEvent | React.PointerEvent) => {
     const cellId = `${rowId}:${colId}`;
+    const currentGrid = gridRef.current;
+    const currentSelected = selectedCellsRef.current;
+
     if (e.shiftKey && lastSelectedCellId) {
       const [lastRowId, lastColId] = lastSelectedCellId.split(':');
-      const rIdx1 = grid.rows.findIndex(r => r.id === lastRowId);
-      const cIdx1 = grid.columns.findIndex(c => c.id === lastColId);
-      const rIdx2 = grid.rows.findIndex(r => r.id === rowId);
-      const cIdx2 = grid.columns.findIndex(c => c.id === colId);
+      const rIdx1 = currentGrid.rows.findIndex(r => r.id === lastRowId);
+      const cIdx1 = currentGrid.columns.findIndex(c => c.id === lastColId);
+      const rIdx2 = currentGrid.rows.findIndex(r => r.id === rowId);
+      const cIdx2 = currentGrid.columns.findIndex(c => c.id === colId);
 
       if (rIdx1 !== -1 && cIdx1 !== -1 && rIdx2 !== -1 && cIdx2 !== -1) {
         const minR = Math.min(rIdx1, rIdx2);
@@ -531,10 +541,10 @@ export function ProductionGridBoard({
         const minC = Math.min(cIdx1, cIdx2);
         const maxC = Math.max(cIdx1, cIdx2);
 
-        const newSet = new Set(selectedCells);
+        const newSet = new Set(currentSelected);
         for (let r = minR; r <= maxR; r++) {
           for (let c = minC; c <= maxC; c++) {
-            newSet.add(`${grid.rows[r].id}:${grid.columns[c].id}`);
+            newSet.add(`${currentGrid.rows[r].id}:${currentGrid.columns[c].id}`);
           }
         }
         setSelectedCells(newSet);
@@ -548,7 +558,7 @@ export function ProductionGridBoard({
       });
     }
     setLastSelectedCellId(cellId);
-  };
+  }, [lastSelectedCellId]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLTableElement>) => {
     if (e.button !== 0 || (!e.ctrlKey && !e.metaKey && !e.shiftKey)) return;
@@ -599,6 +609,18 @@ export function ProductionGridBoard({
     }
   };
 
+  useEffect(() => {
+    const handlePointerUp = () => {
+      if (selectionBox.active) {
+        setSelectionBox(prev => ({ ...prev, active: false }));
+      }
+    };
+    if (selectionBox.active) {
+      window.addEventListener('pointerup', handlePointerUp);
+    }
+    return () => window.removeEventListener('pointerup', handlePointerUp);
+  }, [selectionBox.active]);
+
   const addRow = () => {
     if (!newRowName.trim()) return;
     const newRow = { id: Math.random().toString(36).substring(7), name: newRowName.trim(), cells: {} };
@@ -626,17 +648,19 @@ export function ProductionGridBoard({
     saveGrid({ ...grid, rows: grid.rows.filter(r => r.id !== id) });
   };
 
-  const handleCellUpdate = (rowId: string, colId: string, updates: Partial<any>) => {
+  const handleCellUpdate = useCallback((rowId: string, colId: string, updates: Partial<any>) => {
+    const currentGrid = gridRef.current;
+    const currentSelected = selectedCellsRef.current;
     const cellId = `${rowId}:${colId}`;
-    const isSelected = selectedCells.has(cellId);
+    const isSelected = currentSelected.has(cellId);
 
-    const newRows = grid.rows.map(r => {
+    const newRows = currentGrid.rows.map(r => {
       if (isSelected && updates.status) {
          let rowChanged = false;
          const newCells = { ...r.cells };
-         for (const c of grid.columns) {
+         for (const c of currentGrid.columns) {
            const id = `${r.id}:${c.id}`;
-           if (selectedCells.has(id)) {
+           if (currentSelected.has(id)) {
              newCells[c.id] = { ...(r.cells[c.id] || { status: 'todo' }), status: updates.status };
              rowChanged = true;
            }
@@ -648,8 +672,8 @@ export function ProductionGridBoard({
       const updatedCell = { ...(r.cells[colId] || { status: 'todo' }), ...updates };
       return { ...r, cells: { ...r.cells, [colId]: updatedCell } };
     });
-    saveGrid({ ...grid, rows: newRows });
-  };
+    saveGrid({ ...currentGrid, rows: newRows });
+  }, []);
 
   const handleColDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;

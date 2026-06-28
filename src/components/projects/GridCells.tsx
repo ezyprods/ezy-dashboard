@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Circle, Clock, Eye, CheckCircle2, Paperclip, Calendar, MessageSquare, Play, Loader2, X, ListTodo, FileText, AlignLeft, CheckSquare, Plus, Trash2, UploadCloud, Pause } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
@@ -696,3 +696,18 @@ export function CellComponent({
     </td>
   );
 }
+
+export const MemoizedCellComponent = React.memo(CellComponent, (prev, next) => {
+  return (
+    prev.isSelected === next.isSelected &&
+    prev.cellData.status === next.cellData.status &&
+    prev.cellData.fileId === next.cellData.fileId &&
+    prev.cellData.textValue === next.cellData.textValue &&
+    prev.cellData.dateValue === next.cellData.dateValue &&
+    prev.cellData.checklist === next.cellData.checklist &&
+    prev.colId === next.colId &&
+    prev.rowId === next.rowId &&
+    prev.colType === next.colType &&
+    prev.rowName === next.rowName
+  );
+});
