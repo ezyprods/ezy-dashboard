@@ -8,6 +8,7 @@ import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
 import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
 import { GlobalMatricesWidget } from "@/components/dashboard/GlobalMatricesWidget";
+import { RecentFilesWidget } from "@/components/dashboard/RecentFilesWidget";
 import { GlobalPendingTasks } from "@/components/dashboard/GlobalPendingTasks";
 import { useRouter } from 'next/navigation';
 import type { Artist } from '@/types';
@@ -101,7 +102,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ROW 2: Bento Top */}
-      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:h-[min(24vh,220px)] min-h-[180px]">
+      <div className="shrink-0 grid grid-cols-1 lg:grid-cols-4 gap-4 lg:h-[min(24vh,220px)] min-h-[180px]">
 
         {/* Col 1: Quick Actions */}
         <div className="flex flex-col gap-2 h-full">
@@ -151,7 +152,12 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Col 2: Matrices Activas */}
+        {/* Col 2: Archivos Recientes */}
+        <div className="h-full min-h-0 overflow-hidden">
+          <RecentFilesWidget />
+        </div>
+
+        {/* Col 3: Matrices Activas */}
         <div className="h-full min-h-0 overflow-hidden">
             <GlobalMatricesWidget matrices={matrices} isLoading={isMatricesLoading} />
         </div>
