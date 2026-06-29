@@ -31,6 +31,7 @@ export async function GET() {
       webViewLink: file.webViewLink,
       webContentLink: file.webContentLink,
       url: file.webContentLink || file.webViewLink,
+      parents: file.parents || [],
     }));
 
     return NextResponse.json({ files: formattedFiles });
