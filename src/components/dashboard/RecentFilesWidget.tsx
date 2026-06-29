@@ -44,11 +44,10 @@ export function RecentFilesWidget() {
       if (file.url) {
         playTrack({
           id: file.id,
-          title: file.name,
-          artist: 'Archivo Reciente',
+          name: file.name,
+          artistName: 'Archivo Reciente',
           url: file.url,
-          coverUrl: undefined,
-          source: 'drive',
+          coverArt: undefined,
         });
       }
     }
