@@ -6,6 +6,7 @@ import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, A
 import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
 import { customConfirm, customPrompt, customAlert } from '@/lib/dialog';
+import { cn, formatPhoneNumber, getWhatsAppUrl } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { findBestMatch } from '@/lib/utils';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
@@ -29,6 +30,8 @@ export interface SmartUploadFile {
   uploadError?: string;
   resultId?: string;
   notifyArtist?: boolean;
+  notifyEmail?: boolean;
+  notifyWhatsApp?: boolean;
 }
 
 interface SmartUploadModalProps {
@@ -517,23 +520,7 @@ export function SmartUploadModal({
               try { responseData = JSON.parse(xhr.responseText); } catch (e) {}
               
               setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
-              
-              if (item.notifyArtist) {
-                const artistData = artists.find(a => a.id === item.artistId);
-                if (artistData?.email) {
-                  fetch('/api/notifications/master', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      artistEmail: artistData.email,
-                      artistName: artistData.name,
-                      songName: finalName.replace(/\.[^.]+$/, '').replace(/\[MASTER\]\s*/i, ''),
-                      isUpdate: !!fileToReplaceId,
-                      downloadLink: ''
-                    })
-                  }).catch(console.error);
-                }
-              }
+              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
               resolve();
             } else {
               reject(new Error(xhr.responseText || 'Upload failed'));
@@ -559,10 +546,50 @@ export function SmartUploadModal({
     }
   };
 
-  // Auto-close modal 15 seconds after completion
+  // Auto-close modal and send batch notifications after completion
   useEffect(() => {
     let timeout: NodeJS.Timeout;
     if (allDone) {
+      
+      // Batch notifications
+      const successfullyUploadedItems = items.filter(i => i.uploadStatus === 'done' && i.notifyArtist);
+      const artistsToNotify = Array.from(new Set(successfullyUploadedItems.map(i => i.artistId)));
+
+      artistsToNotify.forEach(artistId => {
+        const artist = artists.find(a => a.id === artistId);
+        if (!artist) return;
+        
+        const artistItems = successfullyUploadedItems.filter(i => i.artistId === artistId);
+        
+        const shouldEmail = artistItems.some(i => i.notifyEmail);
+        const shouldWhatsApp = artistItems.some(i => i.notifyWhatsApp);
+
+        if (!shouldEmail && !shouldWhatsApp) return;
+
+        const fileNames = Array.from(new Set(artistItems.map(i => i.customName.replace(/\.[^.]+$/, ''))));
+        const joinedTitles = fileNames.join(', ');
+        const portalUrl = `${window.location.origin}/portal/${artist.id}`;
+
+        if (shouldEmail && artist.email) {
+          fetch('/api/communications/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              artistEmail: artist.email,
+              artistName: artist.name,
+              projectName: 'Nuevos archivos subidos',
+              message: `He subido nuevas versiones a tu portal: ${joinedTitles}. Revísalas cuando puedas.`,
+              portalUrl
+            })
+          }).catch(console.error);
+        }
+
+        if (shouldWhatsApp && artist.phone) {
+          const text = `Hola ${artist.name},\n\nHe subido nuevos archivos a tu portal: ${joinedTitles}\n\nPuedes escucharlos directamente en tu portal privado:\n${portalUrl}`;
+          window.open(getWhatsAppUrl(artist.phone, text), '_blank');
+        }
+      });
+
       timeout = setTimeout(() => {
         onClose();
       }, 15000);
@@ -570,7 +597,7 @@ export function SmartUploadModal({
     return () => {
       if (timeout) clearTimeout(timeout);
     };
-  }, [allDone, onClose]);
+  }, [allDone, onClose, items, artists]);
 
   if (!isOpen || initialFiles.length === 0) return null;
   
@@ -842,17 +869,106 @@ export function SmartUploadModal({
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 mt-1">
-                    <input
-                      type="checkbox"
-                      id={`notify-${item.id}`}
-                      checked={!!item.notifyArtist}
-                      onChange={e => updateItem(item.id, { notifyArtist: e.target.checked })}
-                      className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated"
-                    />
-                    <label htmlFor={`notify-${item.id}`} className="text-sm text-text-secondary cursor-pointer hover:text-text-primary transition-colors">
-                      Avisar al artista por email al finalizar
-                    </label>
+                  <div className="flex flex-col gap-2 mt-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`notify-${item.id}`}
+                        checked={!!item.notifyArtist}
+                        onChange={e => updateItem(item.id, { notifyArtist: e.target.checked, notifyEmail: false, notifyWhatsApp: false })}
+                        className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated"
+                      />
+                      <label htmlFor={`notify-${item.id}`} className="text-sm font-medium text-text-primary cursor-pointer hover:text-accent transition-colors">
+                        Notificar al artista tras subir
+                      </label>
+                    </div>
+
+                    {item.notifyArtist && (
+                      <div className="ml-6 pl-4 border-l-2 border-border/50 flex flex-col gap-3">
+                        
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`notify-email-${item.id}`}
+                            checked={!!item.notifyEmail}
+                            onChange={e => updateItem(item.id, { notifyEmail: e.target.checked })}
+                            className="w-3.5 h-3.5 rounded border-border/60 text-blue-500 focus:ring-blue-500 bg-surface-elevated"
+                          />
+                          <label htmlFor={`notify-email-${item.id}`} className="text-sm text-text-secondary cursor-pointer">
+                            Enviar Email
+                          </label>
+                          {(() => {
+                            const currentArtist = artists.find(a => a.id === item.artistId);
+                            if (currentArtist && !currentArtist.email) {
+                              return (
+                                <span 
+                                  className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
+                                  onClick={async () => {
+                                    const newEmail = await customPrompt('El artista no tiene email. Introduce uno nuevo:', '', 'Añadir Email');
+                                    if (newEmail && newEmail.trim()) {
+                                      try {
+                                        await fetch(`/api/artists/${item.artistId}`, {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ email: newEmail.trim() })
+                                        });
+                                        customAlert('Email guardado correctamente. Recarga la lista o sube otro archivo para que se actualice globalmente, pero para esta sesión ya está guardado en base de datos.');
+                                        // Update local state temporarily so it works for the batch
+                                        currentArtist.email = newEmail.trim(); 
+                                      } catch {}
+                                    }
+                                  }}
+                                >
+                                  Sin Email (Añadir)
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`notify-wa-${item.id}`}
+                            checked={!!item.notifyWhatsApp}
+                            onChange={e => updateItem(item.id, { notifyWhatsApp: e.target.checked })}
+                            className="w-3.5 h-3.5 rounded border-border/60 text-green-500 focus:ring-green-500 bg-surface-elevated"
+                          />
+                          <label htmlFor={`notify-wa-${item.id}`} className="text-sm text-text-secondary cursor-pointer">
+                            Aviso WhatsApp
+                          </label>
+                          {(() => {
+                            const currentArtist = artists.find(a => a.id === item.artistId);
+                            if (currentArtist && !currentArtist.phone) {
+                              return (
+                                <span 
+                                  className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
+                                  onClick={async () => {
+                                    const newPhone = await customPrompt('El artista no tiene teléfono. Introduce uno nuevo:', '+34 ', 'Añadir Teléfono');
+                                    if (newPhone && newPhone.trim()) {
+                                      try {
+                                        const finalPhone = formatPhoneNumber(newPhone.trim());
+                                        await fetch(`/api/artists/${item.artistId}`, {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ phone: finalPhone })
+                                        });
+                                        customAlert('Teléfono guardado correctamente.');
+                                        currentArtist.phone = finalPhone; 
+                                      } catch {}
+                                    }
+                                  }}
+                                >
+                                  Sin Teléfono (Añadir)
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

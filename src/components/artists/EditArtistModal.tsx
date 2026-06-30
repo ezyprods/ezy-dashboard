@@ -9,6 +9,7 @@ import { useArtists } from '@/lib/hooks/useArtists';
 import { SERVICE_LABELS } from '@/lib/constants';
 import type { Artist, ServiceType } from '@/types';
 import { Loader2 } from 'lucide-react';
+import { formatPhoneNumber } from '@/lib/utils';
 
 interface EditArtistModalProps {
   isOpen: boolean;
@@ -59,7 +60,7 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
     const updatedData = {
       name: formData.name,
       email: formData.email,
-      phone: formData.phone,
+      phone: formatPhoneNumber(formData.phone),
       genre: formData.genre.split(',').map(g => g.trim()).filter(Boolean),
       services: selectedServices,
     };

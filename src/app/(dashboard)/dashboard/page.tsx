@@ -6,6 +6,7 @@ import { Plus, UploadCloud, AlertCircle, Music, Calendar, ChevronRight } from "l
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
 import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
+import { QuickMP3Downloader } from "@/components/dashboard/QuickMP3Downloader";
 import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
 import { GlobalMatricesWidget } from "@/components/dashboard/GlobalMatricesWidget";
 import { RecentFilesWidget } from "@/components/dashboard/RecentFilesWidget";
@@ -136,20 +137,7 @@ export default function DashboardPage() {
             <ChevronRight className="w-4 h-4 text-text-secondary opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 transition-all relative z-10 shrink-0" />
           </div>
 
-          <div
-            onClick={() => router.push('/calendar')}
-            className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-emerald-500/50 cursor-pointer group transition-all flex items-center gap-3 p-3 md:px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
-          >
-            <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none group-hover:scale-150 transition-transform duration-500" />
-            <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/20 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner relative z-10 shrink-0">
-              <Calendar className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0 relative z-10">
-              <h3 className="font-bold text-text-primary text-sm">Calendario</h3>
-              <p className="text-[11px] text-text-secondary font-medium">Ver tu agenda inteligente</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-text-secondary opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-2 transition-all relative z-10 shrink-0" />
-          </div>
+          <QuickMP3Downloader />
         </div>
 
         {/* Col 2: Archivos Recientes */}
@@ -165,7 +153,7 @@ export default function DashboardPage() {
         {/* Col 3: Proximos Eventos */}
         <div className="relative h-full min-h-0 overflow-hidden">
           <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/20 to-transparent rounded-[20px] blur opacity-30 pointer-events-none" />
-          <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[20px] overflow-hidden shadow-lg h-full flex flex-col group hover:border-blue-500/30 transition-colors">
+          <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[20px] overflow-hidden h-full flex flex-col group hover:border-blue-500/30 transition-colors">
             <div className="px-4 py-2.5 border-b border-border/50 bg-gradient-to-b from-surface-elevated/50 to-surface/50 flex items-center gap-2 shrink-0">
               <div className="p-1 rounded-md bg-blue-500/10 text-blue-500">
                 <Calendar className="w-3.5 h-3.5" />

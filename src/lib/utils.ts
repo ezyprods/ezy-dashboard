@@ -269,3 +269,47 @@ export function getNormalizedBaseName(filename: string): string {
   
   return base;
 }
+
+// Format a phone number elegantly and ensure it has country code
+export function formatPhoneNumber(phone: string): string {
+  if (!phone) return '';
+  // Elimina cualquier carácter que no sea dígito o el signo +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // Si empieza con 00 (código internacional europeo), lo cambiamos a +
+  if (cleaned.startsWith('00')) {
+    cleaned = '+' + cleaned.substring(2);
+  }
+  
+  // Si no empieza por +, asumimos España (+34)
+  if (!cleaned.startsWith('+')) {
+    // Solo números (123456789) -> asumimos España
+    if (cleaned.length === 9) {
+      cleaned = '+34' + cleaned;
+    } 
+    // Empezó escribiendo 34 sin el más (34612345678)
+    else if (cleaned.startsWith('34') && cleaned.length === 11) {
+      cleaned = '+' + cleaned;
+    }
+  }
+  
+  // Si es formato español (+34 seguido de 9 dígitos), le damos el formato bonito
+  if (cleaned.startsWith('+34') && cleaned.length === 12) {
+    const p1 = cleaned.substring(0, 3); // +34
+    const p2 = cleaned.substring(3, 6); // 6XX
+    const p3 = cleaned.substring(6, 8); // XX
+    const p4 = cleaned.substring(8, 10); // XX
+    const p5 = cleaned.substring(10, 12); // XX
+    return `${p1} ${p2} ${p3} ${p4} ${p5}`;
+  }
+  
+  return cleaned;
+}
+
+// Generate the proper wa.me link ensuring correct format
+export function getWhatsAppUrl(phone: string, text: string): string {
+  const formatted = formatPhoneNumber(phone);
+  const numericOnly = formatted.replace(/[^\d]/g, '');
+  const encodedText = encodeURIComponent(text);
+  return `https://wa.me/${numericOnly}?text=${encodedText}`;
+}

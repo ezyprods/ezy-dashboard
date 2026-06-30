@@ -1,4 +1,4 @@
-import { MusicDownloader } from '@/components/tools/MusicDownloader';
+import { ToolsHub } from '@/components/tools/ToolsHub';
 
 export default function ToolsPage() {
   return (
@@ -10,7 +10,7 @@ export default function ToolsPage() {
         </p>
       </div>
 
-      <MusicDownloader />
+      <ToolsHub />
     </div>
   );
 }

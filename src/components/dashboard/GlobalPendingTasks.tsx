@@ -206,7 +206,7 @@ function StatusColumn({
       ref={setNodeRef}
       className={cn(
         "flex flex-col h-full min-h-0 rounded-[24px] overflow-hidden transition-all duration-300 relative border backdrop-blur-xl",
-        isOver ? "bg-surface/80 border-accent shadow-[0_0_30px_rgba(var(--accent),0.15)]" : "bg-surface/40 border-border/60 hover:border-border/80 shadow-lg"
+        isOver ? "bg-surface/80 border-accent" : "bg-surface/40 border-border/60 hover:border-border/80"
       )}
     >
       {/* Ambient background glow based on column */}
@@ -424,7 +424,7 @@ export function GlobalPendingTasks() {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide lg:grid lg:grid-cols-3 gap-4 lg:gap-6 relative z-10 flex-1 h-[500px] lg:h-auto lg:min-h-0 pb-4 lg:pb-0 -mx-5 px-5 lg:mx-0 lg:px-0">
+        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide lg:grid lg:grid-cols-3 gap-4 lg:gap-6 relative z-10 flex-1 h-[500px] lg:h-full lg:min-h-0 pb-4 lg:pb-0 -mx-5 px-5 lg:mx-0 lg:px-0">
           <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
             <StatusColumn
               id="todo"

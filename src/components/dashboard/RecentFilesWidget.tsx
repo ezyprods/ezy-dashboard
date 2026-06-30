@@ -71,7 +71,7 @@ export function RecentFilesWidget() {
   };
 
   return (
-    <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[24px] overflow-hidden shadow-lg h-full flex flex-col group hover:border-emerald-500/30 transition-colors min-h-0">
+    <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[24px] overflow-hidden h-full flex flex-col group hover:border-emerald-500/30 transition-colors min-h-0">
       <div className="px-4 py-2.5 border-b border-border/50 bg-gradient-to-b from-surface-elevated/50 to-surface/50 flex items-center gap-2 shrink-0">
         <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-500">
           <FileAudio className="w-3.5 h-3.5" />
@@ -97,12 +97,12 @@ export function RecentFilesWidget() {
             return (
               <div 
                 key={file.id}
-                className="group/item flex items-center gap-3 p-2 rounded-xl hover:bg-surface-elevated/50 border border-transparent hover:border-border/50 transition-all cursor-default"
+                className="group/item relative flex items-center gap-3 p-2 rounded-xl hover:bg-surface-elevated/50 border border-transparent hover:border-border/50 transition-all cursor-default overflow-hidden"
               >
                 {/* Play Button */}
                 <button
                   onClick={() => handlePlay(file)}
-                  className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm ${
+                  className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-all shadow-sm z-10 relative ${
                     isThisTrackPlaying 
                       ? 'bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
                       : 'bg-surface-elevated text-emerald-500 border border-border/60 hover:bg-emerald-500 hover:text-black hover:border-emerald-500 hover:scale-105'
@@ -116,8 +116,8 @@ export function RecentFilesWidget() {
                 </button>
                 
                 {/* File Info */}
-                <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <p className="text-[13px] font-bold text-text-primary truncate" title={file.name}>
+                <div className="flex-1 min-w-0 flex flex-col justify-center pr-1">
+                  <p className="text-[13px] font-bold text-text-primary truncate transition-all duration-300 group-hover/item:text-text-primary/70" title={file.name}>
                     {file.name}
                   </p>
                   <p className="text-[10px] text-text-secondary font-medium">
@@ -126,36 +126,39 @@ export function RecentFilesWidget() {
                 </div>
                 
                 {/* Actions (Download / Link) */}
-                <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-0 group-hover/item:opacity-100 pointer-events-none group-hover/item:pointer-events-auto transition-all duration-300 translate-x-4 group-hover/item:translate-x-0 z-20">
+                  {/* Optional gradient mask behind buttons for better readability */}
+                  <div className="absolute -inset-y-3 -left-8 -right-2 bg-gradient-to-r from-transparent via-surface/90 to-surface pointer-events-none -z-10 dark:via-surface-elevated/90 dark:to-surface-elevated" />
+                  
                   {file.webContentLink && (
                     <a
                       href={file.webContentLink}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors border border-border/40"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-all border border-border/60 shadow-sm hover:shadow-md hover:scale-105"
                       title="Descargar"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <Download className="w-3 h-3" />
+                      <Download className="w-3.5 h-3.5" />
                     </a>
                   )}
                   {file.parents && file.parents.length > 0 && (
                     <button
                       onClick={() => setExplorerFolderId(file.parents![0])}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-emerald-500 hover:text-emerald-400 transition-colors border border-border/40"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-emerald-500 hover:text-emerald-400 transition-all border border-border/60 shadow-sm hover:shadow-md hover:scale-105"
                       title="Abrir ubicación en la plataforma"
                     >
-                      <FolderOpen className="w-3 h-3" />
+                      <FolderOpen className="w-3.5 h-3.5" />
                     </button>
                   )}
                   {file.webViewLink && (
                     <a
                       href={file.webViewLink}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors border border-border/40"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-all border border-border/60 shadow-sm hover:shadow-md hover:scale-105"
                       title="Abrir en Google Drive"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      <ExternalLink className="w-3 h-3" />
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   )}
                 </div>

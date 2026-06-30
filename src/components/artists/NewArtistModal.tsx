@@ -9,8 +9,8 @@ import { useArtists } from '@/lib/hooks/useArtists';
 import { SERVICE_LABELS } from '@/lib/constants';
 import type { ServiceType } from '@/types';
 import { Loader2 } from 'lucide-react';
-
 import { useRouter } from 'next/navigation';
+import { formatPhoneNumber } from '@/lib/utils';
 
 interface NewArtistModalProps {
   isOpen: boolean;
@@ -49,7 +49,7 @@ export function NewArtistModal({ isOpen, onClose }: NewArtistModalProps) {
       const result = await createArtist({
         name: formData.name,
         email: formData.email,
-        phone: formData.phone,
+        phone: formatPhoneNumber(formData.phone),
         genre: formData.genre.split(',').map(g => g.trim()).filter(Boolean),
         services: selectedServices,
       });

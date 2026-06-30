@@ -20,35 +20,26 @@ const FFMPEG_URL = os.platform() === 'win32'
 const downloadFile = (url: string, dest: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
-    https.get(url, (response) => {
-      if (response.statusCode === 301 || response.statusCode === 302) {
-        https.get(response.headers.location!, (redirectResponse) => {
-          redirectResponse.pipe(file);
-          file.on('finish', () => {
-            file.close();
-            resolve();
-          });
-        }).on('error', (err) => {
-          fs.unlink(dest, () => reject(err));
-        });
-      } else {
-        response.pipe(file);
-        file.on('finish', () => {
-          file.close();
-          resolve();
-        });
-      }
-    }).on('error', (err) => {
-      fs.unlink(dest, () => reject(err));
-    });
+    const follow = (targetUrl: string, depth = 0) => {
+      if (depth > 5) return reject(new Error('Too many redirects'));
+      https.get(targetUrl, (response) => {
+        if (response.statusCode === 301 || response.statusCode === 302) {
+          follow(response.headers.location!, depth + 1);
+        } else {
+          response.pipe(file);
+          file.on('finish', () => { file.close(); resolve(); });
+        }
+      }).on('error', (err) => { fs.unlink(dest, () => reject(err)); });
+    };
+    follow(url);
   });
 };
 
 const ensureBinaries = async () => {
   const tmpDir = os.tmpdir();
   const isWin = os.platform() === 'win32';
-  const ytdlpPath = `${tmpDir}/${isWin ? 'yt-dlp.exe' : 'yt-dlp'}`;
-  const ffmpegPath = `${tmpDir}/${isWin ? 'ffmpeg.exe' : 'ffmpeg'}`;
+  const ytdlpPath = `${tmpDir}/${isWin ? 'yt-dlp-new.exe' : 'yt-dlp-new'}`;
+  const ffmpegPath = `${tmpDir}/${isWin ? 'ffmpeg-new.exe' : 'ffmpeg-new'}`;
 
   if (!fs.existsSync(ytdlpPath)) {
     console.log('Downloading yt-dlp...');
@@ -68,7 +59,8 @@ const ensureBinaries = async () => {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const url = searchParams.get('url');
+    const url = searchParams.get('url') || searchParams.get('resolvedUrl');
+    const title = searchParams.get('title') || 'ezy_audio';
 
     if (!url) {
       return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
@@ -85,11 +77,6 @@ export async function GET(req: Request) {
       '-o', '-', // output to stdout
       url
     ]);
-
-    let title = 'audio';
-
-    // We can't easily capture the title if we stream straight to stdout, but we can set a generic one
-    // We will just let the browser download it.
     
     // Create a web ReadableStream from the child process stdout
     // Using cast to any to bypass TS complaining about Node.js vs DOM ReadableStream
@@ -99,10 +86,13 @@ export async function GET(req: Request) {
       console.log(`yt-dlp stderr: ${data}`);
     });
 
+    // Make sure title is safe for HTTP headers
+    const safeTitle = encodeURIComponent(title.replace(/[^\w\s-]/gi, '').trim());
+
     return new NextResponse(stream, {
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Content-Disposition': `attachment; filename="ezy_audio.mp3"`
+        'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`
       }
     });
 
