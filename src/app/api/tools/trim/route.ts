@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     args.push(outputPath);
 
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
       const ffmpegProc = spawn(ffmpegPath, args);
 
       ffmpegProc.on('close', async (code) => {

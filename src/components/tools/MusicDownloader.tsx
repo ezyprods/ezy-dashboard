@@ -180,7 +180,7 @@ export function MusicDownloader() {
               {(task.status === 'downloading' || task.status === 'converting' || task.status === 'completed') && (
                 <div 
                   className={`absolute left-0 top-0 bottom-0 opacity-10 transition-all duration-300 ${task.status === 'completed' ? 'bg-emerald-500 w-full' : 'bg-accent'}`}
-                  style={{ width: task.status !== 'completed' && task.status !== 'error' ? `${task.progress}%` : undefined }}
+                  style={{ width: task.status !== 'completed' ? `${task.progress}%` : undefined }}
                 />
               )}
               

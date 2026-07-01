@@ -549,7 +549,7 @@ export function SmartUploadModal({
 
   // Auto-close modal and send batch notifications after completion
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
+    let timeout: NodeJS.Timeout | null = null;
     if (allDone) {
       
       // Batch notifications
@@ -591,7 +591,6 @@ export function SmartUploadModal({
         }
       });
 
-      let timeout: NodeJS.Timeout | null = null;
       if (!isHovered) {
         timeout = setTimeout(() => {
           onClose();

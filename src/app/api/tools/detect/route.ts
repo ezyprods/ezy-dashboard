@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { writeFile, unlink } from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
+// @ts-ignore
 import MusicTempo from 'music-tempo';
 // @ts-ignore
 import Meyda from 'meyda';
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     const inputPath = path.join(tempDir, file.name);
     await writeFile(inputPath, buffer);
 
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
       const args = ['-i', inputPath, '-t', '60', '-ac', '1', '-ar', '22050', '-f', 'f32le', '-c:a', 'pcm_f32le', 'pipe:1'];
       const ffmpegProc = spawn(ffmpegPath, args);
       
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
 
         for (let i = 0; i < floatArray.length - bufferSize; i += bufferSize) {
           const frame = floatArray.subarray(i, i + bufferSize);
-          const chroma = Meyda.extract('chroma', frame);
+          const chroma = Meyda.extract('chroma', frame) as number[];
           if (chroma && chroma.length === 12) {
             for (let j = 0; j < 12; j++) chromagram[j] += chroma[j];
           }

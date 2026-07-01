@@ -204,7 +204,7 @@ export default function CommunicationsPage() {
 
             {selectedArtist && (
               <div className="mt-4 flex items-center gap-3 p-3 bg-surface-elevated/50 rounded-xl border border-border/30">
-                <ArtistAvatar artist={selectedArtist} size="sm" />
+                <ArtistAvatar name={selectedArtist.name} photoUrl={selectedArtist.photoUrl} size="sm" />
                 <div className="flex flex-col gap-1 w-full">
                   <span className="text-sm font-medium text-text-primary">{selectedArtist.name}</span>
                   <div className="flex flex-wrap gap-2 text-xs text-text-secondary items-center">

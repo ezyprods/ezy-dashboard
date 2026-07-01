@@ -164,7 +164,7 @@ export function AudioConverter() {
                     </a>
                   )}
                   {task.status === 'completed' && !task.downloadUrl && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
-                  {task.status === 'error' && <AlertCircle className="w-5 h-5 text-danger" title={task.error} />}
+                  {task.status === 'error' && <span title={task.error}><AlertCircle className="w-5 h-5 text-danger" /></span>}
                 </div>
               </div>
             ))}

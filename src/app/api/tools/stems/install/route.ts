@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     // To prevent Vercel/NextJS timeouts (though locally it's fine), we can do it asynchronously
     // or just run it and let the client poll the GET endpoint.
     
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
       const installProc = spawn('pip', ['install', 'demucs']);
       
       let out = '';
