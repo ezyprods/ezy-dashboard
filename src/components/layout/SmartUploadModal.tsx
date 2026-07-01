@@ -88,6 +88,7 @@ export function SmartUploadModal({
   const [projectFoldersCache, setProjectFoldersCache] = useState<Record<string, any[]>>({});
   const [artistMatricesCache, setArtistMatricesCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
+  const [isHovered, setIsHovered] = useState(false);
 
   // Sort artists by recent interaction or update
   useEffect(() => {
@@ -590,14 +591,17 @@ export function SmartUploadModal({
         }
       });
 
-      timeout = setTimeout(() => {
-        onClose();
-      }, 15000);
+      let timeout: NodeJS.Timeout | null = null;
+      if (!isHovered) {
+        timeout = setTimeout(() => {
+          onClose();
+        }, 15000);
+      }
     }
     return () => {
       if (timeout) clearTimeout(timeout);
     };
-  }, [allDone, onClose, items, artists]);
+  }, [allDone, onClose, items, artists, isHovered]);
 
   if (!isOpen || initialFiles.length === 0) return null;
   
@@ -608,7 +612,11 @@ export function SmartUploadModal({
   ));
 
   const modal = (
-    <div className="fixed inset-x-4 bottom-4 md:inset-x-auto md:right-4 z-[500] pointer-events-none flex flex-col items-center md:items-end justify-end">
+    <div 
+      className="fixed inset-x-4 bottom-4 md:inset-x-auto md:right-4 z-[500] pointer-events-none flex flex-col items-center md:items-end justify-end"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       
       <div className={isConfiguring
         ? "pointer-events-auto glass w-full sm:w-[500px] max-h-[85vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden shadow-[0_0_40px_rgba(108,92,231,0.15)] animate-in slide-in-from-bottom-4 duration-300"
@@ -670,7 +678,19 @@ export function SmartUploadModal({
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className={`${isConfiguring ? 'text-base' : 'text-xs'} font-semibold text-text-primary truncate`} title={item.file.name}>{item.file.name}</p>
+                  <p 
+                    className={`${isConfiguring ? 'text-base' : 'text-xs'} font-semibold ${item.uploadStatus === 'done' ? 'text-accent hover:underline cursor-pointer' : 'text-text-primary'} truncate transition-colors`} 
+                    title={item.file.name}
+                    onClick={() => {
+                      if (item.uploadStatus === 'done') {
+                         abortControllersRef.current.forEach(c => c.abort()); 
+                         onClose();
+                         router.push(`/artists/${item.artistId}?tab=files`);
+                      }
+                    }}
+                  >
+                    {item.file.name}
+                  </p>
                   
                   {isConfiguring && (
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
