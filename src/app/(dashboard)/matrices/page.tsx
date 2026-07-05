@@ -60,10 +60,7 @@ export default function MatricesPage() {
         const artistsData = await artistsRes.json();
 
         if (artistsData.needsAuth || matricesData.needsAuth) {
-          customAlert('El acceso a Google Drive ha caducado. Te redirigimos para que generes un nuevo token.');
-          setTimeout(() => {
-            window.location.href = '/api/auth/google-token?type=both';
-          }, 2000);
+          console.warn('Drive token needs refresh - check .env.local or Vercel env vars');
           return;
         }
         

@@ -17,11 +17,8 @@ export function useArtists() {
       }
       const data = await res.json();
       if (data.needsAuth) {
-        customAlert('El acceso a Google Drive ha caducado. Te redirigimos para que generes un nuevo token.');
-        setTimeout(() => {
-          window.location.href = '/api/auth/google-token?type=both';
-        }, 2000);
-        throw new Error('Token de Google expirado.');
+        console.warn('Drive token needs refresh - check .env.local or Vercel env vars');
+        throw new Error('Token de Google necesita actualización. Revisa las variables de entorno.');
       }
       setArtists(data.artists || []);
     } catch (err: any) {
