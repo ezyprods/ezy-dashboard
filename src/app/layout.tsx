@@ -22,6 +22,7 @@ export default function RootLayout({
       <head>
         {/* Inline script to apply theme before first paint (anti-FOUC) */}
         <script
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
