@@ -43,7 +43,7 @@ export function GlobalMatricesWidget({ matrices, isLoading }: { matrices: any[],
           </span>
         </div>
         
-        <div ref={scrollRef} className="p-2 flex-1 min-h-0 overflow-y-auto scroll-smooth space-y-0.5 custom-scrollbar">
+        <div ref={scrollRef} className="p-2 flex-1 min-h-0 overflow-y-auto space-y-0.5 custom-scrollbar" style={{ willChange: 'scroll-position' }}>
           {matrices.length === 0 ? (
             <div className="text-center py-8 text-xs text-text-secondary h-full flex flex-col items-center justify-center">
               <Table2 className="w-6 h-6 mx-auto mb-2 opacity-30" />

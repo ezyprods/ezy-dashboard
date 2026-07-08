@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Download, ExternalLink, FileAudio, Loader2, FolderOpen } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { FolderExplorerModal } from './FolderExplorerModal';
+import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 
 interface DriveFile {
   id: string;
@@ -23,6 +24,9 @@ export function RecentFilesWidget() {
   const [isLoading, setIsLoading] = useState(true);
   const [explorerFolderId, setExplorerFolderId] = useState<string | null>(null);
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useSmoothScroll(scrollRef, [isLoading, files]);
 
   useEffect(() => {
     fetch('/api/dashboard/recent-files')
@@ -79,7 +83,7 @@ export function RecentFilesWidget() {
         <h3 className="font-bold text-sm text-text-primary tracking-tight">Archivos recientes</h3>
       </div>
       
-      <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-2 custom-scrollbar scroll-smooth">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 p-3 space-y-2 custom-scrollbar" style={{ willChange: 'scroll-position' }}>
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-text-secondary/50 space-y-2">
             <Loader2 className="w-5 h-5 animate-spin" />

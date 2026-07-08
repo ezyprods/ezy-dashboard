@@ -227,7 +227,7 @@ function StatusColumn({
         </span>
       </div>
       
-      <div ref={scrollRef} className="flex-1 p-3 overflow-y-auto scroll-smooth custom-scrollbar space-y-3">
+      <div ref={scrollRef} className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-3" style={{ willChange: 'scroll-position' }}>
         {columnTasks.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-40 text-text-secondary min-h-[100px]">
             <CheckCircle2 className="w-8 h-8 mb-2" />
