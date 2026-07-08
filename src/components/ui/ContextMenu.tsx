@@ -27,7 +27,6 @@ import {
   Clock,
   CheckCircle2,
   CheckSquare,
-  CheckSquare,
   AlignLeft,
   Paperclip,
   type LucideIcon,
