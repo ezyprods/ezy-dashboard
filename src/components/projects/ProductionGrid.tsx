@@ -284,6 +284,7 @@ export function ProductionGridBoard({
       if (e.key === 'Escape') {
         setSelectedCells(new Set());
         setLastSelectedCellId(null);
+        setSelectionBox(prev => ({ ...prev, active: false }));
       }
     };
 
@@ -300,7 +301,15 @@ export function ProductionGridBoard({
       window.removeEventListener('pointerup', handleGlobalUp);
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [artistId, matrixId, linkedProjectId, projects.length, selectionBox.active]);
+  }, []);
+
+  useEffect(() => {
+    if (artistId && matrixId) {
+      fetchGrid();
+      fetchProjects();
+      fetchCampaigns();
+    }
+  }, [artistId, matrixId]);
 
   useEffect(() => {
     // Always fetch files — if no project linked, fetchFiles will only scan artist bounces
