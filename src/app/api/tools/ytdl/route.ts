@@ -59,11 +59,22 @@ const ensureBinaries = async () => {
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const url = searchParams.get('url') || searchParams.get('resolvedUrl');
+    const rawUrl = searchParams.get('url') || searchParams.get('resolvedUrl');
     const title = searchParams.get('title') || 'ezy_audio';
 
-    if (!url) {
+    if (!rawUrl) {
       return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
+    }
+
+    let url = rawUrl;
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
+        // Strip out &list= and other parameters to prevent downloading playlists or breaking
+        url = `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
+      }
+    } catch(e) {
+      // Ignore parsing errors, it might be a youtu.be or soundcloud link
     }
 
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
@@ -73,6 +84,7 @@ export async function GET(req: Request) {
       '-x', 
       '--audio-format', 'mp3',
       '--audio-quality', '192K',
+      '--no-playlist',
       '--ffmpeg-location', ffmpegPath,
       '-o', '-', // output to stdout
       url
