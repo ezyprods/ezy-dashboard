@@ -67,18 +67,20 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         setIsPlaying(false);
       }
     } else {
-      // New track: load and play synchronously
+      // New track: update src and play
       setCurrentTrack(track);
       setIsLoading(true);
       audioRef.current.src = track.url;
-      audioRef.current.load();
-      audioRef.current.play().then(() => {
-        setIsPlaying(true);
-      }).catch(e => {
-        console.error('Audio play error:', e);
-        // If auto-play blocked, still set state so UI reflects it tried
-        setIsPlaying(true);
-      });
+      
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          setIsPlaying(true);
+        }).catch(e => {
+          console.warn('Audio play block/interrupt:', e);
+          setIsPlaying(false);
+        });
+      }
     }
   };
 

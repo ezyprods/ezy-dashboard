@@ -25,44 +25,16 @@ export function useAudioPlayer({
   const [duration, setDuration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const preloadCache = useRef<Map<string, HTMLAudioElement>>(new Map());
-
-  // Consolidate preload URLs
-  const urlsToPreload = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const newPreloadSet = new Set<string>();
-    if (nextTrackUrl) newPreloadSet.add(nextTrackUrl);
-    preloadUrls.forEach(url => { if (url) newPreloadSet.add(url); });
-    urlsToPreload.current = newPreloadSet;
-
-    // Create new audio objects for URLs not yet in cache
-    newPreloadSet.forEach(url => {
-      if (!preloadCache.current.has(url) && url !== currentTrackUrl) {
-        const audio = new Audio(url);
-        audio.preload = 'auto';
-        audio.volume = 0; // Mute preloads
-        preloadCache.current.set(url, audio);
-      }
-    });
-
-    // Clean up old cached audios that are no longer needed
-    for (const [url, audio] of preloadCache.current.entries()) {
-      if (!newPreloadSet.has(url) && url !== currentTrackUrl) {
-        audio.removeAttribute('src');
-        audio.load();
-        preloadCache.current.delete(url);
-      }
-    }
-  }, [nextTrackUrl, preloadUrls, currentTrackUrl]);
 
   // Clean up cache on unmount
   useEffect(() => {
     return () => {
-      for (const audio of preloadCache.current.values()) {
-        audio.removeAttribute('src');
-        audio.load();
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+        audioRef.current = null;
       }
-      preloadCache.current.clear();
     };
   }, []);
 
@@ -77,24 +49,16 @@ export function useAudioPlayer({
     // Stop and clean up previous audio if it exists
     if (audioRef.current) {
       audioRef.current.pause();
-      // If we want to reuse it later, we could put it back in the cache, but usually we don't need to unless it's in the preload list
-      if (!urlsToPreload.current.has(audioRef.current.src)) {
-        audioRef.current.removeAttribute('src');
-        audioRef.current.load();
-      }
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
     }
 
-    // Did we already preload this exact URL?
-    if (preloadCache.current.has(currentTrackUrl)) {
-      audioRef.current = preloadCache.current.get(currentTrackUrl)!;
-      preloadCache.current.delete(currentTrackUrl);
-    } else {
-      audioRef.current = new Audio(currentTrackUrl);
-    }
-
+    // Create single audio instance
+    audioRef.current = new Audio(currentTrackUrl);
     const audio = audioRef.current;
+    
     audio.volume = isMuted ? 0 : volume;
-    audio.preload = 'auto'; 
+    audio.preload = 'auto';
 
     const handleTimeUpdate = () => {
       if (!audio.duration) return;

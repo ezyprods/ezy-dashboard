@@ -400,7 +400,7 @@ export function WaveformPlayer({
                   {displayName}
                 </span>
                 {modifiedTime && (
-                  <span className="hidden sm:inline-block text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0" title="Fecha de modificación">
+                  <span className={cn("text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0", !isPortal && "hidden sm:inline-block")} title="Fecha de subida">
                     {formatModificationTime(modifiedTime)}
                   </span>
                 )}
