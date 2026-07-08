@@ -88,6 +88,22 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           setIsPlaying(false);
         });
       }
+
+      // Automatically fetch extra info (artist, path) if missing
+      if (!track.pathSegments && track.id) {
+        fetch(`/api/audio/${track.id}/info`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.pathSegments) {
+              setCurrentTrack(prev => prev && prev.id === track.id ? { 
+                ...prev, 
+                pathSegments: data.pathSegments,
+                artistName: data.artistName || prev.artistName
+              } : prev);
+            }
+          })
+          .catch(err => console.error("Failed to load track info:", err));
+      }
     }
   };
 

@@ -73,7 +73,14 @@ export function GlobalAudioPlayer() {
                     {seg.onClick ? (
                       <button onClick={seg.onClick} className="hover:text-text-primary hover:underline transition-colors text-left truncate">{seg.name}</button>
                     ) : seg.url ? (
-                      <a href={seg.url} className="hover:text-text-primary hover:underline transition-colors">{seg.name}</a>
+                      <a 
+                        href={seg.url} 
+                        className="hover:text-text-primary hover:underline transition-colors"
+                        target={seg.url.includes('drive.google.com') ? '_blank' : undefined}
+                        rel={seg.url.includes('drive.google.com') ? 'noopener noreferrer' : undefined}
+                      >
+                        {seg.name}
+                      </a>
                     ) : (
                       <span>{seg.name}</span>
                     )}
