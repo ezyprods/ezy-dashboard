@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Disc, GripVertical, Trash2, Plus, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Disc, GripVertical, Trash2, Plus, Image as ImageIcon, Loader2, ExternalLink } from 'lucide-react';
 import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -61,10 +61,21 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
         <button 
           onClick={(e) => { e.stopPropagation(); onRemove(track.id); }}
           className="p-1.5 text-text-secondary/40 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all shrink-0 outline-none"
+          title="Eliminar pista"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       )}
+      <a 
+        href={`https://drive.google.com/file/d/${track.newFileId || track.originalFileId}/view`}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="p-1.5 text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none"
+        title="Abrir en Google Drive"
+      >
+        <ExternalLink className="w-3.5 h-3.5" />
+      </a>
     </div>
   );
 }

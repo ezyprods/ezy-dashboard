@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { formatMusicalKey } from '@/lib/utils/audio';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2, Download, Share2, Scissors } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2, Download, Share2, Scissors, User, ExternalLink } from 'lucide-react';
 import { ShareModal } from '@/components/artists/ShareModal';
 import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
 
@@ -88,22 +88,34 @@ export function GlobalAudioPlayer() {
         </div>
         
         {/* Mobile controls */}
-        <div className="flex items-center gap-2 md:hidden">
-          <div className="flex items-center gap-1 mr-1">
-            <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light p-1.5" title="Abrir en Mini-DAW">
-              <Scissors className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={() => setIsShareModalOpen(true)} className="text-text-secondary hover:text-accent p-1.5" title="Compartir">
-              <Share2 className="w-3.5 h-3.5" />
-            </button>
-            <a href={`/api/files/${currentTrack.id}?download=true`} download={currentTrack.name} className="text-text-secondary hover:text-text-primary p-1.5" title="Descargar">
-              <Download className="w-3.5 h-3.5" />
-            </a>
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-1 md:hidden">
+          {(() => {
+            const artistUrl = currentTrack.pathSegments?.find(seg => seg.url?.startsWith('/artists/'))?.url;
+            if (artistUrl) {
+              return (
+                <a href={artistUrl} className="text-text-secondary hover:text-accent p-1.5" title="Abrir Perfil de Artista">
+                  <User className="w-3.5 h-3.5" />
+                </a>
+              );
+            }
+            return null;
+          })()}
+          <a href={`https://drive.google.com/file/d/${currentTrack.id}/view`} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-accent p-1.5" title="Abrir en Drive">
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light p-1.5" title="Abrir en Mini-DAW">
+            <Scissors className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => setIsShareModalOpen(true)} className="text-text-secondary hover:text-accent p-1.5" title="Compartir">
+            <Share2 className="w-3.5 h-3.5" />
+          </button>
+          <a href={`/api/files/${currentTrack.id}?download=true`} download={currentTrack.name} className="text-text-secondary hover:text-text-primary p-1.5 mr-1" title="Descargar">
+            <Download className="w-3.5 h-3.5" />
+          </a>
           <button 
             onClick={togglePlay}
             disabled={isLoading}
-            className="w-11 h-11 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center disabled:opacity-70 touch-target"
+            className="w-11 h-11 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center disabled:opacity-70 touch-target shadow-md"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
           </button>
