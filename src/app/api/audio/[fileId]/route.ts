@@ -1,23 +1,50 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { getDriveService } from '@/lib/drive';
+
+export const runtime = 'edge';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   try {
     const { fileId } = await params;
-    const drive = getDriveService();
     
-    // We only fetch metadata (very fast, no large data transfer)
-    const metaRes = await drive.files.get({ fileId, fields: 'mimeType', supportsAllDrives: true });
-    const mimeType = metaRes.data.mimeType || 'audio/mpeg';
+    // Fetch an access token manually (Edge compatible, no googleapis library needed)
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        refresh_token: process.env.GOOGLE_REFRESH_TOKEN!,
+        grant_type: 'refresh_token'
+      })
+    });
     
-    // Redirect the browser directly to Google Drive's endpoint.
-    // This completely bypasses Vercel's Edge/Serverless data transfer, saving 100% of Fast Origin Transfer.
-    const isImage = mimeType.startsWith('image/');
-    const directUrl = isImage 
-      ? `https://drive.google.com/uc?export=view&id=${fileId}`
-      : `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      throw new Error("Failed to get access token");
+    }
     
-    return NextResponse.redirect(directUrl, 302);
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    
+    const range = request.headers.get('range');
+    const fetchHeaders: Record<string, string> = {
+      Authorization: `Bearer ${tokenData.access_token}`
+    };
+    if (range) fetchHeaders['Range'] = range;
+
+    const gDriveRes = await fetch(url, { headers: fetchHeaders });
+    
+    if (!gDriveRes.ok) {
+      throw new Error(`Google Drive API error: ${gDriveRes.statusText}`);
+    }
+
+    const responseHeaders = new Headers(gDriveRes.headers);
+    // Agregamos cache a nivel de CDN (Edge) para que la misma canción no consuma Origin Transfer repetidamente.
+    responseHeaders.set('Cache-Control', 'public, s-maxage=31536000, stale-while-revalidate=86400');
+    
+    return new NextResponse(gDriveRes.body, {
+      status: gDriveRes.status,
+      headers: responseHeaders
+    });
   } catch (error: any) {
     console.error('API /audio/[fileId] error:', error);
     return new NextResponse('Error streaming audio', { status: 500 });
