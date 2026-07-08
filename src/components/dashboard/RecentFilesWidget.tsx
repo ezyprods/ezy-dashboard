@@ -125,7 +125,7 @@ export function RecentFilesWidget() {
                     {file.name}
                   </p>
                   <p className="text-[10px] text-text-secondary font-medium">
-                    {formatTimeAgo(file.createdTime)}
+                    {formatTimeAgo(file.modifiedTime || file.createdTime)}
                   </p>
                 </div>
                 

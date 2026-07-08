@@ -13,7 +13,7 @@ export async function GET() {
     const response: any = await drive.files.list({
       q: query,
       fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)',
-      orderBy: 'createdTime desc',
+      orderBy: 'modifiedTime desc',
       includeItemsFromAllDrives: true,
       supportsAllDrives: true,
       pageSize: 6,
