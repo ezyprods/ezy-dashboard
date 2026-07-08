@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
@@ -15,8 +15,15 @@ type Step = 1 | 2 | 3;
 
 interface UploadState {
   status: 'idle' | 'uploading' | 'success' | 'error';
-  progress: number; // 0–100
+  progress: number;
   message: string;
+}
+
+interface TempUpload {
+  originalFile: File;
+  tempId?: string;
+  status: 'uploading' | 'success' | 'error';
+  abortController: AbortController;
 }
 
 interface QuickUploadModalProps {
@@ -29,7 +36,9 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   const [step, setStep] = useState<Step>(1);
   const [selectedArtistId, setSelectedArtistId] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<FolderType | ''>('');
-  const [files, setFiles] = useState<File[]>([]);
+  
+  const [tempUploads, setTempUploads] = useState<TempUpload[]>([]);
+
   const [uploadState, setUploadState] = useState<UploadState>({
     status: 'idle',
     progress: 0,
@@ -44,90 +53,176 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
     return timeB - timeA;
   });
 
+  // Default to the most recently updated artist when opening
+  useEffect(() => {
+    if (isOpen && !selectedArtistId && sortedArtists.length > 0) {
+      setSelectedArtistId(sortedArtists[0].id);
+    }
+  }, [isOpen, selectedArtistId, sortedArtists]);
+
+  const cleanupTempUploads = useCallback((uploadsToClean: TempUpload[]) => {
+    uploadsToClean.forEach((upload) => {
+      if (upload.status === 'uploading') {
+        upload.abortController.abort();
+      } else if (upload.status === 'success' && upload.tempId) {
+        fetch(`/api/files/upload/temp?id=${upload.tempId}`, { 
+          method: 'DELETE',
+          keepalive: true // Ensure it runs even if modal is closing / navigating away
+        }).catch(console.error);
+      }
+    });
+  }, []);
+
+  // Cleanup on unmount if modal is somehow closed
+  useEffect(() => {
+    return () => {
+      if (tempUploads.length > 0 && uploadState.status !== 'success') {
+        cleanupTempUploads(tempUploads);
+      }
+    };
+  }, [tempUploads, cleanupTempUploads, uploadState.status]);
+
   const reset = () => {
     setStep(1);
     setSelectedArtistId('');
     setSelectedFolder('');
-    setFiles([]);
+    setTempUploads([]);
     setUploadState({ status: 'idle', progress: 0, message: '' });
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (sortedArtists.length > 0) {
+      setSelectedArtistId(sortedArtists[0].id);
+    }
   };
 
   const handleClose = () => {
+    if (uploadState.status !== 'success') {
+      cleanupTempUploads(tempUploads);
+    }
     reset();
     onClose();
+  };
+
+  const startTempUpload = async (file: File) => {
+    const abortController = new AbortController();
+    const tempUpload: TempUpload = {
+      originalFile: file,
+      status: 'uploading',
+      abortController,
+    };
+
+    setTempUploads(prev => [...prev, tempUpload]);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/files/upload/temp', {
+        method: 'POST',
+        body: formData,
+        signal: abortController.signal,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setTempUploads(prev => prev.map(u => 
+        u.abortController === abortController 
+          ? { ...u, status: 'success', tempId: data.fileId }
+          : u
+      ));
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setTempUploads(prev => prev.map(u => 
+          u.abortController === abortController 
+            ? { ...u, status: 'error' }
+            : u
+        ));
+      } else {
+        setTempUploads(prev => prev.filter(u => u.abortController !== abortController));
+      }
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
-      setFiles(newFiles);
+      
+      newFiles.forEach(file => startTempUpload(file));
 
-      // Auto-detect artist from first filename if none selected
-      if (!selectedArtistId) {
-        const fileName = newFiles[0].name;
-        const normalizedName = getNormalizedBaseName(fileName).toLowerCase();
-        
-        // Exact substring match first
-        const exactMatch = sortedArtists.find(a => normalizedName.includes(a.name.toLowerCase()));
-        
-        if (exactMatch) {
-          setSelectedArtistId(exactMatch.id);
-        } else {
-          // Fuzzy match
-          const bestMatch = findBestMatch(fileName, sortedArtists, a => a.name, 0.5);
-          if (bestMatch) {
-            setSelectedArtistId(bestMatch.id);
-          } else if (sortedArtists.length > 0) {
-            // Fallback to most recently modified artist
-            setSelectedArtistId(sortedArtists[0].id);
-          }
+      // Auto-detect artist from first filename if not already manually selected
+      // But since we default to the first one, we might overwrite it. 
+      // Let's only auto-detect if the user hasn't explicitly chosen one (we assume if it's exactly the first one, maybe they didn't).
+      // For safety, we can just do the fuzzy match anyway, as it's a helpful feature.
+      const fileName = newFiles[0].name;
+      const normalizedName = getNormalizedBaseName(fileName).toLowerCase();
+      
+      const exactMatch = sortedArtists.find(a => normalizedName.includes(a.name.toLowerCase()));
+      
+      if (exactMatch) {
+        setSelectedArtistId(exactMatch.id);
+      } else {
+        const bestMatch = findBestMatch(fileName, sortedArtists, a => a.name, 0.5);
+        if (bestMatch) {
+          setSelectedArtistId(bestMatch.id);
         }
       }
     }
   };
 
   const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setTempUploads((prev) => {
+      const uploadToRemove = prev[index];
+      if (uploadToRemove) {
+        cleanupTempUploads([uploadToRemove]);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleUpload = useCallback(async () => {
-    if (!selectedArtistId || !selectedFolder || files.length === 0) return;
+    if (!selectedArtistId || !selectedFolder || tempUploads.length === 0) return;
 
-    setUploadState({ status: 'uploading', progress: 10, message: 'Preparando subida...' });
+    // Verify all are uploaded successfully
+    const allSuccess = tempUploads.every(u => u.status === 'success');
+    if (!allSuccess) return;
 
-    const formData = new FormData();
-    formData.append('artistId', selectedArtistId);
-    formData.append('folderType', selectedFolder);
-    files.forEach((f) => formData.append('file', f));
+    setUploadState({ status: 'uploading', progress: 50, message: 'Organizando archivos...' });
 
-    setUploadState({ status: 'uploading', progress: 30, message: `Subiendo ${files.length} archivo${files.length > 1 ? 's' : ''} a Drive...` });
+    const tempFilesData = tempUploads.map(u => ({
+      tempId: u.tempId,
+      originalName: u.originalFile.name
+    }));
 
     try {
-      const res = await fetch('/api/files/upload', {
+      const res = await fetch('/api/files/upload/finalize', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          artistId: selectedArtistId,
+          folderType: selectedFolder,
+          tempFiles: tempFilesData
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Error al subir los archivos');
+        throw new Error(data.error || 'Error al organizar los archivos');
       }
 
       setUploadState({
         status: 'success',
         progress: 100,
-        message: `${data.files.length} archivo${data.files.length > 1 ? 's' : ''} subido${data.files.length > 1 ? 's' : ''} correctamente a ${selectedFolder}.`,
+        message: `${data.files.length} archivo${data.files.length > 1 ? 's' : ''} organizado${data.files.length > 1 ? 's' : ''} correctamente en ${selectedFolder}.`,
       });
     } catch (err: any) {
       setUploadState({
         status: 'error',
         progress: 0,
-        message: err.message || 'Error desconocido al subir.',
+        message: err.message || 'Error desconocido al finalizar subida.',
       });
     }
-  }, [selectedArtistId, selectedFolder, files]);
+  }, [selectedArtistId, selectedFolder, tempUploads]);
 
   const selectedArtist = artists.find((a) => a.id === selectedArtistId);
 
@@ -136,6 +231,9 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
     2: 'Subida Rápida — Selecciona Carpeta',
     3: 'Subida Rápida — Selecciona Archivos',
   };
+
+  const isUploadingAny = tempUploads.some(u => u.status === 'uploading');
+  const hasErrors = tempUploads.some(u => u.status === 'error');
 
   return (
     <Modal
@@ -295,16 +393,22 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
               </div>
 
               {/* File list */}
-              {files.length > 0 && (
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {files.map((file, i) => (
+              {tempUploads.length > 0 && (
+                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                  {tempUploads.map((upload, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-surface border border-border"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <Music className="w-4 h-4 text-accent shrink-0" />
-                        <span className="text-sm text-text-primary truncate">{file.name}</span>
+                        {upload.status === 'uploading' ? (
+                           <Loader2 className="w-4 h-4 text-accent shrink-0 animate-spin" />
+                        ) : upload.status === 'error' ? (
+                           <AlertCircle className="w-4 h-4 text-error shrink-0" />
+                        ) : (
+                           <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                        )}
+                        <span className="text-sm text-text-primary truncate">{upload.originalFile.name}</span>
                       </div>
                       <button
                         onClick={() => removeFile(i)}
@@ -343,13 +447,15 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
                 </Button>
                 <Button
                   onClick={handleUpload}
-                  disabled={files.length === 0 || uploadState.status === 'uploading'}
+                  disabled={tempUploads.length === 0 || isUploadingAny || hasErrors || uploadState.status === 'uploading'}
                   className="gap-2"
                 >
                   {uploadState.status === 'uploading' ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Subiendo...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Organizando...</>
+                  ) : isUploadingAny ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Subiendo en 2º plano...</>
                   ) : (
-                    <><UploadCloud className="w-4 h-4" /> Subir {files.length > 0 ? `${files.length} archivo${files.length > 1 ? 's' : ''}` : ''}</>
+                    <><CheckCircle2 className="w-4 h-4" /> Finalizar y Organizar</>
                   )}
                 </Button>
               </div>
