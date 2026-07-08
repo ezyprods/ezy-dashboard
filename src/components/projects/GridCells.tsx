@@ -234,21 +234,29 @@ function StatusCellUI({
       {
         label: 'Pendiente',
         icon: 'Circle',
+        iconClassName: 'text-text-secondary',
+        className: 'hover:text-text-secondary',
         action: () => onStatusChange('todo')
       },
       {
         label: 'En progreso',
         icon: 'Clock',
+        iconClassName: 'text-warning',
+        className: 'text-warning hover:bg-warning/10 hover:text-warning',
         action: () => onStatusChange('in_progress')
       },
       {
         label: 'Revisión',
         icon: 'Eye',
+        iconClassName: 'text-info',
+        className: 'text-info hover:bg-info/10 hover:text-info',
         action: () => onStatusChange('review')
       },
       {
         label: 'Hecho',
         icon: 'CheckCircle2',
+        iconClassName: 'text-success',
+        className: 'text-success hover:bg-success/10 hover:text-success',
         action: () => onStatusChange('done')
       }
     ]);
