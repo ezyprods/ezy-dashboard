@@ -32,6 +32,10 @@ export interface SmartUploadFile {
   notifyArtist?: boolean;
   notifyEmail?: boolean;
   notifyWhatsApp?: boolean;
+  // Background Upload
+  tempId?: string;
+  tempUploadStatus?: 'idle' | 'uploading' | 'success' | 'error';
+  abortController?: AbortController;
 }
 
 interface SmartUploadModalProps {
@@ -231,8 +235,8 @@ export function SmartUploadModal({
           detectedArtistId = exactMatch.id;
           detectedArtistName = exactMatch.name;
         } else {
-          // Pass 3: Fuzzy match (lowered threshold to 0.4 to be slightly more forgiving)
-          const bestArtistMatch = findBestMatch(normalizedFile, inlineSortedArtists, (a: any) => a?.name?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ') || '', 0.4);
+          // Pass 3: Fuzzy match (increased threshold to 0.6 to avoid false positives)
+          const bestArtistMatch = findBestMatch(normalizedFile, inlineSortedArtists, (a: any) => a?.name?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ') || '', 0.6);
           if (bestArtistMatch) {
             detectedArtistId = bestArtistMatch.id;
             detectedArtistName = bestArtistMatch.name;
@@ -258,7 +262,34 @@ export function SmartUploadModal({
         uploadStatus: 'pending' as const,
         uploadProgress: 0,
         notifyArtist: false,
+        notifyEmail: true,
+        notifyWhatsApp: false,
+        tempUploadStatus: 'idle' as const,
+        abortController: new AbortController(),
       };
+    });
+
+    // Start background uploads immediately
+    newInitialized.forEach(item => {
+      item.tempUploadStatus = 'uploading';
+      const formData = new FormData();
+      formData.append('file', item.file);
+      
+      fetch('/api/files/upload/temp', {
+        method: 'POST',
+        body: formData,
+        signal: item.abortController?.signal
+      }).then(res => res.json()).then(data => {
+        if (data.fileId) {
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, tempUploadStatus: 'success', tempId: data.fileId } : p));
+        } else {
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, tempUploadStatus: 'error' } : p));
+        }
+      }).catch(err => {
+        if (err.name !== 'AbortError') {
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, tempUploadStatus: 'error' } : p));
+        }
+      });
     });
 
     setItems(prev => [...prev, ...newInitialized]);
@@ -327,6 +358,8 @@ export function SmartUploadModal({
   };
 
   const cancelItem = (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (item?.abortController) item.abortController.abort();
     const ctrl = abortControllersRef.current.get(id);
     if (ctrl) ctrl.abort();
     updateItem(id, { uploadStatus: 'cancelled', uploadProgress: 0 });
@@ -430,6 +463,28 @@ export function SmartUploadModal({
         let finalCustomName = item.customName;
         let extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
 
+        // If we can use the background upload
+        const canUseBackgroundUpload = item.tempUploadStatus === 'success' && item.tempId && !(item.subType === 'bounce' && extension.toLowerCase() === '.wav');
+
+        if (canUseBackgroundUpload) {
+          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: 50 } : it));
+          const res = await fetch('/api/files/upload/finalize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              artistId: item.artistId,
+              folderType: 'Custom',
+              targetFolderId: finalFolderId,
+              tempFiles: [{ tempId: item.tempId, originalName: finalCustomName }]
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error finalizando subida');
+          
+          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: data.files[0].id } : it));
+          continue; // Skip the rest of the traditional upload logic
+        }
+
         // WAV to MP3 Conversion for Bounces
         if (item.subType === 'bounce' && extension.toLowerCase() === '.wav') {
           setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: 10 } : it));
@@ -521,7 +576,6 @@ export function SmartUploadModal({
               try { responseData = JSON.parse(xhr.responseText); } catch (e) {}
               
               setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
-              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
               resolve();
             } else {
               reject(new Error(xhr.responseText || 'Upload failed'));
@@ -599,8 +653,16 @@ export function SmartUploadModal({
     }
     return () => {
       if (timeout) clearTimeout(timeout);
+      
+      // Cleanup abort controllers and temp files if modal closes while pending
+      if (items.some(i => i.uploadStatus === 'pending')) {
+        abortControllersRef.current.forEach(ctrl => ctrl.abort());
+        items.filter(i => i.uploadStatus === 'pending' && i.tempUploadStatus === 'success' && i.tempId).forEach(item => {
+          fetch(`/api/files/upload/temp?id=${item.tempId}`, { method: 'DELETE', keepalive: true }).catch(() => {});
+        });
+      }
     };
-  }, [allDone, onClose, items, artists, isHovered]);
+  }, [allDone, isHovered, onClose, items, artists]);
 
   if (!isOpen || initialFiles.length === 0) return null;
   
@@ -672,8 +734,12 @@ export function SmartUploadModal({
             return (
             <div key={item.id} className={`rounded-xl border ${isConfiguring ? 'p-4' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
               <div className={`flex items-center gap-3 ${isConfiguring ? 'mb-3' : (item.uploadStatus === 'uploading' ? 'mb-2' : '')}`}>
-                <div className={`${isConfiguring ? 'w-9 h-9' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50`}>
-                  {item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
+                <div className={`${isConfiguring ? 'w-9 h-9' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50 overflow-hidden relative`}>
+                  {item.tempUploadStatus === 'uploading' ? (
+                    <div className="absolute inset-0 bg-accent/10 flex flex-col items-center justify-center" title="Subiendo en segundo plano...">
+                       <UploadCloud className="w-4 h-4 text-accent animate-pulse" />
+                    </div>
+                  ) : item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
                 </div>
 
                 <div className="flex-1 min-w-0">

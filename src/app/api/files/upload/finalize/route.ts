@@ -4,57 +4,64 @@ import { FOLDER_NAME_MAP } from '@/lib/constants';
 
 export async function POST(request: Request) {
   try {
-    const { artistId, folderType, tempFiles } = await request.json();
+    const { artistId, folderType, tempFiles, targetFolderId: providedFolderId } = await request.json();
 
-    if (!artistId || !folderType || !tempFiles || tempFiles.length === 0) {
+    if (!tempFiles || tempFiles.length === 0) {
       return NextResponse.json(
-        { error: 'Missing artistId, folderType, or tempFiles' },
+        { error: 'Missing tempFiles' },
         { status: 400 }
       );
     }
 
     const drive = getDriveService();
 
-    // 1. List project folders under artist folder
-    const projectFolders = await listFolders(artistId);
-    const ignoreFolders = [
-      'Images', 'Documents', 'Contracts', 'Stems',
-      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos'
-    ];
-    const projects = projectFolders.filter(
-      (f) => !ignoreFolders.includes(f.name || '')
-    );
-
-    let targetFolderId: string | null = null;
-    const mappedFolderName = (FOLDER_NAME_MAP as any)[folderType] || folderType;
-
-    if (folderType === 'Bounces') {
-      const subfolders = await listFolders(artistId);
-      const match = subfolders.find((f) => f.name?.toLowerCase() === 'bounces');
-      if (match) {
-        targetFolderId = match.id!;
-      } else {
-        targetFolderId = artistId;
-      }
-    } else {
-      for (const project of projects) {
-        const subfolders = await listFolders(project.id!);
-        const match = subfolders.find((f) => f.name === folderType || f.name === mappedFolderName);
-        if (match) {
-          targetFolderId = match.id!;
-          break;
-        }
-      }
-    }
+    let targetFolderId = providedFolderId;
 
     if (!targetFolderId) {
-      const directChild = projectFolders.find((f) => f.name === folderType || f.name === mappedFolderName);
-      if (directChild) targetFolderId = directChild.id!;
+      if (!artistId || !folderType) {
+        return NextResponse.json({ error: 'Missing artistId or folderType' }, { status: 400 });
+      }
+      
+      // 1. List project folders under artist folder
+      const projectFolders = await listFolders(artistId);
+      const ignoreFolders = [
+        'Images', 'Documents', 'Contracts', 'Stems',
+        '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos'
+      ];
+      const projects = projectFolders.filter(
+        (f) => !ignoreFolders.includes(f.name || '')
+      );
+
+      const mappedFolderName = (FOLDER_NAME_MAP as any)[folderType] || folderType;
+
+      if (folderType === 'Bounces') {
+        const subfolders = await listFolders(artistId);
+        const match = subfolders.find((f) => f.name?.toLowerCase() === 'bounces');
+        if (match) {
+          targetFolderId = match.id!;
+        } else {
+          targetFolderId = artistId;
+        }
+      } else {
+        for (const project of projects) {
+          const subfolders = await listFolders(project.id!);
+          const match = subfolders.find((f) => f.name === folderType || f.name === mappedFolderName);
+          if (match) {
+            targetFolderId = match.id!;
+            break;
+          }
+        }
+      }
+
+      if (!targetFolderId) {
+        const directChild = projectFolders.find((f) => f.name === folderType || f.name === mappedFolderName);
+        if (directChild) targetFolderId = directChild.id!;
+      }
     }
 
     if (!targetFolderId) {
       return NextResponse.json(
-        { error: `No se encontró la carpeta "${folderType}" dentro del artista.` },
+        { error: `No se encontró la carpeta de destino.` },
         { status: 404 }
       );
     }
