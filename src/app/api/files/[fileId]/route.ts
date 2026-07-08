@@ -52,7 +52,7 @@ export async function GET(
     const disposition = inline ? 'inline' : 'attachment';
     const safeName = meta.name ? encodeURIComponent(meta.name) : 'archivo';
     responseHeaders.set('Content-Disposition', `${disposition}; filename*=UTF-8''${safeName}`);
-    responseHeaders.set('Cache-Control', 'public, s-maxage=31536000, stale-while-revalidate=86400');
+    responseHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,

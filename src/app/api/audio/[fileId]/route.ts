@@ -38,8 +38,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const responseHeaders = new Headers(gDriveRes.headers);
-    // Agregamos cache a nivel de CDN (Edge) para que la misma canción no consuma Origin Transfer repetidamente.
-    responseHeaders.set('Cache-Control', 'public, s-maxage=31536000, stale-while-revalidate=86400');
+    // Vercel CDN buffers responses if we use s-maxage, which breaks chunked audio streaming!
+    // We must NOT cache the stream on Vercel CDN if we want instant playback.
+    responseHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,
