@@ -70,7 +70,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       // New track: update src and play
       setCurrentTrack(track);
       setIsLoading(true);
-      audioRef.current.src = track.url;
+      
+      let finalUrl = track.url;
+      // If it's a direct Google Drive link, bypass the warning page by using our high-speed streaming proxy
+      if (finalUrl && (finalUrl.includes('drive.google.com') || finalUrl.includes('googleusercontent.com')) && track.id) {
+        finalUrl = `/api/audio/${track.id}`;
+      }
+      
+      audioRef.current.src = finalUrl;
       
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {

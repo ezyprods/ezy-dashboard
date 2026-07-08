@@ -114,7 +114,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       
       // Root Master files
       const query = `mimeType!='application/vnd.google-apps.folder' and '${id}' in parents and trashed=false`;
-      const res = await drive.files.list({ q: query, fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)', supportsAllDrives: true });
+      const res = await drive.files.list({ q: query, fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size)', supportsAllDrives: true });
       if (res.data.files) {
         looseBounces = res.data.files
           .filter(f => f.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || ''))
@@ -128,7 +128,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       });
       if (bouncesFolder) {
         const queryBounces = `mimeType!='application/vnd.google-apps.folder' and '${bouncesFolder.id}' in parents and trashed=false`;
-        const resB = await drive.files.list({ q: queryBounces, fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, size)', supportsAllDrives: true });
+        const resB = await drive.files.list({ q: queryBounces, fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size)', supportsAllDrives: true });
         if (resB.data.files) {
           const bFiles = resB.data.files.filter(f => f.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || ''));
           looseBounces = [...looseBounces, ...bFiles];

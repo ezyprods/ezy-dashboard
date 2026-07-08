@@ -189,7 +189,7 @@ export async function fetchFoldersRecursively(drive: any, parentId: string, pare
   do {
     const response: any = await drive.files.list({
       q: `'${parentId}' in parents and trashed=false`,
-      fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, size, appProperties)',
+      fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size, appProperties)',
       orderBy: 'folder, name',
       pageSize: 1000,
       pageToken: pageToken,
