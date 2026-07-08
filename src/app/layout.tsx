@@ -46,7 +46,7 @@ export default function RootLayout({
               {children}
               <GlobalAudioPlayer />
               <DialogProvider />
-              <Toaster theme="dark" position="bottom-right" className="!font-sans" />
+              <Toaster theme="dark" position="top-center" className="!font-sans" />
             </AudioProvider>
           </ContextMenuProvider>
         </ThemeProvider>

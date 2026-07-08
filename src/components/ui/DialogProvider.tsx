@@ -57,7 +57,7 @@ export function DialogProvider() {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div 
-        className="fixed inset-0 bg-background/80 backdrop-blur-sm animate-fade-in" 
+        className="fixed inset-0 bg-background/80 animate-fade-in" 
         style={{ willChange: 'opacity' }}
         onClick={handleCancel}
       />

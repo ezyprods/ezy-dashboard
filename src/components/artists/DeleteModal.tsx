@@ -86,7 +86,8 @@ export function DeleteModal({ isOpen, onClose, fileId, fileName, onDeleted, curr
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div 
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" 
+        className="fixed inset-0 bg-black/60 animate-fade-in" 
+        onClick={onClose}
         style={{ willChange: 'opacity' }}
       />
       <div 
