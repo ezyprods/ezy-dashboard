@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useArtists } from '@/lib/hooks/useArtists';
 import { useTheme } from '@/lib/contexts/ThemeContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
+import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 import {
   Search, User, Calendar, Settings, Moon, Sun,
   Plus, Music, File as FileIcon, Loader2,
@@ -36,6 +37,9 @@ export function CommandMenu() {
   const { playTrack } = useAudio();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  useSmoothScroll(scrollRef, [results, open, isSearching, activeArtists]);
 
   const [isMac, setIsMac] = React.useState(true);
 
@@ -112,6 +116,15 @@ export function CommandMenu() {
 
   const isQueryActive = query.trim().length >= 2;
 
+  // Sort artists by recent modifications
+  const sortedActiveArtists = React.useMemo(() => {
+    return [...(activeArtists || [])].sort((a, b) => {
+      const aTime = new Date(a.updatedAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || 0).getTime();
+      return bTime - aTime;
+    });
+  }, [activeArtists]);
+
   return (
     <div ref={containerRef} className="relative flex-1 md:max-w-md mx-2 md:mx-4 group">
       {/* Inline Search Input */}
@@ -155,7 +168,7 @@ export function CommandMenu() {
 
       {open && (
         <div className="absolute top-full mt-2 left-0 w-full z-50 bg-surface-elevated border border-border/80 rounded-xl shadow-2xl overflow-hidden ring-1 ring-black/20 flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="max-h-[60vh] overflow-y-auto p-2 custom-scrollbar">
+          <div ref={scrollRef} className="max-h-[60vh] overflow-y-auto p-2 custom-scrollbar" style={{ willChange: 'scroll-position' }}>
 
             {/* ── Dynamic Search Results ── */}
             {isQueryActive && (
@@ -262,86 +275,29 @@ export function CommandMenu() {
               </>
             )}
 
-            {/* ── Default (no query): Navigation + Actions + Artists ── */}
+            {/* ── Default (no query): Artists ONLY ── */}
             {!isQueryActive && (
               <>
-                {/* Quick navigation */}
-                <div className="mb-1">
-                  <p className="text-[10px] font-bold text-text-secondary/60 uppercase tracking-widest px-3 py-2">Navegación</p>
-                  {[
-                    { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', desc: 'Centro de Comando' },
-                    { label: 'Artistas', icon: User, path: '/artists', desc: 'Todos los artistas' },
-                    { label: 'Matrices', icon: Grid, path: '/matrices', desc: 'Producción Global' },
-                    { label: 'Calendario', icon: Calendar, path: '/calendar', desc: 'Agenda inteligente' },
-                    { label: 'Comunicaciones', icon: MessageSquare, path: '/communications', desc: 'Mensajes' },
-                    { label: 'Configuración', icon: Settings, path: '/settings', desc: 'Ajustes' },
-                  ].map(item => (
-                    <button
-                      key={item.path}
-                      onClick={() => runCommand(() => router.push(item.path))}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-elevated transition-all group text-left"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-surface-elevated border border-border/50 flex items-center justify-center shrink-0 group-hover:border-accent/30 group-hover:bg-accent/5 transition-all">
-                        <item.icon className="w-3.5 h-3.5 text-text-secondary group-hover:text-accent transition-colors" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-text-primary">{item.label}</p>
-                      </div>
-                      <kbd className="text-[10px] text-text-secondary/50 opacity-0 group-hover:opacity-100 transition-opacity">↵</kbd>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="h-px bg-border/50 my-2 mx-3" />
-
-                {/* Global Actions */}
-                <div className="mb-1">
-                  <p className="text-[10px] font-bold text-text-secondary/60 uppercase tracking-widest px-3 py-2">Acciones</p>
-                  <button
-                    onClick={() => runCommand(() => router.push('/artists'))}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-elevated transition-all group text-left"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0">
-                      <Plus className="w-3.5 h-3.5 text-accent" />
-                    </div>
-                    <p className="text-sm font-medium text-text-primary">Crear Artista</p>
-                  </button>
-                  <button
-                    onClick={() => runCommand(() => { if (theme !== 'dark') setTheme('dark'); else setTheme('light'); })}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-elevated transition-all group text-left"
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-surface-elevated border border-border/50 flex items-center justify-center shrink-0">
-                      {theme === 'dark' ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-indigo-400" />}
-                    </div>
-                    <p className="text-sm font-medium text-text-primary">
-                      {theme === 'dark' ? 'Tema Claro' : 'Tema Oscuro'}
-                    </p>
-                  </button>
-                </div>
-
                 {/* Artists quick access */}
-                {activeArtists && activeArtists.length > 0 && (
-                  <>
-                    <div className="h-px bg-border/50 my-2 mx-3" />
-                    <div>
-                      <p className="text-[10px] font-bold text-text-secondary/60 uppercase tracking-widest px-3 py-2">Ir a Artista</p>
-                      {activeArtists.map(artist => (
-                        <button
-                          key={artist.id}
-                          onClick={() => runCommand(() => router.push(`/artists/${artist.id}`))}
-                          className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl hover:bg-accent/5 hover:text-accent transition-all group text-left"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center border border-accent/30 group-hover:bg-accent group-hover:border-accent transition-colors">
-                              <User className="w-3 h-3 text-accent group-hover:text-white" />
-                            </div>
-                            <span className="text-sm font-medium text-text-primary group-hover:text-accent transition-colors truncate max-w-[150px]">{artist.name}</span>
+                {sortedActiveArtists && sortedActiveArtists.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-text-secondary/60 uppercase tracking-widest px-3 py-2">Ir a Artista</p>
+                    {sortedActiveArtists.map(artist => (
+                      <button
+                        key={artist.id}
+                        onClick={() => runCommand(() => router.push(`/artists/${artist.id}`))}
+                        className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl hover:bg-accent/5 hover:text-accent transition-all group text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center border border-accent/30 group-hover:bg-accent group-hover:border-accent transition-colors">
+                            <User className="w-3 h-3 text-accent group-hover:text-white" />
                           </div>
-                          <span className="text-[10px] text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity">↵</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
+                          <span className="text-sm font-medium text-text-primary group-hover:text-accent transition-colors truncate max-w-[150px]">{artist.name}</span>
+                        </div>
+                        <span className="text-[10px] text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity">↵</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </>
             )}
