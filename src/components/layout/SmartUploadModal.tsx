@@ -264,7 +264,7 @@ export function SmartUploadModal({
         notifyArtist: false,
         notifyEmail: true,
         notifyWhatsApp: false,
-        tempUploadStatus: 'idle' as const,
+        tempUploadStatus: 'idle' as SmartUploadFile['tempUploadStatus'],
         abortController: new AbortController(),
       };
     });
