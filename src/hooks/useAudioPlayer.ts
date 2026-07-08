@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface UseAudioPlayerProps {
   currentTrackUrl: string | null;
-  nextTrackUrl?: string | null; // Kept for backward compatibility
-  preloadUrls?: string[]; // Array of URLs to preload aggressively
+  nextTrackUrl?: string | null;
+  preloadUrls?: string[]; // Kept for backward compatibility, but ignored for efficiency
   onTrackEnd: () => void;
   volume?: number;
   isMuted?: boolean;
@@ -12,7 +12,6 @@ interface UseAudioPlayerProps {
 export function useAudioPlayer({ 
   currentTrackUrl, 
   nextTrackUrl, 
-  preloadUrls = [],
   onTrackEnd, 
   volume = 1, 
   isMuted = false 
@@ -25,20 +24,49 @@ export function useAudioPlayer({
   const [duration, setDuration] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Clean up cache on unmount
+  // Clean up on unmount
   useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.removeAttribute('src');
-        audioRef.current.load();
-        audioRef.current = null;
-      }
+      [audioRef.current, nextAudioRef.current].forEach(audio => {
+        if (audio) {
+          audio.pause();
+          audio.removeAttribute('src');
+          audio.load();
+        }
+      });
+      audioRef.current = null;
+      nextAudioRef.current = null;
     };
   }, []);
 
-  // Initialize or update the main audio element when the track URL changes
+  // Preload NEXT track efficiently
+  useEffect(() => {
+    if (!nextTrackUrl) return;
+
+    // Si la siguiente url ya es la que se está reproduciendo, no hacer nada
+    if (currentTrackUrl === nextTrackUrl) return;
+
+    // Si ya tenemos un preload para esta URL, no hacer nada
+    if (nextAudioRef.current && nextAudioRef.current.src.endsWith(nextTrackUrl)) return;
+
+    // Limpiar preload anterior si existe
+    if (nextAudioRef.current) {
+      nextAudioRef.current.pause();
+      nextAudioRef.current.removeAttribute('src');
+      nextAudioRef.current.load();
+    }
+
+    // Crear nuevo preload
+    const preloadAudio = new Audio(nextTrackUrl);
+    preloadAudio.preload = 'auto'; // El navegador gestionará 1 solo stream en background perfectamente
+    preloadAudio.volume = 0; // Muteado por si acaso
+    
+    nextAudioRef.current = preloadAudio;
+  }, [nextTrackUrl, currentTrackUrl]);
+
+  // Main playback logic
   useEffect(() => {
     if (!currentTrackUrl) return;
 
@@ -46,19 +74,35 @@ export function useAudioPlayer({
     setProgress(0);
     setCurrentTime(0);
 
-    // Stop and clean up previous audio if it exists
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.removeAttribute('src');
-      audioRef.current.load();
+    let audio: HTMLAudioElement;
+
+    // ¿El track que queremos reproducir ya estaba pre-cargado en el nextAudioRef?
+    if (nextAudioRef.current && nextAudioRef.current.src.endsWith(currentTrackUrl)) {
+      // Magia: Intercambiamos el buffer pre-cargado como nuestro track principal
+      audio = nextAudioRef.current;
+      nextAudioRef.current = null;
+      
+      // Limpiamos el track principal anterior
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      }
+      
+      audioRef.current = audio;
+    } else {
+      // No estaba pre-cargado, instanciamos uno nuevo
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
+      }
+      audio = new Audio(currentTrackUrl);
+      audio.preload = 'auto';
+      audioRef.current = audio;
     }
 
-    // Create single audio instance
-    audioRef.current = new Audio(currentTrackUrl);
-    const audio = audioRef.current;
-    
     audio.volume = isMuted ? 0 : volume;
-    audio.preload = 'auto';
 
     const handleTimeUpdate = () => {
       if (!audio.duration) return;
