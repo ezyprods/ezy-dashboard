@@ -38,7 +38,11 @@ export async function GET() {
       const grid = m.productionGrid;
       let isActive = false;
       
-      if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns) && grid.rows.length > 0 && grid.columns.length > 0) {
+      if (m.forceStatus === 'active') {
+        isActive = true;
+      } else if (m.forceStatus === 'completed') {
+        isActive = false;
+      } else if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns) && grid.rows.length > 0 && grid.columns.length > 0) {
         for (const row of grid.rows) {
           for (const col of grid.columns) {
              const cell = row.cells?.[col.id];

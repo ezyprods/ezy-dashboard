@@ -131,6 +131,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       ...body,
       productionGrid: body.productionGrid || oldGrid
     };
+    
+    if (body.forceStatus !== undefined) {
+      updatedMatrix.forceStatus = body.forceStatus;
+    }
 
     if (body.productionGrid) {
       let projectName = updatedMatrix.name || 'Matriz';

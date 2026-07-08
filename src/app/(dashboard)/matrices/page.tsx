@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil } from 'lucide-react';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil, Copy, Link as LinkIcon, CheckCircle2, RotateCcw, BoxSelect } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
 export default function MatricesPage() {
   const router = useRouter();
@@ -200,6 +201,116 @@ export default function MatricesPage() {
     }
   };
 
+  const { showMenu } = useContextMenu();
+
+  const handleToggleStatus = async (artistId: string, matrixId: string, isCurrentlyCompleted: boolean) => {
+    const newStatus = isCurrentlyCompleted ? 'active' : 'completed';
+    
+    // Optimistic Update
+    if (isCurrentlyCompleted) {
+      const m = completedMatrices.find(x => x.id === matrixId);
+      if (m) {
+        setCompletedMatrices(prev => prev.filter(x => x.id !== matrixId));
+        setMatrices(prev => [...prev, { ...m, forceStatus: newStatus }]);
+      }
+    } else {
+      const m = matrices.find(x => x.id === matrixId);
+      if (m) {
+        setMatrices(prev => prev.filter(x => x.id !== matrixId));
+        setCompletedMatrices(prev => [...prev, { ...m, forceStatus: newStatus }]);
+      }
+    }
+
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceStatus: newStatus })
+      });
+      if (!res.ok) throw new Error('Error updating status');
+    } catch (e) {
+      customAlert('Error al cambiar el estado de la matriz');
+      fetchData(); // revert
+    }
+  };
+
+  const handleDuplicateMatrix = async (artistId: string, matrixId: string, currentName: string) => {
+    const newName = await customPrompt('Nombre de la nueva matriz (plantilla):', `${currentName} (Copia)`, 'Duplicar Matriz');
+    if (!newName) return;
+    
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, duplicateFromId: matrixId })
+      });
+      if (res.ok) {
+        await fetchData();
+        customAlert('Matriz duplicada con éxito. Se ha copiado la estructura.');
+      } else {
+        customAlert('Error al duplicar la matriz');
+        setIsLoading(false);
+      }
+    } catch (e) {
+      customAlert('Error de red al duplicar la matriz');
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyLink = (artistId: string, matrixId: string) => {
+    const url = `${window.location.origin}/matrices?id=${matrixId}&artist=${artistId}`;
+    navigator.clipboard.writeText(url);
+    customAlert('Enlace directo a la matriz copiado al portapapeles');
+  };
+
+  const handleMatrixContextMenu = (e: React.MouseEvent, matrix: any, isCompleted: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    showMenu(e.clientX, e.clientY, [
+      {
+        label: 'Abrir Matriz',
+        icon: 'Table2',
+        action: () => setActiveMatrix({
+          id: matrix.id,
+          name: matrix.name,
+          artistId: matrix.artistId,
+          artistName: matrix.artistName
+        }),
+      },
+      {
+        label: 'Duplicar Matriz',
+        icon: 'Copy',
+        action: () => handleDuplicateMatrix(matrix.artistId, matrix.id, matrix.name),
+      },
+      {
+        label: 'Copiar Enlace',
+        icon: 'Link',
+        action: () => handleCopyLink(matrix.artistId, matrix.id),
+      },
+      {
+        label: 'Renombrar',
+        icon: 'Pencil',
+        action: () => handleRenameMatrix(matrix.artistId, matrix.id, matrix.name),
+      },
+      {
+        label: isCompleted ? 'Marcar como Activa' : 'Marcar como Completada',
+        icon: isCompleted ? 'RotateCcw' : 'CheckCircle2',
+        className: isCompleted ? 'text-info hover:bg-info/10 hover:text-info' : 'text-success hover:bg-success/10 hover:text-success',
+        iconClassName: isCompleted ? 'text-info' : 'text-success',
+        action: () => handleToggleStatus(matrix.artistId, matrix.id, isCompleted),
+      },
+      {
+        label: 'Eliminar',
+        icon: 'Trash2',
+        className: 'text-error hover:bg-error/10 hover:text-error',
+        iconClassName: 'text-error',
+        action: () => handleDeleteMatrix(matrix.artistId, matrix.id),
+      }
+    ]);
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-96">
@@ -288,7 +399,8 @@ export default function MatricesPage() {
                   artistName: m.artistName
                 });
               }}
-              className="relative overflow-hidden glass rounded-[20px] p-5 border border-border hover:border-accent/50 transition-all duration-300 group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 cursor-pointer"
+              onContextMenu={(e) => handleMatrixContextMenu(e, m, false)}
+              className="relative overflow-hidden glass rounded-[20px] p-5 border border-border hover:border-accent/50 transition-all duration-300 group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 cursor-context-menu"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10">
@@ -322,31 +434,6 @@ export default function MatricesPage() {
                       Trackeo Activo
                     </span>
                   </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleRenameMatrix(m.artistId, m.id, m.name);
-                      }}
-                      className="p-1.5 text-text-secondary hover:text-accent hover:bg-accent/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      title="Renombrar Matriz"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDeleteMatrix(m.artistId, m.id);
-                      }}
-                      className="p-1.5 text-text-secondary hover:text-error hover:bg-error/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      title="Eliminar Matriz"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -371,7 +458,16 @@ export default function MatricesPage() {
               {completedMatrices.map((m: any) => (
                 <div 
                   key={m.id} 
-                  className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between min-h-[180px] opacity-70 hover:opacity-100 bg-surface/50"
+                  onClick={() => {
+                    setActiveMatrix({
+                      id: m.id,
+                      name: m.name,
+                      artistId: m.artistId,
+                      artistName: m.artistName
+                    });
+                  }}
+                  onContextMenu={(e) => handleMatrixContextMenu(e, m, true)}
+                  className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between min-h-[180px] opacity-70 hover:opacity-100 bg-surface/50 cursor-context-menu"
                 >
                   <div>
                     <div className="flex justify-between items-start mb-2">
@@ -379,21 +475,14 @@ export default function MatricesPage() {
                         <Check className="w-5 h-5 text-success shrink-0" />
                         <h4 className="font-bold text-base text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
                       </div>
-                      <button 
-                        onClick={() => handleDeleteMatrix(m.artistId, m.id)} 
-                        className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                        title="Eliminar Matriz"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                     
                     <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium mb-4">
                       <User className="w-3.5 h-3.5 text-accent-light" />
                       <span>Artista:</span>
-                      <Link href={`/artists/${m.artistId}`} className="text-text-primary hover:text-accent hover:underline transition-colors">
+                      <span className="text-text-primary hover:text-accent hover:underline transition-colors cursor-pointer" onClick={(e) => { e.stopPropagation(); router.push(`/artists/${m.artistId}`); }}>
                         {m.artistName || 'Desconocido'}
-                      </Link>
+                      </span>
                     </div>
                   </div>
 

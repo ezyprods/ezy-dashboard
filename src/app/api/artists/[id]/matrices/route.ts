@@ -20,11 +20,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = await request.json();
     
     const data = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
+    
+    let productionGrid = { columns: [], rows: [], mode: 'simple' };
+    
+    if (body.duplicateFromId) {
+      const originalMatrix = data.matrices?.find((m: any) => m.id === body.duplicateFromId);
+      if (originalMatrix && originalMatrix.productionGrid) {
+        // Deep clone structure but reset statuses and clear linked files
+        const clonedGrid = JSON.parse(JSON.stringify(originalMatrix.productionGrid));
+        clonedGrid.rows = clonedGrid.rows.map((row: any) => {
+           row.linkedFile = undefined; // clear file
+           if (row.cells) {
+             Object.keys(row.cells).forEach(colId => {
+                row.cells[colId] = { status: 'todo' }; // clear status and notes
+             });
+           }
+           return row;
+        });
+        productionGrid = clonedGrid;
+      }
+    }
+    
     const newMatrix = {
       id: randomUUID(),
       name: body.name || 'Nueva Matriz',
       projectId: body.projectId || null,
-      productionGrid: { columns: [], rows: [], mode: 'simple' },
+      productionGrid: productionGrid,
+      forceStatus: 'active',
       createdAt: new Date().toISOString(),
     };
     
