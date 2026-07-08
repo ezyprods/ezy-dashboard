@@ -170,6 +170,20 @@ export function GlobalAudioPlayer() {
       {/* Right side: volume and close (desktop only) */}
       <div className="hidden md:flex w-1/4 min-w-[200px] items-center justify-end gap-4">
         <div className="flex items-center gap-3 border-r border-border/50 pr-4">
+          {(() => {
+            const artistUrl = currentTrack.pathSegments?.find(seg => seg.url?.startsWith('/artists/'))?.url;
+            if (artistUrl) {
+              return (
+                <a href={artistUrl} className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir Perfil de Artista">
+                  <User className="w-4 h-4" />
+                </a>
+              );
+            }
+            return null;
+          })()}
+          <a href={`https://drive.google.com/file/d/${currentTrack.id}/view`} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir en Drive">
+            <ExternalLink className="w-4 h-4" />
+          </a>
           <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir en Mini-DAW">
             <Scissors className="w-4 h-4" />
           </button>
