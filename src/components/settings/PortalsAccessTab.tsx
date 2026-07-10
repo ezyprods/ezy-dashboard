@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Globe, Loader2, Search, ExternalLink, Copy, CheckCircle2, XCircle } from 'lucide-react';
+import { Globe, Loader2, Search, ExternalLink, Copy, Headphones, CheckSquare, Disc, MessageSquare, Wrench, Wallet } from 'lucide-react';
 import { customAlert } from '@/lib/dialog';
-import type { PortalConfig } from '@/types';
+import type { PortalConfig, PortalModule } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
 
 interface ArtistPortalData {
   artistId: string;
@@ -37,75 +38,54 @@ export function PortalsAccessTab() {
     }
   };
 
-  const handleToggleModule = async (artistId: string, moduleType: string, currentVal: boolean) => {
+  const updateArtistConfig = async (artistId: string, newConfig: PortalConfig) => {
     // Optimistic update
-    setArtists(prev => prev.map(a => {
-      if (a.artistId === artistId && a.config && a.config.modules) {
-        return {
-          ...a,
-          config: {
-            ...a.config,
-            modules: a.config.modules.map(m => m.type === moduleType ? { ...m, isVisible: !currentVal } : m)
-          }
-        };
-      }
-      return a;
-    }));
-
-    // Find the full new config to save
-    const artist = artists.find(a => a.artistId === artistId);
-    if (!artist || !artist.config || !artist.config.modules) return;
-    
-    const newConfig = {
-      ...artist.config,
-      modules: artist.config.modules.map(m => m.type === moduleType ? { ...m, isVisible: !currentVal } : m)
-    };
+    setArtists(prev => prev.map(a => a.artistId === artistId ? { ...a, config: newConfig } : a));
 
     try {
-      await fetch(`/api/artists/${artistId}/portal`, {
+      const res = await fetch(`/api/artists/${artistId}/portal`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newConfig)
       });
+      if (!res.ok) throw new Error('Falló al guardar en servidor');
     } catch (e: any) {
       customAlert('Error al guardar cambio: ' + e.message);
       fetchData(); // revert
     }
   };
 
-  const handleToggleFeedback = async (artistId: string, currentVal: boolean) => {
-    // Optimistic update
-    setArtists(prev => prev.map(a => {
-      if (a.artistId === artistId && a.config) {
-        return {
-          ...a,
-          config: {
-            ...a.config,
-            showFeedback: !currentVal
-          }
-        };
-      }
-      return a;
-    }));
-
-    const artist = artists.find(a => a.artistId === artistId);
-    if (!artist || !artist.config) return;
+  const handleToggleModule = (artist: ArtistPortalData, moduleType: string, currentVal: boolean) => {
+    if (!artist.config) return;
     
-    const newConfig = {
-      ...artist.config,
-      showFeedback: !currentVal
-    };
-
-    try {
-      await fetch(`/api/artists/${artistId}/portal`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newConfig)
+    let newModules = [...(artist.config.modules || [])];
+    const existingIndex = newModules.findIndex(m => m.type === moduleType);
+    
+    if (existingIndex >= 0) {
+      newModules[existingIndex] = { ...newModules[existingIndex], isVisible: !currentVal };
+    } else {
+      // If module doesn't exist yet in their config, create it
+      const defaultTitles: Record<string, string> = {
+        bounces: 'Últimas Mezclas / Audios',
+        tasks: 'Estado del Trabajo',
+        releases: 'Releases / Previews',
+        finances: 'Resumen Financiero'
+      };
+      newModules.push({
+        id: moduleType,
+        type: moduleType as any,
+        isVisible: true,
+        order: newModules.length,
+        title: defaultTitles[moduleType] || moduleType
       });
-    } catch (e: any) {
-      customAlert('Error al guardar cambio: ' + e.message);
-      fetchData(); // revert
     }
+
+    updateArtistConfig(artist.artistId, { ...artist.config, modules: newModules });
+  };
+
+  const handleToggleRootProperty = (artist: ArtistPortalData, property: keyof PortalConfig, currentVal: boolean) => {
+    if (!artist.config) return;
+    updateArtistConfig(artist.artistId, { ...artist.config, [property]: !currentVal });
   };
 
   const handleCopyLink = (artistId: string) => {
@@ -134,10 +114,12 @@ export function PortalsAccessTab() {
             <Globe className="w-5 h-5 text-accent" />
             Accesos a Portales
           </h2>
-          <p className="text-sm text-text-secondary mt-1">Gestiona qué módulos pueden ver los artistas en sus portales públicos.</p>
+          <p className="text-sm text-text-secondary mt-1">
+            Gestiona qué módulos y herramientas pueden ver los artistas en sus portales públicos.
+          </p>
         </div>
         
-        <div className="relative">
+        <div className="relative shrink-0">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
           <input
             type="text"
@@ -149,84 +131,86 @@ export function PortalsAccessTab() {
         </div>
       </div>
 
-      <div className="glass rounded-[24px] border border-border overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="border-b border-border bg-surface-elevated/50">
-                <th className="px-6 py-4 text-sm font-semibold text-text-primary">Artista</th>
-                <th className="px-6 py-4 text-sm font-semibold text-text-primary text-center">Mezclas / Audios</th>
-                <th className="px-6 py-4 text-sm font-semibold text-text-primary text-center">Estado del Trabajo</th>
-                <th className="px-6 py-4 text-sm font-semibold text-text-primary text-center">Releases / Previews</th>
-                <th className="px-6 py-4 text-sm font-semibold text-text-primary text-center">Feedback</th>
-                <th className="px-6 py-4 text-sm font-semibold text-text-primary text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredArtists.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-text-secondary">
-                    No se encontraron artistas.
-                  </td>
-                </tr>
-              ) : (
-                filteredArtists.map((artist) => {
-                  const hasBounces = artist.config?.modules?.find(m => m.type === 'bounces')?.isVisible ?? true;
-                  const hasTasks = artist.config?.modules?.find(m => m.type === 'tasks')?.isVisible ?? true;
-                  const hasReleases = artist.config?.modules?.find(m => m.type === 'releases')?.isVisible ?? true;
-                  const hasFeedback = artist.config?.showFeedback ?? true;
+      <div className="space-y-3">
+        {filteredArtists.length === 0 ? (
+          <div className="glass rounded-2xl p-12 text-center text-text-secondary border border-dashed border-border">
+            <Globe className="w-12 h-12 mx-auto mb-4 opacity-30" />
+            <p>No se encontraron artistas.</p>
+          </div>
+        ) : (
+          filteredArtists.map((artist) => {
+            const mods = artist.config?.modules || [];
+            const hasTools = artist.config?.enableTools ?? false;
+            const hasBounces = mods.find(m => m.type === 'bounces')?.isVisible ?? true;
+            const hasFinances = mods.find(m => m.type === 'finances')?.isVisible ?? false;
+            const hasTasks = mods.find(m => m.type === 'tasks')?.isVisible ?? true;
+            const hasReleases = mods.find(m => m.type === 'releases')?.isVisible ?? true;
+            const hasFeedback = artist.config?.showFeedback ?? true;
 
-                  const renderToggle = (isOn: boolean, onToggle: () => void) => (
-                    <button
-                      onClick={onToggle}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-background ${isOn ? 'bg-accent' : 'bg-surface-elevated border border-border'}`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isOn ? 'translate-x-6' : 'translate-x-1 shadow-sm'}`} />
-                    </button>
-                  );
+            const TogglePill = ({ icon: Icon, label, isOn, onClick }: { icon: any, label: string, isOn: boolean, onClick: () => void }) => (
+              <button
+                onClick={onClick}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border",
+                  isOn 
+                    ? "bg-accent/10 text-accent border-accent/30 hover:bg-accent/20" 
+                    : "bg-surface text-text-secondary border-border hover:bg-surface-elevated hover:text-text-primary"
+                )}
+              >
+                <div className={cn("w-2 h-2 rounded-full transition-colors", isOn ? "bg-accent" : "bg-text-secondary/30")} />
+                <Icon className="w-3.5 h-3.5" />
+                <span>{label}</span>
+              </button>
+            );
 
-                  return (
-                    <tr key={artist.artistId} className="hover:bg-surface/50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="font-semibold text-text-primary group-hover:text-accent transition-colors">{artist.artistName}</div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {renderToggle(hasBounces, () => handleToggleModule(artist.artistId, 'bounces', hasBounces))}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {renderToggle(hasTasks, () => handleToggleModule(artist.artistId, 'tasks', hasTasks))}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {renderToggle(hasReleases, () => handleToggleModule(artist.artistId, 'releases', hasReleases))}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {renderToggle(hasFeedback, () => handleToggleFeedback(artist.artistId, hasFeedback))}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleCopyLink(artist.artistId)}
-                            className="p-2 text-text-secondary hover:text-accent hover:bg-accent/10 rounded-lg transition-colors"
-                            title="Copiar Enlace"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => window.open(`/portal/${artist.artistId}`, '_blank')}
-                            className="p-2 text-text-secondary hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
-                            title="Abrir Portal"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+            return (
+              <div key={artist.artistId} className="glass p-4 rounded-xl border border-border flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-all hover:border-border/80">
+                {/* Artist Info */}
+                <div className="flex items-center gap-3 xl:w-56 shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent/20 to-surface-elevated border border-border flex items-center justify-center text-text-primary font-bold shrink-0">
+                    {artist.artistName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-text-primary truncate">{artist.artistName}</h3>
+                    <p className="text-xs text-text-secondary truncate">Configuración de Portal</p>
+                  </div>
+                </div>
+
+                {/* Toggles Flex Container */}
+                <div className="flex flex-wrap items-center gap-2 flex-1">
+                  <TogglePill icon={Wrench} label="SoundBox" isOn={hasTools} onClick={() => handleToggleRootProperty(artist, 'enableTools', hasTools)} />
+                  <TogglePill icon={Headphones} label="Mezclas" isOn={hasBounces} onClick={() => handleToggleModule(artist, 'bounces', hasBounces)} />
+                  <TogglePill icon={Wallet} label="Finanzas" isOn={hasFinances} onClick={() => handleToggleModule(artist, 'finances', hasFinances)} />
+                  <TogglePill icon={CheckSquare} label="Tareas" isOn={hasTasks} onClick={() => handleToggleModule(artist, 'tasks', hasTasks)} />
+                  <TogglePill icon={Disc} label="Releases" isOn={hasReleases} onClick={() => handleToggleModule(artist, 'releases', hasReleases)} />
+                  <TogglePill icon={MessageSquare} label="Feedback" isOn={hasFeedback} onClick={() => handleToggleRootProperty(artist, 'showFeedback', hasFeedback)} />
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-border/50">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 xl:flex-none text-xs"
+                    onClick={() => handleCopyLink(artist.artistId)}
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1.5" />
+                    Copiar
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="flex-1 xl:flex-none text-xs bg-emerald-500 hover:bg-emerald-600 text-white border-none shadow-lg shadow-emerald-500/20"
+                    onClick={() => window.open(`/portal/${artist.artistId}`, '_blank')}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                    Abrir
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
