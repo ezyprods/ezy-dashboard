@@ -198,7 +198,7 @@ export function PortalsAccessTab() {
                     Copiar
                   </Button>
                   <Button
-                    variant="primary"
+                    variant="default"
                     size="sm"
                     className="flex-1 xl:flex-none text-xs bg-emerald-500 hover:bg-emerald-600 text-white border-none shadow-lg shadow-emerald-500/20"
                     onClick={() => window.open(`/portal/${artist.artistId}`, '_blank')}
