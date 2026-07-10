@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Palette, Database, Shield, HardDrive, User, Bell } from 'lucide-react';
+import { Settings, Palette, Database, Shield, HardDrive, User, Bell, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AppearanceTab } from '@/components/settings/AppearanceTab';
 import { DriveTab } from '@/components/settings/DriveTab';
@@ -9,8 +9,9 @@ import { SecurityTab } from '@/components/settings/SecurityTab';
 import { CacheTab } from '@/components/settings/CacheTab';
 import { ProfileTab } from '@/components/settings/ProfileTab';
 import { NotificationsTab } from '@/components/settings/NotificationsTab';
+import { PortalsAccessTab } from '@/components/settings/PortalsAccessTab';
 
-type TabType = 'profile' | 'appearance' | 'notifications' | 'drive' | 'cache' | 'security';
+type TabType = 'profile' | 'appearance' | 'notifications' | 'drive' | 'cache' | 'security' | 'portals';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<TabType>('profile');
@@ -20,6 +21,7 @@ export default function SettingsPage() {
     { id: 'appearance', label: 'Apariencia', icon: Palette },
     { id: 'notifications', label: 'Alertas y Sonido', icon: Bell },
     { id: 'drive', label: 'Google Drive', icon: Database },
+    { id: 'portals', label: 'Accesos a Portales', icon: Globe },
     { id: 'cache', label: 'Datos y Caché', icon: HardDrive },
     { id: 'security', label: 'Seguridad', icon: Shield },
   ] as const;
@@ -34,6 +36,8 @@ export default function SettingsPage() {
         return <NotificationsTab />;
       case 'drive':
         return <DriveTab />;
+      case 'portals':
+        return <PortalsAccessTab />;
       case 'cache':
         return <CacheTab />;
       case 'security':
