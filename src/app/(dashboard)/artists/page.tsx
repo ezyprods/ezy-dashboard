@@ -8,7 +8,7 @@ import { SERVICE_LABELS } from "@/lib/constants";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
 import { Input } from "@/components/ui/Input";
 import { useRouter } from 'next/navigation';
-import { cn } from "@/lib/utils";
+import { cn, sortArtistsByRecent } from "@/lib/utils";
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
@@ -75,20 +75,10 @@ export default function ArtistsPage() {
     .sort((a, b) => {
       if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
       if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
-      
-      // Default: recent (last accessed via localStorage, fallback to updatedAt)
-      let accessedA = 0, accessedB = 0;
-      if (typeof window !== 'undefined') {
-        const storedA = localStorage.getItem(`accessed_${a.id}`);
-        const storedB = localStorage.getItem(`accessed_${b.id}`);
-        accessedA = storedA ? parseInt(storedA, 10) : (a.updatedAt ? new Date(a.updatedAt).getTime() : 0);
-        accessedB = storedB ? parseInt(storedB, 10) : (b.updatedAt ? new Date(b.updatedAt).getTime() : 0);
-      } else {
-        accessedA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        accessedB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      }
-      return accessedB - accessedA;
+      return 0; // Handled by sortArtistsByRecent next
     });
+
+  const sortedAndFilteredArtists = sortBy === 'recent' ? sortArtistsByRecent(filteredArtists) : filteredArtists;
 
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in pb-10">
@@ -197,7 +187,7 @@ export default function ArtistsPage() {
             ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4" 
             : "space-y-3"
         }>
-          {filteredArtists.map((artist) => (
+          {sortedAndFilteredArtists.map((artist) => (
             <div 
               key={artist.id} 
               onClick={() => {

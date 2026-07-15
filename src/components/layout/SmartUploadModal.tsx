@@ -6,7 +6,7 @@ import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, A
 import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
 import { customConfirm, customPrompt, customAlert } from '@/lib/dialog';
-import { cn, formatPhoneNumber, getWhatsAppUrl } from '@/lib/utils';
+import { cn, formatPhoneNumber, getWhatsAppUrl, sortArtistsByRecent, getNormalizedBaseName } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { findBestMatch } from '@/lib/utils';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
@@ -96,21 +96,7 @@ export function SmartUploadModal({
 
   // Sort artists by recent interaction or update
   useEffect(() => {
-    const sorted = [...artists].sort((a, b) => {
-      const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      let accessedA = timeA;
-      let accessedB = timeB;
-      
-      if (typeof window !== 'undefined') {
-        const storedA = localStorage.getItem(`accessed_${a.id}`);
-        const storedB = localStorage.getItem(`accessed_${b.id}`);
-        if (storedA) accessedA = Math.max(accessedA, parseInt(storedA, 10));
-        if (storedB) accessedB = Math.max(accessedB, parseInt(storedB, 10));
-      }
-      return accessedB - accessedA;
-    });
-    setSortedArtists(sorted);
+    setSortedArtists(sortArtistsByRecent(artists));
   }, [artists]);
 
   // ─── Safe Folder Fetching Methods ───────────────────────────────────────────
@@ -168,20 +154,7 @@ export function SmartUploadModal({
 
     if (initialFiles.length === 0 || isArtistsLoading) return;
 
-    const inlineSortedArtists = [...artists].sort((a, b) => {
-      const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      let accessedA = timeA;
-      let accessedB = timeB;
-      
-      if (typeof window !== 'undefined') {
-        const storedA = localStorage.getItem(`accessed_${a.id}`);
-        const storedB = localStorage.getItem(`accessed_${b.id}`);
-        if (storedA) accessedA = Math.max(accessedA, parseInt(storedA, 10));
-        if (storedB) accessedB = Math.max(accessedB, parseInt(storedB, 10));
-      }
-      return accessedB - accessedA;
-    });
+    const inlineSortedArtists = sortArtistsByRecent(artists);
 
     // Filter out files that are already in the list
     const newFiles = initialFiles.filter(f => !items.some(item => item.file.name === f.name && item.file.size === f.size && item.file.lastModified === f.lastModified));
@@ -212,12 +185,12 @@ export function SmartUploadModal({
         detectedArtistId = preselectedArtistId;
         detectedArtistName = artists.find(a => a.id === preselectedArtistId)?.name || '';
       } else {
-        const normalizedFile = f.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ');
+        const normalizedFile = getNormalizedBaseName(f.name);
         const squashedFile = normalizedFile.replace(/\s+/g, '');
         
         // Pass 1: Exact substring match (handles regular spacing and underscores mapped to spaces)
         let exactMatch = inlineSortedArtists.find(a => {
-           const normArtist = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ');
+           const normArtist = getNormalizedBaseName(a.name);
            return normalizedFile.includes(normArtist);
         });
 
@@ -225,7 +198,7 @@ export function SmartUploadModal({
         // Only if artist name is > 3 chars to avoid false positives with short names like 'SAO' in 'pesao'
         if (!exactMatch) {
           exactMatch = inlineSortedArtists.find(a => {
-             const squashedArtist = a.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_\-\s]+/g, '');
+             const squashedArtist = getNormalizedBaseName(a.name).replace(/\s+/g, '');
              if (squashedArtist.length <= 3) return false;
              return squashedFile.includes(squashedArtist);
           });
@@ -236,7 +209,7 @@ export function SmartUploadModal({
           detectedArtistName = exactMatch.name;
         } else {
           // Pass 3: Fuzzy match (increased threshold to 0.6 to avoid false positives)
-          const bestArtistMatch = findBestMatch(normalizedFile, inlineSortedArtists, (a: any) => a?.name?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]/g, ' ') || '', 0.6);
+          const bestArtistMatch = findBestMatch(normalizedFile, inlineSortedArtists, (a: any) => getNormalizedBaseName(a?.name || ''), 0.6);
           if (bestArtistMatch) {
             detectedArtistId = bestArtistMatch.id;
             detectedArtistName = bestArtistMatch.name;
@@ -575,6 +548,10 @@ export function SmartUploadModal({
               let responseData: any = {};
               try { responseData = JSON.parse(xhr.responseText); } catch (e) {}
               
+              if (item.artistId && typeof window !== 'undefined') {
+                localStorage.setItem(`accessed_${item.artistId}`, Date.now().toString());
+              }
+              
               setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
               resolve();
             } else {
@@ -845,6 +822,10 @@ export function SmartUploadModal({
                       size="sm" 
                       className="w-full text-xs"
                       onClick={() => {
+                        if (!item.artistId) {
+                          customAlert('Error: ID del artista no definido.');
+                          return;
+                        }
                         window.open(`/portal/${item.artistId}`, '_blank');
                       }}
                     >
@@ -857,6 +838,10 @@ export function SmartUploadModal({
                       size="sm" 
                       className="w-full text-xs"
                       onClick={() => {
+                        if (!item.artistId) {
+                          customAlert('Error: ID del artista no definido.');
+                          return;
+                        }
                         navigator.clipboard.writeText(`${window.location.origin}/portal/${item.artistId}`);
                         customAlert('Enlace al portal copiado');
                       }}
@@ -871,6 +856,10 @@ export function SmartUploadModal({
                         size="sm" 
                         className="w-full text-xs"
                         onClick={() => {
+                          if (!item.resultId) {
+                            customAlert('Error: ID del archivo no definido.');
+                            return;
+                          }
                           window.open(`https://drive.google.com/file/d/${item.resultId}/view`, '_blank');
                         }}
                       >

@@ -313,3 +313,27 @@ export function getWhatsAppUrl(phone: string, text: string): string {
   const encodedText = encodeURIComponent(text);
   return `https://wa.me/${numericOnly}?text=${encodedText}`;
 }
+
+// Sort artists by recent interaction, with fallback to updatedAt and then name
+export function sortArtistsByRecent<T extends { id: string, name: string, updatedAt?: string | Date | null }>(artists: T[]): T[] {
+  return [...artists].sort((a, b) => {
+    const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    let accessedA = timeA;
+    let accessedB = timeB;
+    
+    if (typeof window !== 'undefined') {
+      const storedA = localStorage.getItem(`accessed_${a.id}`);
+      const storedB = localStorage.getItem(`accessed_${b.id}`);
+      if (storedA) accessedA = Math.max(accessedA, parseInt(storedA, 10));
+      if (storedB) accessedB = Math.max(accessedB, parseInt(storedB, 10));
+    }
+    
+    // Sort by recent access
+    const diff = accessedB - accessedA;
+    if (diff !== 0) return diff;
+    
+    // Fallback to alphabetical if both are equal (e.g., both 0)
+    return a.name.localeCompare(b.name);
+  });
+}
