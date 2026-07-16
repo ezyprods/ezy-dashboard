@@ -1099,6 +1099,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                 {groupedItems.map((item: any, idx) => {
                   const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                   const isAudio = item.mimeType?.startsWith('audio/');
+                  const isThisTrackActive = currentTrack?.id === item.id;
+                  const isThisTrackPlaying = isThisTrackActive && isPlaying;
 
                   return (
                     <div
@@ -1125,22 +1127,94 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       )}
                       onClick={(e) => handleItemClick(e, idx, item, groupedItems)}
                     >
-                      {isAudio ? (
-                        <div className="flex-1 min-w-0 w-full flex items-center pr-2">
-                          <WaveformPlayer
-                            fileId={item.id}
-                            fileName={item.name}
-                            versions={item.versions}
-                            currentFolderId={currentFolderId}
-                            onRefresh={() => {
-                              fetchItems(currentFolderId);
-                              fetchRecentFiles();
+                        <>
+                          <button
+                            className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm ml-1',
+                              isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isThisTrackActive) {
+                                togglePlay();
+                              } else {
+                                const safeName = item.name || 'Audio';
+                                playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
+                              }
                             }}
-                            modifiedTime={item.modifiedTime || item.createdTime}
-                            bpm={item.bpm}
-                            trackKey={item.key}
-                          />
-                        </div>
+                          >
+                            {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                          </button>
+
+                          <div className="flex-1 min-w-0 ml-3 pr-2 flex flex-col justify-center">
+                            <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
+                              <span className="truncate block">{item.name || 'Sin Título'}</span>
+                              {item.expiresAt && (
+                                <RealtimeCountdown 
+                                  expiresAt={item.expiresAt} 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    showMenu(e.clientX, e.clientY, [
+                                      {
+                                        label: 'Eliminar ya',
+                                        icon: 'Trash2',
+                                        action: () => setDeleteModalFile(item)
+                                      },
+                                      {
+                                        label: 'Cancelar eliminación',
+                                        icon: 'Undo',
+                                        action: async () => {
+                                          try {
+                                            const res = await fetch(`/api/files/${item.id}/expiration`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ expiresInMs: null })
+                                            });
+                                            if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                            fetchItems(currentFolderId);
+                                            fetchRecentFiles();
+                                          } catch(err: any) {
+                                            customAlert(err.message);
+                                          }
+                                        }
+                                      }
+                                    ]);
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              {item.bpm && (() => {
+                                const bpmNum = parseInt(String(item.bpm));
+                                const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                                                 bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                                                 bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                                 'text-red-400 bg-red-500/10 border-red-500/20';
+                                return <span className={`font-bold font-mono px-1.5 py-0.5 rounded border ${bpmColor}`}>{bpmNum} BPM</span>;
+                              })()}
+                              {item.key && <span className="font-bold font-mono text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{item.key}</span>}
+                              <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                            </div>
+                          </div>
+
+                          {/* Hover actions */}
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0 z-10">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }}
+                              className="p-1.5 text-text-secondary hover:text-accent-light hover:bg-surface rounded-md transition-colors"
+                              title="Abrir en Mini-DAW"
+                            >
+                              <Scissors className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
+                              className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
+                              title="Descargar/Ver"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
                       ) : (
                         <>
                           <div className="w-10 flex justify-center shrink-0">
@@ -1309,6 +1383,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                   {pane.items.map((item: any) => {
                     const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                     const isAudio = item.mimeType?.startsWith('audio/');
+                    const isThisTrackActive = currentTrack?.id === item.id;
+                    const isThisTrackPlaying = isThisTrackActive && isPlaying;
 
                     return (
                       <div
@@ -1332,20 +1408,95 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                         className="group relative flex items-center p-3 transition-colors cursor-pointer hover:bg-surface-elevated/80"
                       >
                         {isAudio ? (
-                          <div className="flex-1 min-w-0 w-full flex items-center pr-2">
-                            <WaveformPlayer
-                              fileId={item.id}
-                              fileName={item.name}
-                              versions={item.versions}
-                              currentFolderId={pane.folderId}
-                              onRefresh={() => {
-                                fetchPaneItems(pane.folderId);
-                                fetchItems(currentFolderId);
-                                fetchRecentFiles();
-                              }}
-                              modifiedTime={item.modifiedTime || item.createdTime}
-                            />
+                        <>
+                          <button
+                            className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm ml-1',
+                              isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isThisTrackActive) {
+                                togglePlay();
+                              } else {
+                                const safeName = item.name || 'Audio';
+                                playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
+                              }
+                            }}
+                          >
+                            {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                          </button>
+
+                          <div className="flex-1 min-w-0 ml-3 pr-2 flex flex-col justify-center">
+                            <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
+                              <span className="truncate block">{item.name || 'Sin Título'}</span>
+                              {item.expiresAt && (
+                                <RealtimeCountdown 
+                                  expiresAt={item.expiresAt} 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    showMenu(e.clientX, e.clientY, [
+                                      {
+                                        label: 'Eliminar ya',
+                                        icon: 'Trash2',
+                                        action: () => setDeleteModalFile(item)
+                                      },
+                                      {
+                                        label: 'Cancelar eliminación',
+                                        icon: 'Undo',
+                                        action: async () => {
+                                          try {
+                                            const res = await fetch(`/api/files/${item.id}/expiration`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ expiresInMs: null })
+                                            });
+                                            if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                            fetchPaneItems(pane.folderId);
+                                            fetchItems(currentFolderId);
+                                            fetchRecentFiles();
+                                          } catch(err: any) {
+                                            customAlert(err.message);
+                                          }
+                                        }
+                                      }
+                                    ]);
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              {item.bpm && (() => {
+                                const bpmNum = parseInt(String(item.bpm));
+                                const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                                                 bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                                                 bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                                 'text-red-400 bg-red-500/10 border-red-500/20';
+                                return <span className={`font-bold font-mono px-1.5 py-0.5 rounded border ${bpmColor}`}>{bpmNum} BPM</span>;
+                              })()}
+                              {item.key && <span className="font-bold font-mono text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{item.key}</span>}
+                              <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                            </div>
                           </div>
+
+                          {/* Hover actions */}
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0 z-10">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }}
+                              className="p-1.5 text-text-secondary hover:text-accent-light hover:bg-surface rounded-md transition-colors"
+                              title="Abrir en Mini-DAW"
+                            >
+                              <Scissors className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
+                              className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
+                              title="Descargar/Ver"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
                         ) : (
                           <>
                             <div className="w-10 flex justify-center shrink-0">
