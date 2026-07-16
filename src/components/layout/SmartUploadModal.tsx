@@ -44,6 +44,7 @@ interface SmartUploadModalProps {
   initialFiles: File[];
   preselectedArtistId?: string;
   preselectedFolderId?: string; // If user drops inside DriveExplorer in a specific folder
+  onSuccess?: () => void; // Called when all uploads complete successfully
 }
 
 
@@ -74,7 +75,8 @@ export function SmartUploadModal({
   onClose,
   initialFiles,
   preselectedArtistId,
-  preselectedFolderId
+  preselectedFolderId,
+  onSuccess
 }: SmartUploadModalProps) {
   const { activeArtists: artists, isLoading: isArtistsLoading } = useArtists();
   const router = useRouter();
@@ -627,6 +629,10 @@ export function SmartUploadModal({
           onClose();
         }, 15000);
       }
+
+      // Dispatch global event so any subscriber (e.g. RecentFilesWidget) can refresh
+      window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
+      if (onSuccess) onSuccess();
     }
     return () => {
       if (timeout) clearTimeout(timeout);
@@ -639,7 +645,7 @@ export function SmartUploadModal({
         });
       }
     };
-  }, [allDone, isHovered, onClose, items, artists]);
+  }, [allDone, isHovered, onClose, onSuccess, items, artists]);
 
   if (!isOpen || initialFiles.length === 0) return null;
   
@@ -821,16 +827,22 @@ export function SmartUploadModal({
                       variant="secondary" 
                       size="sm" 
                       className="w-full text-xs"
-                      onClick={() => {
-                        if (!item.artistId) {
-                          customAlert('Error: ID del artista no definido.');
-                          return;
-                        }
-                        window.open(`/portal/${item.artistId}`, '_blank');
-                      }}
+                      asChild
                     >
-                      <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                      Ver Portal
+                      <a 
+                        href={`/portal/${item.artistId}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          if (!item.artistId) {
+                            e.preventDefault();
+                            customAlert('Error: ID del artista no definido.');
+                          }
+                        }}
+                      >
+                        <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                        Ver Portal
+                      </a>
                     </Button>
 
                     <Button 
@@ -855,16 +867,16 @@ export function SmartUploadModal({
                         variant="secondary" 
                         size="sm" 
                         className="w-full text-xs"
-                        onClick={() => {
-                          if (!item.resultId) {
-                            customAlert('Error: ID del archivo no definido.');
-                            return;
-                          }
-                          window.open(`https://drive.google.com/file/d/${item.resultId}/view`, '_blank');
-                        }}
+                        asChild
                       >
-                        <FileIcon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                        Ver en Drive
+                        <a 
+                          href={`https://drive.google.com/file/d/${item.resultId}/view`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                        >
+                          <FileIcon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                          Ver en Drive
+                        </a>
                       </Button>
                     )}
 

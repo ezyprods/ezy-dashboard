@@ -28,7 +28,8 @@ export function FolderExplorerModal({ isOpen, onClose, folderId, folderName = 'C
         onClick={onClose}
       />
       
-      <div className="relative w-full max-w-5xl h-[85vh] bg-surface border border-border shadow-2xl rounded-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+      {/* Modal shell — full height flex column, no outer overflow */}
+      <div className="relative w-full max-w-6xl h-[88vh] bg-surface border border-border shadow-2xl rounded-2xl flex flex-col animate-in zoom-in-95 duration-200 gpu-layer">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border bg-surface flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -49,8 +50,8 @@ export function FolderExplorerModal({ isOpen, onClose, folderId, folderName = 'C
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-hidden relative">
+        {/* Content — flex-1 so it fills the remaining height; overflow-y-auto is handled inside DriveExplorer panels */}
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar smooth-scroll-container p-6">
           <DriveExplorer 
             rootFolderId={folderId} 
             rootName={folderName} 

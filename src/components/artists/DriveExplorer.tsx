@@ -15,6 +15,7 @@ import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
 import { DAWErrorBoundary } from '@/components/projects/DAWErrorBoundary';
+import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 
 interface DriveItem {
   id: string;
@@ -144,6 +145,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   }, [extraPanes, fetchPaneItems]);
 
   const explorerRef = useRef<HTMLDivElement>(null);
+  const recentScrollRef = useRef<HTMLDivElement>(null);
+
+  // Smooth scroll on the recent files panel
+  useSmoothScroll(recentScrollRef, [isRecentLoading, recentFiles]);
 
   // Undo / Redo Stack
   const [actionStack, setActionStack] = useState<ActionHistory[]>([]);
@@ -784,7 +789,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         {/* ── Column 1: Archivos Recientes (fixed width, shrink-0) ── */}
         <div
           className={cn(
-            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] transition-all duration-300 w-full",
+            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] transition-colors duration-300 w-full gpu-layer",
             "flex-1 min-w-0",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
@@ -794,7 +799,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
             Archivos Recientes
           </h3>
 
-          <div className="flex-1 overflow-y-auto max-h-[510px] pr-1 space-y-2">
+          <div
+            ref={recentScrollRef}
+            className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
+          >
             {isRecentLoading ? (
               <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
             ) : recentFiles.length === 0 ? (
@@ -844,7 +852,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       );
                     } : undefined}
                     title={isAudio ? 'Arrastra a WhatsApp Web u otra pestaña para compartir' : undefined}
-                    className={`relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-all flex items-center gap-3 group cursor-pointer overflow-hidden ${isAudio ? 'drag-audio-item' : ''}`}
+                    className={`relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center gap-3 group cursor-pointer overflow-hidden perf-item ${isAudio ? 'drag-audio-item' : ''}`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {isAudio ? (
@@ -1061,7 +1069,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
               }
             }}
             className={cn(
-              "relative bg-surface-elevated rounded-2xl border transition-all duration-300 min-h-[470px] overflow-hidden",
+              "relative bg-surface-elevated rounded-2xl border transition-colors duration-200 overflow-hidden gpu-layer",
               isDraggingOver ? "border-accent bg-accent/5 ring-2 ring-accent/15 scale-[0.995]" : "border-border"
             )}
           >
@@ -1084,7 +1092,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                 <p className="text-xs text-text-secondary mt-1">Arrastra archivos aquí o haz clic en "Subir archivo" para comenzar.</p>
               </div>
             ) : (
-              <div className="divide-y divide-border/40">
+              <div
+                className="divide-y divide-border/40 overflow-y-auto custom-scrollbar smooth-scroll-container"
+                style={{ maxHeight: 'min(70vh, 600px)' }}
+              >
                 {groupedItems.map((item: any, idx) => {
                   const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                   const isAudio = item.mimeType?.startsWith('audio/');
@@ -1232,9 +1243,9 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           <div
             key={pane.folderId}
             className={cn(
-              "space-y-4 animate-slide-in transition-all duration-300 w-full",
-              "flex-1 min-w-0",
-              activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:block"
+              "space-y-4 animate-slide-in transition-colors duration-300 w-full gpu-layer",
+              "flex-1 min-w-0 flex flex-col",
+              activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:flex"
             )}
           >
             {/* Header: Folder name & Close */}
@@ -1276,7 +1287,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                 }
               }}
               className={cn(
-                "relative bg-surface rounded-2xl border overflow-hidden min-h-[470px] transition-all duration-200",
+                "relative bg-surface rounded-2xl border transition-colors duration-200 flex flex-col overflow-hidden",
+                "flex-1 min-h-0",
                 pane.isDragOver ? "border-accent bg-accent/5 ring-2 ring-accent/20" : "border-border"
               )}
             >
@@ -1289,7 +1301,11 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                   <p className="text-xs mt-1 text-text-secondary/70">Arrastra archivos aquí.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-border/50">
+                <div
+                  className="flex-1 overflow-y-auto min-h-0 custom-scrollbar smooth-scroll-container divide-y divide-border/50"
+                  style={{ maxHeight: 'min(70vh, 600px)' }}
+                >
+                  <div className="divide-y divide-border/50">
                   {pane.items.map((item: any) => {
                     const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
                     const isAudio = item.mimeType?.startsWith('audio/');
@@ -1420,6 +1436,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               )}
             </div>
