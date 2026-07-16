@@ -88,7 +88,7 @@ export function RecentFilesWidget() {
   };
 
   return (
-    <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[24px] overflow-hidden h-full flex flex-col group hover:border-emerald-500/30 transition-colors min-h-0 gpu-layer">
+    <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[24px] overflow-hidden h-full flex flex-col group hover:border-emerald-500/30 transition-colors min-h-0">
       <div className="px-4 py-2.5 border-b border-border/50 bg-gradient-to-b from-surface-elevated/50 to-surface/50 flex items-center gap-2 shrink-0">
         <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-500">
           <FileAudio className="w-3.5 h-3.5" />
@@ -117,7 +117,7 @@ export function RecentFilesWidget() {
             return (
               <div 
                 key={file.id}
-                className="group/item relative flex items-center gap-3 p-2 rounded-xl hover:bg-surface-elevated/50 border border-transparent hover:border-border/50 transition-colors cursor-default overflow-hidden perf-item"
+                className="group/item relative flex items-center gap-3 p-2 rounded-xl hover:bg-surface-elevated/50 border border-transparent hover:border-border/50 transition-colors cursor-default overflow-hidden"
               >
                 {/* Play Button */}
                 <button

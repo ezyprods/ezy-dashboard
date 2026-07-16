@@ -29,7 +29,7 @@ export function FolderExplorerModal({ isOpen, onClose, folderId, folderName = 'C
       />
       
       {/* Modal shell — full height flex column, no outer overflow */}
-      <div className="relative w-full max-w-6xl h-[88vh] bg-surface border border-border shadow-2xl rounded-2xl flex flex-col animate-in zoom-in-95 duration-200 gpu-layer">
+      <div className="relative w-full max-w-6xl h-[88vh] bg-surface border border-border shadow-2xl rounded-2xl flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="px-6 py-4 border-b border-border bg-surface flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">

@@ -30,7 +30,7 @@ export function GlobalMatricesWidget({ matrices, isLoading }: { matrices: any[],
   return (
     <div className="relative h-full flex flex-col min-h-0 w-full">
       <div className="absolute -inset-0.5 bg-gradient-to-b from-accent/20 to-transparent rounded-[24px] blur opacity-40 pointer-events-none" />
-      <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[24px] overflow-hidden h-full flex flex-col group hover:border-accent/30 transition-colors min-h-0 gpu-layer">
+      <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[24px] overflow-hidden h-full flex flex-col group hover:border-accent/30 transition-colors min-h-0">
         <div className="p-4 border-b border-border/50 bg-gradient-to-b from-surface-elevated/50 to-surface/50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-accent/10 text-accent shadow-inner">
@@ -54,7 +54,7 @@ export function GlobalMatricesWidget({ matrices, isLoading }: { matrices: any[],
               <Link 
                 key={`${m.artistId}-${m.id}`}
                 href={`/artists/${m.artistId}?tab=matrices`}
-                className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-surface border border-transparent hover:border-border/50 transition-colors group block shrink-0 perf-item"
+                className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-surface border border-transparent hover:border-border/50 transition-colors group block shrink-0"
               >
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-xs text-text-primary group-hover:text-accent transition-colors truncate">{m.name}</h4>

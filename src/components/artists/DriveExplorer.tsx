@@ -789,7 +789,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         {/* ── Column 1: Archivos Recientes (fixed width, shrink-0) ── */}
         <div
           className={cn(
-            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] transition-colors duration-300 w-full gpu-layer",
+            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] transition-colors duration-300 w-full",
             "flex-1 min-w-0",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
@@ -801,7 +801,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
           <div
             ref={recentScrollRef}
-            className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
+            className="flex-1 overflow-y-auto max-h-[510px] min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
           >
             {isRecentLoading ? (
               <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
@@ -852,7 +852,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       );
                     } : undefined}
                     title={isAudio ? 'Arrastra a WhatsApp Web u otra pestaña para compartir' : undefined}
-                    className={`relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center gap-3 group cursor-pointer overflow-hidden perf-item ${isAudio ? 'drag-audio-item' : ''}`}
+                    className={`relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center gap-3 group cursor-pointer overflow-hidden ${isAudio ? 'drag-audio-item' : ''}`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       {isAudio ? (
@@ -1069,7 +1069,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
               }
             }}
             className={cn(
-              "relative bg-surface-elevated rounded-2xl border transition-colors duration-200 overflow-hidden gpu-layer",
+              "relative bg-surface-elevated rounded-2xl border transition-colors duration-200 overflow-hidden",
               isDraggingOver ? "border-accent bg-accent/5 ring-2 ring-accent/15 scale-[0.995]" : "border-border"
             )}
           >
@@ -1243,7 +1243,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           <div
             key={pane.folderId}
             className={cn(
-              "space-y-4 animate-slide-in transition-colors duration-300 w-full gpu-layer",
+              "space-y-4 animate-slide-in transition-colors duration-300 w-full",
               "flex-1 min-w-0 flex flex-col",
               activeMobileTab === `parallel-${idx}` ? "block" : "hidden lg:flex"
             )}

@@ -163,20 +163,6 @@ html.light .logo-dark {
     border-color: rgba(108, 92, 231, 0.3);
   }
 
-  /* GPU-promoted layer for smooth animations */
-  .gpu-layer {
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-  }
-
-  /* Contain paint/layout to improve FPS on list items */
-  .perf-item {
-    contain: layout style;
-    transform: translateZ(0);
-  }
-
   /* Smooth scroll container — adds will-change only during scroll */
   .smooth-scroll-container {
     overflow-y: auto;
