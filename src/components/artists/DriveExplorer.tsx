@@ -1127,6 +1127,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                       )}
                       onClick={(e) => handleItemClick(e, idx, item, groupedItems)}
                     >
+                      {isAudio ? (
                         <>
                           <button
                             className={cn(

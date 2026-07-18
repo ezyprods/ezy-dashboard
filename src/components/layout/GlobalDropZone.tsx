@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { UploadCloud } from 'lucide-react';
+import { UploadCloud, Music, Image as ImageIcon, Film, File as FileIcon } from 'lucide-react';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
 import type { Artist } from '@/types';
