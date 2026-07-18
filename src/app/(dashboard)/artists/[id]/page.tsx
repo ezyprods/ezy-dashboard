@@ -107,7 +107,7 @@ export default function ArtistDetailPage() {
   const isOldFolder = false; // Ya no hay carpetas antiguas, todo se auto-sincroniza
 
   return (
-    <div className="space-y-6 animate-fade-in pb-20">
+    <div className="space-y-6 animate-fade-in">
       <NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} artistId={artistId} />
       {artist && (
         <EditArtistModal
@@ -199,7 +199,7 @@ export default function ArtistDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-3 md:gap-6 border-b border-border/50 px-1 overflow-x-auto mt-4 md:mt-8 scrollbar-hide">
+      <div className="flex items-center gap-3 md:gap-6 border-b border-border/50 px-1 overflow-x-auto mt-4 md:mt-8 scrollbar-hide sticky top-0 z-30 bg-background/95 backdrop-blur-md pt-2">
         {(['files', 'projects', 'campaigns', 'matrices', 'portal'] as const).map(tab => (
           <button 
             key={tab}

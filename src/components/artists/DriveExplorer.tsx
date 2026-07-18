@@ -748,7 +748,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   return (
     <div ref={explorerRef} className={cn("animate-fade-in space-y-6 transition-all w-full", isDraggingFiles && "relative z-[500]")}>
       {/* Mobile Tabs */}
-      <div className="flex lg:hidden bg-surface-elevated p-1.5 rounded-xl border border-border overflow-x-auto gap-1 shadow-sm">
+      <div className="flex lg:hidden bg-surface-elevated/95 backdrop-blur-md p-1.5 rounded-xl border border-border overflow-x-auto gap-1 shadow-sm sticky top-14 z-20">
         <button
           onClick={() => setActiveMobileTab('explorer')}
           className={cn(
@@ -801,7 +801,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
           <div
             ref={recentScrollRef}
-            className="flex-1 overflow-y-auto max-h-[510px] min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
+            className="flex-1 lg:overflow-y-auto max-h-none lg:max-h-[510px] min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
           >
             {isRecentLoading ? (
               <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
@@ -1093,8 +1093,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
               </div>
             ) : (
               <div
-                className="divide-y divide-border/40 overflow-y-auto custom-scrollbar smooth-scroll-container"
-                style={{ maxHeight: 'min(70vh, 600px)' }}
+                className="divide-y divide-border/40 lg:overflow-y-auto custom-scrollbar smooth-scroll-container max-h-none lg:max-h-[min(70vh,600px)]"
               >
                 {groupedItems.map((item: any, idx) => {
                   const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
