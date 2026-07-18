@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
-import { UploadCloud, Music, Image as ImageIcon, Film, File as FileIcon, User } from 'lucide-react';
+import { UploadCloud } from 'lucide-react';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
-import { useArtists } from '@/lib/hooks/useArtists';
 import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
 import type { Artist } from '@/types';
 
@@ -80,7 +79,6 @@ export function GlobalDropZone() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isDraggingFiles, droppedFiles, preselectedArtistId, preselectedFolderId, clearDroppedFiles, triggerUploadForArtist } = useGlobalDragDrop();
-  const { activeArtists } = useArtists();
   const [hoveredZone, setHoveredZone] = useState(false);
   const zoneCounter = useRef(0);
 
@@ -109,7 +107,9 @@ export function GlobalDropZone() {
     }
     
     if (files.length > 0) {
-      triggerUploadForArtist(files, targetArtistId || (activeArtists[0]?.id ?? ''));
+      // Pass empty string when no specific artist is targeted — SmartUploadModal
+      // will auto-detect from filename and fall back to the most-recently-used artist.
+      triggerUploadForArtist(files, targetArtistId || '');
     }
   };
 
@@ -131,7 +131,9 @@ export function GlobalDropZone() {
           setHoveredZone(false);
           const files = Array.from(e.dataTransfer.files);
           if (files.length > 0) {
-            triggerUploadForArtist(files, preselectedArtistId || (activeArtists[0]?.id ?? ''));
+            // Pass empty string when no specific artist is targeted — SmartUploadModal
+            // will auto-detect from filename and fall back to the most-recently-used artist.
+            triggerUploadForArtist(files, preselectedArtistId || '');
           }
         }}
       >
