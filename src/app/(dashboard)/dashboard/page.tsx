@@ -138,17 +138,17 @@ export default function DashboardPage() {
         </div>
 
         {/* Col 2: Archivos Recientes */}
-        <div className="h-full min-h-0 overflow-hidden">
+        <div className="h-[350px] lg:h-full min-h-0 overflow-hidden">
           <RecentFilesWidget />
         </div>
 
         {/* Col 3: Matrices Activas */}
-        <div className="h-full min-h-0 overflow-hidden">
+        <div className="h-[350px] lg:h-full min-h-0 overflow-hidden">
             <GlobalMatricesWidget matrices={matrices} isLoading={isMatricesLoading} />
         </div>
 
         {/* Col 3: Proximos Eventos */}
-        <div className="relative h-full min-h-0 overflow-hidden">
+        <div className="relative h-[350px] lg:h-full min-h-0 overflow-hidden">
           <div className="absolute -inset-0.5 bg-gradient-to-b from-blue-500/20 to-transparent rounded-[20px] blur opacity-30 pointer-events-none" />
           <div className="relative bg-surface/80 backdrop-blur-xl border border-border/60 rounded-[20px] overflow-hidden h-full flex flex-col group hover:border-blue-500/30 transition-colors">
             <div className="px-4 py-2.5 border-b border-border/50 bg-gradient-to-b from-surface-elevated/50 to-surface/50 flex items-center gap-2 shrink-0">
