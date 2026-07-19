@@ -207,8 +207,8 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         item.mimeType !== 'application/json'
       );
       filesOnly.sort((a: any, b: any) => {
-        const timeA = new Date(a.modifiedTime || a.createdTime || 0).getTime();
-        const timeB = new Date(b.modifiedTime || b.createdTime || 0).getTime();
+        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
         return timeB - timeA;
       });
       setRecentFiles(filesOnly);
@@ -801,7 +801,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
 
           <div
             ref={recentScrollRef}
-            className="flex-1 lg:overflow-y-auto max-h-none lg:max-h-[510px] min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
+            className="flex-1 overflow-y-auto max-h-[450px] lg:max-h-[510px] min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
           >
             {isRecentLoading ? (
               <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
@@ -1093,7 +1093,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
               </div>
             ) : (
               <div
-                className="divide-y divide-border/40 lg:overflow-y-auto custom-scrollbar smooth-scroll-container max-h-none lg:max-h-[min(70vh,600px)]"
+                className="divide-y divide-border/40 overflow-y-auto custom-scrollbar smooth-scroll-container max-h-[450px] lg:max-h-[min(70vh,600px)]"
               >
                 {groupedItems.map((item: any, idx) => {
                   const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
