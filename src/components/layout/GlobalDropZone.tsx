@@ -143,8 +143,8 @@ export function GlobalDropZone() {
 
       {/* 2. VISUAL OVERLAY (z-[9999]) */}
       {/* Placed at the top so it's never occluded by DriveExplorer */}
-      <div className="fixed top-24 left-0 right-0 z-[9999] pointer-events-none flex justify-center px-4 animate-in fade-in slide-in-from-top-10 duration-200">
-        <div className={`flex items-center gap-4 px-8 py-5 rounded-2xl border bg-surface/90 backdrop-blur-xl shadow-2xl transition-all duration-200 ${hoveredZone ? 'border-accent bg-accent/10 scale-105 shadow-[0_20px_60px_-15px_rgba(108,92,231,0.6)]' : 'border-accent/30 shadow-[0_20px_60px_-15px_rgba(108,92,231,0.2)]'}`}>
+      <div className="fixed top-24 left-0 right-0 z-[9999] pointer-events-none flex justify-center px-4 animate-in fade-in slide-in-from-top-10 duration-200 hardware-accelerated">
+        <div className={`flex items-center gap-4 px-8 py-5 rounded-2xl border bg-surface/90 backdrop-blur-xl shadow-2xl transition-all duration-300 ease-out hardware-accelerated ${hoveredZone ? 'border-accent bg-accent/10 scale-105 shadow-[0_20px_60px_-15px_rgba(108,92,231,0.6)]' : 'border-accent/30 shadow-[0_20px_60px_-15px_rgba(108,92,231,0.2)]'}`}>
           <div className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center transition-all ${hoveredZone ? 'border-accent bg-accent/20' : 'border-accent/30 bg-accent/5'}`}>
             <UploadCloud className={`w-6 h-6 transition-colors ${hoveredZone ? 'text-accent' : 'text-accent/60'}`} />
           </div>

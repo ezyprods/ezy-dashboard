@@ -227,11 +227,11 @@ html.light .logo-dark {
 @keyframes slide-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(10px) translateZ(0);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) translateZ(0);
   }
 }
 
@@ -249,11 +249,11 @@ html.light .logo-dark {
 @keyframes menu-in {
   from {
     opacity: 0;
-    transform: scale(0.95) translateY(-4px);
+    transform: scale(0.95) translateY(-4px) translateZ(0);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(1) translateY(0) translateZ(0);
   }
 }
 
@@ -294,11 +294,12 @@ html.light {
   }
 }
 
-/* Fix for square shadows on rounded elements (WebKit bug) */
-[class*="shadow-"], .glow {
+/* Optional utility for forcing hardware acceleration only when strictly necessary */
+.hardware-accelerated {
   -webkit-backface-visibility: hidden;
-  -webkit-transform: translate3d(0, 0, 0);
-  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform, opacity;
 }
 
 @keyframes daw-progress-pulse {
