@@ -163,12 +163,17 @@ export default function PortalPage() {
       const cols = m.productionGrid?.columns || [];
       const rows = m.productionGrid?.rows || [];
       if (cols.length === 0 || rows.length === 0) return false;
-      return rows.every((r: any) => 
+      let hasTrackable = false;
+      const allDone = rows.every((r: any) => 
         cols.every((c: any) => {
-          if (c.type === 'file') return true; // file columns might not have 'done', ignore them or just check 'status'
-          return r.cells?.[c.id]?.status === 'done';
+          if (!c.type || c.type === 'status' || c.type === 'file') {
+            hasTrackable = true;
+            return r.cells?.[c.id]?.status === 'done';
+          }
+          return true;
         })
       );
+      return hasTrackable && allDone;
     };
 
     // Sólo mostrar matrices que NO estén 100% completadas (siempre visibles, sin importar la carpeta seleccionada)
@@ -180,9 +185,10 @@ export default function PortalPage() {
     matrices.forEach((matrix: any) => {
       const columns = matrix.productionGrid?.columns || [];
       const rows = matrix.productionGrid?.rows || [];
-      totalMatrixTasks += columns.length * rows.length;
+      const trackableCols = columns.filter((c: any) => !c.type || c.type === 'status' || c.type === 'file');
+      totalMatrixTasks += trackableCols.length * rows.length;
       rows.forEach((row: any) => {
-        columns.forEach((col: any) => {
+        trackableCols.forEach((col: any) => {
           if (row.cells?.[col.id]?.status === 'done') {
             completedMatrixTasks++;
           }

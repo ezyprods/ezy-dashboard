@@ -155,15 +155,22 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
     let isActive = false;
     
     if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns) && grid.rows.length > 0 && grid.columns.length > 0) {
+      let hasTrackable = false;
       for (const row of grid.rows) {
         for (const col of grid.columns) {
-           const cell = row.cells?.[col.id];
-           if (!cell || cell.status !== 'done') {
-             isActive = true;
-             break;
+           if (!col.type || col.type === 'status' || col.type === 'file') {
+             hasTrackable = true;
+             const cell = row.cells?.[col.id];
+             if (!cell || cell.status !== 'done') {
+               isActive = true;
+               break;
+             }
            }
         }
         if (isActive) break;
+      }
+      if (!hasTrackable) {
+        isActive = true;
       }
     } else {
       isActive = true;
@@ -201,11 +208,13 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
             const grid = m.productionGrid;
             const rowCount = grid?.rows?.length || 0;
             const colCount = grid?.columns?.length || 0;
+            let totalTasks = 0;
             let completedTasks = 0;
-            const totalTasks = rowCount * colCount;
             if (rowCount > 0 && colCount > 0 && grid.rows) {
+              const trackableCols = grid.columns.filter((c: any) => !c.type || c.type === 'status' || c.type === 'file');
+              totalTasks = rowCount * trackableCols.length;
               grid.rows.forEach((row: any) => {
-                grid.columns.forEach((col: any) => {
+                trackableCols.forEach((col: any) => {
                   const cell = row.cells?.[col.id];
                   if (cell && cell.status === 'done') {
                     completedTasks++;
@@ -299,11 +308,13 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
                 const grid = m.productionGrid;
                 const rowCount = grid?.rows?.length || 0;
                 const colCount = grid?.columns?.length || 0;
+                let totalTasks = 0;
                 let completedTasks = 0;
-                const totalTasks = rowCount * colCount;
                 if (rowCount > 0 && colCount > 0 && grid.rows) {
+                  const trackableCols = grid.columns.filter((c: any) => !c.type || c.type === 'status' || c.type === 'file');
+                  totalTasks = rowCount * trackableCols.length;
                   grid.rows.forEach((row: any) => {
-                    grid.columns.forEach((col: any) => {
+                    trackableCols.forEach((col: any) => {
                       const cell = row.cells?.[col.id];
                       if (cell && cell.status === 'done') {
                         completedTasks++;

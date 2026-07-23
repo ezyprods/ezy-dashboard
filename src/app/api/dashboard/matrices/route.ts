@@ -43,15 +43,22 @@ export async function GET() {
       } else if (m.forceStatus === 'completed') {
         isActive = false;
       } else if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns) && grid.rows.length > 0 && grid.columns.length > 0) {
+        let hasTrackable = false;
         for (const row of grid.rows) {
           for (const col of grid.columns) {
-             const cell = row.cells?.[col.id];
-             if (!cell || cell.status !== 'done') {
-               isActive = true;
-               break;
+             if (!col.type || col.type === 'status' || col.type === 'file') {
+               hasTrackable = true;
+               const cell = row.cells?.[col.id];
+               if (!cell || cell.status !== 'done') {
+                 isActive = true;
+                 break;
+               }
              }
           }
           if (isActive) break;
+        }
+        if (!hasTrackable) {
+          isActive = true;
         }
       } else {
         // Si no tiene grid o está vacío, se considera activa por defecto (para poder editarla)
