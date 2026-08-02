@@ -216,21 +216,28 @@ export async function POST(req: Request) {
       platform = 'youtube';
       const oembedMeta = await getYouTubeOEmbed(videoId);
       
+      if (oembedMeta) {
+        return NextResponse.json({
+          title: cleanTitle({ title: oembedMeta.title, uploader: oembedMeta.author }),
+          thumbnail: oembedMeta.thumbnail,
+          duration: null,
+          platform: 'youtube',
+          resolvedUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          isPlaylist: false
+        });
+      }
+
       let results: any[] = [];
       try {
-        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${videoId}`]);
+        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:https://www.youtube.com/watch?v=${videoId}`]);
       } catch (err) {
-        if (oembedMeta?.title) {
-          results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${oembedMeta.title}`]);
-        } else {
-          throw err;
-        }
+        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${videoId}`]);
       }
 
       const entry = results[0] || {};
       targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      title = oembedMeta ? cleanTitle({ title: oembedMeta.title, uploader: oembedMeta.author }) : cleanTitle(entry);
-      thumbnail = oembedMeta?.thumbnail || entry.thumbnail;
+      title = cleanTitle(entry);
+      thumbnail = entry.thumbnail;
       duration = entry.duration;
 
     } else if (!url.startsWith('http')) {

@@ -119,18 +119,33 @@ async function processDownload(taskId: string) {
       });
     };
 
-    // Primary attempt using search query if videoId is present to avoid webpage bot challenge
-    const primaryTarget = videoId ? `ytsearch1:${videoId}` : task.url;
-    try {
-      await executeDownload(primaryTarget);
-    } catch (primaryErr: any) {
-      if (videoId) {
-        console.warn('Primary search download failed, retrying with title query...', primaryErr);
-        const fallbackTarget = `ytsearch1:${safeTitle} audio`;
-        await executeDownload(fallbackTarget);
-      } else {
-        throw primaryErr;
+    let downloadTargets: string[] = [];
+    if (videoId) {
+      downloadTargets = [
+        `ytsearch1:${safeTitle} audio`,
+        `https://www.youtube.com/watch?v=${videoId}`,
+        `ytsearch1:${videoId}`
+      ];
+    } else {
+      downloadTargets = [task.url];
+    }
+
+    let success = false;
+    let lastErr: any = null;
+
+    for (const targetUrl of downloadTargets) {
+      try {
+        await executeDownload(targetUrl);
+        success = true;
+        break;
+      } catch (err: any) {
+        console.warn(`Download target "${targetUrl}" failed:`, err?.message || err);
+        lastErr = err;
       }
+    }
+
+    if (!success) {
+      throw lastErr || new Error('No se pudo descargar el audio');
     }
 
     task.status = 'completed';
