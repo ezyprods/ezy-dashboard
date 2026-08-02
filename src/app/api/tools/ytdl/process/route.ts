@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { tasks, broadcast } from '../state';
+import { tasks, broadcast, completedFileBuffers } from '../state';
 import { ensureBinaries } from '../binaries';
 import { spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 
 export async function POST(req: Request) {
   try {
@@ -27,8 +28,8 @@ export async function POST(req: Request) {
     tasks.set(taskId, task);
     broadcast({ type: 'update', task });
 
-    // Iniciar proceso asíncrono y responder de inmediato
-    processDownload(taskId).catch(console.error);
+    // Await download execution so serverless function stays alive until MP3 buffer is ready
+    await processDownload(taskId);
 
     return NextResponse.json({ success: true, taskId });
   } catch (error: any) {
@@ -148,10 +149,21 @@ async function processDownload(taskId: string) {
       throw lastErr || new Error('No se pudo descargar el audio');
     }
 
+    const finalMp3Path = path.join(downloadsDir, `${safeTitle}_${taskId}.mp3`);
+    if (fs.existsSync(finalMp3Path)) {
+      const buffer = await fs.promises.readFile(finalMp3Path);
+      if (buffer.length > 0) {
+        completedFileBuffers.set(taskId, { buffer, title: task.title });
+        try { await fs.promises.unlink(finalMp3Path); } catch (e) {}
+      } else {
+        throw new Error('El archivo generado tiene 0 bytes');
+      }
+    } else {
+      throw new Error('No se encontró el archivo MP3 generado');
+    }
+
     task.status = 'completed';
     task.progress = 100;
-    task.downloadPath = path.join(downloadsDir, `${safeTitle}_${taskId}.mp3`);
-    
     broadcast({ type: 'update', task });
 
   } catch (err: any) {

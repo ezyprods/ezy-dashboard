@@ -2,17 +2,17 @@ export type TaskStatus = 'analysing' | 'downloading' | 'converting' | 'completed
 
 export interface YtdlTask {
   id: string;
-  clientId: string; // Quien inició la descarga
+  clientId: string;
   url: string;
   resolvedUrl?: string;
   title: string;
   thumbnail?: string;
   platform?: string;
   status: TaskStatus;
-  progress: number; // 0-100
+  progress: number;
   error?: string;
   startTime: number;
-  downloadPath?: string; // Ruta temporal en el servidor
+  downloadPath?: string;
 }
 
 const globalAny: any = global;
@@ -23,9 +23,13 @@ if (!globalAny.__YTDL_TASKS__) {
 if (!globalAny.__YTDL_SSE_CLIENTS__) {
   globalAny.__YTDL_SSE_CLIENTS__ = new Set<ReadableStreamDefaultController>();
 }
+if (!globalAny.__YTDL_FILE_BUFFERS__) {
+  globalAny.__YTDL_FILE_BUFFERS__ = new Map<string, { buffer: Buffer; title: string }>();
+}
 
 export const tasks: Map<string, YtdlTask> = globalAny.__YTDL_TASKS__;
 export const sseClients: Set<ReadableStreamDefaultController> = globalAny.__YTDL_SSE_CLIENTS__;
+export const completedFileBuffers: Map<string, { buffer: Buffer; title: string }> = globalAny.__YTDL_FILE_BUFFERS__;
 
 export const broadcast = (data: any) => {
   const json = JSON.stringify(data);
