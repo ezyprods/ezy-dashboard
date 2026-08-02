@@ -151,23 +151,26 @@ async function processDownload(taskId: string) {
     }
 
     let finalMp3Path = path.join(downloadsDir, `${taskId}.mp3`);
+    let foundFile: string | null = null;
 
-    // Robust file search in downloadsDir if yt-dlp appended an extension or character
-    if (!fs.existsSync(finalMp3Path)) {
+    if (fs.existsSync(finalMp3Path)) {
+      foundFile = finalMp3Path;
+    } else {
       try {
         const files = fs.readdirSync(downloadsDir);
-        const match = files.find(f => f.includes(taskId) && f.endsWith('.mp3'));
+        // Find any audio file produced for this taskId (.mp3, .m4a, .webm, .opus, .aac, etc.)
+        const match = files.find(f => f.includes(taskId) && (f.endsWith('.mp3') || f.endsWith('.m4a') || f.endsWith('.webm') || f.endsWith('.opus') || f.endsWith('.aac')));
         if (match) {
-          finalMp3Path = path.join(downloadsDir, match);
+          foundFile = path.join(downloadsDir, match);
         }
       } catch (e) {}
     }
 
-    if (fs.existsSync(finalMp3Path)) {
-      const buffer = await fs.promises.readFile(finalMp3Path);
+    if (foundFile && fs.existsSync(foundFile)) {
+      const buffer = await fs.promises.readFile(foundFile);
       if (buffer.length > 0) {
         completedFileBuffers.set(taskId, { buffer, title: task.title });
-        try { await fs.promises.unlink(finalMp3Path); } catch (e) {}
+        try { await fs.promises.unlink(foundFile); } catch (e) {}
       } else {
         throw new Error('El archivo generado tiene 0 bytes');
       }

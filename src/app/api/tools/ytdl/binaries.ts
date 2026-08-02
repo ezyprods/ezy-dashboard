@@ -2,14 +2,11 @@ import os from 'os';
 import fs from 'fs';
 import https from 'https';
 import path from 'path';
+import ffmpegStatic from 'ffmpeg-static';
 
 const YTDLP_URL = os.platform() === 'win32' 
   ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
   : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
-
-const FFMPEG_URL = os.platform() === 'win32'
-  ? 'https://github.com/eugeneware/ffmpeg-static/releases/download/b4.4/win32-x64'
-  : 'https://github.com/eugeneware/ffmpeg-static/releases/download/b4.4/linux-x64';
 
 export const downloadFile = (url: string, dest: string): Promise<void> => {
   return new Promise((resolve, reject) => {
@@ -81,7 +78,7 @@ export const ensureBinaries = async (): Promise<{ ytdlpPath: string; ffmpegPath:
     const tmpDir = os.tmpdir();
     const isWin = os.platform() === 'win32';
     const ytdlpPath = path.join(tmpDir, isWin ? 'yt-dlp-v3.exe' : 'yt-dlp-v3');
-    const ffmpegPath = path.join(tmpDir, isWin ? 'ffmpeg-v3.exe' : 'ffmpeg-v3');
+    const ffmpegPath = ffmpegStatic || 'ffmpeg';
 
     // Verify yt-dlp binary exists and is valid (> 1MB)
     let ytdlpValid = false;
@@ -101,26 +98,6 @@ export const ensureBinaries = async (): Promise<{ ytdlpPath: string; ffmpegPath:
     if (!ytdlpValid) {
       console.log('Downloading yt-dlp binary...');
       await downloadFile(YTDLP_URL, ytdlpPath);
-    }
-
-    // Verify ffmpeg binary exists and is valid (> 1MB)
-    let ffmpegValid = false;
-    if (fs.existsSync(ffmpegPath)) {
-      try {
-        const stat = fs.statSync(ffmpegPath);
-        if (stat.size > 1000000) {
-          ffmpegValid = true;
-        } else {
-          fs.unlinkSync(ffmpegPath);
-        }
-      } catch (e) {
-        ffmpegValid = false;
-      }
-    }
-
-    if (!ffmpegValid) {
-      console.log('Downloading ffmpeg binary...');
-      await downloadFile(FFMPEG_URL, ffmpegPath);
     }
 
     return { ytdlpPath, ffmpegPath };
