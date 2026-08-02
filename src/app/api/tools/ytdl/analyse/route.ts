@@ -111,8 +111,14 @@ async function getSpotifyMetadata(url: string) {
 }
 
 async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
-  return new Promise((resolve, reject) => {
-    const proc = spawn(ytdlpPath, args);
+  const commonArgs = [
+    '--no-warnings',
+    '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
+    '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+  ];
+
+  const execute = (cmdArgs: string[]) => new Promise<any[]>((resolve, reject) => {
+    const proc = spawn(ytdlpPath, cmdArgs);
     let stdout = '';
     let stderr = '';
     proc.stdout.on('data', d => stdout += d.toString());
@@ -126,11 +132,27 @@ async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
         try { results.push(JSON.parse(line)); } catch (e) { }
       }
       
-      if (results.length === 0) reject(new Error('No results found'));
+      if (results.length === 0) reject(new Error(stderr || 'No results found'));
       else resolve(results);
     });
     proc.on('error', reject);
   });
+
+  try {
+    return await execute([...commonArgs, ...args]);
+  } catch (err: any) {
+    if (err.message && (err.message.includes('Sign in') || err.message.includes('bot') || err.message.includes('HTTP Error 429'))) {
+      console.warn('YTDLP primary client blocked, trying fallback client args...');
+      const fallbackArgs = [
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android,web',
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        ...args
+      ];
+      return await execute(fallbackArgs);
+    }
+    throw err;
+  }
 }
 
 export async function POST(req: Request) {
@@ -141,6 +163,16 @@ export async function POST(req: Request) {
     const ytdlpPath = await ensureYtDlp();
 
     let targetUrl = url;
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
+        targetUrl = `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
+      } else if (parsed.hostname.includes('youtu.be')) {
+        const id = parsed.pathname.replace(/^\//, '');
+        if (id) targetUrl = `https://www.youtube.com/watch?v=${id}`;
+      }
+    } catch (e) {}
+
     let title, thumbnail, duration, platform;
 
     if (url.includes('spotify.com')) {
@@ -151,7 +183,7 @@ export async function POST(req: Request) {
         ? `${spotMeta.artist.split(',')[0].trim()} ${spotMeta.track}` 
         : `${spotMeta.fullTitle.replace(/[-|,]/g, ' ')} audio`;
 
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', '--no-warnings', `ytsearch5:${query}`]);
+      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch5:${query}`]);
       const entry = results[0];
       targetUrl = entry.webpage_url || entry.url;
       title = spotMeta.fullTitle;
@@ -160,7 +192,7 @@ export async function POST(req: Request) {
 
     } else if (!url.startsWith('http')) {
       platform = 'search';
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', '--no-warnings', `ytsearch1:${url}`]);
+      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${url}`]);
       const entry = results[0];
       targetUrl = entry.webpage_url || entry.url;
       title = cleanTitle(entry);
@@ -168,8 +200,8 @@ export async function POST(req: Request) {
       duration = entry.duration;
 
     } else {
-      platform = url.includes('soundcloud.com') ? 'soundcloud' : 'youtube';
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', '--flat-playlist', '--no-warnings', targetUrl]);
+      platform = targetUrl.includes('soundcloud.com') ? 'soundcloud' : 'youtube';
+      const results = await runYtDlp(ytdlpPath, ['--dump-json', '--flat-playlist', targetUrl]);
       
       if (results.length > 1) {
         return NextResponse.json({

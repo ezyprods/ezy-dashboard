@@ -37,6 +37,9 @@ export async function GET(req: Request) {
 
     // Spawn yt-dlp to stream mp3 directly to stdout
     const ytdlp = spawn(ytdlpPath, [
+      '--no-warnings',
+      '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
+      '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
       '-x', 
       '--audio-format', 'mp3',
       '--audio-quality', '192K',

@@ -49,6 +49,9 @@ async function processDownload(taskId: string) {
     const outputTemplate = path.join(downloadsDir, `${safeTitle}_${taskId}.%(ext)s`);
 
     const args = [
+      '--no-warnings',
+      '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
+      '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
       task.url,
       '--extract-audio',
       '--audio-format', 'mp3',
