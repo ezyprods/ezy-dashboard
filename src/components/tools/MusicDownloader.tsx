@@ -55,7 +55,7 @@ export function MusicDownloader() {
     tasks.forEach(task => {
       if (task.status === 'completed' && task.clientId === clientId && !downloadedTasks.has(task.id)) {
         setDownloadedTasks(prev => new Set(prev).add(task.id));
-        const downloadUrl = `/api/tools/ytdl/file?taskId=${task.id}`;
+        const downloadUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.url)}&title=${encodeURIComponent(task.title)}`;
         const a = document.createElement('a');
         a.href = downloadUrl;
         a.download = `${task.title}.mp3`;
@@ -105,11 +105,22 @@ export function MusicDownloader() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch(status) {
+  const getStatusIcon = (task: YtdlTask) => {
+    switch(task.status) {
       case 'downloading': return <Download className="w-5 h-5 text-blue-500 animate-pulse" />;
       case 'converting': return <RefreshCw className="w-5 h-5 text-purple-500 animate-spin" />;
-      case 'completed': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
+      case 'completed':
+        return (
+          <a
+            href={`/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.url)}&title=${encodeURIComponent(task.title)}`}
+            download={`${task.title}.mp3`}
+            title="Descargar MP3"
+            className="p-1 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 hover:scale-110 transition-transform" />
+          </a>
+        );
       case 'error': return <AlertCircle className="w-5 h-5 text-danger" />;
       default: return <Loader2 className="w-5 h-5 text-accent animate-spin" />;
     }
@@ -208,7 +219,7 @@ export function MusicDownloader() {
               </div>
 
               <div className="pl-3 sm:pl-4 border-l border-border/50 z-10 flex flex-col items-center justify-center">
-                {getStatusIcon(task.status)}
+                {getStatusIcon(task)}
               </div>
             </div>
           ))}
