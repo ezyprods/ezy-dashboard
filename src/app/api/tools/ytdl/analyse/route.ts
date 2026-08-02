@@ -1,45 +1,10 @@
 import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
-import fs from 'fs';
-import os from 'os';
 import https from 'https';
+import { ensureYtDlp } from '../binaries';
 
 export const maxDuration = 60;
 
-const YTDLP_URL = os.platform() === 'win32' 
-  ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
-  : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
-
-const downloadFile = (url: string, dest: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    const follow = (targetUrl: string, depth = 0) => {
-      if (depth > 5) return reject(new Error('Too many redirects'));
-      https.get(targetUrl, (response) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
-          follow(response.headers.location!, depth + 1);
-        } else {
-          response.pipe(file);
-          file.on('finish', () => { file.close(); resolve(); });
-        }
-      }).on('error', (err) => { fs.unlink(dest, () => reject(err)); });
-    };
-    follow(url);
-  });
-};
-
-const ensureYtDlp = async () => {
-  const tmpDir = os.tmpdir();
-  const isWin = os.platform() === 'win32';
-  const ytdlpPath = `${tmpDir}/${isWin ? 'yt-dlp-new.exe' : 'yt-dlp-new'}`;
-
-  if (!fs.existsSync(ytdlpPath)) {
-    console.log('Downloading yt-dlp for analysis...');
-    await downloadFile(YTDLP_URL, ytdlpPath);
-    if (!isWin) fs.chmodSync(ytdlpPath, '755');
-  }
-  return ytdlpPath;
-};
 
 const fetchUrl = (url: string, headers = {}): Promise<string> => {
   return new Promise((resolve, reject) => {
