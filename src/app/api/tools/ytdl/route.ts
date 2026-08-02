@@ -22,23 +22,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
     }
 
-    let url = rawUrl;
+    let target = rawUrl;
     try {
       const parsed = new URL(rawUrl);
       if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
-        // Strip out &list= and other parameters to prevent downloading playlists or breaking
-        url = `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
+        target = `ytsearch1:${parsed.searchParams.get('v')}`;
+      } else if (parsed.hostname.includes('youtu.be')) {
+        const id = parsed.pathname.replace(/^\//, '');
+        if (id) target = `ytsearch1:${id}`;
       }
-    } catch(e) {
-      // Ignore parsing errors, it might be a youtu.be or soundcloud link
-    }
+    } catch(e) {}
 
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
 
     // Spawn yt-dlp to stream mp3 directly to stdout
     const ytdlp = spawn(ytdlpPath, [
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
+      '--extractor-args', 'youtube:player_client=mweb,android,ios,web_creator',
       '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
       '-x', 
       '--audio-format', 'mp3',
@@ -46,7 +46,7 @@ export async function GET(req: Request) {
       '--no-playlist',
       '--ffmpeg-location', ffmpegPath,
       '-o', '-', // output to stdout
-      url
+      target
     ]);
     
     // Create a web ReadableStream from the child process stdout

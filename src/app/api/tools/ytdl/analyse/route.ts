@@ -110,6 +110,37 @@ async function getSpotifyMetadata(url: string) {
   throw new Error('No se pudo leer la información de Spotify');
 }
 
+function getYouTubeVideoId(urlStr: string): string | null {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.hostname.includes('youtube.com')) {
+      return parsed.searchParams.get('v') || null;
+    }
+    if (parsed.hostname.includes('youtu.be')) {
+      return parsed.pathname.replace(/^\//, '').split('?')[0] || null;
+    }
+  } catch (e) {
+    const match = urlStr.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+async function getYouTubeOEmbed(videoId: string) {
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const data = await fetchUrl(oembedUrl);
+    const json = JSON.parse(data);
+    return {
+      title: json.title as string,
+      author: json.author_name as string,
+      thumbnail: json.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
   const commonArgs = [
     '--no-warnings',
@@ -162,17 +193,8 @@ export async function POST(req: Request) {
 
     const ytdlpPath = await ensureYtDlp();
 
+    const videoId = getYouTubeVideoId(url);
     let targetUrl = url;
-    try {
-      const parsed = new URL(url);
-      if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
-        targetUrl = `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
-      } else if (parsed.hostname.includes('youtu.be')) {
-        const id = parsed.pathname.replace(/^\//, '');
-        if (id) targetUrl = `https://www.youtube.com/watch?v=${id}`;
-      }
-    } catch (e) {}
-
     let title, thumbnail, duration, platform;
 
     if (url.includes('spotify.com')) {
@@ -188,6 +210,27 @@ export async function POST(req: Request) {
       targetUrl = entry.webpage_url || entry.url;
       title = spotMeta.fullTitle;
       thumbnail = spotMeta.thumbnail || entry.thumbnail;
+      duration = entry.duration;
+
+    } else if (videoId) {
+      platform = 'youtube';
+      const oembedMeta = await getYouTubeOEmbed(videoId);
+      
+      let results: any[] = [];
+      try {
+        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${videoId}`]);
+      } catch (err) {
+        if (oembedMeta?.title) {
+          results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${oembedMeta.title}`]);
+        } else {
+          throw err;
+        }
+      }
+
+      const entry = results[0] || {};
+      targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      title = oembedMeta ? cleanTitle({ title: oembedMeta.title, uploader: oembedMeta.author }) : cleanTitle(entry);
+      thumbnail = oembedMeta?.thumbnail || entry.thumbnail;
       duration = entry.duration;
 
     } else if (!url.startsWith('http')) {

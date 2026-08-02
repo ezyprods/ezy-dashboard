@@ -36,6 +36,22 @@ export async function POST(req: Request) {
   }
 }
 
+function getYouTubeVideoId(urlStr: string): string | null {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.hostname.includes('youtube.com')) {
+      return parsed.searchParams.get('v') || null;
+    }
+    if (parsed.hostname.includes('youtu.be')) {
+      return parsed.pathname.replace(/^\//, '').split('?')[0] || null;
+    }
+  } catch (e) {
+    const match = urlStr.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 async function processDownload(taskId: string) {
   const task = tasks.get(taskId);
   if (!task) return;
@@ -44,65 +60,81 @@ async function processDownload(taskId: string) {
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
     
     const safeTitle = task.title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
-    // Use tmpdir so it works on Vercel and keeps admin Downloads clean
     const downloadsDir = os.tmpdir();
     const outputTemplate = path.join(downloadsDir, `${safeTitle}_${taskId}.%(ext)s`);
 
-    const args = [
-      '--no-warnings',
-      '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
-      '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-      task.url,
-      '--extract-audio',
-      '--audio-format', 'mp3',
-      '--audio-quality', '320K',
-      '--ffmpeg-location', ffmpegPath,
-      '--output', outputTemplate,
-      '--no-playlist',
-      '--progress',
-      '--newline'
-    ];
+    const videoId = getYouTubeVideoId(task.url);
 
-    const ytdlp = spawn(ytdlpPath, args);
-    let stderrOut = '';
+    const executeDownload = (targetUrl: string) => {
+      const args = [
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=mweb,android,ios,web_creator',
+        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+        targetUrl,
+        '--extract-audio',
+        '--audio-format', 'mp3',
+        '--audio-quality', '320K',
+        '--ffmpeg-location', ffmpegPath,
+        '--output', outputTemplate,
+        '--no-playlist',
+        '--progress',
+        '--newline'
+      ];
 
-    ytdlp.stdout.on('data', (data) => {
-      const output = data.toString();
-      const match = output.match(/\[download\]\s+(\d+(\.\d+)?)%/);
-      if (match) {
-        const progress = parseFloat(match[1]);
-        if (progress > task.progress) {
-          task.progress = progress;
-          if (progress >= 100 && task.status === 'downloading') {
-            task.status = 'converting';
+      const ytdlp = spawn(ytdlpPath, args);
+      let stderrOut = '';
+
+      ytdlp.stdout.on('data', (data) => {
+        const output = data.toString();
+        const match = output.match(/\[download\]\s+(\d+(\.\d+)?)%/);
+        if (match) {
+          const progress = parseFloat(match[1]);
+          if (progress > task.progress) {
+            task.progress = progress;
+            if (progress >= 100 && task.status === 'downloading') {
+              task.status = 'converting';
+            }
+            broadcast({ type: 'update', task });
           }
+        }
+        if (output.includes('Extracting audio')) {
+          task.status = 'converting';
           broadcast({ type: 'update', task });
         }
-      }
-      if (output.includes('Extracting audio')) {
-        task.status = 'converting';
-        broadcast({ type: 'update', task });
-      }
-    });
-
-    ytdlp.stderr.on('data', (data) => {
-      stderrOut += data.toString();
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      ytdlp.on('close', (code) => {
-        if (code === 0) resolve();
-        else {
-          const errors = stderrOut.split('\n').filter(l => l.includes('ERROR'));
-          reject(new Error(errors.length > 0 ? errors[errors.length - 1] : `yt-dlp exited with code ${code}`));
-        }
       });
-      ytdlp.on('error', reject);
-    });
+
+      ytdlp.stderr.on('data', (data) => {
+        stderrOut += data.toString();
+      });
+
+      return new Promise<void>((resolve, reject) => {
+        ytdlp.on('close', (code) => {
+          if (code === 0) resolve();
+          else {
+            const errors = stderrOut.split('\n').filter(l => l.includes('ERROR'));
+            reject(new Error(errors.length > 0 ? errors[errors.length - 1] : `yt-dlp exited with code ${code}`));
+          }
+        });
+        ytdlp.on('error', reject);
+      });
+    };
+
+    // Primary attempt using search query if videoId is present to avoid webpage bot challenge
+    const primaryTarget = videoId ? `ytsearch1:${videoId}` : task.url;
+    try {
+      await executeDownload(primaryTarget);
+    } catch (primaryErr: any) {
+      if (videoId) {
+        console.warn('Primary search download failed, retrying with title query...', primaryErr);
+        const fallbackTarget = `ytsearch1:${safeTitle} audio`;
+        await executeDownload(fallbackTarget);
+      } else {
+        throw primaryErr;
+      }
+    }
 
     task.status = 'completed';
     task.progress = 100;
-    // El archivo final se genera con la extensión .mp3
     task.downloadPath = path.join(downloadsDir, `${safeTitle}_${taskId}.mp3`);
     
     broadcast({ type: 'update', task });
