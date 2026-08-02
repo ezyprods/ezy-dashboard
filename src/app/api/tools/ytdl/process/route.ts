@@ -62,7 +62,8 @@ async function processDownload(taskId: string) {
     
     const safeTitle = task.title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
     const downloadsDir = os.tmpdir();
-    const outputTemplate = path.join(downloadsDir, `${safeTitle}_${taskId}.%(ext)s`);
+    // Use strictly the taskId in outputTemplate to avoid character/parentheses sanitization mismatch
+    const outputTemplate = path.join(downloadsDir, `${taskId}.%(ext)s`);
 
     const videoId = getYouTubeVideoId(task.url);
 
@@ -149,7 +150,19 @@ async function processDownload(taskId: string) {
       throw lastErr || new Error('No se pudo descargar el audio');
     }
 
-    const finalMp3Path = path.join(downloadsDir, `${safeTitle}_${taskId}.mp3`);
+    let finalMp3Path = path.join(downloadsDir, `${taskId}.mp3`);
+
+    // Robust file search in downloadsDir if yt-dlp appended an extension or character
+    if (!fs.existsSync(finalMp3Path)) {
+      try {
+        const files = fs.readdirSync(downloadsDir);
+        const match = files.find(f => f.includes(taskId) && f.endsWith('.mp3'));
+        if (match) {
+          finalMp3Path = path.join(downloadsDir, match);
+        }
+      } catch (e) {}
+    }
+
     if (fs.existsSync(finalMp3Path)) {
       const buffer = await fs.promises.readFile(finalMp3Path);
       if (buffer.length > 0) {
