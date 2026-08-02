@@ -10,9 +10,9 @@ import fs from 'fs';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { url, title, thumbnail, platform, resolvedUrl, clientId } = body;
+    const { url, title, thumbnail, platform, resolvedUrl, clientId, taskId: passedTaskId } = body;
 
-    const taskId = uuidv4();
+    const taskId = passedTaskId || uuidv4();
     const task = {
       id: taskId,
       clientId: clientId || 'anonymous',
@@ -68,20 +68,33 @@ async function processDownload(taskId: string) {
     const videoId = getYouTubeVideoId(task.url);
 
     const executeDownload = (targetUrl: string) => {
+      const isSearch = targetUrl.startsWith('ytsearch');
+      
       const args = [
         '--no-warnings',
-        '--extractor-args', 'youtube:player_client=mweb,android,ios,web_creator',
-        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-        targetUrl,
+        '--no-playlist',
         '--extract-audio',
         '--audio-format', 'mp3',
         '--audio-quality', '320K',
         '--ffmpeg-location', ffmpegPath,
         '--output', outputTemplate,
-        '--no-playlist',
         '--progress',
         '--newline'
       ];
+
+      // Player client extractor args are ONLY valid for direct YouTube video URLs, NOT for ytsearch
+      if (!isSearch) {
+        args.unshift(
+          '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
+          '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+        );
+      } else {
+        args.unshift(
+          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+        );
+      }
+
+      args.push(targetUrl);
 
       const ytdlp = spawn(ytdlpPath, args);
       let stderrOut = '';
@@ -99,7 +112,7 @@ async function processDownload(taskId: string) {
             broadcast({ type: 'update', task });
           }
         }
-        if (output.includes('Extracting audio')) {
+        if (output.includes('Extracting audio') || output.includes('Destination:')) {
           task.status = 'converting';
           broadcast({ type: 'update', task });
         }
@@ -114,7 +127,7 @@ async function processDownload(taskId: string) {
           if (code === 0) resolve();
           else {
             const errors = stderrOut.split('\n').filter(l => l.includes('ERROR'));
-            reject(new Error(errors.length > 0 ? errors[errors.length - 1] : `yt-dlp exited with code ${code}`));
+            reject(new Error(errors.length > 0 ? errors[errors.length - 1] : `yt-dlp exited code ${code}: ${stderrOut.slice(-200)}`));
           }
         });
         ytdlp.on('error', reject);

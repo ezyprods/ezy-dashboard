@@ -22,7 +22,6 @@ export function MusicDownloader() {
   const [clientId] = useState(() => Math.random().toString(36).substring(2, 15));
   const [downloadedTasks, setDownloadedTasks] = useState(new Set<string>());
   const [url, setUrl] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [tasks, setTasks] = useState<YtdlTask[]>([]);
 
@@ -38,7 +37,7 @@ export function MusicDownloader() {
         } else if (data.type === 'update') {
           setTasks(prev => {
             const index = prev.findIndex(t => t.id === data.task.id);
-            if (index === -1) return [data.task, ...prev]; // Push to top
+            if (index === -1) return [data.task, ...prev];
             const newTasks = [...prev];
             newTasks[index] = data.task;
             return newTasks;
@@ -67,41 +66,67 @@ export function MusicDownloader() {
   }, [tasks, clientId, downloadedTasks]);
 
   const handleSubmit = async () => {
-    if (!url.trim()) return;
-    setIsAnalyzing(true);
+    const inputUrl = url.trim();
+    if (!inputUrl) return;
+
+    // Immediately clear input field so user can paste next link right away!
+    setUrl('');
     setErrorMsg('');
 
+    const taskId = Math.random().toString(36).substring(2, 15);
+    const initialTask: YtdlTask = {
+      id: taskId,
+      clientId,
+      url: inputUrl,
+      title: inputUrl.startsWith('http') ? 'Analizando enlace...' : inputUrl,
+      status: 'analysing',
+      progress: 0,
+      startTime: Date.now()
+    };
+
+    setTasks(prev => [initialTask, ...prev]);
+
     try {
-      // Paso 1: Analizar (Mismo endpoint que teníamos, que es súper rápido)
+      // Step 1: Fast Analyse (~50ms via oEmbed)
       const res = await fetch('/api/tools/ytdl/analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url: inputUrl })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al analizar el enlace');
-      
+
       if (data.isPlaylist) {
         throw new Error('Las listas de reproducción no están soportadas aún en la versión web.');
       }
 
-      // Paso 2: Poner en cola de descargas y vaciar
+      // Update card title and thumbnail
+      setTasks(prev => prev.map(t => t.id === taskId ? {
+        ...t,
+        title: data.title || t.title,
+        thumbnail: data.thumbnail,
+        platform: data.platform,
+        status: 'downloading'
+      } : t));
+
+      // Step 2: Queue processing
       const processRes = await fetch('/api/tools/ytdl/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, url, clientId })
+        body: JSON.stringify({ ...data, url: inputUrl, clientId, taskId })
       });
-      
+
+      const processData = await processRes.json();
       if (!processRes.ok) {
-        throw new Error('Error al enviar a la cola de procesamiento');
+        throw new Error(processData.error || 'Error al procesar el archivo');
       }
 
-      // Limpiar input para permitir pegar el siguiente
-      setUrl('');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error desconocido');
-    } finally {
-      setIsAnalyzing(false);
+      setTasks(prev => prev.map(t => t.id === taskId ? {
+        ...t,
+        status: 'error',
+        error: err.message || 'Error en descarga'
+      } : t));
     }
   };
 
@@ -159,16 +184,15 @@ export function MusicDownloader() {
               setUrl(e.target.value);
               if (errorMsg) setErrorMsg('');
             }}
-            onKeyDown={e => e.key === 'Enter' && !isAnalyzing && handleSubmit()}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
             className="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-text-primary px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base placeholder:text-text-secondary/50"
-            disabled={isAnalyzing}
           />
           <Button 
             onClick={handleSubmit}
-            disabled={!url.trim() || isAnalyzing}
+            disabled={!url.trim()}
             className="rounded-xl px-4 sm:px-6 py-2 sm:py-3 font-bold shrink-0 whitespace-nowrap w-full sm:w-auto"
           >
-            {isAnalyzing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Conectando...</> : <><Search className="w-4 h-4 mr-2" /> Buscar y Bajar</>}
+            <Search className="w-4 h-4 mr-2" /> Buscar y Bajar
           </Button>
         </div>
 
@@ -181,7 +205,7 @@ export function MusicDownloader() {
           <div className="flex items-center justify-between mb-2 px-1">
             <h3 className="text-lg font-bold text-text-primary">Centro de Descargas</h3>
             <span className="text-sm font-medium text-text-secondary bg-surface-elevated px-3 py-1 rounded-full">
-              {tasks.filter(t => t.status === 'downloading' || t.status === 'converting').length} activas
+              {tasks.filter(t => t.status === 'downloading' || t.status === 'converting' || t.status === 'analysing').length} activas
             </span>
           </div>
           
