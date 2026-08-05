@@ -7,11 +7,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navItems = [
+const mainNavItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Artistas', href: '/artists', icon: Users },
   { name: 'Matrices', href: '/matrices', icon: Grid },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
+];
+
+const secondaryNavItems = [
   { name: 'Herramientas', href: '/tools', icon: Wrench },
   { name: 'Comunicaciones', href: '/communications', icon: MessageSquare },
   { name: 'Configuración', href: '/settings', icon: Settings },
@@ -25,6 +28,35 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
       onClose();
     }
   }, [pathname]);
+
+  const renderNavItem = (item: { name: string; href: string; icon: any }) => {
+    const isActive = pathname.startsWith(item.href);
+    const isInsideSubRoute = pathname !== item.href && isActive;
+    const Icon = item.icon;
+
+    return (
+      <Link
+        key={item.name}
+        href={item.href}
+        className={cn(
+          "w-full flex items-center gap-3 px-4 py-3 md:py-2.5 rounded-lg text-base md:text-sm font-medium transition-all duration-200 group relative overflow-hidden text-left",
+          isActive 
+            ? "text-white bg-accent/10 font-bold" 
+            : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
+        )}
+        title={isInsideSubRoute ? `Volver a ${item.name}` : item.name}
+      >
+        {isActive && (
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent rounded-r-full" />
+        )}
+        <Icon className={cn(
+          "w-5 h-5 transition-colors",
+          isActive ? "text-accent-light" : "text-text-secondary group-hover:text-text-primary"
+        )} />
+        {item.name}
+      </Link>
+    );
+  };
 
   return (
     <>
@@ -40,7 +72,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0 md:shadow-none",
         )}
       >
-        <div className="h-32 flex flex-col items-center px-4 border-b border-border justify-center">
+        <div className="h-28 flex flex-col items-center px-4 border-b border-border justify-center shrink-0">
           <Link href="/dashboard" className="flex items-center w-full justify-center group relative -translate-x-2">
             {/* Light Mode Logo */}
             <Image
@@ -48,7 +80,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
               alt="EZY"
               width={240}
               height={96}
-              className="logo-light h-12 w-auto object-contain transition-transform group-hover:scale-105"
+              className="logo-light h-10 w-auto object-contain transition-transform group-hover:scale-105"
               priority
             />
             {/* Dark Mode Logo (White) */}
@@ -57,44 +89,33 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
               alt="EZY"
               width={240}
               height={96}
-              className="logo-dark h-12 w-auto object-contain transition-transform group-hover:scale-105"
+              className="logo-dark h-10 w-auto object-contain transition-transform group-hover:scale-105"
               priority
             />
           </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            const isInsideSubRoute = pathname !== item.href && isActive;
-            const Icon = item.icon;
-            
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3.5 md:py-2.5 rounded-lg text-base md:text-sm font-medium transition-all duration-200 group relative overflow-hidden text-left",
-                  isActive 
-                    ? "text-white bg-accent/10" 
-                    : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
-                )}
-                title={isInsideSubRoute ? `Volver a ${item.name}` : item.name}
-              >
-                {isActive && (
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent rounded-r-full" />
-                )}
-                <Icon className={cn(
-                  "w-5 h-5 transition-colors",
-                  isActive ? "text-accent-light" : "text-text-secondary group-hover:text-text-primary"
-                )} />
-                {item.name}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 overflow-y-auto py-5 px-4 space-y-5">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-2 px-3">
+              Principal
+            </p>
+            <div className="space-y-1">
+              {mainNavItems.map(renderNavItem)}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-2 px-3">
+              Herramientas & Configuración
+            </p>
+            <div className="space-y-1">
+              {secondaryNavItems.map(renderNavItem)}
+            </div>
+          </div>
         </nav>
 
-        <div className="p-4 border-t border-border mt-auto">
+        <div className="p-4 border-t border-border mt-auto shrink-0">
           <div className="glass rounded-xl p-4 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <p className="text-xs text-text-secondary">Conectado a Google Drive</p>
@@ -108,7 +129,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
-            <div className="flex items-center gap-2 text-sm text-success">
+            <div className="flex items-center gap-2 text-sm text-success font-medium">
               <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
               <span>Sincronizado</span>
             </div>

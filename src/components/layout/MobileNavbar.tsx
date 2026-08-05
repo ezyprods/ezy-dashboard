@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Grid, Calendar } from 'lucide-react';
+import { LayoutDashboard, Users, Grid, Calendar, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { name: 'Artistas', href: '/artists', icon: Users },
   { name: 'Matrices', href: '/matrices', icon: Grid },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
+  { name: 'Herramientas', href: '/tools', icon: Wrench },
 ];
 
 export function MobileNavbar() {
