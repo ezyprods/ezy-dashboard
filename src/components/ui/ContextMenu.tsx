@@ -123,7 +123,7 @@ export function GlobalContextMenu() {
       icon: 'Download',
       action: () => {
         const a = document.createElement('a');
-        a.href = `https://drive.google.com/uc?export=download&id=${fileId}`;
+        a.href = `/api/audio/${fileId}`;
         a.click();
       },
     },
