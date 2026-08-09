@@ -14,6 +14,7 @@ import { useAudio } from '@/lib/contexts/AudioContext';
 import { isBrowserCompatible } from '@/lib/utils';
 
 import { PortalReleasePlayer } from '@/components/releases/PortalReleasePlayer';
+import { customAlert } from '@/lib/dialog';
 
 // ─── Main Portal Page ─────────────────────────────────────────────────────────
 export default function PortalPage() {
@@ -568,7 +569,7 @@ export default function PortalPage() {
                   <button 
                     onClick={() => {
                        window.open(activeProject.driveUrl, '_blank');
-                       alert('Se abrirá Google Drive. Haz clic en el botón "Descargar" arriba a la derecha para descargar toda la carpeta.');
+                       customAlert('Se abrirá Google Drive. Haz clic en el botón "Descargar" arriba a la derecha para descargar toda la carpeta.');
                     }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-elevated border border-border hover:bg-accent hover:text-white hover:border-accent text-text-secondary transition-colors text-xs font-bold"
                   >

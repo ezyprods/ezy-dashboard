@@ -322,33 +322,34 @@ export default function MatricesPage() {
   if (activeMatrix) {
     return (
       <div className="space-y-6 animate-fade-in pb-20">
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setActiveMatrix(null)} 
-            className="text-text-secondary hover:text-text-primary"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Volver a Matrices
-          </Button>
-          <ChevronRight className="w-4 h-4 text-text-secondary" />
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setActiveMatrix(null)} 
+              className="text-text-secondary hover:text-text-primary px-2.5 h-8 text-xs shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1.5" />
+              Volver a Matrices
+            </Button>
+            <ChevronRight className="w-3.5 h-3.5 text-text-secondary/50 shrink-0 hidden sm:block" />
             <span 
-              className="text-xs text-text-secondary font-medium px-2 py-0.5 bg-surface border border-border rounded cursor-pointer hover:bg-accent/10 hover:text-accent hover:border-accent/30 transition-colors"
+              className="text-xs text-text-secondary font-medium px-2 py-0.5 bg-surface border border-border rounded cursor-pointer hover:bg-accent/10 hover:text-accent hover:border-accent/30 transition-colors shrink-0"
               onClick={() => router.push(`/artists/${activeMatrix.artistId}`)}
               title="Ir al perfil del artista"
             >
               {activeMatrix.artistName}
             </span>
-            <div 
-              className="flex items-center gap-2 group/title cursor-pointer hover:bg-surface border border-transparent hover:border-border px-2 py-1 -ml-2 rounded transition-all" 
-              onClick={() => handleRenameMatrix(activeMatrix.artistId, activeMatrix.id, activeMatrix.name)}
-              title="Renombrar Matriz"
-            >
-              <h2 className="font-bold text-text-primary text-xl">{activeMatrix.name}</h2>
-              <Pencil className="w-4 h-4 text-text-secondary opacity-0 group-hover/title:opacity-100 transition-opacity" />
-            </div>
+          </div>
+
+          <div 
+            className="flex items-center gap-2 group/title cursor-pointer hover:bg-surface border border-transparent hover:border-border px-2 py-1 rounded transition-all min-w-0" 
+            onClick={() => handleRenameMatrix(activeMatrix.artistId, activeMatrix.id, activeMatrix.name)}
+            title="Renombrar Matriz"
+          >
+            <h2 className="font-bold text-text-primary text-lg sm:text-xl truncate">{activeMatrix.name}</h2>
+            <Pencil className="w-3.5 h-3.5 text-text-secondary opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0" />
           </div>
         </div>
         

@@ -12,6 +12,7 @@ const mainNavItems = [
   { name: 'Artistas', href: '/artists', icon: Users },
   { name: 'Matrices', href: '/matrices', icon: Grid },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
+  { name: 'Pagos', href: '/payments', icon: CreditCard },
 ];
 
 const secondaryNavItems = [
@@ -23,11 +24,27 @@ const secondaryNavItems = [
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
   useEffect(() => {
     if (isOpen && onClose) {
       onClose();
     }
   }, [pathname]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const isSwipeLeft = touchStartX - touchEndX > 50;
+    if (isSwipeLeft && onClose) {
+      onClose();
+    }
+    setTouchStartX(null);
+  };
 
   const renderNavItem = (item: { name: string; href: string; icon: any }) => {
     const isActive = pathname.startsWith(item.href);
@@ -41,7 +58,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         className={cn(
           "w-full flex items-center gap-3 px-4 py-3 md:py-2.5 rounded-lg text-base md:text-sm font-medium transition-all duration-200 group relative overflow-hidden text-left",
           isActive 
-            ? "text-white bg-accent/10 font-bold" 
+            ? "text-accent dark:text-accent-light bg-accent/10 font-bold" 
             : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
         )}
         title={isInsideSubRoute ? `Volver a ${item.name}` : item.name}
@@ -51,7 +68,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         )}
         <Icon className={cn(
           "w-5 h-5 transition-colors",
-          isActive ? "text-accent-light" : "text-text-secondary group-hover:text-text-primary"
+          isActive ? "text-accent dark:text-accent-light" : "text-text-secondary group-hover:text-text-primary"
         )} />
         {item.name}
       </Link>
@@ -67,6 +84,8 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         />
       )}
       <aside 
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         className={cn(
           "bg-surface border-r border-border flex flex-col h-[100dvh] fixed md:sticky top-0 left-0 z-50 md:z-auto transition-transform duration-300 w-[85vw] max-w-[320px] md:w-64",
           isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0 md:shadow-none",

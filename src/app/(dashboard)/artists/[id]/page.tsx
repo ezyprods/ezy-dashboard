@@ -418,7 +418,7 @@ export default function ArtistDetailPage() {
       )}
 
       {/* Tab Content: Placeholder for others */}
-      {activeTab !== 'projects' && activeTab !== 'matrices' && activeTab !== 'files' && activeTab !== 'portal' && (
+      {activeTab !== 'projects' && activeTab !== 'matrices' && activeTab !== 'files' && activeTab !== 'portal' && activeTab !== 'campaigns' && (
         <div className="glass rounded-xl p-12 text-center text-text-secondary border border-border animate-fade-in">
           <h3 className="text-lg font-medium text-text-primary mb-2 capitalize">Módulo de {activeTab}</h3>
           <p className="max-w-md mx-auto">Esta sección se está construyendo actualmente.</p>
