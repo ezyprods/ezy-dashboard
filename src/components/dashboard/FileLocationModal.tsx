@@ -47,7 +47,15 @@ const getIcon = (mimeType: string, name?: string) => {
 const formatDate = (t?: string) => {
   if (!t) return '';
   const d = new Date(t);
+  const time = d.getTime();
+  if (isNaN(time)) return '';
   return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+};
+
+const parseTime = (t?: string) => {
+  if (!t) return 0;
+  const time = new Date(t).getTime();
+  return isNaN(time) ? 0 : time;
 };
 
 type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
@@ -109,13 +117,13 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
       if (!aF && bF) return 1;
 
       if (sortBy === 'date-desc') {
-        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
-        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+        const timeA = parseTime(a.createdTime || a.modifiedTime);
+        const timeB = parseTime(b.createdTime || b.modifiedTime);
         return timeB - timeA;
       }
       if (sortBy === 'date-asc') {
-        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
-        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+        const timeA = parseTime(a.createdTime || a.modifiedTime);
+        const timeB = parseTime(b.createdTime || b.modifiedTime);
         return timeA - timeB;
       }
       if (sortBy === 'name-desc') {
@@ -138,8 +146,8 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-bold text-text-primary truncate leading-tight">
-              {highlightFileName
-                ? `Ubicación de "${(highlightFileName).replace(/\.[^/.]+$/, '')}"`
+              {typeof highlightFileName === 'string' && highlightFileName
+                ? `Ubicación de "${highlightFileName.replace(/\.[^/.]+$/, '')}"`
                 : 'Explorador de archivos'}
             </h2>
             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
