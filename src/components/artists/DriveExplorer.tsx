@@ -258,7 +258,9 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     const crumbs: Breadcrumb[] = [];
     let currentId = targetFolderId;
 
-    while (currentId) {
+    const visited = new Set<string>();
+    while (currentId && !visited.has(currentId) && visited.size < 20) {
+      visited.add(currentId);
       const folder = folderMap[currentId] || (currentId === rootFolderId ? { name: rootName, parentId: null } : null);
       if (folder) {
         crumbs.unshift({ id: currentId, name: folder.name });
