@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, FolderOpen, Folder, FileAudio, FileImage, FileText, Film, File as FileIcon,
@@ -97,35 +97,39 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
 
   if (!mounted || !isOpen || !folderId) return null;
 
-  const displayItems = (searchQuery.trim()
-    ? items.filter(i => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase().trim()))
-    : items
-  ).sort((a, b) => {
-    const aF = a.mimeType === 'application/vnd.google-apps.folder';
-    const bF = b.mimeType === 'application/vnd.google-apps.folder';
-    if (aF && !bF) return -1;
-    if (!aF && bF) return 1;
+  const displayItems = useMemo(() => {
+    const filtered = searchQuery.trim()
+      ? items.filter(i => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase().trim()))
+      : items;
 
-    if (sortBy === 'date-desc') {
-      const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
-      const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
-      return timeB - timeA;
-    }
-    if (sortBy === 'date-asc') {
-      const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
-      const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
-      return timeA - timeB;
-    }
-    if (sortBy === 'name-desc') {
-      return (b.name || '').localeCompare(a.name || '');
-    }
-    return (a.name || '').localeCompare(b.name || '');
-  });
+    return [...filtered].sort((a, b) => {
+      const aF = a.mimeType === 'application/vnd.google-apps.folder';
+      const bF = b.mimeType === 'application/vnd.google-apps.folder';
+      if (aF && !bF) return -1;
+      if (!aF && bF) return 1;
+
+      if (sortBy === 'date-desc') {
+        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+        return timeB - timeA;
+      }
+      if (sortBy === 'date-asc') {
+        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+        return timeA - timeB;
+      }
+      if (sortBy === 'name-desc') {
+        return (b.name || '').localeCompare(a.name || '');
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [items, searchQuery, sortBy]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl h-[75vh] max-h-[680px] bg-surface border border-border shadow-2xl rounded-2xl flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-150">
+      {/* GPU-friendly semi-transparent backdrop without backdrop-blur overhead */}
+      <div className="absolute inset-0 bg-black/75 transition-opacity" onClick={onClose} />
+      <div className="relative w-full max-w-2xl h-[75vh] max-h-[680px] bg-surface border border-border shadow-xl rounded-2xl flex flex-col animate-in zoom-in-95 duration-150 overflow-hidden transform-gpu">
 
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-border flex items-center gap-3 shrink-0 bg-surface-elevated/40">

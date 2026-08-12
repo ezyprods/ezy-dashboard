@@ -158,9 +158,6 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   const explorerRef = useRef<HTMLDivElement>(null);
   const recentScrollRef = useRef<HTMLDivElement>(null);
 
-  // Smooth scroll on the recent files panel
-  useSmoothScroll(recentScrollRef, [isRecentLoading, recentFiles]);
-
   // Undo / Redo Stack
   const [actionStack, setActionStack] = useState<ActionHistory[]>([]);
   const [redoStack, setRedoStack] = useState<ActionHistory[]>([]);

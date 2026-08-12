@@ -26,8 +26,6 @@ export function RecentFilesWidget() {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useSmoothScroll(scrollRef, [isLoading, files]);
-
   const loadFiles = useCallback(() => {
     fetch('/api/dashboard/recent-files')
       .then(res => res.json())
