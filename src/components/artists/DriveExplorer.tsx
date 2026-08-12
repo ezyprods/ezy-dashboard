@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer, X, Scissors, LayoutGrid, List, Search, Filter, CheckSquare, Square } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
@@ -107,6 +107,9 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
+  // Recent panel: collapsed by default — user expands on demand
+  const [isRecentPanelOpen, setIsRecentPanelOpen] = useState(false);
+
   // Split screen (Extra Panes) states
   interface FolderPane {
     folderId: string;
@@ -182,11 +185,22 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     fetchItems(currentFolderId);
   }, [currentFolderId]);
 
-  useEffect(() => {
-    fetchRecentFiles();
-  }, [rootFolderId]);
+  const fetchRecentFiles = useCallback(async () => {
+    // Try sessionStorage cache first (60 second TTL)
+    const cacheKey = `recentFiles_${rootFolderId}`;
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const { ts, data } = JSON.parse(cached);
+        if (Date.now() - ts < 60_000) {
+          setRecentFiles(data.files);
+          setFolderMap(data.folderMap);
+          setIsRecentLoading(false);
+          return;
+        }
+      }
+    } catch {}
 
-  const fetchRecentFiles = async () => {
     setIsRecentLoading(true);
     try {
       const res = await fetch(`/api/files?folderId=${rootFolderId}&recursive=true`);
@@ -205,25 +219,38 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       });
       setFolderMap(map);
 
-      // Filter to files only, sorted by modification time (or created time) descending
-      // Also filter out JSON files
-      const filesOnly = allItems.filter((item: any) => 
-        item.mimeType !== 'application/vnd.google-apps.folder' && 
-        !item.name?.endsWith('.json') && 
-        item.mimeType !== 'application/json'
-      );
-      filesOnly.sort((a: any, b: any) => {
-        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
-        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
-        return timeB - timeA;
-      });
+      const filesOnly = allItems
+        .filter((item: any) =>
+          item.mimeType !== 'application/vnd.google-apps.folder' &&
+          !item.name?.endsWith('.json') &&
+          item.mimeType !== 'application/json'
+        )
+        .sort((a: any, b: any) => {
+          const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+          const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+          return timeB - timeA;
+        })
+        .slice(0, 50); // cap at 50 to avoid huge lists
+
       setRecentFiles(filesOnly);
+
+      // Cache result
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: { files: filesOnly, folderMap: map } }));
+      } catch {}
     } catch (e: any) {
       console.error('Error fetching recent files:', e);
     } finally {
       setIsRecentLoading(false);
     }
-  };
+  }, [rootFolderId, rootName]);
+
+  // Only load recent files when the panel is opened
+  useEffect(() => {
+    if (isRecentPanelOpen) {
+      fetchRecentFiles();
+    }
+  }, [isRecentPanelOpen, fetchRecentFiles]);
 
   const handleOpenFileLocation = (parentFolderId?: string) => {
     const targetFolderId = parentFolderId || rootFolderId;
@@ -758,8 +785,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     return <FileIcon className="w-5 h-5 text-text-secondary" />;
   };
 
-  // Sort and group
-  const groupedItems = (() => {
+  const groupedItems = useMemo(() => {
     const audioItems = items.filter(i => i.mimeType?.startsWith('audio/'));
     const nonAudioItems = items.filter(i => !i.mimeType?.startsWith('audio/'));
 
@@ -773,7 +799,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     });
 
     const finalItems = [...nonAudioItems];
-    audioGroups.forEach((versions, baseName) => {
+    audioGroups.forEach((versions) => {
       versions.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       finalItems.push({
         ...versions[0],
@@ -788,7 +814,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       if (!isAFolder && isBFolder) return 1;
       return (a.name || '').localeCompare(b.name || '');
     });
-  })();
+  }, [items]);
 
   const navigatePaneTo = (paneIndex: number, folderId: string, folderName: string) => {
     setExtraPanes(prev => prev.map((p, idx) => idx === paneIndex ? { ...p, folderId, folderName, isLoading: true, items: [] } : p));
@@ -839,196 +865,175 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         className="flex flex-col lg:flex-row lg:flex-nowrap gap-4 items-start w-full overflow-x-auto pb-4 px-1"
         style={{ scrollbarWidth: 'thin' }}
       >
-        {/* ── Column 1: Archivos Recientes (fixed width, shrink-0) ── */}
+        {/* ── Column 1: Archivos Recientes (collapsible, lazy) ── */}
         <div
           className={cn(
-            "bg-surface-elevated rounded-2xl border border-border p-5 flex flex-col lg:min-h-[550px] transition-colors duration-300 w-full",
-            "flex-1 min-w-0",
+            "bg-surface-elevated rounded-2xl border border-border transition-all duration-300 w-full",
+            isRecentPanelOpen ? "flex-1 min-w-0 flex flex-col" : "flex-none",
             activeMobileTab === 'recent' ? "flex animate-fade-in" : "hidden lg:flex"
           )}
         >
-          <h3 className="text-md font-bold text-text-primary mb-4 flex items-center gap-2 shrink-0">
-            <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
-            Archivos Recientes
-          </h3>
-
-          <div
-            ref={recentScrollRef}
-            className="flex-1 overflow-y-auto max-h-[450px] lg:max-h-[510px] min-h-0 pr-1 space-y-2 custom-scrollbar smooth-scroll-container"
+          {/* Collapsible header */}
+          <button
+            onClick={() => setIsRecentPanelOpen(p => !p)}
+            className="flex items-center justify-between w-full p-4 text-left hover:bg-surface/50 rounded-2xl transition-colors"
           >
-            {isRecentLoading ? (
-              <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
-            ) : recentFiles.length === 0 ? (
-              <div className="p-8 text-center text-text-secondary text-sm">
-                No hay archivos en este perfil.
-              </div>
-            ) : (
-              recentFiles.map((item: any) => {
-                const isAudio = item.mimeType?.startsWith('audio/');
-                const isThisTrackActive = currentTrack?.id === item.id;
-                const isThisTrackPlaying = isThisTrackActive && isPlaying;
+            <span className="text-sm font-bold text-text-primary flex items-center gap-2">
+              <span className={cn("w-2 h-2 rounded-full shrink-0", isRecentPanelOpen ? "bg-accent animate-pulse" : "bg-text-secondary/40")} />
+              Archivos Recientes
+              {recentFiles.length > 0 && (
+                <span className="text-[10px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-full font-bold">{recentFiles.length}</span>
+              )}
+            </span>
+            <ChevronRight className={cn("w-4 h-4 text-text-secondary transition-transform duration-200", isRecentPanelOpen && "rotate-90")} />
+          </button>
 
-                return (
-                  <div
-                    key={item.id}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
-                      window.open(openUrl, '_blank');
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isAudio) {
-                        if (isThisTrackActive) {
-                          togglePlay();
-                        } else {
-                          playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
-                        }
-                      } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
-                        const openUrl = `/api/files/${item.id}?inline=true`;
+          {isRecentPanelOpen && (
+            <div
+              ref={recentScrollRef}
+              className="flex-1 overflow-y-auto max-h-[450px] lg:max-h-[510px] min-h-0 px-4 pb-4 space-y-2 custom-scrollbar smooth-scroll-container border-t border-border/40"
+            >
+              {isRecentLoading ? (
+                <div className="p-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>
+              ) : recentFiles.length === 0 ? (
+                <div className="p-8 text-center text-text-secondary text-sm">
+                  No hay archivos en este perfil.
+                </div>
+              ) : (
+                recentFiles.map((item: any) => {
+                  const isAudio = item.mimeType?.startsWith('audio/');
+                  const isThisTrackActive = currentTrack?.id === item.id;
+                  const isThisTrackPlaying = isThisTrackActive && isPlaying;
+
+                  return (
+                    <div
+                      key={item.id}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        const openUrl = item.webViewLink || `/api/files/${item.id}?inline=true`;
                         window.open(openUrl, '_blank');
-                      } else if (item.webViewLink) {
-                        window.open(item.webViewLink, '_blank');
-                      } else {
-                        window.open(`/api/files/${item.id}?inline=true`, '_blank');
-                      }
-                    }}
-                    draggable={isAudio}
-                    onDragStart={isAudio ? (e) => {
-                      const cleanName = item.name.replace(/\.[^/.]+$/, '') + '.mp3';
-                      e.dataTransfer.effectAllowed = 'copy';
-                      e.dataTransfer.setData('text/plain', cleanName);
-                      // DownloadURL: Chrome uses this to let you drag a URL as a downloadable file
-                      e.dataTransfer.setData(
-                        'DownloadURL',
-                        `audio/mpeg:${cleanName}:${window.location.origin}/api/audio/${item.id}`
-                      );
-                    } : undefined}
-                    title={isAudio ? 'Arrastra a WhatsApp Web u otra pestaña para compartir' : undefined}
-                    className={`relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center gap-3 group cursor-pointer overflow-hidden ${isAudio ? 'drag-audio-item' : ''}`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {isAudio ? (
-                        <button
-                          className={cn(
-                            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm',
-                            isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isThisTrackActive) {
-                              togglePlay();
-                            } else {
-                              const safeName = item.name || 'Audio';
-                              playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
-                            }
-                          }}
-                        >
-                          {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
-                        </button>
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50">
-                          {getIcon(item.mimeType, item.name)}
-                        </div>
-                      )}
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isAudio) {
+                          if (isThisTrackActive) {
+                            togglePlay();
+                          } else {
+                            playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
+                          }
+                        } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
+                          window.open(`/api/files/${item.id}?inline=true`, '_blank');
+                        } else if (item.webViewLink) {
+                          window.open(item.webViewLink, '_blank');
+                        } else {
+                          window.open(`/api/files/${item.id}?inline=true`, '_blank');
+                        }
+                      }}
+                      draggable={isAudio}
+                      onDragStart={isAudio ? (e) => {
+                        const cleanName = item.name.replace(/\.[^/.]+$/, '') + '.mp3';
+                        e.dataTransfer.effectAllowed = 'copy';
+                        e.dataTransfer.setData('text/plain', cleanName);
+                        e.dataTransfer.setData(
+                          'DownloadURL',
+                          `audio/mpeg:${cleanName}:${window.location.origin}/api/audio/${item.id}`
+                        );
+                      } : undefined}
+                      title={isAudio ? 'Arrastra a WhatsApp Web u otra pestaña para compartir' : undefined}
+                      className={`mt-2 relative p-3 bg-surface rounded-xl border border-border/60 hover:border-accent/40 hover:bg-surface-elevated/70 transition-colors flex items-center gap-3 group cursor-pointer overflow-hidden ${isAudio ? 'drag-audio-item' : ''}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {isAudio ? (
+                          <button
+                            className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm',
+                              isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isThisTrackActive) {
+                                togglePlay();
+                              } else {
+                                const safeName = item.name || 'Audio';
+                                playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
+                              }
+                            }}
+                          >
+                            {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                          </button>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50">
+                            {getIcon(item.mimeType, item.name)}
+                          </div>
+                        )}
 
-                      <div className="flex-1 min-w-0 pr-2">
-                        <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
-                          <span className="truncate block">{item.name || 'Sin Título'}</span>
-                          {item.expiresAt && (
-                            <RealtimeCountdown 
-                              expiresAt={item.expiresAt} 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                showMenu(e.clientX, e.clientY, [
-                                  {
-                                    label: 'Eliminar ya',
-                                    icon: 'Trash2',
-                                    action: () => setDeleteModalFile(item)
-                                  },
-                                  {
-                                    label: 'Cancelar eliminación',
-                                    icon: 'Undo',
-                                    action: async () => {
-                                      try {
-                                        const res = await fetch(`/api/files/${item.id}/expiration`, {
-                                          method: 'POST',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ expiresInMs: null })
-                                        });
-                                        if (!res.ok) throw new Error('Error al cancelar eliminación');
-                                        fetchItems(currentFolderId);
-                                        fetchRecentFiles();
-                                      } catch(err: any) {
-                                        customAlert(err.message);
+                        <div className="flex-1 min-w-0 pr-2">
+                          <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
+                            <span className="truncate block">{item.name || 'Sin Título'}</span>
+                            {item.expiresAt && (
+                              <RealtimeCountdown
+                                expiresAt={item.expiresAt}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  showMenu(e.clientX, e.clientY, [
+                                    { label: 'Eliminar ya', icon: 'Trash2', action: () => setDeleteModalFile(item) },
+                                    {
+                                      label: 'Cancelar eliminación', icon: 'Undo',
+                                      action: async () => {
+                                        try {
+                                          const res = await fetch(`/api/files/${item.id}/expiration`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresInMs: null }) });
+                                          if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                          fetchItems(currentFolderId);
+                                          fetchRecentFiles();
+                                        } catch(err: any) { customAlert(err.message); }
                                       }
                                     }
-                                  }
-                                ]);
-                              }}
-                            />
-                          )}
-                        </div>
-                        <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                          {item.bpm && (() => {
-                            const bpmNum = parseInt(String(item.bpm));
-                            const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
-                                             bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
-                                             bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-                                             'text-red-400 bg-red-500/10 border-red-500/20';
-                            return <span className={`font-bold font-mono px-1.5 py-0.5 rounded border ${bpmColor}`}>{bpmNum} BPM</span>;
-                          })()}
-                          {item.key && <span className="font-bold font-mono text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{item.key}</span>}
-                          <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                                  ]);
+                                }}
+                              />
+                            )}
+                          </div>
+                          <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            {item.bpm && (() => {
+                              const bpmNum = parseInt(String(item.bpm));
+                              const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                                               bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                                               bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                               'text-red-400 bg-red-500/10 border-red-500/20';
+                              return <span className={`font-bold font-mono px-1.5 py-0.5 rounded border ${bpmColor}`}>{bpmNum} BPM</span>;
+                            })()}
+                            {item.key && <span className="font-bold font-mono text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{item.key}</span>}
+                            <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Action buttons on hover */}
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0">
-                      {isAudio && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }}
-                          className="p-1.5 text-text-secondary hover:text-accent-light hover:bg-surface rounded-md transition-colors"
-                          title="Abrir en Mini-DAW"
-                        >
-                          <Scissors className="w-3.5 h-3.5" />
+                      {/* Action buttons on hover */}
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0">
+                        {isAudio && (
+                          <button onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }} className="p-1.5 text-text-secondary hover:text-accent-light hover:bg-surface rounded-md transition-colors" title="Abrir en Mini-DAW">
+                            <Scissors className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }} className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors" title="Descargar/Ver">
+                          <Download className="w-3.5 h-3.5" />
                         </button>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
-                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
-                        title="Descargar/Ver"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleOpenFileLocation(item.parentFolderId); }}
-                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
-                        title="Abrir ubicación"
-                      >
-                        <FolderOpen className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShareModalFile(item); }}
-                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
-                        title="Compartir"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setDeleteModalFile(item); }}
-                        className="p-1.5 text-text-secondary hover:text-error hover:bg-surface rounded-md transition-colors"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleOpenFileLocation(item.parentFolderId); }} className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors" title="Abrir ubicación">
+                          <FolderOpen className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); setShareModalFile(item); }} className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors" title="Compartir">
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); setDeleteModalFile(item); }} className="p-1.5 text-text-secondary hover:text-error hover:bg-surface rounded-md transition-colors" title="Eliminar">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Column 2: Main Explorer (flex-1, elastic – takes all remaining space) ── */}

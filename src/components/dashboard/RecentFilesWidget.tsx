@@ -22,7 +22,7 @@ interface DriveFile {
 export function RecentFilesWidget() {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [explorerFolderId, setExplorerFolderId] = useState<string | null>(null);
+  const [explorerContext, setExplorerContext] = useState<{ folderId: string; fileId: string; fileName: string } | null>(null);
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -163,7 +163,7 @@ export function RecentFilesWidget() {
                   )}
                   {file.parents && file.parents.length > 0 && (
                     <button
-                      onClick={() => setExplorerFolderId(file.parents![0])}
+                      onClick={() => setExplorerContext({ folderId: file.parents![0], fileId: file.id, fileName: file.name })}
                       className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-emerald-500 hover:text-emerald-400 transition-colors border border-border/60 shadow-sm"
                       title="Abrir ubicación en la plataforma"
                     >
@@ -188,10 +188,12 @@ export function RecentFilesWidget() {
         )}
       </div>
 
-      <FolderExplorerModal 
-        isOpen={!!explorerFolderId}
-        onClose={() => setExplorerFolderId(null)}
-        folderId={explorerFolderId}
+      <FolderExplorerModal
+        isOpen={!!explorerContext}
+        onClose={() => setExplorerContext(null)}
+        folderId={explorerContext?.folderId ?? null}
+        highlightFileId={explorerContext?.fileId}
+        highlightFileName={explorerContext?.fileName}
       />
     </div>
   );
