@@ -50,6 +50,8 @@ const formatDate = (t?: string) => {
   return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
 };
 
+type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+
 export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, highlightFileName }: FileLocationModalProps) {
   const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState<DriveItem[]>([]);
@@ -57,6 +59,7 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
   useEffect(() => { setMounted(true); }, []);
@@ -68,14 +71,7 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
       if (!res.ok) throw new Error();
       const data = await res.json();
       const filtered = (data.items || [])
-        .filter((i: any) => !i.name?.endsWith('.json') && i.mimeType !== 'application/json')
-        .sort((a: DriveItem, b: DriveItem) => {
-          const aF = a.mimeType === 'application/vnd.google-apps.folder';
-          const bF = b.mimeType === 'application/vnd.google-apps.folder';
-          if (aF && !bF) return -1;
-          if (!aF && bF) return 1;
-          return (a.name || '').localeCompare(b.name || '');
-        });
+        .filter((i: any) => !i.name?.endsWith('.json') && i.mimeType !== 'application/json');
       setItems(filtered);
     } catch { setItems([]); }
     finally { setIsLoading(false); }
@@ -101,9 +97,30 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
 
   if (!mounted || !isOpen || !folderId) return null;
 
-  const displayItems = searchQuery.trim()
+  const displayItems = (searchQuery.trim()
     ? items.filter(i => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase().trim()))
-    : items;
+    : items
+  ).sort((a, b) => {
+    const aF = a.mimeType === 'application/vnd.google-apps.folder';
+    const bF = b.mimeType === 'application/vnd.google-apps.folder';
+    if (aF && !bF) return -1;
+    if (!aF && bF) return 1;
+
+    if (sortBy === 'date-desc') {
+      const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+      const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+      return timeB - timeA;
+    }
+    if (sortBy === 'date-asc') {
+      const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+      const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+      return timeA - timeB;
+    }
+    if (sortBy === 'name-desc') {
+      return (b.name || '').localeCompare(a.name || '');
+    }
+    return (a.name || '').localeCompare(b.name || '');
+  });
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -148,6 +165,17 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
               className="w-full bg-surface border border-border/60 rounded-lg pl-8 pr-3 py-1.5 text-xs text-text-primary placeholder:text-text-secondary/70 focus:outline-none focus:border-accent" />
             {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"><X className="w-3 h-3" /></button>}
           </div>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as SortOption)}
+            className="bg-surface border border-border/60 rounded-lg px-2 py-1 text-xs font-semibold text-text-primary focus:outline-none focus:border-accent cursor-pointer"
+            title="Ordenar por"
+          >
+            <option value="date-desc">Recientes primero</option>
+            <option value="date-asc">Antiguos primero</option>
+            <option value="name-asc">Nombre (A-Z)</option>
+            <option value="name-desc">Nombre (Z-A)</option>
+          </select>
           <div className="flex bg-surface border border-border/60 rounded-lg p-0.5 gap-0.5">
             <button onClick={() => setViewMode('list')} className={cn("p-1.5 rounded-md transition-colors", viewMode === 'list' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary")}><List className="w-3.5 h-3.5" /></button>
             <button onClick={() => setViewMode('grid')} className={cn("p-1.5 rounded-md transition-colors", viewMode === 'grid' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary")}><LayoutGrid className="w-3.5 h-3.5" /></button>

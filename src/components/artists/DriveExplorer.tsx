@@ -86,10 +86,12 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     return pathSegs;
   };
 
-  // View mode, search & filter states
+  type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+  // View mode, search, filter & sort states
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'folder' | 'audio' | 'image' | 'video' | 'document'>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('date-desc');
 
   // Modal states
   const [shareModalFile, setShareModalFile] = useState<DriveItem | null>(null);
@@ -812,9 +814,23 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       const isBFolder = b.mimeType === 'application/vnd.google-apps.folder';
       if (isAFolder && !isBFolder) return -1;
       if (!isAFolder && isBFolder) return 1;
+
+      if (sortBy === 'date-desc') {
+        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+        return timeB - timeA;
+      }
+      if (sortBy === 'date-asc') {
+        const timeA = new Date(a.createdTime || a.modifiedTime || 0).getTime();
+        const timeB = new Date(b.createdTime || b.modifiedTime || 0).getTime();
+        return timeA - timeB;
+      }
+      if (sortBy === 'name-desc') {
+        return (b.name || '').localeCompare(a.name || '');
+      }
       return (a.name || '').localeCompare(b.name || '');
     });
-  }, [items]);
+  }, [items, sortBy]);
 
   const navigatePaneTo = (paneIndex: number, folderId: string, folderName: string) => {
     setExtraPanes(prev => prev.map((p, idx) => idx === paneIndex ? { ...p, folderId, folderName, isLoading: true, items: [] } : p));
@@ -1181,6 +1197,22 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                     {cat.label}
                   </button>
                 ))}
+              </div>
+
+              {/* Sort Selector Dropdown */}
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                <span className="text-[11px] text-text-secondary font-medium hidden sm:inline">Ordenar:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className="bg-surface border border-border/60 rounded-lg px-2 py-1 text-[11px] font-semibold text-text-primary focus:outline-none focus:border-accent cursor-pointer"
+                  title="Ordenar elementos"
+                >
+                  <option value="date-desc">Recientes primero</option>
+                  <option value="date-asc">Antiguos primero</option>
+                  <option value="name-asc">Nombre (A-Z)</option>
+                  <option value="name-desc">Nombre (Z-A)</option>
+                </select>
               </div>
             </div>
 
