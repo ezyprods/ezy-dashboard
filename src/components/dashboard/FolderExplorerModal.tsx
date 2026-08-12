@@ -1,5 +1,32 @@
-﻿'use client';
+'use client';
 
-// FolderExplorerModal — now delegates to the lightweight FileLocationModal
-// to avoid mounting the full DriveExplorer (which triggers expensive recursive fetches)
-export { FileLocationModal as FolderExplorerModal } from './FileLocationModal';
+import { FileLocationModal } from './FileLocationModal';
+
+interface FolderExplorerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  folderId: string | null;
+  folderName?: string;
+  highlightFileId?: string;
+  highlightFileName?: string;
+}
+
+export function FolderExplorerModal({
+  isOpen,
+  onClose,
+  folderId,
+  highlightFileId,
+  highlightFileName,
+}: FolderExplorerModalProps) {
+  return (
+    <FileLocationModal
+      isOpen={isOpen}
+      onClose={onClose}
+      folderId={folderId}
+      highlightFileId={highlightFileId}
+      highlightFileName={highlightFileName}
+    />
+  );
+}
+
+export default FolderExplorerModal;
