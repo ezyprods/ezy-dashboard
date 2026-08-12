@@ -50,8 +50,8 @@ export function FolderExplorerModal({ isOpen, onClose, folderId, folderName = 'C
           </button>
         </div>
 
-        {/* Content — flex-1 so it fills the remaining height; overflow-y-auto is handled inside DriveExplorer panels */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar smooth-scroll-container p-6">
+        {/* Content — flex-1 so it fills the remaining height */}
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden p-4 sm:p-6">
           <DriveExplorer 
             rootFolderId={folderId} 
             rootName={folderName} 

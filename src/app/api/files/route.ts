@@ -311,17 +311,34 @@ export async function PUT(request: Request) {
       requestBody: {},
     };
 
-    if (name) {
-      updateParams.requestBody.name = name;
+    if (name && name.trim()) {
+      updateParams.requestBody.name = name.trim();
     }
     
     if (trashed !== undefined) {
-      updateParams.requestBody.trashed = trashed;
+      updateParams.requestBody.trashed = Boolean(trashed);
     }
 
-    if (newParentId && oldParentId) {
+    if (newParentId) {
       updateParams.addParents = newParentId;
-      updateParams.removeParents = oldParentId;
+      if (oldParentId) {
+        updateParams.removeParents = oldParentId;
+      } else {
+        // Fetch current parents if oldParentId was not provided
+        try {
+          const currentFile = await drive.files.get({
+            fileId,
+            fields: 'parents',
+            supportsAllDrives: true,
+          });
+          const currentParents = currentFile.data.parents || [];
+          if (currentParents.length > 0) {
+            updateParams.removeParents = currentParents.join(',');
+          }
+        } catch (e) {
+          console.warn('Could not fetch existing parents for fileId:', fileId, e);
+        }
+      }
     }
 
     const res = await drive.files.update(updateParams);

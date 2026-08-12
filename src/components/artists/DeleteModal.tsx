@@ -10,15 +10,18 @@ interface DeleteModalProps {
   onClose: () => void;
   fileId: string;
   fileName: string;
-  onDeleted: () => void;
+  fileIds?: string[];
+  onDeleted: (deletedIds?: string[]) => void;
   currentExpiration?: number | null;
 }
 
-export function DeleteModal({ isOpen, onClose, fileId, fileName, onDeleted, currentExpiration }: DeleteModalProps) {
+export function DeleteModal({ isOpen, onClose, fileId, fileName, fileIds, onDeleted, currentExpiration }: DeleteModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<boolean>(!!currentExpiration);
   
+  const targetIds = fileIds && fileIds.length > 0 ? fileIds : [fileId];
+
   // Opciones de caducidad
   const expirationOptions = [
     { label: 'En 1 hora', ms: 60 * 60 * 1000 },
@@ -33,9 +36,11 @@ export function DeleteModal({ isOpen, onClose, fileId, fileName, onDeleted, curr
   const handleDeleteNow = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error al eliminar');
-      onDeleted();
+      for (const id of targetIds) {
+        const res = await fetch(`/api/files?id=${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Error al eliminar un archivo');
+      }
+      onDeleted(targetIds);
       onClose();
     } catch (e: any) {
       customAlert(e.message);
@@ -47,15 +52,17 @@ export function DeleteModal({ isOpen, onClose, fileId, fileName, onDeleted, curr
   const handleScheduleDelete = async () => {
     setIsScheduling(true);
     try {
-      const res = await fetch(`/api/files/${fileId}/expiration`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expiresInMs: selectedExpirationMs })
-      });
-      if (!res.ok) throw new Error('Error al programar eliminación');
+      for (const id of targetIds) {
+        const res = await fetch(`/api/files/${id}/expiration`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expiresInMs: selectedExpirationMs })
+        });
+        if (!res.ok) throw new Error('Error al programar eliminación');
+      }
       
       customAlert(`Eliminación programada con éxito.`);
-      onDeleted(); // To trigger a refresh
+      onDeleted(targetIds); // To trigger a refresh
       onClose();
     } catch (e: any) {
       customAlert(e.message);

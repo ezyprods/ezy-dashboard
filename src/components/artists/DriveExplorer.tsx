@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer, X, Scissors } from 'lucide-react';
+import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer, X, Scissors, LayoutGrid, List, Search, Filter, CheckSquare, Square } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -86,9 +86,15 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     return pathSegs;
   };
 
+  // View mode, search & filter states
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'folder' | 'audio' | 'image' | 'video' | 'document'>('all');
+
   // Modal states
   const [shareModalFile, setShareModalFile] = useState<DriveItem | null>(null);
   const [deleteModalFile, setDeleteModalFile] = useState<DriveItem | null>(null);
+  const [deleteModalExtraIds, setDeleteModalExtraIds] = useState<string[] | undefined>(undefined);
   const [pendingUploadFiles, setPendingUploadFiles] = useState<{files: File[], targetFolderId: string} | null>(null);
   const [miniDAWFile, setMiniDAWFile] = useState<{id: string, name: string} | null>(null);
 
@@ -286,28 +292,78 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       );
       setLastSelectedIndex(index);
     } else {
-      // Single click - select and open/play
-      if (item.mimeType === 'application/vnd.google-apps.folder') {
-        navigateTo(item.id, item.name);
-      } else {
-        setSelectedIds([item.id]);
-        setLastSelectedIndex(index);
-        
-        if (item.mimeType?.startsWith('audio/')) {
-          if (currentTrack?.id === item.id) {
-            togglePlay();
-          } else {
-            playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
-          }
-        } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
-          window.open(`/api/files/${item.id}?inline=true`, '_blank');
-        } else if (item.webViewLink) {
-          window.open(item.webViewLink, '_blank');
-        } else {
-          window.open(`/api/files/${item.id}?inline=true`, '_blank');
-        }
-      }
+      // Single click - select item
+      setSelectedIds([item.id]);
+      setLastSelectedIndex(index);
     }
+  };
+
+  const handleItemDoubleClick = (e: React.MouseEvent, item: DriveItem) => {
+    e.stopPropagation();
+    if (item.mimeType === 'application/vnd.google-apps.folder') {
+      navigateTo(item.id, item.name);
+    } else if (item.mimeType?.startsWith('audio/')) {
+      if (currentTrack?.id === item.id) {
+        togglePlay();
+      } else {
+        playTrack({ id: item.id, name: item.name.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
+      }
+    } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
+      window.open(`/api/files/${item.id}?inline=true`, '_blank');
+    } else if (item.webViewLink) {
+      window.open(item.webViewLink, '_blank');
+    } else {
+      window.open(`/api/files/${item.id}?inline=true`, '_blank');
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, item: DriveItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selectedIds.includes(item.id)) {
+      setSelectedIds([item.id]);
+    }
+
+    const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+    const isAudio = item.mimeType?.startsWith('audio/');
+    const currentSelection = selectedIds.includes(item.id) && selectedIds.length > 1 ? selectedIds : [item.id];
+
+    showMenu(e.clientX, e.clientY, [
+      {
+        label: isFolder ? 'Abrir carpeta' : (isAudio ? 'Reproducir' : 'Abrir / Ver'),
+        icon: isFolder ? 'FolderOpen' : (isAudio ? 'Play' : 'ExternalLink'),
+        action: () => handleItemDoubleClick(e, item)
+      },
+      ...(isAudio ? [{
+        label: 'Abrir en Mini-DAW',
+        icon: 'Scissors',
+        action: () => setMiniDAWFile({ id: item.id, name: item.name })
+      }] : []),
+      {
+        label: 'Renombrar',
+        icon: 'Edit3',
+        action: () => handleRename(item.id, item.name)
+      },
+      {
+        label: 'Compartir',
+        icon: 'Share2',
+        action: () => setShareModalFile(item)
+      },
+      {
+        label: 'Copiar enlace',
+        icon: 'LinkIcon',
+        action: () => {
+          const link = item.webViewLink || `${window.location.origin}/api/files/${item.id}?inline=true`;
+          navigator.clipboard.writeText(link);
+          customAlert('Enlace copiado al portapapeles');
+        }
+      },
+      {
+        label: currentSelection.length > 1 ? `Eliminar (${currentSelection.length} elementos)` : 'Eliminar',
+        icon: 'Trash2',
+        action: () => handleDelete(item.id, isFolder, currentSelection)
+      }
+    ]);
   };
 
   const undoLastAction = async () => {
@@ -621,33 +677,30 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     }
   };
 
-  const handleDelete = async (itemId: string, isFolder: boolean, multipleIds?: string[]) => {
+  const handleDelete = (itemId: string, isFolder: boolean, multipleIds?: string[]) => {
     const idsToDelete = multipleIds && multipleIds.length > 0 ? multipleIds : [itemId];
-    const message = idsToDelete.length > 1
-      ? `¿Enviar ${idsToDelete.length} elementos a la papelera?`
-      : `¿Enviar a la papelera?`;
+    const targetItem = items.find(i => i.id === itemId);
+    const fileName = idsToDelete.length > 1 ? `${idsToDelete.length} elementos` : (targetItem ? targetItem.name : 'elemento');
+    
+    setDeleteModalFile(targetItem || { id: itemId, name: fileName, mimeType: isFolder ? 'application/vnd.google-apps.folder' : 'file' });
+    setDeleteModalExtraIds(idsToDelete);
+  };
 
-    if (!await customConfirm(message)) return;
-    setIsLoading(true);
-    try {
-      const trashedItems = items.filter(i => idsToDelete.includes(i.id));
-      for (const id of idsToDelete) {
-        await fetch(`/api/files?id=${id}`, { method: 'DELETE' });
-      }
-
+  const handleDeletedCallback = (deletedIds?: string[]) => {
+    const ids = deletedIds || (deleteModalExtraIds ?? [deleteModalFile?.id ?? '']);
+    const trashedItems = items.filter(i => ids.includes(i.id));
+    if (trashedItems.length > 0) {
       setActionStack(prev => [...prev, {
         type: 'TRASH',
         items: trashedItems
       }]);
       setRedoStack([]);
-
-      setSelectedIds([]);
-      fetchItems(currentFolderId);
-      fetchRecentFiles();
-    } catch (e) {
-      customAlert('Error al enviar a la papelera');
-      setIsLoading(false);
     }
+    setSelectedIds([]);
+    fetchItems(currentFolderId);
+    fetchRecentFiles();
+    setDeleteModalFile(null);
+    setDeleteModalExtraIds(undefined);
   };
 
   const handleRename = async (itemId: string, currentName: string) => {
@@ -985,59 +1038,182 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
             activeMobileTab === 'explorer' ? "block" : "hidden lg:block"
           )}
         >
-          {/* Top Bar: Breadcrumbs & Actions */}
-          <div className="flex items-center justify-between bg-surface-elevated p-4 rounded-xl border border-border gap-2">
-            <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-1 min-w-0">
-              {breadcrumbs.map((crumb, idx) => (
-                <div
-                  key={crumb.id}
-                  className="flex items-center gap-2"
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  onDrop={(e) => {
-                    if (idx < breadcrumbs.length - 1) {
-                      handleItemDrop(e, crumb.id, currentFolderId);
-                    }
-                  }}
-                >
-                  <button
-                    onClick={() => navigateUp(idx)}
-                    className={`hover:text-accent transition-colors px-2 py-1 rounded ${idx === breadcrumbs.length - 1 ? 'text-text-primary font-medium' : 'text-text-secondary hover:bg-surface'}`}
+          {/* Top Bar: Breadcrumbs, Search, Filters & View Mode */}
+          <div className="space-y-3 bg-surface-elevated p-4 rounded-xl border border-border">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* Breadcrumbs */}
+              <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-1 min-w-[200px]">
+                {breadcrumbs.map((crumb, idx) => (
+                  <div
+                    key={crumb.id}
+                    className="flex items-center gap-2"
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      if (idx < breadcrumbs.length - 1) {
+                        handleItemDrop(e, crumb.id, currentFolderId);
+                      }
+                    }}
                   >
-                    {crumb.name}
+                    <button
+                      onClick={() => navigateUp(idx)}
+                      className={`hover:text-accent transition-colors px-2 py-1 rounded text-xs ${idx === breadcrumbs.length - 1 ? 'text-text-primary font-bold' : 'text-text-secondary hover:bg-surface'}`}
+                    >
+                      {crumb.name}
+                    </button>
+                    {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary shrink-0" />}
+                  </div>
+                ))}
+              </div>
+
+              {/* Toolbar Controls: Undo, View Mode, Folder Creation & Upload */}
+              <div className="flex items-center gap-2 shrink-0">
+                {actionStack.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={undoLastAction}
+                    className="h-8 text-xs gap-1 text-accent border-accent/30 hover:bg-accent/10"
+                    title="Deshacer última acción (Ctrl+Z)"
+                  >
+                    <Undo className="w-3.5 h-3.5" />
+                    Deshacer
+                  </Button>
+                )}
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-surface p-1 rounded-lg border border-border/80">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={cn(
+                      "p-1.5 rounded-md transition-colors",
+                      viewMode === 'grid' ? "bg-accent text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                    )}
+                    title="Vista de Cuadrícula (Grid)"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
                   </button>
-                  {idx < breadcrumbs.length - 1 && <ChevronRight className="w-4 h-4 text-text-secondary shrink-0" />}
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={cn(
+                      "p-1.5 rounded-md transition-colors",
+                      viewMode === 'list' ? "bg-accent text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                    )}
+                    title="Vista de Lista"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-              ))}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCreateFolder}
+                  className="h-8 text-xs gap-1.5"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" />
+                  Nueva carpeta
+                </Button>
+
+                <label className="cursor-pointer shrink-0">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white hover:bg-accent/90 text-xs font-semibold transition-colors shadow-md shadow-accent/10 h-8">
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    Subir archivo
+                  </span>
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        uploadFiles(Array.from(e.target.files), currentFolderId);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCreateFolder}
-                className="h-8 text-xs gap-1.5"
-              >
-                <FolderPlus className="w-3.5 h-3.5" />
-                Nueva carpeta
-              </Button>
-
-              <label className="cursor-pointer shrink-0">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white hover:bg-accent/90 text-xs font-semibold transition-colors shadow-md shadow-accent/10 h-8">
-                  <UploadCloud className="w-3.5 h-3.5" />
-                  Subir archivo
-                </span>
+            {/* Search Bar & Category Filters */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/40">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-3.5 h-3.5 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                      uploadFiles(Array.from(e.target.files), currentFolderId);
-                    }
-                  }}
+                  type="text"
+                  placeholder="Buscar archivos por nombre..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-surface border border-border/60 rounded-lg pl-8 pr-8 py-1.5 text-xs text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-accent"
                 />
-              </label>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 custom-scrollbar">
+                {[
+                  { id: 'all', label: 'Todos' },
+                  { id: 'folder', label: 'Carpetas' },
+                  { id: 'audio', label: 'Audios' },
+                  { id: 'image', label: 'Imágenes' },
+                  { id: 'video', label: 'Vídeos' },
+                  { id: 'document', label: 'Documentos' },
+                ].map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setFilterType(cat.id as any)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap border",
+                      filterType === cat.id
+                        ? "bg-accent/20 border-accent text-accent"
+                        : "bg-surface border-border/50 text-text-secondary hover:border-accent/40 hover:text-text-primary"
+                    )}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Selection Batch Action Bar */}
+            {selectedIds.length > 0 && (
+              <div className="flex items-center justify-between bg-accent/15 border border-accent/30 px-3 py-2 rounded-xl animate-fade-in text-xs">
+                <div className="flex items-center gap-2 font-semibold text-accent">
+                  <CheckSquare className="w-4 h-4" />
+                  <span>{selectedIds.length} elemento{selectedIds.length > 1 ? 's' : ''} seleccionado{selectedIds.length > 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSelectedIds(groupedItems.filter(i => {
+                      const matches = !searchQuery.trim() || i.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+                      return matches;
+                    }).map(i => i.id))}
+                    className="hover:underline text-text-secondary hover:text-text-primary text-[11px]"
+                  >
+                    Seleccionar todos
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds([])}
+                    className="hover:underline text-text-secondary hover:text-text-primary text-[11px]"
+                  >
+                    Desmarcar
+                  </button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(selectedIds[0], false, selectedIds)}
+                    className="h-7 text-xs gap-1 border-error/30 text-error hover:bg-error/10"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Eliminar seleccionados
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Drag & Drop Main Explorer Window */}
@@ -1069,7 +1245,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
               }
             }}
             className={cn(
-              "relative bg-surface-elevated rounded-2xl border transition-colors duration-200 overflow-hidden",
+              "relative bg-surface-elevated rounded-2xl border transition-colors duration-200 overflow-hidden min-h-[300px]",
               isDraggingOver ? "border-accent bg-accent/5 ring-2 ring-accent/15 scale-[0.995]" : "border-border"
             )}
           >
@@ -1091,224 +1267,353 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                 <p className="font-medium text-sm text-text-primary">Esta carpeta está vacía</p>
                 <p className="text-xs text-text-secondary mt-1">Arrastra archivos aquí o haz clic en "Subir archivo" para comenzar.</p>
               </div>
-            ) : (
-              <div
-                className="divide-y divide-border/40 overflow-y-auto custom-scrollbar smooth-scroll-container max-h-[450px] lg:max-h-[min(70vh,600px)]"
-              >
-                {groupedItems.map((item: any, idx) => {
-                  const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
-                  const isAudio = item.mimeType?.startsWith('audio/');
-                  const isThisTrackActive = currentTrack?.id === item.id;
-                  const isThisTrackPlaying = isThisTrackActive && isPlaying;
+            ) : (() => {
+              const displayItems = groupedItems.filter(item => {
+                const nameMatches = !searchQuery.trim() || (item.name || '').toLowerCase().includes(searchQuery.toLowerCase().trim());
+                if (!nameMatches) return false;
+                if (filterType === 'all') return true;
+                if (filterType === 'folder') return item.mimeType === 'application/vnd.google-apps.folder';
+                if (filterType === 'audio') return item.mimeType?.startsWith('audio/');
+                if (filterType === 'image') return item.mimeType?.startsWith('image/');
+                if (filterType === 'video') return item.mimeType?.startsWith('video/');
+                if (filterType === 'document') return !item.mimeType?.startsWith('audio/') && !item.mimeType?.startsWith('image/') && !item.mimeType?.startsWith('video/') && item.mimeType !== 'application/vnd.google-apps.folder';
+                return true;
+              });
 
-                  return (
-                    <div
-                      key={item.id}
-                      draggable
-                      onDragStart={(e) => handleItemDragStart(e, item.id)}
-                      onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
-                      onDrop={isFolder ? (e) => handleItemDrop(e, item.id, currentFolderId) : undefined}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        if (isFolder) {
-                          navigateTo(item.id, item.name);
-                        } else if (item.mimeType?.startsWith('image/') || item.mimeType?.startsWith('video/')) {
-                          window.open(`/api/files/${item.id}?inline=true`, '_blank');
-                        } else if (item.webViewLink) {
-                          window.open(item.webViewLink, '_blank');
-                        } else {
-                          window.open(`/api/files/${item.id}?inline=true`, '_blank');
-                        }
-                      }}
-                      className={cn(
-                        "group flex items-center p-3 transition-colors cursor-pointer hover:bg-surface/60",
-                        selectedIds.includes(item.id) && "bg-accent/5 hover:bg-accent/10"
-                      )}
-                      onClick={(e) => handleItemClick(e, idx, item, groupedItems)}
-                    >
-                      {isAudio ? (
-                        <>
-                          <button
-                            className={cn(
-                              'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm ml-1',
-                              isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isThisTrackActive) {
-                                togglePlay();
-                              } else {
-                                const safeName = item.name || 'Audio';
-                                playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
-                              }
-                            }}
-                          >
-                            {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
-                          </button>
+              if (displayItems.length === 0) {
+                return (
+                  <div className="p-16 text-center text-text-secondary text-xs">
+                    No se encontraron elementos con el filtro o búsqueda actual.
+                  </div>
+                );
+              }
 
-                          <div className="flex-1 min-w-0 ml-3 pr-2 flex flex-col justify-center">
-                            <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
-                              <span className="truncate block">{item.name || 'Sin Título'}</span>
-                              {item.expiresAt && (
-                                <RealtimeCountdown 
-                                  expiresAt={item.expiresAt} 
+              if (viewMode === 'grid') {
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-3 p-4 max-h-[450px] lg:max-h-[min(70vh,600px)] overflow-y-auto custom-scrollbar smooth-scroll-container">
+                    {displayItems.map((item: any, idx) => {
+                      const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+                      const isAudio = item.mimeType?.startsWith('audio/');
+                      const isImage = item.mimeType?.startsWith('image/');
+                      const isThisTrackActive = currentTrack?.id === item.id;
+                      const isThisTrackPlaying = isThisTrackActive && isPlaying;
+                      const isSelected = selectedIds.includes(item.id);
+
+                      return (
+                        <div
+                          key={item.id}
+                          draggable
+                          onDragStart={(e) => handleItemDragStart(e, item.id)}
+                          onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
+                          onDrop={isFolder ? (e) => handleItemDrop(e, item.id, currentFolderId) : undefined}
+                          onClick={(e) => handleItemClick(e, idx, item, displayItems)}
+                          onDoubleClick={(e) => handleItemDoubleClick(e, item)}
+                          onContextMenu={(e) => handleContextMenu(e, item)}
+                          className={cn(
+                            "group relative flex flex-col justify-between p-3 rounded-xl border transition-all cursor-pointer bg-surface/70 hover:bg-surface-elevated hover:border-accent/40 select-none overflow-hidden min-h-[120px]",
+                            isSelected ? "border-accent bg-accent/10 ring-1 ring-accent/30 shadow-md" : "border-border/60"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="w-9 h-9 rounded-xl bg-surface-elevated border border-border/50 flex items-center justify-center shrink-0">
+                              {isFolder ? (
+                                <Folder className="w-5 h-5 text-accent" />
+                              ) : isAudio ? (
+                                <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    showMenu(e.clientX, e.clientY, [
-                                      {
-                                        label: 'Eliminar ya',
-                                        icon: 'Trash2',
-                                        action: () => setDeleteModalFile(item)
-                                      },
-                                      {
-                                        label: 'Cancelar eliminación',
-                                        icon: 'Undo',
-                                        action: async () => {
-                                          try {
-                                            const res = await fetch(`/api/files/${item.id}/expiration`, {
-                                              method: 'POST',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ expiresInMs: null })
-                                            });
-                                            if (!res.ok) throw new Error('Error al cancelar eliminación');
-                                            fetchItems(currentFolderId);
-                                            fetchRecentFiles();
-                                          } catch(err: any) {
-                                            customAlert(err.message);
-                                          }
-                                        }
-                                      }
-                                    ]);
+                                    if (isThisTrackActive) togglePlay();
+                                    else playTrack({ id: item.id, name: (item.name || 'Audio').replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(item.name || '', breadcrumbs), bpm: item.bpm, musicalKey: item.key });
                                   }}
-                                />
+                                  className={cn(
+                                    "w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-sm",
+                                    isThisTrackActive ? "bg-accent text-white" : "bg-surface border border-border text-text-primary hover:border-accent hover:text-accent"
+                                  )}
+                                >
+                                  {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
+                                </button>
+                              ) : (
+                                getIcon(item.mimeType, item.name)
                               )}
                             </div>
-                            <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                              {item.bpm && (() => {
-                                const bpmNum = parseInt(String(item.bpm));
-                                const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
-                                                 bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
-                                                 bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-                                                 'text-red-400 bg-red-500/10 border-red-500/20';
-                                return <span className={`font-bold font-mono px-1.5 py-0.5 rounded border ${bpmColor}`}>{bpmNum} BPM</span>;
-                              })()}
-                              {item.key && <span className="font-bold font-mono text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{item.key}</span>}
-                              <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
-                            </div>
-                          </div>
 
-                          {/* Hover actions */}
-                          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all bg-surface-elevated/95 backdrop-blur-md p-1 rounded-lg shadow-sm border border-border/50 translate-x-0 lg:translate-x-2 lg:group-hover:translate-x-0 z-10">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }}
-                              className="p-1.5 text-text-secondary hover:text-accent-light hover:bg-surface rounded-md transition-colors"
-                              title="Abrir en Mini-DAW"
-                            >
-                              <Scissors className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
-                              className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
-                              title="Descargar/Ver"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-10 flex justify-center shrink-0">
-                            {getIcon(item.mimeType, item.name)}
-                          </div>
-
-                          <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
-                            <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
-                              {item.name || 'Sin Título'}
-                              {item.expiresAt && (
-                                <RealtimeCountdown 
-                                  expiresAt={item.expiresAt} 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    showMenu(e.clientX, e.clientY, [
-                                      {
-                                        label: 'Eliminar ya',
-                                        icon: 'Trash2',
-                                        action: () => setDeleteModalFile(item)
-                                      },
-                                      {
-                                        label: 'Cancelar eliminación',
-                                        icon: 'Undo',
-                                        action: async () => {
-                                          try {
-                                            const res = await fetch(`/api/files/${item.id}/expiration`, {
-                                              method: 'POST',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ expiresInMs: null })
-                                            });
-                                            if (!res.ok) throw new Error('Error al cancelar eliminación');
-                                            fetchItems(currentFolderId);
-                                            fetchRecentFiles();
-                                          } catch(err: any) {
-                                            customAlert(err.message);
-                                          }
-                                        }
-                                      }
-                                    ]);
-                                  }}
-                                />
+                            <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity bg-surface-elevated/90 backdrop-blur-sm p-1 rounded-lg border border-border/40">
+                              {isAudio && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }}
+                                  className="p-1 text-text-secondary hover:text-accent rounded"
+                                  title="Mini-DAW"
+                                >
+                                  <Scissors className="w-3.5 h-3.5" />
+                                </button>
                               )}
-                            </div>
-                            {!isFolder && (
-                              <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
-                                {item.size && <span>•</span>}
-                                <span className="font-mono bg-surface px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0">
-                            <button
-                              className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShareModalFile(item);
-                              }}
-                              title="Compartir"
-                            >
-                              <Share2 className="w-4 h-4" />
-                            </button>
-                            {!isFolder && (
-                              <a
-                                href={item.webContentLink || item.webViewLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                download={item.name}
-                                onClick={(e) => e.stopPropagation()}
-                                className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface transition-colors"
-                                title="Descargar"
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setShareModalFile(item); }}
+                                className="p-1 text-text-secondary hover:text-accent rounded"
+                                title="Compartir"
                               >
-                                <Download className="w-4 h-4" />
-                              </a>
-                            )}
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteModalFile(item); }}
+                                className="p-1 text-text-secondary hover:text-error rounded"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {isImage && (
+                            <div className="my-2 h-20 rounded-lg bg-black/20 overflow-hidden border border-border/40 flex items-center justify-center">
+                              <img
+                                src={`/api/files/${item.id}?inline=true`}
+                                alt={item.name}
+                                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                loading="lazy"
+                              />
+                            </div>
+                          )}
+
+                          <div className="mt-2">
+                            <p className={cn("text-xs font-bold truncate", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name}>
+                              {item.name || 'Sin Título'}
+                            </p>
+                            <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1">
+                              <span>{isFolder ? 'Carpeta' : (item.size ? `${(parseInt(item.size)/(1024*1024)).toFixed(1)} MB` : '')}</span>
+                              {item.bpm && <span className="font-mono font-bold text-accent">{item.bpm} BPM</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  className="divide-y divide-border/40 overflow-y-auto custom-scrollbar smooth-scroll-container max-h-[450px] lg:max-h-[min(70vh,600px)]"
+                >
+                  {displayItems.map((item: any, idx) => {
+                    const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+                    const isAudio = item.mimeType?.startsWith('audio/');
+                    const isThisTrackActive = currentTrack?.id === item.id;
+                    const isThisTrackPlaying = isThisTrackActive && isPlaying;
+                    const isSelected = selectedIds.includes(item.id);
+
+                    return (
+                      <div
+                        key={item.id}
+                        draggable
+                        onDragStart={(e) => handleItemDragStart(e, item.id)}
+                        onDragOver={isFolder ? (e) => { e.preventDefault(); e.stopPropagation(); } : undefined}
+                        onDrop={isFolder ? (e) => handleItemDrop(e, item.id, currentFolderId) : undefined}
+                        onClick={(e) => handleItemClick(e, idx, item, displayItems)}
+                        onDoubleClick={(e) => handleItemDoubleClick(e, item)}
+                        onContextMenu={(e) => handleContextMenu(e, item)}
+                        className={cn(
+                          "group flex items-center p-3 transition-colors cursor-pointer hover:bg-surface/60 select-none",
+                          isSelected && "bg-accent/5 hover:bg-accent/10"
+                        )}
+                      >
+                        {isAudio ? (
+                          <>
                             <button
-                              className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-surface transition-colors"
+                              className={cn(
+                                'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 shadow-sm ml-1',
+                                isThisTrackActive ? 'bg-accent text-white shadow-accent/40' : 'bg-surface border border-border text-text-primary hover:border-accent hover:text-accent'
+                              )}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDeleteModalFile(item);
+                                if (isThisTrackActive) {
+                                  togglePlay();
+                                } else {
+                                  const safeName = item.name || 'Audio';
+                                  playTrack({ id: item.id, name: safeName.replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}`, pathSegments: getPathSegments(safeName, breadcrumbs), bpm: item.bpm, musicalKey: item.key });
+                                }
                               }}
-                              title="Eliminar"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {isThisTrackPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-0.5" />}
                             </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+
+                            <div className="flex-1 min-w-0 ml-3 pr-2 flex flex-col justify-center">
+                              <div className={cn("text-xs font-bold flex items-center gap-1.5", isThisTrackActive ? "text-accent" : "text-text-primary")} title={item.name || 'Sin Título'}>
+                                <span className="truncate block">{item.name || 'Sin Título'}</span>
+                                {item.expiresAt && (
+                                  <RealtimeCountdown 
+                                    expiresAt={item.expiresAt} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      showMenu(e.clientX, e.clientY, [
+                                        {
+                                          label: 'Eliminar ya',
+                                          icon: 'Trash2',
+                                          action: () => setDeleteModalFile(item)
+                                        },
+                                        {
+                                          label: 'Cancelar eliminación',
+                                          icon: 'Undo',
+                                          action: async () => {
+                                            try {
+                                              const res = await fetch(`/api/files/${item.id}/expiration`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ expiresInMs: null })
+                                              });
+                                              if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                              fetchItems(currentFolderId);
+                                              fetchRecentFiles();
+                                            } catch(err: any) {
+                                              customAlert(err.message);
+                                            }
+                                          }
+                                        }
+                                      ]);
+                                    }}
+                                  />
+                                )}
+                              </div>
+                              <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                {item.bpm && (() => {
+                                  const bpmNum = parseInt(String(item.bpm));
+                                  const bpmColor = bpmNum < 80 ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                                                   bpmNum < 110 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                                                   bpmNum < 140 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                                   'text-red-400 bg-red-500/10 border-red-500/20';
+                                  return <span className={`font-bold font-mono px-1.5 py-0.5 rounded border ${bpmColor}`}>{bpmNum} BPM</span>;
+                                })()}
+                                {item.key && <span className="font-bold font-mono text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">{item.key}</span>}
+                                <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all shrink-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setMiniDAWFile({ id: item.id, name: item.name }); }}
+                                className="p-1.5 text-text-secondary hover:text-accent-light hover:bg-surface rounded-md transition-colors"
+                                title="Abrir en Mini-DAW"
+                              >
+                                <Scissors className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
+                                className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
+                                title="Descargar/Ver"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setShareModalFile(item); }}
+                                className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
+                                title="Compartir"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteModalFile(item); }}
+                                className="p-1.5 text-text-secondary hover:text-error hover:bg-surface rounded-md transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-10 flex justify-center shrink-0">
+                              {getIcon(item.mimeType, item.name)}
+                            </div>
+
+                            <div className="flex-1 min-w-0 mr-4 flex flex-col justify-center">
+                              <div className="font-medium text-text-primary truncate text-sm flex items-center gap-2">
+                                {item.name || 'Sin Título'}
+                                {item.expiresAt && (
+                                  <RealtimeCountdown 
+                                    expiresAt={item.expiresAt} 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      showMenu(e.clientX, e.clientY, [
+                                        {
+                                          label: 'Eliminar ya',
+                                          icon: 'Trash2',
+                                          action: () => setDeleteModalFile(item)
+                                        },
+                                        {
+                                          label: 'Cancelar eliminación',
+                                          icon: 'Undo',
+                                          action: async () => {
+                                            try {
+                                              const res = await fetch(`/api/files/${item.id}/expiration`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ expiresInMs: null })
+                                              });
+                                              if (!res.ok) throw new Error('Error al cancelar eliminación');
+                                              fetchItems(currentFolderId);
+                                              fetchRecentFiles();
+                                            } catch(err: any) {
+                                              customAlert(err.message);
+                                            }
+                                          }
+                                        }
+                                      ]);
+                                    }}
+                                  />
+                                )}
+                              </div>
+                              {!isFolder && (
+                                <div className="text-[10px] text-text-secondary mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                  {item.size && <span>{(parseInt(item.size) / (1024 * 1024)).toFixed(2)} MB</span>}
+                                  {item.size && <span>•</span>}
+                                  <span className="font-mono bg-surface px-1.5 py-0.5 rounded border border-border/30">{formatModificationTime(item.modifiedTime || item.createdTime)}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity shrink-0">
+                              <button
+                                className="p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShareModalFile(item);
+                                }}
+                                title="Compartir"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
+                              {!isFolder && (
+                                <a
+                                  href={item.webContentLink || item.webViewLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download={item.name}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface transition-colors"
+                                  title="Descargar"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </a>
+                              )}
+                              <button
+                                className="p-1.5 text-text-secondary hover:text-error rounded-md hover:bg-surface transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteModalFile(item);
+                                }}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -1634,14 +1939,15 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       {deleteModalFile && (
         <DeleteModal
           isOpen={true}
-          onClose={() => setDeleteModalFile(null)}
+          onClose={() => {
+            setDeleteModalFile(null);
+            setDeleteModalExtraIds(undefined);
+          }}
           fileId={deleteModalFile.id}
           fileName={deleteModalFile.name}
+          fileIds={deleteModalExtraIds}
           currentExpiration={deleteModalFile.expiresAt}
-          onDeleted={() => {
-            fetchItems(currentFolderId);
-            fetchRecentFiles();
-          }}
+          onDeleted={(deletedIds) => handleDeletedCallback(deletedIds)}
         />
       )}
 
