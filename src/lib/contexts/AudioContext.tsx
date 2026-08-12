@@ -160,8 +160,20 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
 export function useAudio() {
   const context = useContext(AudioContext);
-  if (context === undefined) {
-    throw new Error('useAudio must be used within an AudioProvider');
+  if (!context) {
+    return {
+      currentTrack: null,
+      isPlaying: false,
+      duration: 0,
+      currentTime: 0,
+      playTrack: () => {},
+      togglePlay: () => {},
+      seek: () => {},
+      volume: 1,
+      setVolume: () => {},
+      closePlayer: () => {},
+      isLoading: false,
+    };
   }
   return context;
 }

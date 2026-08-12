@@ -103,14 +103,17 @@ export function FileLocationModal({ isOpen, onClose, folderId, highlightFileId, 
     fetchFolder(newCrumbs[newCrumbs.length - 1].id);
   };
 
-  if (!mounted || !isOpen || !folderId) return null;
+  if (!mounted || !isOpen || !folderId || typeof document === 'undefined' || !document.body) return null;
 
   const displayItems = useMemo(() => {
-    const filtered = searchQuery.trim()
-      ? items.filter(i => (i.name || '').toLowerCase().includes(searchQuery.toLowerCase().trim()))
-      : items;
+    const list = Array.isArray(items) ? items : [];
+    const query = typeof searchQuery === 'string' ? searchQuery.toLowerCase().trim() : '';
+    const filtered = query
+      ? list.filter(i => i && typeof i.name === 'string' && i.name.toLowerCase().includes(query))
+      : list;
 
     return [...filtered].sort((a, b) => {
+      if (!a || !b) return 0;
       const aF = a.mimeType === 'application/vnd.google-apps.folder';
       const bF = b.mimeType === 'application/vnd.google-apps.folder';
       if (aF && !bF) return -1;
