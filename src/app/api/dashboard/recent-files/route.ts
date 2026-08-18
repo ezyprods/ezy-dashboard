@@ -12,7 +12,7 @@ export async function GET() {
 
     const response: any = await drive.files.list({
       q: query,
-      fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)',
+      fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents, appProperties)',
       orderBy: 'createdTime desc',
       includeItemsFromAllDrives: true,
       supportsAllDrives: true,
@@ -20,19 +20,31 @@ export async function GET() {
     });
 
     const files = response.data.files || [];
+    const formattedFiles: any[] = [];
 
-    const formattedFiles = files.map((file: any) => ({
-      id: file.id,
-      name: file.name,
-      mimeType: file.mimeType,
-      size: parseInt(file.size || '0', 10),
-      createdTime: file.createdTime,
-      modifiedTime: file.modifiedTime,
-      webViewLink: file.webViewLink,
-      webContentLink: file.webContentLink,
-      url: file.webContentLink || file.webViewLink,
-      parents: file.parents || [],
-    }));
+    for (const file of files) {
+      const expiresAt = file.appProperties?.expiresAt ? parseInt(file.appProperties.expiresAt, 10) : null;
+      if (expiresAt && expiresAt < Date.now()) {
+        drive.files.delete({ fileId: file.id!, supportsAllDrives: true }).catch(console.error);
+        continue;
+      }
+
+      formattedFiles.push({
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+        size: parseInt(file.size || '0', 10),
+        createdTime: file.createdTime,
+        modifiedTime: file.modifiedTime,
+        webViewLink: file.webViewLink,
+        webContentLink: file.webContentLink,
+        url: file.webContentLink || file.webViewLink,
+        parents: file.parents || [],
+        expiresAt: expiresAt || undefined,
+        bpm: file.appProperties?.bpm || undefined,
+        key: file.appProperties?.key || undefined,
+      });
+    }
 
     return NextResponse.json({ files: formattedFiles });
   } catch (error: any) {

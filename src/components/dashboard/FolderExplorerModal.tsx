@@ -2,12 +2,22 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import {
   X, FolderOpen, Folder, FileAudio, FileImage, FileText, Film, File as FileIcon,
   ChevronRight, Loader2, Play, Pause, Download, Search, LayoutGrid, List,
+  Trash2, Scissors, Share2, Link as LinkIcon, User, ExternalLink, MoreVertical,
+  Clock, Timer as TimerIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
+import { DeleteModal } from '@/components/artists/DeleteModal';
+import { ShareModal } from '@/components/artists/ShareModal';
+import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
+import { DAWErrorBoundary } from '@/components/projects/DAWErrorBoundary';
+import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
+import { customAlert } from '@/lib/dialog';
 
 interface DriveItem {
   id: string;
@@ -20,6 +30,8 @@ interface DriveItem {
   webContentLink?: string;
   bpm?: string | number | null;
   key?: string | null;
+  expiresAt?: number | null;
+  parentFolderId?: string;
 }
 
 interface Breadcrumb {
@@ -72,6 +84,8 @@ export function FolderExplorerModal({
   highlightFileId,
   highlightFileName,
 }: FolderExplorerModalProps) {
+  const router = useRouter();
+  const { showMenu } = useContextMenu();
   const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState<DriveItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,6 +93,13 @@ export function FolderExplorerModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [sortBy, setSortBy] = useState<SortOption>('date-desc');
+  
+  // Modals inside FolderExplorer
+  const [deleteModalFile, setDeleteModalFile] = useState<DriveItem | null>(null);
+  const [shareModalFile, setShareModalFile] = useState<DriveItem | null>(null);
+  const [miniDAWFile, setMiniDAWFile] = useState<{ id: string; name: string } | null>(null);
+  const [resolvingArtistFor, setResolvingArtistFor] = useState<string | null>(null);
+
   const audio = useAudio();
 
   useEffect(() => {
@@ -130,6 +151,96 @@ export function FolderExplorerModal({
     if (newCrumbs.length > 0) {
       fetchFolder(newCrumbs[newCrumbs.length - 1].id);
     }
+  };
+
+  const handleOpenArtistLocation = async (item: DriveItem) => {
+    setResolvingArtistFor(item.id);
+    try {
+      const currentFolder = breadcrumbs[breadcrumbs.length - 1]?.id || folderId;
+      const res = await fetch(`/api/files/resolve-location?folderId=${encodeURIComponent(currentFolder || '')}&fileId=${encodeURIComponent(item.id)}`);
+      const data = await res.json();
+      if (data.found && data.url) {
+        onClose();
+        router.push(data.url);
+      } else if (data.artistId) {
+        onClose();
+        router.push(`/artists/${data.artistId}?tab=files&folderId=${encodeURIComponent(currentFolder || '')}&fileId=${encodeURIComponent(item.id)}`);
+      } else {
+        customAlert('No se encontró el perfil de artista correspondiente a esta ubicación.');
+      }
+    } catch (err: any) {
+      console.error('Failed to resolve artist location', err);
+      customAlert('Error al abrir la ubicación en el perfil del artista.');
+    } finally {
+      setResolvingArtistFor(null);
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, item: DriveItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+    const isAudio = item.mimeType?.startsWith('audio/');
+
+    showMenu(e.clientX, e.clientY, [
+      {
+        label: isFolder ? 'Abrir carpeta' : (isAudio ? (currentTrack?.id === item.id && isPlaying ? 'Pausar' : 'Reproducir') : 'Abrir / Ver'),
+        icon: isFolder ? 'FolderOpen' : (isAudio ? (currentTrack?.id === item.id && isPlaying ? 'Pause' : 'Play') : 'ExternalLink'),
+        action: () => {
+          if (isFolder) navigateTo(item.id, item.name);
+          else if (isAudio) {
+            if (currentTrack?.id === item.id && togglePlay) togglePlay();
+            else if (playTrack) playTrack({ id: item.id, name: (item.name || '').replace(/\.[^/.]+$/, ''), url: `/api/audio/${item.id}` });
+          } else {
+            window.open(item.webViewLink || `/api/files/${item.id}?inline=true`, '_blank');
+          }
+        }
+      },
+      {
+        label: 'Abrir en perfil de artista',
+        icon: 'User',
+        action: () => handleOpenArtistLocation(item)
+      },
+      ...(isAudio ? [{
+        label: 'Abrir en Mini-DAW',
+        icon: 'Scissors',
+        action: () => setMiniDAWFile({ id: item.id, name: item.name })
+      }] : []),
+      {
+        label: 'Descargar',
+        icon: 'Download',
+        action: () => {
+          window.open(item.webContentLink || `/api/files/${item.id}?inline=true`, '_blank');
+        }
+      },
+      {
+        label: 'Compartir',
+        icon: 'Share2',
+        action: () => setShareModalFile(item)
+      },
+      {
+        label: 'Copiar enlace',
+        icon: 'LinkIcon',
+        action: () => {
+          const link = item.webViewLink || `${window.location.origin}/api/files/${item.id}?inline=true`;
+          navigator.clipboard.writeText(link);
+          customAlert('Enlace copiado al portapapeles');
+        }
+      },
+      {
+        label: 'Ver en Google Drive',
+        icon: 'ExternalLink',
+        action: () => {
+          window.open(item.webViewLink || `https://drive.google.com/file/d/${item.id}/view`, '_blank');
+        }
+      },
+      {
+        label: item.expiresAt ? 'Opciones de eliminación / Caducidad' : 'Eliminar',
+        icon: 'Trash2',
+        variant: 'danger',
+        action: () => setDeleteModalFile(item)
+      }
+    ]);
   };
 
   const displayItems = useMemo(() => {
@@ -248,12 +359,14 @@ export function FolderExplorerModal({
             <button
               onClick={() => setViewMode('list')}
               className={cn("p-2 rounded-lg transition-colors", viewMode === 'list' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary")}
+              title="Vista en lista"
             >
               <List className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode('grid')}
               className={cn("p-2 rounded-lg transition-colors", viewMode === 'grid' ? "bg-accent text-white" : "text-text-secondary hover:text-text-primary")}
+              title="Vista en cuadrícula"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
@@ -290,11 +403,13 @@ export function FolderExplorerModal({
                       if (isFolder) navigateTo(item.id, item.name);
                       else window.open(item.webViewLink || `/api/files/${item.id}?inline=true`, '_blank');
                     }}
+                    onContextMenu={(e) => handleContextMenu(e, item)}
                     className={cn(
-                      "group flex items-center gap-3 px-6 py-3 cursor-pointer transition-colors border-l-2",
+                      "group flex items-center gap-3 px-6 py-3 cursor-pointer transition-colors border-l-2 relative",
                       isHl ? "bg-accent/8 border-l-accent" : "hover:bg-surface-elevated/50 border-l-transparent"
                     )}
                   >
+                    {/* Icon or Play/Pause Button */}
                     <div className="w-8 shrink-0 flex items-center justify-center">
                       {isAudio ? (
                         <button
@@ -312,8 +427,9 @@ export function FolderExplorerModal({
                           }}
                           className={cn(
                             "w-8 h-8 rounded-full flex items-center justify-center transition-all border",
-                            isActive ? "bg-accent border-accent text-white" : "border-border text-text-secondary hover:border-accent hover:text-accent"
+                            isActive ? "bg-accent border-accent text-white shadow-sm" : "border-border text-text-secondary hover:border-accent hover:text-accent"
                           )}
+                          title={isPlayingNow ? 'Pausar' : 'Reproducir'}
                         >
                           {isPlayingNow ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current ml-px" />}
                         </button>
@@ -321,15 +437,28 @@ export function FolderExplorerModal({
                         getIcon(item.mimeType, item.name)
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={cn("text-sm font-semibold truncate", isActive || isHl ? "text-accent" : "text-text-primary")}>
-                        {item.name || 'Sin nombre'}
+
+                    {/* Item Details */}
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={cn("text-sm font-semibold truncate", isActive || isHl ? "text-accent" : "text-text-primary")}>
+                          {item.name || 'Sin nombre'}
+                        </p>
                         {isHl && (
-                          <span className="ml-2 text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full align-middle">
+                          <span className="text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full">
                             este archivo
                           </span>
                         )}
-                      </p>
+                        {item.expiresAt && (
+                          <RealtimeCountdown
+                            expiresAt={item.expiresAt}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteModalFile(item);
+                            }}
+                          />
+                        )}
+                      </div>
                       <p className="text-xs text-text-secondary mt-0.5 flex items-center gap-2 flex-wrap">
                         {isFolder ? 'Carpeta' : sizeText}
                         {item.bpm && <span className="font-mono text-amber-400 font-bold">{item.bpm} BPM</span>}
@@ -337,13 +466,48 @@ export function FolderExplorerModal({
                         {(item.modifiedTime || item.createdTime) && <span>{formatDate(item.modifiedTime || item.createdTime)}</span>}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+
+                    {/* Action buttons (Right side of each item) */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-surface-elevated/90 backdrop-blur-sm px-1.5 py-1 rounded-xl border border-border/50 shadow-sm">
+                      {isAudio && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMiniDAWFile({ id: item.id, name: item.name });
+                          }}
+                          className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-lg transition-colors"
+                          title="Abrir en Mini-DAW"
+                        >
+                          <Scissors className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenArtistLocation(item);
+                        }}
+                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-lg transition-colors relative"
+                        title="Abrir ubicación en el perfil del artista"
+                        disabled={resolvingArtistFor === item.id}
+                      >
+                        {resolvingArtistFor === item.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                        ) : (
+                          <User className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+
                       {isFolder ? (
                         <button
-                          onClick={() => navigateTo(item.id, item.name)}
-                          className="p-2 text-text-secondary hover:text-accent hover:bg-surface rounded-lg transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigateTo(item.id, item.name);
+                          }}
+                          className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-lg transition-colors"
+                          title="Abrir carpeta"
                         >
-                          <FolderOpen className="w-4 h-4" />
+                          <FolderOpen className="w-3.5 h-3.5" />
                         </button>
                       ) : (
                         <a
@@ -352,11 +516,34 @@ export function FolderExplorerModal({
                           rel="noopener noreferrer"
                           download={item.name}
                           onClick={e => e.stopPropagation()}
-                          className="p-2 text-text-secondary hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
+                          className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface rounded-lg transition-colors"
+                          title="Descargar"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-3.5 h-3.5" />
                         </a>
                       )}
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShareModalFile(item);
+                        }}
+                        className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-lg transition-colors"
+                        title="Compartir"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteModalFile(item);
+                        }}
+                        className="p-1.5 text-text-secondary hover:text-error hover:bg-surface rounded-lg transition-colors"
+                        title="Eliminar / Programar eliminación"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -381,8 +568,9 @@ export function FolderExplorerModal({
                       if (isFolder) navigateTo(item.id, item.name);
                       else window.open(item.webViewLink || `/api/files/${item.id}?inline=true`, '_blank');
                     }}
+                    onContextMenu={(e) => handleContextMenu(e, item)}
                     className={cn(
-                      "group flex flex-col p-3.5 rounded-2xl border transition-all cursor-pointer select-none",
+                      "group relative flex flex-col p-3.5 rounded-2xl border transition-all cursor-pointer select-none",
                       isHl ? "border-accent bg-accent/10 ring-1 ring-accent/20" : "border-border/60 bg-surface/60 hover:bg-surface-elevated hover:border-accent/30"
                     )}
                   >
@@ -405,25 +593,101 @@ export function FolderExplorerModal({
                             "w-9 h-9 rounded-full flex items-center justify-center transition-all border",
                             isActive ? "bg-accent border-accent text-white" : "border-border text-text-secondary hover:border-accent hover:text-accent"
                           )}
+                          title={isPlayingNow ? 'Pausar' : 'Reproducir'}
                         >
                           {isPlayingNow ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-px" />}
                         </button>
                       ) : (
                         <div className="w-9 h-9 flex items-center justify-center">{getIcon(item.mimeType, item.name)}</div>
                       )}
+
+                      {/* Quick action triggers on card header */}
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenArtistLocation(item);
+                          }}
+                          className="p-1 rounded-md text-text-secondary hover:text-accent hover:bg-surface"
+                          title="Abrir ubicación en el perfil"
+                        >
+                          <User className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteModalFile(item);
+                          }}
+                          className="p-1 rounded-md text-text-secondary hover:text-error hover:bg-surface"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
+
                     <p className={cn("text-xs font-bold truncate", isActive || isHl ? "text-accent" : "text-text-primary")} title={item.name}>
                       {item.name || 'Sin nombre'}
                     </p>
-                    {isHl && (
-                      <span className="mt-1 text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full self-start">
-                        aquí
-                      </span>
-                    )}
+
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {isHl && (
+                        <span className="text-[9px] font-bold bg-accent/20 text-accent px-2 py-0.5 rounded-full">
+                          aquí
+                        </span>
+                      )}
+                      {item.expiresAt && (
+                        <RealtimeCountdown
+                          expiresAt={item.expiresAt}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteModalFile(item);
+                          }}
+                        />
+                      )}
+                    </div>
+
                     <p className="text-[10px] text-text-secondary mt-1">
                       {isFolder ? 'Carpeta' : sizeText}
                       {item.bpm && ` · ${item.bpm} BPM`}
                     </p>
+
+                    {/* Bottom action row in grid card */}
+                    <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {isAudio && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMiniDAWFile({ id: item.id, name: item.name });
+                          }}
+                          className="p-1 text-text-secondary hover:text-accent hover:bg-surface rounded"
+                          title="Mini-DAW"
+                        >
+                          <Scissors className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <a
+                        href={item.webContentLink || `/api/files/${item.id}?inline=true`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={item.name}
+                        onClick={e => e.stopPropagation()}
+                        className="p-1 text-text-secondary hover:text-text-primary hover:bg-surface rounded"
+                        title="Descargar"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShareModalFile(item);
+                        }}
+                        className="p-1 text-text-secondary hover:text-accent hover:bg-surface rounded"
+                        title="Compartir"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -442,6 +706,46 @@ export function FolderExplorerModal({
           </button>
         </div>
       </div>
+
+      {/* Sub-modals */}
+      {deleteModalFile && (
+        <DeleteModal
+          isOpen={!!deleteModalFile}
+          onClose={() => setDeleteModalFile(null)}
+          fileId={deleteModalFile.id}
+          fileName={deleteModalFile.name}
+          currentExpiration={deleteModalFile.expiresAt}
+          onDeleted={(deletedIds) => {
+            const idsToRemove = deletedIds || [deleteModalFile.id];
+            setItems(prev => prev.filter(i => !idsToRemove.includes(i.id)));
+            setDeleteModalFile(null);
+            window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
+            const currentFolder = breadcrumbs[breadcrumbs.length - 1]?.id || folderId;
+            if (currentFolder) fetchFolder(currentFolder);
+          }}
+        />
+      )}
+
+      {shareModalFile && (
+        <ShareModal
+          isOpen={!!shareModalFile}
+          onClose={() => setShareModalFile(null)}
+          fileId={shareModalFile.id}
+          fileName={shareModalFile.name}
+          webViewLink={shareModalFile.webViewLink}
+          webContentLink={shareModalFile.webContentLink}
+        />
+      )}
+
+      {miniDAWFile && (
+        <DAWErrorBoundary onClose={() => setMiniDAWFile(null)}>
+          <MiniDAWModal
+            fileId={miniDAWFile.id}
+            fileName={miniDAWFile.name}
+            onClose={() => setMiniDAWFile(null)}
+          />
+        </DAWErrorBoundary>
+      )}
     </div>,
     document.body
   );

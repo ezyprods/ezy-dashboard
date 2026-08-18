@@ -108,12 +108,29 @@ export async function POST(request: Request) {
       const fileRes = await drive.files.get({ fileId: tempId, fields: 'parents', supportsAllDrives: true });
       const previousParents = fileRes.data.parents?.join(',') || '';
 
+      // Build appProperties if provided
+      const appProperties: Record<string, string> = {};
+      if (tempFile.bpm) appProperties.bpm = tempFile.bpm.toString();
+      if (tempFile.key) appProperties.key = tempFile.key.toString();
+      if (tempFile.expiresAt) {
+        appProperties.expiresAt = tempFile.expiresAt.toString();
+      } else if (tempFile.expiresInMs) {
+        appProperties.expiresAt = (Date.now() + tempFile.expiresInMs).toString();
+      } else if (tempFile.appProperties) {
+        Object.assign(appProperties, tempFile.appProperties);
+      }
+
+      const requestBody: any = { name: finalName };
+      if (Object.keys(appProperties).length > 0) {
+        requestBody.appProperties = appProperties;
+      }
+
       const updatedFile = await drive.files.update({
         fileId: tempId,
         addParents: targetFolderId,
         removeParents: previousParents,
-        requestBody: { name: finalName },
-        fields: 'id, name, webViewLink',
+        requestBody,
+        fields: 'id, name, webViewLink, appProperties',
         supportsAllDrives: true,
       });
 

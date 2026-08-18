@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon, User, Table2 } from 'lucide-react';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon, User, Table2, Clock, Timer } from 'lucide-react';
 import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
 import { customConfirm, customPrompt, customAlert } from '@/lib/dialog';
@@ -32,6 +32,9 @@ export interface SmartUploadFile {
   notifyArtist?: boolean;
   notifyEmail?: boolean;
   notifyWhatsApp?: boolean;
+  // Scheduled deletion
+  scheduleDelete?: boolean;
+  expiresInMs?: number | null;
   // Background Upload
   tempId?: string;
   tempUploadStatus?: 'idle' | 'uploading' | 'success' | 'error';
@@ -47,6 +50,13 @@ interface SmartUploadModalProps {
   onSuccess?: () => void; // Called when all uploads complete successfully
 }
 
+
+const EXPIRATION_OPTIONS = [
+  { label: '1 hora', shortLabel: '1h', ms: 60 * 60 * 1000 },
+  { label: '24 horas', shortLabel: '24h', ms: 24 * 60 * 60 * 1000 },
+  { label: '7 días', shortLabel: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: '30 días', shortLabel: '30d', ms: 30 * 24 * 60 * 60 * 1000 },
+];
 
 // ─── Name Generation ──────────────────────────────────────────────────────────
 function generateName(original: string, subType: string, artistName?: string): string {
@@ -239,6 +249,8 @@ export function SmartUploadModal({
         notifyArtist: false,
         notifyEmail: true,
         notifyWhatsApp: false,
+        scheduleDelete: false,
+        expiresInMs: 24 * 60 * 60 * 1000,
         tempUploadStatus: 'idle' as SmartUploadFile['tempUploadStatus'],
         abortController: new AbortController(),
       };
@@ -443,6 +455,7 @@ export function SmartUploadModal({
 
         if (canUseBackgroundUpload) {
           setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: 50 } : it));
+          const expirationTimestamp = item.scheduleDelete && item.expiresInMs ? Date.now() + item.expiresInMs : null;
           const res = await fetch('/api/files/upload/finalize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -450,13 +463,30 @@ export function SmartUploadModal({
               artistId: item.artistId,
               folderType: 'Custom',
               targetFolderId: finalFolderId,
-              tempFiles: [{ tempId: item.tempId, originalName: finalCustomName }]
+              tempFiles: [{
+                tempId: item.tempId,
+                originalName: finalCustomName,
+                bpm: item.bpm,
+                key: item.key,
+                expiresInMs: item.scheduleDelete ? item.expiresInMs : null,
+                expiresAt: expirationTimestamp
+              }]
             })
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Error finalizando subida');
           
-          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: data.files[0].id } : it));
+          const uploadedId = data.files?.[0]?.id;
+          if (item.scheduleDelete && item.expiresInMs && uploadedId) {
+            fetch(`/api/files/${uploadedId}/expiration`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ expiresInMs: item.expiresInMs })
+            }).catch(console.error);
+          }
+
+          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: uploadedId } : it));
+          window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
           continue; // Skip the rest of the traditional upload logic
         }
 
@@ -507,6 +537,9 @@ export function SmartUploadModal({
         const appProps: any = {};
         if (item.bpm) appProps.bpm = item.bpm.toString();
         if (item.key) appProps.key = item.key;
+        if (item.scheduleDelete && item.expiresInMs) {
+          appProps.expiresAt = (Date.now() + item.expiresInMs).toString();
+        }
 
         const sessionRes = await fetch('/api/files/upload-session', {
           method: 'POST',
@@ -554,7 +587,17 @@ export function SmartUploadModal({
                 localStorage.setItem(`accessed_${item.artistId}`, Date.now().toString());
               }
               
-              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: responseData.id || fileToReplaceId } : it));
+              const uploadedResultId = responseData.id || fileToReplaceId;
+              if (item.scheduleDelete && item.expiresInMs && uploadedResultId) {
+                fetch(`/api/files/${uploadedResultId}/expiration`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ expiresInMs: item.expiresInMs })
+                }).catch(console.error);
+              }
+
+              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: uploadedResultId } : it));
+              window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
               resolve();
             } else {
               reject(new Error(xhr.responseText || 'Upload failed'));
@@ -1091,6 +1134,60 @@ export function SmartUploadModal({
                             }
                             return null;
                           })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Scheduled deletion option */}
+                  <div className="col-span-2 flex flex-col gap-2 mt-1 pt-3 border-t border-border/40">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`schedule-${item.id}`}
+                          checked={!!item.scheduleDelete}
+                          onChange={e => updateItem(item.id, {
+                            scheduleDelete: e.target.checked,
+                            expiresInMs: e.target.checked ? (item.expiresInMs || 24 * 60 * 60 * 1000) : null
+                          })}
+                          className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated cursor-pointer"
+                        />
+                        <label htmlFor={`schedule-${item.id}`} className="text-sm font-medium text-text-primary cursor-pointer hover:text-accent flex items-center gap-1.5 transition-colors">
+                          <Clock className="w-3.5 h-3.5 text-accent" />
+                          Eliminado programado (Autodestrucción)
+                        </label>
+                      </div>
+                      {item.scheduleDelete && (
+                        <span className="text-[10px] font-mono font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+                          Caducará
+                        </span>
+                      )}
+                    </div>
+
+                    {item.scheduleDelete && (
+                      <div className="ml-6 pl-4 border-l-2 border-accent/30 flex flex-col gap-1.5 animate-fade-in">
+                        <p className="text-[11px] text-text-secondary">¿Cuánto tiempo debe durar subido?</p>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {EXPIRATION_OPTIONS.map(opt => {
+                            const isSelected = (item.expiresInMs || (24 * 60 * 60 * 1000)) === opt.ms;
+                            return (
+                              <button
+                                key={opt.label}
+                                type="button"
+                                onClick={() => updateItem(item.id, { expiresInMs: opt.ms })}
+                                className={cn(
+                                  "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center",
+                                  isSelected
+                                    ? "bg-accent text-white border-accent shadow-sm"
+                                    : "bg-surface-elevated hover:bg-surface border-border/60 text-text-secondary hover:text-text-primary"
+                                )}
+                                title={`Se eliminará automáticamente tras ${opt.label}`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

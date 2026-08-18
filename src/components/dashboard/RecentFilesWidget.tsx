@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, Download, ExternalLink, FileAudio, Loader2, FolderOpen } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { FolderExplorerModal } from './FolderExplorerModal';
+import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 
 interface DriveFile {
@@ -17,6 +18,7 @@ interface DriveFile {
   webContentLink?: string;
   url?: string;
   parents?: string[];
+  expiresAt?: number | null;
 }
 
 export function RecentFilesWidget() {
@@ -138,9 +140,14 @@ export function RecentFilesWidget() {
                   <p className="text-[13px] font-bold text-text-primary truncate" title={file.name}>
                     {file.name}
                   </p>
-                  <p className="text-[10px] text-text-secondary font-medium">
-                    {formatTimeAgo(file.modifiedTime || file.createdTime)}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-[10px] text-text-secondary font-medium">
+                      {formatTimeAgo(file.modifiedTime || file.createdTime)}
+                    </p>
+                    {file.expiresAt && (
+                      <RealtimeCountdown expiresAt={file.expiresAt} />
+                    )}
+                  </div>
                 </div>
                 
                 {/* Actions (Download / Location / Link) */}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, ChevronRight, Loader2, UploadCloud, FolderPlus, ArrowLeft, MoreVertical, Link as LinkIcon, Trash2, Edit3, Plus, ExternalLink, Undo, Download, FolderOpen, Play, Pause, Share2, Timer, X, Scissors, LayoutGrid, List, Search, Filter, CheckSquare, Square } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
@@ -108,6 +109,26 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   // Selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
+  // URL query params
+  const searchParams = useSearchParams();
+  const targetFolderParam = searchParams.get('folderId');
+  const targetFileParam = searchParams.get('fileId') || searchParams.get('highlight');
+
+  useEffect(() => {
+    if (targetFolderParam && targetFolderParam !== rootFolderId) {
+      handleOpenFileLocation(targetFolderParam);
+    }
+  }, [targetFolderParam, rootFolderId, folderMap]);
+
+  useEffect(() => {
+    if (targetFileParam && items.length > 0) {
+      const match = items.find(i => i.id === targetFileParam);
+      if (match) {
+        setSelectedIds([targetFileParam]);
+      }
+    }
+  }, [targetFileParam, items]);
 
   // Recent panel: collapsed by default — user expands on demand
   const [isRecentPanelOpen, setIsRecentPanelOpen] = useState(false);
