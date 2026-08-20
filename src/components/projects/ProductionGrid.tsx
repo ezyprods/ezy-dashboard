@@ -212,15 +212,19 @@ export function ProductionGridBoard({
   artistId, 
   matrixId, 
   matrixName = 'Matriz de Producción', 
-  artistName = 'Artista' 
+  artistName = 'Artista',
+  initialGrid,
+  initialProjectId
 }: { 
   artistId: string; 
   matrixId: string; 
   matrixName?: string; 
   artistName?: string;
+  initialGrid?: ProductionGrid;
+  initialProjectId?: string;
 }) {
-  const [grid, setGrid] = useState<ProductionGrid>({ columns: [], rows: [], mode: 'simple' });
-  const [isLoading, setIsLoading] = useState(true);
+  const [grid, setGrid] = useState<ProductionGrid>(initialGrid || { columns: [], rows: [], mode: 'simple' });
+  const [isLoading, setIsLoading] = useState(!initialGrid);
   const [isSaving, setIsSaving] = useState(false);
   const [newRowName, setNewRowName] = useState('');
   const { showMenu } = useContextMenu();
@@ -233,7 +237,7 @@ export function ProductionGridBoard({
   // Projects, Campaigns and Files logic
   const [projects, setProjects] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [linkedProjectId, setLinkedProjectId] = useState<string>('');
+  const [linkedProjectId, setLinkedProjectId] = useState<string>(initialProjectId || '');
   const [files, setFiles] = useState<any[]>([]);
 
   // Selection logic
@@ -317,7 +321,9 @@ export function ProductionGridBoard({
   }, [linkedProjectId, campaigns]);
 
   const fetchGrid = async () => {
-    setIsLoading(true);
+    if (!grid.rows.length && !grid.columns.length) {
+      setIsLoading(true);
+    }
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices`);
       if (res.ok) {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones, Trash2, MoreVertical, Edit3, FolderInput, X } from "lucide-react";
@@ -658,16 +659,14 @@ export default function ProjectDetailPage() {
                 <h3 className="font-bold text-base sm:text-lg text-text-primary truncate">{linkedMatrix.name}</h3>
               </div>
               <div className="flex items-center gap-2">
-                <Button 
-                  size="sm" 
-                  variant="ghost"
-                  onClick={() => router.push(`/matrices?id=${linkedMatrix.id}&artist=${data.project.artistId}`)}
-                  className="text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 h-8"
+                <Link
+                  href={`/matrices?id=${linkedMatrix.id}&artist=${data.project.artistId}`}
+                  className="text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 h-8 px-2.5 rounded-lg hover:bg-surface transition-colors"
                   title="Abrir en página completa"
                 >
                   <ExternalLinkIcon className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Página Completa</span>
-                </Button>
+                </Link>
                 <button 
                   onClick={() => setIsMatrixModalOpen(false)}
                   className="p-1 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated transition-colors"
@@ -683,6 +682,8 @@ export default function ProjectDetailPage() {
               matrixId={linkedMatrix.id}
               matrixName={linkedMatrix.name}
               artistName={data.project.artistName}
+              initialGrid={linkedMatrix.productionGrid}
+              initialProjectId={projectId}
             />
           </div>
         </div>
