@@ -12,17 +12,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // 2. Extraer todo recursivamente
+    // 2. Extraer carpetas y matriz vinculada en paralelo
     const drive = getDriveService();
-    const { folders: foldersWithFiles, files: rootFiles } = await fetchFoldersRecursively(drive, id);
+    const [foldersData, matrices] = await Promise.all([
+      fetchFoldersRecursively(drive, id),
+      config.artistId ? findAndReadJsonFile<any[]>('matrices.json', config.artistId) : Promise.resolve(null)
+    ]);
 
-    // Filtramos las carpetas que no tienen archivos para que la UI no quede sucia (opcional, pero recomendado)
+    const { folders: foldersWithFiles, files: rootFiles } = foldersData;
     const activeFolders = foldersWithFiles.filter(f => f.files.length > 0);
+
+    const linkedMatrix = Array.isArray(matrices) 
+      ? matrices.find(m => m.projectId === id || m.projectId === config.id || (config.driveFolderId && m.projectId === config.driveFolderId)) 
+      : null;
 
     return NextResponse.json({ 
       project: { ...config, driveFolderId: id },
       folders: activeFolders,
-      rootFiles
+      rootFiles,
+      linkedMatrix
     });
   } catch (error: any) {
     if (error.code === 404 || error.status === 404 || error.message?.includes('File not found')) {

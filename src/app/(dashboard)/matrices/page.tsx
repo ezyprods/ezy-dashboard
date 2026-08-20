@@ -76,24 +76,23 @@ function MatricesContent() {
         artistId: found.artistId,
         artistName: found.artistName
       });
-    } else if (directArtist && artists.length > 0) {
+    } else if (directArtist) {
       fetch(`/api/artists/${directArtist}/matrices`)
         .then(r => r.json())
         .then(data => {
           const specific = (data.matrices || []).find((m: any) => m.id === directId);
-          const artistObj = artists.find((a: any) => a.id === directArtist);
           if (specific) {
             setActiveMatrixState({
               id: specific.id,
               name: specific.name,
               artistId: directArtist,
-              artistName: artistObj?.name || 'Artista'
+              artistName: specific.artistName || 'Artista'
             });
           }
         })
         .catch(err => console.error('Direct link fetch error:', err));
     }
-  }, [searchParams, matrices, completedMatrices, artists]);
+  }, [searchParams, matrices, completedMatrices]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -398,7 +397,7 @@ function MatricesContent() {
     ]);
   };
 
-  if (isLoading) {
+  if (isLoading && !activeMatrix) {
     return (
       <div className="flex justify-center items-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-accent" />
