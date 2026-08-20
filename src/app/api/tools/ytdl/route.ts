@@ -26,10 +26,10 @@ export async function GET(req: Request) {
     try {
       const parsed = new URL(rawUrl);
       if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
-        target = `ytsearch1:${parsed.searchParams.get('v')}`;
+        target = `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
       } else if (parsed.hostname.includes('youtu.be')) {
-        const id = parsed.pathname.replace(/^\//, '');
-        if (id) target = `ytsearch1:${id}`;
+        const id = parsed.pathname.replace(/^\//, '').split('?')[0];
+        if (id) target = `https://www.youtube.com/watch?v=${id}`;
       }
     } catch(e) {}
 
@@ -38,8 +38,8 @@ export async function GET(req: Request) {
     // Spawn yt-dlp to stream mp3 directly to stdout
     const ytdlp = spawn(ytdlpPath, [
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=mweb,android,ios,web_creator',
-      '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+      '--extractor-args', 'youtube:player_client=android,ios,mweb',
+      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
       '-x', 
       '--audio-format', 'mp3',
       '--audio-quality', '192K',

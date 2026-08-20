@@ -77,15 +77,15 @@ export const ensureBinaries = async (): Promise<{ ytdlpPath: string; ffmpegPath:
   binariesPromise = (async () => {
     const tmpDir = os.tmpdir();
     const isWin = os.platform() === 'win32';
-    const ytdlpPath = path.join(tmpDir, isWin ? 'yt-dlp-v3.exe' : 'yt-dlp-v3');
+    const ytdlpPath = path.join(tmpDir, isWin ? 'yt-dlp-2026.exe' : 'yt-dlp-2026');
     const ffmpegPath = ffmpegStatic || 'ffmpeg';
 
-    // Verify yt-dlp binary exists and is valid (> 1MB)
+    // Verify yt-dlp binary exists and is valid (> 5MB)
     let ytdlpValid = false;
     if (fs.existsSync(ytdlpPath)) {
       try {
         const stat = fs.statSync(ytdlpPath);
-        if (stat.size > 1000000) {
+        if (stat.size > 5000000) {
           ytdlpValid = true;
         } else {
           fs.unlinkSync(ytdlpPath);

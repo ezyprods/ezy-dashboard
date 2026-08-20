@@ -752,6 +752,16 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
     setDeleteModalExtraIds(undefined);
   };
 
+  const handleExpirationChanged = (fileId: string, newExpiration: number | null) => {
+    setItems(prev => prev.map(item => item.id === fileId ? { ...item, expiresAt: newExpiration || undefined } : item));
+    setRecentFiles(prev => prev.map(item => item.id === fileId ? { ...item, expiresAt: newExpiration || undefined } : item));
+    setExtraPanes(prev => prev.map(pane => ({
+      ...pane,
+      items: pane.items.map(item => item.id === fileId ? { ...item, expiresAt: newExpiration || undefined } : item)
+    })));
+  };
+
+
   const handleRename = async (itemId: string, currentName: string) => {
     const newName = await customPrompt('Nuevo nombre:', currentName);
     if (!newName || newName === currentName) return;
@@ -2005,8 +2015,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           fileIds={deleteModalExtraIds}
           currentExpiration={deleteModalFile.expiresAt}
           onDeleted={(deletedIds) => handleDeletedCallback(deletedIds)}
+          onExpirationChanged={handleExpirationChanged}
         />
       )}
+
 
       {pendingUploadFiles && (
         <SmartUploadModal 

@@ -144,8 +144,8 @@ async function getYouTubeOEmbed(videoId: string) {
 async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
   const commonArgs = [
     '--no-warnings',
-    '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
-    '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+    '--extractor-args', 'youtube:player_client=android,ios,mweb',
+    '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
   ];
 
   const execute = (cmdArgs: string[]) => new Promise<any[]>((resolve, reject) => {
@@ -172,17 +172,25 @@ async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
   try {
     return await execute([...commonArgs, ...args]);
   } catch (err: any) {
-    if (err.message && (err.message.includes('Sign in') || err.message.includes('bot') || err.message.includes('HTTP Error 429'))) {
-      console.warn('YTDLP primary client blocked, trying fallback client args...');
-      const fallbackArgs = [
+    console.warn('YTDLP primary client failed, trying fallback client args...', err?.message || err);
+    const fallbackArgs = [
+      '--no-warnings',
+      '--extractor-args', 'youtube:player_client=android_vr,tv_downgraded',
+      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+      ...args
+    ];
+    try {
+      return await execute(fallbackArgs);
+    } catch (fallbackErr: any) {
+      console.warn('YTDLP fallback client failed, trying web_creator client args...', fallbackErr?.message || fallbackErr);
+      const webCreatorArgs = [
         '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android,web',
-        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        '--extractor-args', 'youtube:player_client=android,mweb,web_creator',
+        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
         ...args
       ];
-      return await execute(fallbackArgs);
+      return await execute(webCreatorArgs);
     }
-    throw err;
   }
 }
 
@@ -229,7 +237,7 @@ export async function POST(req: Request) {
 
       let results: any[] = [];
       try {
-        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:https://www.youtube.com/watch?v=${videoId}`]);
+        results = await runYtDlp(ytdlpPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`]);
       } catch (err) {
         results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${videoId}`]);
       }

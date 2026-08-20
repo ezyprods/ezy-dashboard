@@ -67,34 +67,44 @@ async function processDownload(taskId: string) {
 
     const videoId = getYouTubeVideoId(task.url);
 
-    const executeDownload = (targetUrl: string) => {
-      const isSearch = targetUrl.startsWith('ytsearch');
-      
+    const clientConfigs = [
+      {
+        name: 'android_ios_mweb',
+        args: [
+          '--extractor-args', 'youtube:player_client=android,ios,mweb',
+          '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+        ]
+      },
+      {
+        name: 'android_vr_tv_downgraded',
+        args: [
+          '--extractor-args', 'youtube:player_client=android_vr,tv_downgraded',
+          '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+        ]
+      },
+      {
+        name: 'android_mweb_creator',
+        args: [
+          '--extractor-args', 'youtube:player_client=android,mweb,web_creator',
+          '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+        ]
+      }
+    ];
+
+    const executeDownload = (targetUrl: string, clientConfig: typeof clientConfigs[0]) => {
       const args = [
         '--no-warnings',
         '--no-playlist',
+        ...clientConfig.args,
         '--extract-audio',
         '--audio-format', 'mp3',
         '--audio-quality', '320K',
         '--ffmpeg-location', ffmpegPath,
         '--output', outputTemplate,
         '--progress',
-        '--newline'
+        '--newline',
+        targetUrl
       ];
-
-      // Player client extractor args are ONLY valid for direct YouTube video URLs, NOT for ytsearch
-      if (!isSearch) {
-        args.unshift(
-          '--extractor-args', 'youtube:player_client=ios,android,mweb,web_creator',
-          '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
-        );
-      } else {
-        args.unshift(
-          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        );
-      }
-
-      args.push(targetUrl);
 
       const ytdlp = spawn(ytdlpPath, args);
       let stderrOut = '';
@@ -137,9 +147,9 @@ async function processDownload(taskId: string) {
     let downloadTargets: string[] = [];
     if (videoId) {
       downloadTargets = [
-        `ytsearch1:${safeTitle} audio`,
         `https://www.youtube.com/watch?v=${videoId}`,
-        `ytsearch1:${videoId}`
+        `ytsearch1:${videoId}`,
+        `ytsearch1:${safeTitle} audio`
       ];
     } else {
       downloadTargets = [task.url];
@@ -149,14 +159,17 @@ async function processDownload(taskId: string) {
     let lastErr: any = null;
 
     for (const targetUrl of downloadTargets) {
-      try {
-        await executeDownload(targetUrl);
-        success = true;
-        break;
-      } catch (err: any) {
-        console.warn(`Download target "${targetUrl}" failed:`, err?.message || err);
-        lastErr = err;
+      for (const config of clientConfigs) {
+        try {
+          await executeDownload(targetUrl, config);
+          success = true;
+          break;
+        } catch (err: any) {
+          console.warn(`Download target "${targetUrl}" with config "${config.name}" failed:`, err?.message || err);
+          lastErr = err;
+        }
       }
+      if (success) break;
     }
 
     if (!success) {

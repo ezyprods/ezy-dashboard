@@ -53,10 +53,13 @@ interface SmartUploadModalProps {
 
 const EXPIRATION_OPTIONS = [
   { label: '1 hora', shortLabel: '1h', ms: 60 * 60 * 1000 },
+  { label: '6 horas', shortLabel: '6h', ms: 6 * 60 * 60 * 1000 },
   { label: '24 horas', shortLabel: '24h', ms: 24 * 60 * 60 * 1000 },
+  { label: '3 días', shortLabel: '3d', ms: 3 * 24 * 60 * 60 * 1000 },
   { label: '7 días', shortLabel: '7d', ms: 7 * 24 * 60 * 60 * 1000 },
   { label: '30 días', shortLabel: '30d', ms: 30 * 24 * 60 * 60 * 1000 },
 ];
+
 
 // ─── Name Generation ──────────────────────────────────────────────────────────
 function generateName(original: string, subType: string, artistName?: string): string {
@@ -1168,7 +1171,7 @@ export function SmartUploadModal({
                     {item.scheduleDelete && (
                       <div className="ml-6 pl-4 border-l-2 border-accent/30 flex flex-col gap-1.5 animate-fade-in">
                         <p className="text-[11px] text-text-secondary">¿Cuánto tiempo debe durar subido?</p>
-                        <div className="grid grid-cols-4 gap-1.5">
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                           {EXPIRATION_OPTIONS.map(opt => {
                             const isSelected = (item.expiresInMs || (24 * 60 * 60 * 1000)) === opt.ms;
                             return (

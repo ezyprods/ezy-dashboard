@@ -77,31 +77,44 @@ export async function GET(req: Request) {
     const outputTemplate = path.join(downloadsDir, `${cleanSafeTitle}_${tempId}.%(ext)s`);
 
     const videoId = getYouTubeVideoId(url);
-    const target = videoId ? `ytsearch1:${cleanSafeTitle} audio` : url;
+    const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
 
-    const args = [
-      '--no-warnings',
-      '--extractor-args', 'youtube:player_client=mweb,android,ios,web_creator',
-      '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-      target,
-      '--extract-audio',
-      '--audio-format', 'mp3',
-      '--audio-quality', '320K',
-      '--ffmpeg-location', ffmpegPath,
-      '--output', outputTemplate,
-      '--no-playlist'
-    ];
+    const executeSpawn = (clientArgs: string[]) => {
+      const args = [
+        '--no-warnings',
+        ...clientArgs,
+        target,
+        '--extract-audio',
+        '--audio-format', 'mp3',
+        '--audio-quality', '320K',
+        '--ffmpeg-location', ffmpegPath,
+        '--output', outputTemplate,
+        '--no-playlist'
+      ];
 
-    await new Promise<void>((resolve, reject) => {
-      const ytdlp = spawn(ytdlpPath, args);
-      let stderrOut = '';
-      ytdlp.stderr.on('data', d => stderrOut += d.toString());
-      ytdlp.on('close', code => {
-        if (code === 0) resolve();
-        else reject(new Error(stderrOut || `yt-dlp exited code ${code}`));
+      return new Promise<void>((resolve, reject) => {
+        const ytdlp = spawn(ytdlpPath, args);
+        let stderrOut = '';
+        ytdlp.stderr.on('data', d => stderrOut += d.toString());
+        ytdlp.on('close', code => {
+          if (code === 0) resolve();
+          else reject(new Error(stderrOut || `yt-dlp exited code ${code}`));
+        });
+        ytdlp.on('error', reject);
       });
-      ytdlp.on('error', reject);
-    });
+    };
+
+    try {
+      await executeSpawn([
+        '--extractor-args', 'youtube:player_client=android,ios,mweb',
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+      ]);
+    } catch (err) {
+      await executeSpawn([
+        '--extractor-args', 'youtube:player_client=android_vr,tv_downgraded',
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+      ]);
+    }
 
     const generatedMp3 = path.join(downloadsDir, `${cleanSafeTitle}_${tempId}.mp3`);
     if (fs.existsSync(generatedMp3)) {

@@ -38,12 +38,15 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   const [selectedFolder, setSelectedFolder] = useState<FolderType | ''>('');
   
   const [tempUploads, setTempUploads] = useState<TempUpload[]>([]);
+  const [scheduleDelete, setScheduleDelete] = useState(false);
+  const [expiresInMs, setExpiresInMs] = useState<number>(24 * 60 * 60 * 1000);
 
   const [uploadState, setUploadState] = useState<UploadState>({
     status: 'idle',
     progress: 0,
     message: '',
   });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sort artists by updatedAt descending
@@ -86,6 +89,8 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
     setStep(1);
     setSelectedArtistId('');
     setSelectedFolder('');
+    setScheduleDelete(false);
+    setExpiresInMs(24 * 60 * 60 * 1000);
     setTempUploads([]);
     setUploadState({ status: 'idle', progress: 0, message: '' });
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -149,10 +154,6 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
       
       newFiles.forEach(file => startTempUpload(file));
 
-      // Auto-detect artist from first filename if not already manually selected
-      // But since we default to the first one, we might overwrite it. 
-      // Let's only auto-detect if the user hasn't explicitly chosen one (we assume if it's exactly the first one, maybe they didn't).
-      // For safety, we can just do the fuzzy match anyway, as it's a helpful feature.
       const fileName = newFiles[0].name;
       const normalizedName = getNormalizedBaseName(fileName).toLowerCase();
       
@@ -188,9 +189,13 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
 
     setUploadState({ status: 'uploading', progress: 50, message: 'Organizando archivos...' });
 
+    const expirationTimestamp = scheduleDelete && expiresInMs ? Date.now() + expiresInMs : null;
+
     const tempFilesData = tempUploads.map(u => ({
       tempId: u.tempId,
-      originalName: u.originalFile.name
+      originalName: u.originalFile.name,
+      expiresInMs: scheduleDelete ? expiresInMs : null,
+      expiresAt: expirationTimestamp,
     }));
 
     try {
@@ -210,6 +215,8 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
         throw new Error(data.error || 'Error al organizar los archivos');
       }
 
+      window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
+
       setUploadState({
         status: 'success',
         progress: 100,
@@ -222,7 +229,8 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
         message: err.message || 'Error desconocido al finalizar subida.',
       });
     }
-  }, [selectedArtistId, selectedFolder, tempUploads]);
+  }, [selectedArtistId, selectedFolder, tempUploads, scheduleDelete, expiresInMs]);
+
 
   const selectedArtist = artists.find((a) => a.id === selectedArtistId);
 

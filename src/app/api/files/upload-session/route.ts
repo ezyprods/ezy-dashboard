@@ -35,8 +35,13 @@ export async function POST(request: Request) {
     
     // Si pasamos appProperties (como BPM, Key, etc), los guardamos
     if (appProperties && Object.keys(appProperties).length > 0) {
-      bodyData.appProperties = appProperties;
+      const finalProps = { ...appProperties };
+      if (finalProps.expiresAt) {
+        finalProps.isTemporary = 'true';
+      }
+      bodyData.appProperties = finalProps;
     }
+
 
     // Extract origin from request to forward it to Google for CORS
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

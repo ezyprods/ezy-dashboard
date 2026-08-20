@@ -301,11 +301,70 @@ export async function setFileExpiration(fileId: string, expirationTimestamp: num
     fileId,
     requestBody: {
       appProperties: {
+        isTemporary: expirationTimestamp ? 'true' : null,
         expiresAt: expirationTimestamp ? expirationTimestamp.toString() : null,
       } as any
     },
     supportsAllDrives: true,
   });
+}
+
+/**
+ * Escanea y elimina automáticamente todos los archivos cuya fecha de expiración haya pasado.
+ * Retorna los archivos eliminados y el total limpiado.
+ */
+export async function cleanupExpiredFiles(): Promise<{ deletedCount: number; deletedFiles: { id: string; name: string; expiredAt: number }[] }> {
+  try {
+    const drive = getDriveService();
+    const now = Date.now();
+    const deletedFiles: { id: string; name: string; expiredAt: number }[] = [];
+
+    // 1. Consulta rápida: archivos explícitamente etiquetados como isTemporary
+    let pageToken: string | undefined = undefined;
+    const itemsToCheck: any[] = [];
+
+    do {
+      const res: any = await drive.files.list({
+        q: "appProperties has { key='isTemporary' and value='true' } and trashed=false",
+        fields: 'nextPageToken, files(id, name, appProperties)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+        pageSize: 1000,
+        pageToken,
+      });
+
+      if (res.data.files) {
+        itemsToCheck.push(...res.data.files);
+      }
+      pageToken = res.data.nextPageToken || undefined;
+    } while (pageToken);
+
+    // 2. Procesar y eliminar los que hayan caducado
+    for (const file of itemsToCheck) {
+      if (!file.id) continue;
+      const expiresAt = file.appProperties?.expiresAt ? parseInt(file.appProperties.expiresAt, 10) : null;
+      if (expiresAt && expiresAt <= now) {
+        try {
+          await drive.files.delete({ fileId: file.id, supportsAllDrives: true });
+          deletedFiles.push({
+            id: file.id,
+            name: file.name || 'Sin nombre',
+            expiredAt: expiresAt,
+          });
+        } catch (delErr) {
+          console.error(`[cleanupExpiredFiles] Error deleting file ${file.id} (${file.name}):`, delErr);
+        }
+      }
+    }
+
+    return {
+      deletedCount: deletedFiles.length,
+      deletedFiles,
+    };
+  } catch (error: any) {
+    console.error('[cleanupExpiredFiles] Global scan error:', error);
+    return { deletedCount: 0, deletedFiles: [] };
+  }
 }
 
 /**

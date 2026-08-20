@@ -723,8 +723,14 @@ export function FolderExplorerModal({
             const currentFolder = breadcrumbs[breadcrumbs.length - 1]?.id || folderId;
             if (currentFolder) fetchFolder(currentFolder);
           }}
+          onExpirationChanged={(fId, newExp) => {
+            setItems(prev => prev.map(item => item.id === fId ? { ...item, expiresAt: newExp || undefined } : item));
+            setDeleteModalFile(null);
+            window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
+          }}
         />
       )}
+
 
       {shareModalFile && (
         <ShareModal

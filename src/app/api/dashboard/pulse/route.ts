@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 import { NextResponse } from 'next/server';
-import { findAndReadJsonFile, listFolders } from '@/lib/drive';
+import { findAndReadJsonFile, listFolders, cleanupExpiredFiles } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+
 import type { ArtistConfig, Artist } from '@/types';
 
 export async function GET() {
@@ -18,6 +19,9 @@ export async function GET() {
       findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null)
     ]);
     
+    // Trigger non-blocking background cleanup of expired files
+    cleanupExpiredFiles().catch(err => console.warn('Background cleanupExpiredFiles non-critical error:', err));
+
     const artistsDb = artistsDbResult || [];
     
     let totalActiveProjects = 0;

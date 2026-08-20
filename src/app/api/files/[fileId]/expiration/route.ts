@@ -8,9 +8,20 @@ export async function POST(
   try {
     const { fileId } = await params;
     const body = await request.json();
-    const { expiresInMs } = body;
+    const { expiresInMs, expiresAt } = body;
 
-    const expirationTimestamp = expiresInMs ? Date.now() + expiresInMs : null;
+    let expirationTimestamp: number | null = null;
+    if (expiresAt !== undefined && expiresAt !== null) {
+      const parsed = typeof expiresAt === 'number' ? expiresAt : parseInt(expiresAt, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        expirationTimestamp = parsed;
+      }
+    } else if (expiresInMs !== undefined && expiresInMs !== null) {
+      const parsedMs = typeof expiresInMs === 'number' ? expiresInMs : parseInt(expiresInMs, 10);
+      if (!isNaN(parsedMs) && parsedMs > 0) {
+        expirationTimestamp = Date.now() + parsedMs;
+      }
+    }
     
     await setFileExpiration(fileId, expirationTimestamp);
 
@@ -20,3 +31,4 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to set expiration', details: error.message }, { status: 500 });
   }
 }
+

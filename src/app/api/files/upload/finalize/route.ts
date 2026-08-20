@@ -114,11 +114,14 @@ export async function POST(request: Request) {
       if (tempFile.key) appProperties.key = tempFile.key.toString();
       if (tempFile.expiresAt) {
         appProperties.expiresAt = tempFile.expiresAt.toString();
+        appProperties.isTemporary = 'true';
       } else if (tempFile.expiresInMs) {
         appProperties.expiresAt = (Date.now() + tempFile.expiresInMs).toString();
+        appProperties.isTemporary = 'true';
       } else if (tempFile.appProperties) {
         Object.assign(appProperties, tempFile.appProperties);
       }
+
 
       const requestBody: any = { name: finalName };
       if (Object.keys(appProperties).length > 0) {
