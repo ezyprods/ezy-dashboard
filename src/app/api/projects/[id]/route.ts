@@ -25,6 +25,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       rootFiles
     });
   } catch (error: any) {
+    if (error.code === 404 || error.status === 404 || error.message?.includes('File not found')) {
+      return NextResponse.json({ error: 'Project folder not found on Drive' }, { status: 404 });
+    }
     console.error('API /projects/[id] GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch project details', details: error.message }, { status: 500 });
   }

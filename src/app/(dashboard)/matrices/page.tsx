@@ -62,6 +62,39 @@ function MatricesContent() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const directId = searchParams.get('id');
+    const directArtist = searchParams.get('artist');
+    if (!directId) return;
+
+    const allMatricesList = [...matrices, ...completedMatrices];
+    const found = allMatricesList.find(m => m.id === directId);
+    if (found) {
+      setActiveMatrixState({
+        id: found.id,
+        name: found.name,
+        artistId: found.artistId,
+        artistName: found.artistName
+      });
+    } else if (directArtist && artists.length > 0) {
+      fetch(`/api/artists/${directArtist}/matrices`)
+        .then(r => r.json())
+        .then(data => {
+          const specific = (data.matrices || []).find((m: any) => m.id === directId);
+          const artistObj = artists.find((a: any) => a.id === directArtist);
+          if (specific) {
+            setActiveMatrixState({
+              id: specific.id,
+              name: specific.name,
+              artistId: directArtist,
+              artistName: artistObj?.name || 'Artista'
+            });
+          }
+        })
+        .catch(err => console.error('Direct link fetch error:', err));
+    }
+  }, [searchParams, matrices, completedMatrices, artists]);
+
   const fetchData = async () => {
     setIsLoading(true);
     try {

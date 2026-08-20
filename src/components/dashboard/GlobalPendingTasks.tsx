@@ -96,7 +96,7 @@ function TaskCard({
             <button
               {...(isOverlay ? {} : attributes)}
               {...(isOverlay ? {} : listeners)}
-              className="text-text-secondary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-opacity shrink-0 cursor-grab active:cursor-grabbing p-0.5"
+              className="text-text-secondary opacity-40 sm:opacity-0 sm:group-hover:opacity-100 hover:text-text-primary transition-opacity shrink-0 cursor-grab active:cursor-grabbing p-0.5"
               title="Arrastrar para mover"
             >
               <GripVertical className="w-3.5 h-3.5" />
@@ -535,6 +535,43 @@ export function GlobalPendingTasks() {
         </div>
       )}
 
+      {/* Mobile Column Quick Switcher */}
+      <div className="flex lg:hidden items-center gap-1.5 p-1 bg-surface-elevated/60 rounded-xl border border-border/60 mb-3 overflow-x-auto scrollbar-hide">
+        <button
+          onClick={() => {
+            const el = document.getElementById('col-todo');
+            el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }}
+          className="flex-1 min-w-[100px] py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-text-primary bg-surface border border-border/40 active:scale-95 shadow-sm"
+        >
+          <Circle className="w-3 h-3 text-text-secondary" />
+          <span className="truncate">Pendientes</span>
+          <span className="text-[10px] bg-surface-elevated px-1.5 py-0.2 rounded-full text-text-secondary">{todoTasks.length}</span>
+        </button>
+        <button
+          onClick={() => {
+            const el = document.getElementById('col-in_progress');
+            el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }}
+          className="flex-1 min-w-[100px] py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-warning bg-warning/10 border border-warning/20 active:scale-95 shadow-sm"
+        >
+          <Clock className="w-3 h-3 text-warning" />
+          <span className="truncate">Progreso</span>
+          <span className="text-[10px] bg-warning/20 px-1.5 py-0.2 rounded-full text-warning">{inProgressTasks.length}</span>
+        </button>
+        <button
+          onClick={() => {
+            const el = document.getElementById('col-review');
+            el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          }}
+          className="flex-1 min-w-[100px] py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all text-blue-400 bg-blue-500/10 border border-blue-500/20 active:scale-95 shadow-sm"
+        >
+          <AlertCircle className="w-3 h-3 text-blue-400" />
+          <span className="truncate">Revisión</span>
+          <span className="text-[10px] bg-blue-500/20 px-1.5 py-0.2 rounded-full text-blue-400">{reviewTasks.length}</span>
+        </button>
+      </div>
+
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -543,7 +580,7 @@ export function GlobalPendingTasks() {
         onDragCancel={handleDragCancel}
       >
         <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide lg:grid lg:grid-cols-3 gap-4 lg:gap-6 relative z-10 flex-1 h-[500px] lg:h-full lg:min-h-0 pb-4 lg:pb-0 -mx-5 px-5 lg:mx-0 lg:px-0">
-          <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
+          <div id="col-todo" className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
             <StatusColumn
               id="todo"
               title="Pendientes"
@@ -556,7 +593,7 @@ export function GlobalPendingTasks() {
             />
           </div>
           
-          <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
+          <div id="col-in_progress" className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
             <StatusColumn
               id="in_progress"
               title="En Progreso"
@@ -569,7 +606,7 @@ export function GlobalPendingTasks() {
             />
           </div>
           
-          <div className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
+          <div id="col-review" className="w-[85vw] sm:w-[340px] shrink-0 snap-center lg:w-auto lg:h-full lg:min-h-0">
             <StatusColumn
               id="review"
               title="En Revisión"

@@ -49,7 +49,7 @@ function SortableColHeader({ col, onDelete, onRename }: { col: { id: string; nam
           className="font-semibold text-sm text-center bg-transparent border-none outline-none w-full truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors" 
           title={localName}
         />
-        <button onClick={() => onDelete(col.id)} className="opacity-0 group-hover:opacity-100 text-error hover:bg-error/10 p-0.5 rounded transition-opacity shrink-0">
+        <button onClick={() => onDelete(col.id)} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-error hover:bg-error/10 p-0.5 rounded transition-opacity shrink-0" title="Eliminar columna">
           <Trash2 className="w-3 h-3" />
         </button>
       </div>
@@ -124,7 +124,7 @@ function SortableRow({
     <tr ref={setNodeRef} style={style} className={`group/row transition-colors ${isDragging ? 'bg-surface-elevated shadow-lg' : 'hover:bg-surface/30'}`}>
       <td className="p-1 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 w-40 sm:w-64 min-w-[160px] sm:min-w-[250px] max-w-[160px] sm:max-w-[400px]">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
-          <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
+          <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-40 sm:opacity-0 sm:group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
           <input 
             value={localName} 
             onChange={e => setLocalName(e.target.value)}
@@ -147,7 +147,7 @@ function SortableRow({
                </span>
              );
           })()}
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity">
             {row.linkedFile && (
               <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1 py-0.5 rounded border border-border/50">
                 {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
@@ -190,7 +190,7 @@ function SortableRow({
             >
               <MessageSquare className="w-3.5 h-3.5" />
             </button>
-            <button onClick={() => onDelete(row.id)} className="text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
+            <button onClick={() => onDelete(row.id)} className="text-error hover:bg-error/10 p-1 rounded transition-opacity shrink-0" title="Eliminar fila"><Trash2 className="w-3.5 h-3.5" /></button>
           </div>
         </div>
       </td>
@@ -713,11 +713,11 @@ export function ProductionGridBoard({
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between items-start gap-3 sm:gap-4">
-        <div className="hidden sm:block">
-          <h3 className="text-xl font-bold">{matrixName}</h3>
-          <p className="text-sm text-text-secondary">Trackeo modular por canción y fase.</p>
+        <div className="block">
+          <h3 className="text-lg sm:text-xl font-bold text-text-primary">{matrixName}</h3>
+          <p className="text-xs sm:text-sm text-text-secondary">Trackeo modular por canción y fase.</p>
         </div>
-        <div className="w-full sm:w-auto flex flex-col sm:items-end items-start gap-3">
+        <div className="w-full sm:w-auto flex flex-col sm:items-end items-start gap-2 sm:gap-3">
           <CampaignSelector 
             linkedProjectId={linkedProjectId} 
             campaigns={campaigns} 
@@ -726,7 +726,7 @@ export function ProductionGridBoard({
             onOpenCampaignModal={() => customAlert('Funcionalidad de crear campaña en desarrollo. Ve a Artistas > Campañas por ahora.')} 
           />
           <div className="flex items-center gap-4 w-full justify-between sm:justify-end">
-            <div className="text-sm font-bold text-text-secondary">{progress}% Completado</div>
+            <div className="text-xs sm:text-sm font-bold text-text-secondary">{progress}% Completado</div>
             {isSaving && <Loader2 className="w-4 h-4 animate-spin text-accent" />}
           </div>
         </div>
