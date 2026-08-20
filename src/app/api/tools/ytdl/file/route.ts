@@ -76,15 +76,16 @@ export async function GET(req: Request) {
     const cleanSafeTitle = safeTitle.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
     const downloadsDir = os.tmpdir();
     const tempId = taskId || Math.random().toString(36).substring(2, 8);
-    const outputTemplate = path.join(downloadsDir, `${cleanSafeTitle}_${tempId}.%(ext)s`);
+    const outputTemplate = path.join(downloadsDir, `${tempId}.%(ext)s`);
 
     const videoId = getYouTubeVideoId(url);
     const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
 
-    const executeSpawn = (clientArgs: string[]) => {
+    const executeSpawn = (clientArgs: string[], useCookies = false) => {
+      const extraCookieArgs = (useCookies && cookieArgs.length > 0) ? cookieArgs : [];
       const args = [
         '--no-warnings',
-        ...cookieArgs,
+        ...extraCookieArgs,
         ...clientArgs,
         target,
         '--extract-audio',
@@ -111,26 +112,39 @@ export async function GET(req: Request) {
       await executeSpawn([
         '--extractor-args', 'youtube:player_client=android',
         '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-      ]);
+      ], false);
     } catch (err) {
       try {
         await executeSpawn([
           '--extractor-args', 'youtube:player_client=android_vr',
           '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-        ]);
+        ], false);
       } catch (err2) {
         await executeSpawn([
-          ...cookieArgs,
           '--extractor-args', 'youtube:player_client=web,web_safari',
           '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        ]);
+        ], true);
       }
     }
 
-    const generatedMp3 = path.join(downloadsDir, `${cleanSafeTitle}_${tempId}.mp3`);
-    if (fs.existsSync(generatedMp3)) {
-      const buffer = await fs.promises.readFile(generatedMp3);
-      try { await fs.promises.unlink(generatedMp3); } catch (e) {}
+    let finalMp3Path = path.join(downloadsDir, `${tempId}.mp3`);
+    let foundFile: string | null = null;
+
+    if (fs.existsSync(finalMp3Path)) {
+      foundFile = finalMp3Path;
+    } else {
+      try {
+        const files = fs.readdirSync(downloadsDir);
+        const match = files.find(f => f.includes(tempId) && (f.endsWith('.mp3') || f.endsWith('.m4a') || f.endsWith('.webm') || f.endsWith('.opus') || f.endsWith('.aac')));
+        if (match) {
+          foundFile = path.join(downloadsDir, match);
+        }
+      } catch (e) {}
+    }
+
+    if (foundFile && fs.existsSync(foundFile)) {
+      const buffer = await fs.promises.readFile(foundFile);
+      try { await fs.promises.unlink(foundFile); } catch (e) {}
       
       const safeFilename = encodeURIComponent(cleanSafeTitle);
       return new NextResponse(buffer as any, {
