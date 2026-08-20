@@ -1,11 +1,23 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { UploadCloud, Layers, Loader2, CheckCircle2, AlertTriangle, Terminal, Settings } from 'lucide-react';
+import { 
+  UploadCloud, 
+  Layers, 
+  Loader2, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Terminal, 
+  Settings, 
+  Zap, 
+  Key, 
+  ExternalLink,
+  Cpu
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { StemsMixer } from './StemsMixer';
 
-type SetupStatus = 'checking' | 'ready' | 'no_python' | 'no_demucs' | 'installing' | 'install_error';
+type SetupStatus = 'checking' | 'ready' | 'need_token_or_python' | 'no_demucs' | 'installing' | 'install_error';
 type ProcessStatus = 'idle' | 'processing' | 'completed' | 'error';
 
 interface Task {
@@ -13,14 +25,29 @@ interface Task {
   filename: string;
   status: ProcessStatus;
   progress: number;
+  engine?: 'cloud' | 'local';
   outputDir?: string;
+  stems?: {
+    vocals?: string;
+    drums?: string;
+    bass?: string;
+    other?: string;
+  };
   error?: string;
 }
 
 export function StemsSplitter() {
   const [setupStatus, setSetupStatus] = useState<SetupStatus>('checking');
   const [setupError, setSetupError] = useState('');
+  const [engineType, setEngineType] = useState<'cloud' | 'local'>('cloud');
   
+  // Replicate token state
+  const [replicateToken, setReplicateToken] = useState<string>('');
+  const [inputToken, setInputToken] = useState<string>('');
+  const [isVerifyingToken, setIsVerifyingToken] = useState(false);
+  const [tokenError, setTokenError] = useState('');
+  const [showTokenSettings, setShowTokenSettings] = useState(false);
+
   const [file, setFile] = useState<File | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -29,35 +56,89 @@ export function StemsSplitter() {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    checkDemucs();
+    // Cargar token guardado en localStorage si existe
+    const savedToken = typeof window !== 'undefined' ? localStorage.getItem('ezy_replicate_token') || '' : '';
+    if (savedToken) {
+      setReplicateToken(savedToken);
+      setInputToken(savedToken);
+    }
+    checkEngineStatus(savedToken);
+
     return () => {
       if (eventSourceRef.current) eventSourceRef.current.close();
     };
   }, []);
 
-  const checkDemucs = async () => {
+  const checkEngineStatus = async (tokenToTest?: string) => {
     setSetupStatus('checking');
+    setSetupError('');
     try {
-      const res = await fetch('/api/tools/stems/install');
+      const activeToken = tokenToTest !== undefined ? tokenToTest : replicateToken;
+      const headers: Record<string, string> = {};
+      if (activeToken) {
+        headers['x-replicate-token'] = activeToken;
+      }
+
+      const res = await fetch('/api/tools/stems/install', { headers });
       const data = await res.json();
       
       if (data.status === 'ready') {
         setSetupStatus('ready');
-      } else if (data.status === 'no_python') {
-        setSetupStatus('no_python');
+        setEngineType(data.engine || 'cloud');
       } else if (data.status === 'no_demucs') {
         setSetupStatus('no_demucs');
       } else {
-        setSetupStatus('install_error');
-        setSetupError(data.message);
+        setSetupStatus('need_token_or_python');
+        setSetupError(data.message || '');
       }
     } catch (e: any) {
       setSetupStatus('install_error');
-      setSetupError(e.message);
+      setSetupError(e.message || 'Error al verificar el motor de IA');
     }
   };
 
-  const installDemucs = async () => {
+  const handleSaveToken = async () => {
+    if (!inputToken.trim()) {
+      setTokenError('Por favor ingresa un token válido de Replicate');
+      return;
+    }
+
+    setIsVerifyingToken(true);
+    setTokenError('');
+
+    try {
+      const res = await fetch('/api/tools/stems/install', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify_token', token: inputToken.trim() })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.valid) {
+        throw new Error(data.error || 'Token inválido');
+      }
+
+      // Guardar token válido
+      localStorage.setItem('ezy_replicate_token', inputToken.trim());
+      setReplicateToken(inputToken.trim());
+      setShowTokenSettings(false);
+      await checkEngineStatus(inputToken.trim());
+    } catch (err: any) {
+      setTokenError(err.message || 'Error al verificar el token');
+    } finally {
+      setIsVerifyingToken(false);
+    }
+  };
+
+  const removeToken = () => {
+    localStorage.removeItem('ezy_replicate_token');
+    setReplicateToken('');
+    setInputToken('');
+    checkEngineStatus('');
+  };
+
+  const installDemucsLocal = async () => {
     setSetupStatus('installing');
     setSetupError('');
     try {
@@ -65,7 +146,7 @@ export function StemsSplitter() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al instalar');
       
-      setSetupStatus('ready');
+      await checkEngineStatus();
     } catch (e: any) {
       setSetupStatus('install_error');
       setSetupError(e.message);
@@ -82,9 +163,18 @@ export function StemsSplitter() {
     try {
       const formData = new FormData();
       formData.append('file', selected);
+      if (replicateToken) {
+        formData.append('replicateToken', replicateToken);
+      }
+
+      const headers: Record<string, string> = {};
+      if (replicateToken) {
+        headers['x-replicate-token'] = replicateToken;
+      }
 
       const res = await fetch('/api/tools/stems/process', {
         method: 'POST',
+        headers,
         body: formData
       });
 
@@ -130,48 +220,187 @@ export function StemsSplitter() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="glass p-4 sm:p-6 rounded-2xl border border-border/50">
+      {/* Header Info & Settings */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-surface p-4 rounded-2xl border border-border/50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-text-primary flex items-center gap-2">
+              Separador de Stems (Demucs IA)
+              {setupStatus === 'ready' && (
+                <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  engineType === 'cloud' 
+                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                    : 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20'
+                }`}>
+                  {engineType === 'cloud' ? <Zap className="w-3 h-3 fill-emerald-500" /> : <Cpu className="w-3 h-3" />}
+                  {engineType === 'cloud' ? 'Cloud GPU Activo' : 'Motor Local'}
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-text-secondary">
+              Separa cualquier audio en Voces, Batería, Bajo e Instrumental con calidad de estudio.
+            </p>
+          </div>
+        </div>
 
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowTokenSettings(!showTokenSettings)}
+          className="text-xs flex items-center gap-1.5 shrink-0"
+        >
+          <Settings className="w-3.5 h-3.5 text-text-secondary" />
+          {replicateToken ? 'Configurar Token IA' : 'Conectar Token IA'}
+        </Button>
+      </div>
+
+      {/* Modal / Card de Configuración de Token de IA */}
+      {showTokenSettings && (
+        <div className="bg-surface-elevated border border-indigo-500/30 rounded-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-indigo-400" />
+              <h3 className="font-bold text-text-primary text-sm">Token de IA en la Nube (Replicate GPU)</h3>
+            </div>
+            <button 
+              onClick={() => setShowTokenSettings(false)}
+              className="text-xs text-text-secondary hover:text-text-primary"
+            >
+              Cerrar
+            </button>
+          </div>
+
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Permite procesar canciones en la nube desde cualquier dispositivo (Vercel, móvil o PC) a máxima velocidad en tarjetas gráficas NVIDIA dedicadas sin consumir los recursos de tu ordenador.
+          </p>
+
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="Pega tu token de Replicate (r8_...)"
+                value={inputToken}
+                onChange={(e) => setInputToken(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm bg-surface border border-border/70 rounded-xl font-mono focus:outline-none focus:border-indigo-500"
+              />
+              <Button 
+                onClick={handleSaveToken} 
+                disabled={isVerifyingToken || !inputToken.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs px-4"
+              >
+                {isVerifyingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verificar y Guardar'}
+              </Button>
+            </div>
+
+            {tokenError && (
+              <p className="text-xs text-red-500 font-medium">{tokenError}</p>
+            )}
+
+            <div className="flex items-center justify-between pt-2 text-[11px] text-text-secondary">
+              <a
+                href="https://replicate.com/account/api-tokens"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-400 hover:underline flex items-center gap-1 font-medium"
+              >
+                Obtener token gratis en Replicate.com <ExternalLink className="w-3 h-3" />
+              </a>
+
+              {replicateToken && (
+                <button onClick={removeToken} className="text-red-400 hover:underline">
+                  Desconectar token
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="glass p-4 sm:p-6 rounded-2xl border border-border/50">
         {/* SETUP WIZARD */}
         {setupStatus !== 'ready' && (
           <div className="bg-surface-elevated border border-border/50 rounded-2xl p-8 max-w-lg mx-auto text-center space-y-6 animate-in zoom-in-95">
             {setupStatus === 'checking' && (
               <div className="flex flex-col items-center gap-4">
                 <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                <p className="font-medium">Comprobando motor de Inteligencia Artificial...</p>
+                <p className="font-medium text-sm">Comprobando conexión con el motor de Inteligencia Artificial...</p>
               </div>
             )}
 
-            {setupStatus === 'no_python' && (
+            {setupStatus === 'need_token_or_python' && (
               <div className="space-y-4">
-                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <AlertTriangle className="w-8 h-8 text-red-500" />
+                <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-2 text-indigo-500">
+                  <Zap className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-bold">Falta Python en tu sistema</h3>
-                <p className="text-sm text-text-secondary">
-                  Demucs es un modelo de IA de código abierto que requiere Python para funcionar. Por favor, instala Python 3.8+ (asegúrate de marcar "Add Python to PATH" durante la instalación).
+                <h3 className="text-lg font-bold">Activa el Procesador de Stems en la Nube</h3>
+                <p className="text-sm text-text-secondary leading-relaxed">
+                  Para separar pistas desde la web desplegada (Vercel) sin necesidad de tener tu ordenador encendido, conecta tu token gratuito de <strong>Replicate AI</strong>.
                 </p>
-                <div className="pt-4 flex gap-4 justify-center">
-                  <a href="https://www.python.org/downloads/" target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline text-sm font-medium">Descargar Python</a>
-                  <button onClick={checkDemucs} className="text-indigo-400 hover:underline text-sm font-medium">Reintentar</button>
+
+                <div className="space-y-3 pt-2">
+                  <input
+                    type="password"
+                    placeholder="Pega tu token de Replicate (r8_...)"
+                    value={inputToken}
+                    onChange={(e) => setInputToken(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-sm bg-surface border border-border/80 rounded-xl font-mono focus:outline-none focus:border-indigo-500"
+                  />
+
+                  {tokenError && (
+                    <p className="text-xs text-red-500 font-medium">{tokenError}</p>
+                  )}
+
+                  <Button 
+                    onClick={handleSaveToken}
+                    disabled={isVerifyingToken || !inputToken.trim()}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 font-medium flex items-center justify-center gap-2"
+                  >
+                    {isVerifyingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                    Conectar y Activar Stems
+                  </Button>
+
+                  <div className="pt-2 flex flex-col gap-2 text-xs">
+                    <a 
+                      href="https://replicate.com/account/api-tokens" 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="text-indigo-400 hover:underline inline-flex items-center justify-center gap-1 font-medium"
+                    >
+                      1. Conseguir token en Replicate.com (Gratis) <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <button 
+                      onClick={() => checkEngineStatus()} 
+                      className="text-text-secondary hover:text-text-primary text-[11px]"
+                    >
+                      Reintentar comprobación
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {(setupStatus === 'no_demucs' || setupStatus === 'install_error') && (
+            {setupStatus === 'no_demucs' && (
               <div className="space-y-4">
                 <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
                   <Settings className="w-8 h-8 text-indigo-500" />
                 </div>
-                <h3 className="text-lg font-bold">Se requiere instalar Demucs</h3>
+                <h3 className="text-lg font-bold">Motor Demucs Local detectado</h3>
                 <p className="text-sm text-text-secondary">
-                  Hemos detectado Python en tu sistema, pero falta el motor Demucs. Haz clic en el botón para descargarlo e instalarlo automáticamente. Puede tardar un par de minutos.
+                  Hemos detectado Python en tu sistema local. Puedes instalar Demucs en tu PC o conectar un token de nube para usar GPU.
                 </p>
                 {setupError && <p className="text-xs text-red-400 font-mono bg-red-400/10 p-2 rounded">{setupError}</p>}
                 
-                <Button onClick={installDemucs} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl">
-                  Instalar Demucs IA
-                </Button>
+                <div className="flex flex-col gap-2 pt-2">
+                  <Button onClick={installDemucsLocal} className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl">
+                    Instalar Demucs en PC
+                  </Button>
+                  <Button onClick={() => setShowTokenSettings(true)} variant="outline" className="w-full rounded-xl text-xs">
+                    Preferir Motor en la Nube (Replicate GPU)
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -181,8 +410,21 @@ export function StemsSplitter() {
                   <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
                   <Terminal className="w-6 h-6 text-indigo-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 </div>
-                <p className="font-medium text-indigo-400">Instalando Demucs (vía pip)...</p>
+                <p className="font-medium text-indigo-400">Instalando Demucs en tu PC...</p>
                 <p className="text-xs text-text-secondary">Por favor, espera unos instantes. Esto descargará las librerías necesarias.</p>
+              </div>
+            )}
+
+            {setupStatus === 'install_error' && (
+              <div className="space-y-4">
+                <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <AlertTriangle className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="text-lg font-bold text-red-500">Error al iniciar el motor</h3>
+                <p className="text-xs text-text-secondary">{setupError}</p>
+                <Button onClick={() => checkEngineStatus()} variant="outline" className="rounded-xl">
+                  Reintentar
+                </Button>
               </div>
             )}
           </div>
@@ -193,31 +435,40 @@ export function StemsSplitter() {
           <div className="space-y-6">
             {!task || task.status === 'idle' ? (
               <div 
-                className="border-2 border-dashed border-border/60 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all rounded-2xl p-8 sm:p-12 cursor-pointer flex flex-col items-center justify-center gap-4 text-center"
+                className="border-2 border-dashed border-border/60 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all rounded-2xl p-8 sm:p-12 cursor-pointer flex flex-col items-center justify-center gap-4 text-center group"
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => { e.preventDefault(); handleFileSelect(e.dataTransfer.files); }}
                 onClick={() => fileInputRef.current?.click()}
               >
                 <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={e => handleFileSelect(e.target.files)} />
-                <div className="w-16 h-16 bg-surface-elevated rounded-full flex items-center justify-center shadow-inner">
-                  <UploadCloud className="w-8 h-8 text-text-secondary" />
+                <div className="w-16 h-16 bg-surface-elevated rounded-full flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                  <UploadCloud className="w-8 h-8 text-indigo-400" />
                 </div>
                 <div>
-                  <p className="text-text-primary font-medium text-lg">Suelta una canción aquí</p>
-                  <p className="text-sm text-text-secondary mt-1">La IA la separará en 4 pistas de alta calidad</p>
+                  <p className="text-text-primary font-medium text-lg">Arrastra y suelta tu canción aquí</p>
+                  <p className="text-sm text-text-secondary mt-1">
+                    La IA de Demucs la separará en 4 pistas limpias (Voz, Batería, Bajo, Instrumental)
+                  </p>
                 </div>
+                <span className="text-xs text-indigo-400 font-medium bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                  Formatos soportados: MP3, WAV, FLAC, M4A, OGG
+                </span>
               </div>
             ) : (
               <div className={`bg-surface-elevated rounded-2xl border border-border/50 text-center ${task.status === 'completed' ? 'p-1 sm:p-2' : 'p-8 space-y-6'}`}>
-                {task.status !== 'completed' && <h3 className="font-medium truncate max-w-sm mx-auto">{task.filename}</h3>}
+                {task.status !== 'completed' && <h3 className="font-medium truncate max-w-sm mx-auto text-sm">{task.filename}</h3>}
                 
                 {task.status === 'processing' && (
                   <div className="space-y-4">
                     <div className="relative pt-4">
                       <div className="flex mb-2 items-center justify-between">
                         <div>
-                          <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-indigo-500 bg-indigo-500/10 transition-all">
-                            {task.progress === 100 ? 'Finalizando y guardando pistas...' : 'Analizando y Separando'}
+                          <span className="text-xs font-semibold inline-block py-1 px-2.5 uppercase rounded-full text-indigo-500 bg-indigo-500/10 transition-all">
+                            {task.progress >= 100 
+                              ? 'Finalizando y empaquetando pistas...' 
+                              : engineType === 'cloud' 
+                                ? 'Procesando en GPU Cloud...' 
+                                : 'Separando pistas...'}
                           </span>
                         </div>
                         <div className="text-right">
@@ -226,14 +477,17 @@ export function StemsSplitter() {
                           </span>
                         </div>
                       </div>
-                      <div className="overflow-hidden h-2 mb-4 text-xs flex rounded-full bg-surface">
-                        <div style={{ width: `${task.progress}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500 transition-all duration-500" />
+                      <div className="overflow-hidden h-2.5 mb-4 text-xs flex rounded-full bg-surface">
+                        <div 
+                          style={{ width: `${task.progress}%` }} 
+                          className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500 transition-all duration-500" 
+                        />
                       </div>
                     </div>
-                    <p className="text-sm text-text-secondary animate-pulse">
-                      {task.progress === 100 
-                        ? 'Generando archivos de audio finales...' 
-                        : 'Este proceso es intenso, puede tardar unos minutos...'}
+                    <p className="text-xs text-text-secondary animate-pulse">
+                      {task.progress >= 100 
+                        ? 'Cargando mezclador interactivo...' 
+                        : 'Separando frecuencias vocales, percusión, bajo y armonías...'}
                     </p>
                   </div>
                 )}
@@ -243,10 +497,10 @@ export function StemsSplitter() {
                     <div className="flex items-center justify-between mb-2 px-3 pt-3">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                        <span className="font-bold text-sm text-emerald-500">Separación Completada</span>
+                        <span className="font-bold text-sm text-emerald-500">Separación Completada con Éxito</span>
                       </div>
                       <Button onClick={() => setTask(null)} variant="outline" size="sm" className="h-8 text-xs">
-                        Nueva Separación
+                        Separar otra canción
                       </Button>
                     </div>
                     
@@ -271,7 +525,7 @@ export function StemsSplitter() {
               </div>
             )}
             
-            {errorMsg && <p className="text-sm text-danger text-center">{errorMsg}</p>}
+            {errorMsg && <p className="text-sm text-danger text-center font-medium">{errorMsg}</p>}
           </div>
         )}
       </div>

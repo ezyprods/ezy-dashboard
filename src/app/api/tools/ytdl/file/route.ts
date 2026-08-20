@@ -112,23 +112,23 @@ export async function GET(req: Request) {
 
     try {
       await executeSpawn([
-        '--extractor-args', 'youtube:player_client=android',
-        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-      ], false);
+        '--extractor-args', 'youtube:player_client=tv_embedded',
+        '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+'
+      ], true);
     } catch (err: any) {
       lastSpawnError = err?.message || String(err);
       try {
         await executeSpawn([
-          '--extractor-args', 'youtube:player_client=android_vr',
+          '--extractor-args', 'youtube:player_client=android_creator',
           '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-        ], false);
+        ], true);
       } catch (err2: any) {
         lastSpawnError = err2?.message || String(err2);
         try {
           await executeSpawn([
-            '--extractor-args', 'youtube:player_client=web,web_safari',
-            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-          ], true);
+            '--extractor-args', 'youtube:player_client=android',
+            '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+          ], false);
         } catch (err3: any) {
           lastSpawnError = err3?.message || String(err3);
         }

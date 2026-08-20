@@ -140,41 +140,62 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
     window.open(`/api/tools/stems/stream?taskId=${taskId}&stem=${stemId}&download=true`, '_blank');
   };
 
+  const downloadAll = () => {
+    STEMS.forEach((stem, index) => {
+      setTimeout(() => {
+        downloadStem(stem.id);
+      }, index * 400);
+    });
+  };
+
   return (
     <div className="mt-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-white rounded-xl border border-border/50 shadow-sm overflow-hidden">
+      <div className="bg-surface rounded-2xl border border-border/60 shadow-sm overflow-hidden">
         
         {/* Encabezado y Reproductor */}
         <div className="px-4 py-3 border-b border-border/50 bg-surface flex flex-col sm:flex-row gap-3 items-center justify-between">
           <div className="flex-1 min-w-0 w-full">
             <h3 className="font-semibold text-text-primary truncate text-sm sm:text-base" title={filename}>{filename}</h3>
             <p className="text-xs text-text-secondary flex items-center gap-2">
-              Mezclador de pistas inteligente
+              Mezclador de pistas sincronizado
             </p>
           </div>
           
-          <div className="flex items-center gap-2 w-full sm:w-auto bg-surface-elevated px-3 py-1.5 rounded-full border border-border/50">
-            <span className="text-[11px] font-medium text-text-secondary w-8 text-right">{formatTime(currentTime)}</span>
-            
-            <input 
-              type="range"
-              value={currentTime} 
-              max={duration || 100} 
-              step={0.1}
-              onChange={handleSeek}
-              className="w-full sm:w-40 h-1 bg-border rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-indigo-600 [&::-webkit-slider-thumb]:rounded-full transition-all"
-            />
-            
-            <span className="text-[11px] font-medium text-text-secondary w-8">{formatTime(duration)}</span>
-            
-            <Button 
-              onClick={togglePlay}
-              variant={playing ? 'outline' : 'default'}
-              size="icon"
-              className="w-7 h-7 ml-1 rounded-full shrink-0 transition-all duration-200"
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadAll}
+              className="text-xs h-8 px-2.5 flex items-center gap-1.5 shrink-0"
+              title="Descargar las 4 pistas"
             >
-              {playing ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Descargar Todo</span>
             </Button>
+
+            <div className="flex items-center gap-2 bg-surface-elevated px-3 py-1.5 rounded-full border border-border/50">
+              <span className="text-[11px] font-medium text-text-secondary w-8 text-right">{formatTime(currentTime)}</span>
+              
+              <input 
+                type="range"
+                value={currentTime} 
+                max={duration || 100} 
+                step={0.1}
+                onChange={handleSeek}
+                className="w-full sm:w-36 h-1 bg-border rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-indigo-600 [&::-webkit-slider-thumb]:rounded-full transition-all"
+              />
+              
+              <span className="text-[11px] font-medium text-text-secondary w-8">{formatTime(duration)}</span>
+              
+              <Button 
+                onClick={togglePlay}
+                variant={playing ? 'outline' : 'default'}
+                size="icon"
+                className="w-7 h-7 ml-1 rounded-full shrink-0 transition-all duration-200"
+              >
+                {playing ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
+              </Button>
+            </div>
           </div>
         </div>
 

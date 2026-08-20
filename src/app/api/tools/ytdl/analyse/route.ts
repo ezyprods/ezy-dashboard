@@ -145,8 +145,9 @@ async function getYouTubeOEmbed(videoId: string) {
 async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] = []): Promise<any[]> {
   const commonArgs = [
     '--no-warnings',
-    '--extractor-args', 'youtube:player_client=android',
-    '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+    ...cookieArgs,
+    '--extractor-args', 'youtube:player_client=tv_embedded',
+    '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+'
   ];
 
   const execute = (cmdArgs: string[]) => new Promise<any[]>((resolve, reject) => {
@@ -173,25 +174,25 @@ async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] 
   try {
     return await execute([...commonArgs, ...args]);
   } catch (err: any) {
-    console.warn('YTDLP android client failed, trying android_vr fallback...', err?.message || err);
+    console.warn('YTDLP tv_embedded client failed, trying android_creator fallback...', err?.message || err);
     const fallbackArgs = [
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=android_vr',
+      ...cookieArgs,
+      '--extractor-args', 'youtube:player_client=android_creator',
       '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
       ...args
     ];
     try {
       return await execute(fallbackArgs);
     } catch (fallbackErr: any) {
-      console.warn('YTDLP android_vr fallback failed, trying web with cookies...', fallbackErr?.message || fallbackErr);
-      const webArgs = [
+      console.warn('YTDLP android_creator fallback failed, trying android standalone...', fallbackErr?.message || fallbackErr);
+      const androidArgs = [
         '--no-warnings',
-        ...cookieArgs,
-        '--extractor-args', 'youtube:player_client=web,web_safari',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        '--extractor-args', 'youtube:player_client=android',
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
         ...args
       ];
-      return await execute(webArgs);
+      return await execute(androidArgs);
     }
   }
 }

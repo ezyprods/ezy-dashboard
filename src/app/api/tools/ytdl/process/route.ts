@@ -71,27 +71,27 @@ async function processDownload(taskId: string) {
 
     const clientConfigs = [
       {
+        name: 'tv_embedded',
+        useCookies: true,
+        args: [
+          '--extractor-args', 'youtube:player_client=tv_embedded',
+          '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+'
+        ]
+      },
+      {
+        name: 'android_creator',
+        useCookies: true,
+        args: [
+          '--extractor-args', 'youtube:player_client=android_creator',
+          '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+        ]
+      },
+      {
         name: 'android',
         useCookies: false,
         args: [
           '--extractor-args', 'youtube:player_client=android',
           '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-        ]
-      },
-      {
-        name: 'android_vr',
-        useCookies: false,
-        args: [
-          '--extractor-args', 'youtube:player_client=android_vr',
-          '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-        ]
-      },
-      {
-        name: 'web_cookies',
-        useCookies: true,
-        args: [
-          '--extractor-args', 'youtube:player_client=web,web_safari',
-          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
         ]
       }
     ];
