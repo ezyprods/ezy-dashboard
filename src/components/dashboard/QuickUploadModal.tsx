@@ -4,7 +4,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
-import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Music } from 'lucide-react';
+import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Music, Clock } from 'lucide-react';
+
 import type { Artist } from '@/types';
 import { findBestMatch, getNormalizedBaseName } from '@/lib/utils';
 
@@ -428,6 +429,60 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
                   ))}
                 </div>
               )}
+
+              {/* Scheduled deletion option */}
+              {tempUploads.length > 0 && (
+
+                <div className="p-3 bg-surface rounded-xl border border-border/60 space-y-2 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-text-primary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={scheduleDelete}
+                        onChange={(e) => setScheduleDelete(e.target.checked)}
+                        className="w-4 h-4 rounded text-accent focus:ring-accent bg-surface-elevated cursor-pointer"
+                      />
+                      <Clock className="w-3.5 h-3.5 text-accent" />
+                      Eliminado programado (Autodestrucción)
+                    </label>
+                    {scheduleDelete && (
+                      <span className="text-[10px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+                        Activo
+                      </span>
+                    )}
+                  </div>
+
+                  {scheduleDelete && (
+                    <div className="pt-1.5 border-t border-border/40 space-y-1.5">
+                      <p className="text-[11px] text-text-secondary">¿Cuándo deben eliminarse estos archivos?</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[
+                          { label: '1 hora', ms: 60 * 60 * 1000 },
+                          { label: '6 horas', ms: 6 * 60 * 60 * 1000 },
+                          { label: '24 horas', ms: 24 * 60 * 60 * 1000 },
+                          { label: '3 días', ms: 3 * 24 * 60 * 60 * 1000 },
+                          { label: '7 días', ms: 7 * 24 * 60 * 60 * 1000 },
+                          { label: '30 días', ms: 30 * 24 * 60 * 60 * 1000 },
+                        ].map((opt) => (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() => setExpiresInMs(opt.ms)}
+                            className={`py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center ${
+                              expiresInMs === opt.ms
+                                ? 'bg-accent text-white border-accent shadow-sm'
+                                : 'bg-surface-elevated border-border/60 text-text-secondary hover:border-accent/40 hover:text-text-primary'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
 
               {/* Upload progress bar */}
               {uploadState.status === 'uploading' && (

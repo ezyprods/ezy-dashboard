@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Users, Link as LinkIcon, Shield, Globe, User, X, Trash2 } from 'lucide-react';
+import { Loader2, Users, Link as LinkIcon, Shield, Globe, User, X, Trash2, Clock, Download, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { customAlert } from '@/lib/dialog';
 import { DrivePermission } from '@/types/file';
@@ -13,9 +13,11 @@ interface ShareModalProps {
   fileName: string;
   webContentLink?: string;
   webViewLink?: string;
+  expiresAt?: number | null;
 }
 
-export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, webContentLink }: ShareModalProps) {
+export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, webContentLink, expiresAt }: ShareModalProps) {
+
   const [permissions, setPermissions] = useState<DrivePermission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -151,6 +153,22 @@ export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, web
 
         {/* Content */}
         <div className="p-5 flex-1 overflow-y-auto space-y-6">
+          {/* Expiration Banner if file is scheduled for deletion */}
+          {expiresAt && (
+            <div className="p-3 bg-accent/10 border border-accent/25 rounded-xl flex items-start gap-2.5 text-accent animate-fade-in">
+              <Clock className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-0.5">
+                <p className="font-bold">⏱️ Archivo Temporal / Autodestrucción Activa</p>
+                <p className="text-text-secondary">
+                  Este archivo se eliminará de forma irreversible el{' '}
+                  <strong className="text-accent">
+                    {new Date(expiresAt).toLocaleString('es-ES', { dateStyle: 'full', timeStyle: 'short' })}
+                  </strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Add User */}
           <form onSubmit={handleAddPermission} className="flex gap-2">
             <input 
@@ -247,14 +265,30 @@ export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, web
         </div>
 
         {/* Footer */}
-        <div className="p-5 border-t border-border flex items-center justify-between bg-surface-elevated/50 rounded-b-2xl">
-          <Button variant="outline" onClick={handleCopyLink} className="gap-2" disabled={!webViewLink}>
-            <LinkIcon className="w-4 h-4" />
-            Copiar enlace
-          </Button>
-          <Button onClick={onClose} variant="default">Hecho</Button>
+        <div className="p-4 border-t border-border flex flex-wrap items-center justify-between gap-2 bg-surface-elevated/50 rounded-b-2xl">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleCopyLink} className="gap-1.5 text-xs h-9" disabled={!webViewLink}>
+              <LinkIcon className="w-3.5 h-3.5" />
+              Copiar Enlace
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const directUrl = `${window.location.origin}/api/files/${fileId}?inline=true`;
+                navigator.clipboard.writeText(directUrl);
+                customAlert('Enlace directo copiado al portapapeles.');
+              }}
+              className="gap-1.5 text-xs h-9 border-accent/30 text-accent hover:bg-accent/10"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Enlace Directo
+            </Button>
+          </div>
+          <Button onClick={onClose} variant="default" size="sm" className="h-9 px-4">Hecho</Button>
         </div>
       </div>
     </div>
   );
 }
+

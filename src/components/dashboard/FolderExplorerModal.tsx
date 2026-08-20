@@ -740,8 +740,10 @@ export function FolderExplorerModal({
           fileName={shareModalFile.name}
           webViewLink={shareModalFile.webViewLink}
           webContentLink={shareModalFile.webContentLink}
+          expiresAt={shareModalFile.expiresAt}
         />
       )}
+
 
       {miniDAWFile && (
         <DAWErrorBoundary onClose={() => setMiniDAWFile(null)}>

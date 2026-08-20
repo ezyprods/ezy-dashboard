@@ -2000,8 +2000,10 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
           fileName={shareModalFile.name}
           webViewLink={shareModalFile.webViewLink}
           webContentLink={shareModalFile.webContentLink}
+          expiresAt={shareModalFile.expiresAt}
         />
       )}
+
 
       {deleteModalFile && (
         <DeleteModal
