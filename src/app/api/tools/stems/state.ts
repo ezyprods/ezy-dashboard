@@ -5,7 +5,14 @@ export interface StemsTask {
   filename: string;
   status: StemsTaskStatus;
   progress: number;
+  engine?: 'cloud' | 'local';
   outputDir?: string;
+  stems?: {
+    vocals?: string;
+    drums?: string;
+    bass?: string;
+    other?: string;
+  };
   error?: string;
 }
 
