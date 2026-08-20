@@ -71,33 +71,37 @@ async function processDownload(taskId: string) {
 
     const clientConfigs = [
       {
-        name: 'android_ios_mweb',
+        name: 'android',
+        useCookies: false,
         args: [
-          '--extractor-args', 'youtube:player_client=android,ios,mweb',
+          '--extractor-args', 'youtube:player_client=android',
           '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
         ]
       },
       {
-        name: 'android_vr_tv_downgraded',
+        name: 'android_vr',
+        useCookies: false,
         args: [
-          '--extractor-args', 'youtube:player_client=android_vr,tv_downgraded',
+          '--extractor-args', 'youtube:player_client=android_vr',
           '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
         ]
       },
       {
-        name: 'android_mweb_creator',
+        name: 'web_cookies',
+        useCookies: true,
         args: [
-          '--extractor-args', 'youtube:player_client=android,mweb,web_creator',
-          '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+          '--extractor-args', 'youtube:player_client=web,web_safari',
+          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
         ]
       }
     ];
 
     const executeDownload = (targetUrl: string, clientConfig: typeof clientConfigs[0]) => {
+      const extraCookieArgs = (clientConfig.useCookies && cookieArgs.length > 0) ? cookieArgs : [];
       const args = [
         '--no-warnings',
         '--no-playlist',
-        ...cookieArgs,
+        ...extraCookieArgs,
         ...clientConfig.args,
         '--extract-audio',
         '--audio-format', 'mp3',

@@ -684,20 +684,24 @@ export function ProductionGridBoard({
     saveGrid({ ...currentGrid, rows: newRows });
   }, []);
 
-  const handleColDragEnd = (event: DragEndEvent) => {
+  const handleUnifiedDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIdx = grid.columns.findIndex(c => c.id === active.id);
-    const newIdx = grid.columns.findIndex(c => c.id === over.id);
-    saveGrid({ ...grid, columns: arrayMove(grid.columns, oldIdx, newIdx) });
-  };
-
-  const handleRowDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIdx = grid.rows.findIndex(r => r.id === active.id);
-    const newIdx = grid.rows.findIndex(r => r.id === over.id);
-    saveGrid({ ...grid, rows: arrayMove(grid.rows, oldIdx, newIdx) });
+    
+    const isCol = grid.columns.some(c => c.id === active.id);
+    if (isCol) {
+      const oldIdx = grid.columns.findIndex(c => c.id === active.id);
+      const newIdx = grid.columns.findIndex(c => c.id === over.id);
+      if (oldIdx !== -1 && newIdx !== -1) {
+        saveGrid({ ...grid, columns: arrayMove(grid.columns, oldIdx, newIdx) });
+      }
+    } else {
+      const oldIdx = grid.rows.findIndex(r => r.id === active.id);
+      const newIdx = grid.rows.findIndex(r => r.id === over.id);
+      if (oldIdx !== -1 && newIdx !== -1) {
+        saveGrid({ ...grid, rows: arrayMove(grid.rows, oldIdx, newIdx) });
+      }
+    }
   };
 
   if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>;
@@ -732,64 +736,63 @@ export function ProductionGridBoard({
       <div className="relative">
         {/* Fade indicator for horizontal scroll */}
         <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-background/80 to-transparent z-10 md:hidden rounded-r-xl" />
-      <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border shadow-sm relative" style={{ touchAction: 'pan-x pan-y' }}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColDragEnd}>
-          <table 
-            ref={containerRef}
-            className="w-full text-left border-collapse select-none"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-          >
-            {selectionBox.active && (
-              <div 
-                className="absolute bg-accent/20 border border-accent pointer-events-none z-50 rounded"
-                style={{
-                  left: Math.min(selectionBox.start.x, selectionBox.end.x),
-                  top: Math.min(selectionBox.start.y, selectionBox.end.y),
-                  width: Math.abs(selectionBox.end.x - selectionBox.start.x),
-                  height: Math.abs(selectionBox.end.y - selectionBox.start.y),
-                }}
-              />
-            )}
-            <thead>
-              <tr>
-                <th className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 w-40 sm:w-64 min-w-[160px] sm:min-w-[250px] max-w-[160px] sm:max-w-[400px]">
-                  <div className="flex items-center gap-1">
-                    <Input placeholder="Nueva fila..." value={newRowName} onChange={e => setNewRowName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addRow()} className="h-7 text-xs bg-transparent w-full" />
-                    <Button size="sm" variant="ghost" onClick={addRow} disabled={!newRowName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>
-                  </div>
-                </th>
+        <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border shadow-sm relative" style={{ touchAction: 'pan-x pan-y' }}>
+          {selectionBox.active && (
+            <div 
+              className="absolute bg-accent/20 border border-accent pointer-events-none z-50 rounded"
+              style={{
+                left: Math.min(selectionBox.start.x, selectionBox.end.x),
+                top: Math.min(selectionBox.start.y, selectionBox.end.y),
+                width: Math.abs(selectionBox.end.x - selectionBox.start.x),
+                height: Math.abs(selectionBox.end.y - selectionBox.start.y),
+              }}
+            />
+          )}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleUnifiedDragEnd}>
+            <table 
+              ref={containerRef}
+              className="w-full text-left border-collapse select-none"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+            >
+              <thead>
+                <tr>
+                  <th className="p-1.5 sm:p-3 border-b border-r border-border bg-surface/50 w-40 sm:w-64 min-w-[160px] sm:min-w-[250px] max-w-[160px] sm:max-w-[400px]">
+                    <div className="flex items-center gap-1">
+                      <Input placeholder="Nueva fila..." value={newRowName} onChange={e => setNewRowName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addRow()} className="h-7 text-xs bg-transparent w-full" />
+                      <Button size="sm" variant="ghost" onClick={addRow} disabled={!newRowName.trim()} className="h-7 px-1.5 shrink-0"><Plus className="w-3.5 h-3.5" /></Button>
+                    </div>
+                  </th>
 
-                <SortableContext items={grid.columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
-                  {grid.columns.map(col => <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} onRename={renameColumn} />)}
-                </SortableContext>
+                  <SortableContext items={grid.columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
+                    {grid.columns.map(col => <SortableColHeader key={col.id} col={col} onDelete={deleteColumn} onRename={renameColumn} />)}
+                  </SortableContext>
 
-                <th className="p-1 sm:p-2 border-b border-border bg-surface/50 w-10 min-w-[40px] max-w-[40px] shrink-0 text-center">
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      showMenu(e.clientX, e.clientY, COL_TYPES.map(t => ({
-                        label: t.label,
-                        icon: t.id === 'status' ? 'Circle' : t.id === 'file' ? 'Paperclip' : t.id === 'checklist' ? 'CheckSquare' : t.id === 'text' ? 'AlignLeft' : 'Calendar',
-                        action: () => {
-                          const id = Math.random().toString(36).substring(7);
-                          const updatedRows = grid.rows.map(r => ({ ...r, cells: { ...r.cells, [id]: { status: 'todo' as FlexTaskStatus } } }));
-                          saveGrid({ ...grid, columns: [...grid.columns, { id, name: t.label, type: t.id }], rows: updatedRows });
-                        }
-                      })));
-                    }} 
-                    className="h-7 w-7 p-0 shrink-0 text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
-                    title="Añadir Columna"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </th>
-              </tr>
-            </thead>
+                  <th className="p-1 sm:p-2 border-b border-border bg-surface/50 w-10 min-w-[40px] max-w-[40px] shrink-0 text-center">
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        showMenu(e.clientX, e.clientY, COL_TYPES.map(t => ({
+                          label: t.label,
+                          icon: t.id === 'status' ? 'Circle' : t.id === 'file' ? 'Paperclip' : t.id === 'checklist' ? 'CheckSquare' : t.id === 'text' ? 'AlignLeft' : 'Calendar',
+                          action: () => {
+                            const id = Math.random().toString(36).substring(7);
+                            const updatedRows = grid.rows.map(r => ({ ...r, cells: { ...r.cells, [id]: { status: 'todo' as FlexTaskStatus } } }));
+                            saveGrid({ ...grid, columns: [...grid.columns, { id, name: t.label, type: t.id }], rows: updatedRows });
+                          }
+                        })));
+                      }} 
+                      className="h-7 w-7 p-0 shrink-0 text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
+                      title="Añadir Columna"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </th>
+                </tr>
+              </thead>
 
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRowDragEnd}>
               <tbody>
                 <SortableContext items={grid.rows.map(r => r.id)} strategy={verticalListSortingStrategy}>
                   {grid.rows.map(row => (
@@ -812,10 +815,9 @@ export function ProductionGridBoard({
                   </tr>
                 )}
               </tbody>
-            </DndContext>
-          </table>
-        </DndContext>
-      </div>
+            </table>
+          </DndContext>
+        </div>
       </div>{/* end scroll wrapper */}
 
       {linkingRowId && (

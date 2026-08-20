@@ -213,9 +213,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const pendingPayment = Math.max(0, totalBudget - totalPaid);
 
-    // 4.5 Obtener las matrices compartidas
+    // 4.5 Obtener las matrices compartidas (solo las que tienen sharedInPortal === true)
     const matricesData = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
-    const sharedMatrices = await Promise.all((matricesData.matrices || []).map(async (m: any) => {
+    const sharedMatricesList = (matricesData.matrices || []).filter((m: any) => m.sharedInPortal === true);
+    const sharedMatrices = await Promise.all(sharedMatricesList.map(async (m: any) => {
       let grid = m.productionGrid;
       if (m.projectId && grid) {
         try {

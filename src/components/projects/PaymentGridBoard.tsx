@@ -367,10 +367,30 @@ export function PaymentGridBoard({ projectId }: { projectId: string }) {
       })
     : grid.rows;
 
+  const handleUnifiedDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    
+    const isCol = grid.columns.some(c => c.id === active.id);
+    if (isCol) {
+      const oldIdx = grid.columns.findIndex(c => c.id === active.id);
+      const newIdx = grid.columns.findIndex(c => c.id === over.id);
+      if (oldIdx !== -1 && newIdx !== -1) {
+        saveGrid({ ...grid, columns: arrayMove(grid.columns, oldIdx, newIdx) });
+      }
+    } else {
+      const oldIdx = displayRows.findIndex(r => r.id === active.id);
+      const newIdx = displayRows.findIndex(r => r.id === over.id);
+      if (oldIdx !== -1 && newIdx !== -1) {
+        saveGrid({ ...grid, rows: arrayMove(displayRows, oldIdx, newIdx) });
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in mt-6">
       <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border mt-4">
-        <DndContext sensors={colSensors} collisionDetection={closestCenter} onDragEnd={handleColDragEnd}>
+        <DndContext sensors={colSensors} collisionDetection={closestCenter} onDragEnd={handleUnifiedDragEnd}>
           <table className="w-full text-left border-collapse">
             <thead>
               <tr>
@@ -412,29 +432,27 @@ export function PaymentGridBoard({ projectId }: { projectId: string }) {
               </tr>
             </thead>
 
-            <DndContext sensors={rowSensors} collisionDetection={closestCenter} onDragEnd={handleRowDragEnd}>
-              <tbody>
-                <SortableContext items={displayRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
-                  {displayRows.map(row => (
-                    <SortableRow
-                      key={row.id}
-                      row={row}
-                      columns={grid.columns}
-                      mode={grid.mode || 'interconnected'}
-                      onDelete={deleteRow}
-                      onCellChange={handleCellChange}
-                    />
-                  ))}
-                </SortableContext>
-                {displayRows.length === 0 && (
-                  <tr>
-                    <td colSpan={grid.columns.length + 2} className="p-8 text-center text-text-secondary border-b border-border">
-                      {grid.mode === 'interconnected' ? 'Sube archivos al proyecto para empezar a cobrar por ellos.' : 'Añade filas para empezar.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </DndContext>
+            <tbody>
+              <SortableContext items={displayRows.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                {displayRows.map(row => (
+                  <SortableRow
+                    key={row.id}
+                    row={row}
+                    columns={grid.columns}
+                    mode={grid.mode || 'interconnected'}
+                    onDelete={deleteRow}
+                    onCellChange={handleCellChange}
+                  />
+                ))}
+              </SortableContext>
+              {displayRows.length === 0 && (
+                <tr>
+                  <td colSpan={grid.columns.length + 2} className="p-8 text-center text-text-secondary border-b border-border">
+                    {grid.mode === 'interconnected' ? 'Sube archivos al proyecto para empezar a cobrar por ellos.' : 'Añade filas para empezar.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
           </table>
         </DndContext>
       </div>

@@ -178,19 +178,25 @@ export function GlobalContextMenu() {
   }, [getDefaultItems, getArtistItems, getAudioItems, showMenu]);
 
   const [position, setPosition] = React.useState({ x: 0, y: 0 });
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(typeof window !== 'undefined' && window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (menuState.visible && typeof window !== 'undefined') {
       let x = menuState.x;
       let y = menuState.y;
 
-      // Ensure menu fits in viewport
       if (menuRef.current) {
         const rect = menuRef.current.getBoundingClientRect();
         if (x + rect.width > window.innerWidth) x = window.innerWidth - rect.width - 8;
         if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 8;
       } else {
-        // Fallback approximate bounds if ref is not measured yet
         const approxW = 200;
         const approxH = menuState.items.length * 40 + 16;
         if (x + approxW > window.innerWidth) x = window.innerWidth - approxW - 8;
@@ -200,30 +206,88 @@ export function GlobalContextMenu() {
     }
   }, [menuState]);
 
-  // Close on outside click, scroll, escape
+  // Close on outside click, scroll, escape, touch
   useEffect(() => {
     if (!menuState.visible) return;
 
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = 'touches' in e ? e.touches[0]?.target : e.target;
+      if (menuRef.current && target && !menuRef.current.contains(target as Node)) {
         hideMenu();
       }
     };
-    const handleScroll = () => hideMenu();
+    const handleScroll = () => {
+      if (!isMobile) hideMenu();
+    };
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') hideMenu(); };
 
-    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handlePointerDown as any);
+    document.addEventListener('touchstart', handlePointerDown as any);
     document.addEventListener('scroll', handleScroll, { capture: true });
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('mousedown', handlePointerDown as any);
+      document.removeEventListener('touchstart', handlePointerDown as any);
       document.removeEventListener('scroll', handleScroll, { capture: true });
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [menuState.visible, hideMenu]);
+  }, [menuState.visible, hideMenu, isMobile]);
 
   if (!menuState.visible || typeof document === 'undefined') return null;
+
+  if (isMobile) {
+    return createPortal(
+      <div 
+        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm flex flex-col justify-end animate-fade-in"
+        onClick={hideMenu}
+      >
+        <div
+          ref={menuRef}
+          className="w-full bg-surface-elevated/95 backdrop-blur-2xl border-t border-border rounded-t-3xl p-4 pb-8 shadow-2xl animate-in slide-in-from-bottom-6 duration-200 z-[9999]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Drag Pill */}
+          <div className="w-12 h-1.5 bg-border/80 rounded-full mx-auto mb-4" />
+          
+          <div className="space-y-1">
+            {menuState.items.map((item, i) => {
+              if (item.separator) {
+                return <div key={`sep-${i}`} className="my-2 border-t border-border/40" />;
+              }
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    if (item.action) item.action();
+                    hideMenu();
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-100 text-left active:bg-surface-elevated/80',
+                    item.variant === 'danger'
+                      ? 'text-error hover:bg-error/10'
+                      : 'text-text-primary hover:bg-accent/10 hover:text-accent-light',
+                    item.className
+                  )}
+                >
+                  <MenuIcon name={item.icon} className={cn('w-4 h-4', item.iconClassName)} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={hideMenu}
+            className="w-full mt-4 py-3 text-center text-xs font-semibold text-text-secondary bg-surface rounded-xl border border-border/60 active:bg-surface-elevated"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div

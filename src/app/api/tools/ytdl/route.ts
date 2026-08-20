@@ -35,13 +35,11 @@ export async function GET(req: Request) {
     } catch(e) {}
 
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
-    const cookieArgs = await buildCookieArgs();
 
     // Spawn yt-dlp to stream mp3 directly to stdout
     const ytdlp = spawn(ytdlpPath, [
       '--no-warnings',
-      ...cookieArgs,
-      '--extractor-args', 'youtube:player_client=android,ios,mweb',
+      '--extractor-args', 'youtube:player_client=android',
       '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
       '-x', 
       '--audio-format', 'mp3',

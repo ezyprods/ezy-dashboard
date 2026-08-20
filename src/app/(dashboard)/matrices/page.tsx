@@ -1,22 +1,36 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil, Copy, Link as LinkIcon, CheckCircle2, RotateCcw, BoxSelect } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil, Copy, Link as LinkIcon, CheckCircle2, RotateCcw, BoxSelect, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
-export default function MatricesPage() {
+function MatricesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [matrices, setMatrices] = useState<any[]>([]);
   const [completedMatrices, setCompletedMatrices] = useState<any[]>([]);
   const [artists, setArtists] = useState<any[]>([]);
   const [showCompleted, setShowCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeMatrix, setActiveMatrix] = useState<{ id: string; name: string; artistId: string; artistName: string } | null>(null);
+  const [activeMatrix, setActiveMatrixState] = useState<{ id: string; name: string; artistId: string; artistName: string } | null>(null);
+  const [searchTermQuery, setSearchTermQuery] = useState('');
+
+  const setActiveMatrix = (m: { id: string; name: string; artistId: string; artistName: string } | null) => {
+    setActiveMatrixState(m);
+    if (typeof window !== 'undefined') {
+      if (m) {
+        const newUrl = `/matrices?id=${encodeURIComponent(m.id)}&artist=${encodeURIComponent(m.artistId)}`;
+        window.history.replaceState(null, '', newUrl);
+      } else {
+        window.history.replaceState(null, '', '/matrices');
+      }
+    }
+  };
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -65,9 +79,49 @@ export default function MatricesPage() {
           return;
         }
         
-        setMatrices(matricesData.matrices || []);
-        setCompletedMatrices(matricesData.completedMatrices || []);
-        setArtists(artistsData.artists || []);
+        const allActives = matricesData.matrices || [];
+        const allCompleteds = matricesData.completedMatrices || [];
+        const allArtistsList = artistsData.artists || [];
+
+        setMatrices(allActives);
+        setCompletedMatrices(allCompleteds);
+        setArtists(allArtistsList);
+
+        // Check if direct link params are present in URL
+        const directId = searchParams.get('id');
+        const directArtist = searchParams.get('artist');
+        if (directId) {
+          const allMatricesList = [...allActives, ...allCompleteds];
+          const found = allMatricesList.find(m => m.id === directId);
+          if (found) {
+            setActiveMatrixState({
+              id: found.id,
+              name: found.name,
+              artistId: found.artistId,
+              artistName: found.artistName
+            });
+          } else if (directArtist) {
+            // Fetch directly from artist matrices endpoint if not in global list
+            try {
+              const res = await fetch(`/api/artists/${directArtist}/matrices`);
+              if (res.ok) {
+                const artistMatricesData = await res.json();
+                const specificMatrix = (artistMatricesData.matrices || []).find((m: any) => m.id === directId);
+                const artistObj = allArtistsList.find((a: any) => a.id === directArtist);
+                if (specificMatrix) {
+                  setActiveMatrixState({
+                    id: specificMatrix.id,
+                    name: specificMatrix.name,
+                    artistId: directArtist,
+                    artistName: artistObj?.name || 'Artista'
+                  });
+                }
+              }
+            } catch (err) {
+              console.error('Error resolving direct matrix link', err);
+            }
+          }
+        }
       } else {
         console.error('Error fetching data');
       }
@@ -365,17 +419,56 @@ export default function MatricesPage() {
     );
   }
 
+  const normalize = (s: string) => s?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
+  const query = normalize(searchTermQuery.trim());
+
+  const filteredMatrices = matrices.filter(m => 
+    !query || 
+    normalize(m.name).includes(query) || 
+    normalize(m.artistName).includes(query)
+  );
+
+  const filteredCompleted = completedMatrices.filter(m => 
+    !query || 
+    normalize(m.name).includes(query) || 
+    normalize(m.artistName).includes(query)
+  );
+
   return (
     <div className="space-y-6 animate-fade-in pb-20">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-text-primary">Matrices de Producción</h1>
           <p className="text-sm text-text-secondary mt-1 hidden sm:block">Crea, visualiza y gestiona las tareas y fases de todos tus artistas de forma unificada.</p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} size="sm" className="shrink-0">
-          <Plus className="w-4 h-4 mr-1.5" /> Nueva
-        </Button>
+        
+        <div className="flex items-center gap-3">
+          {/* Search bar */}
+          <div className="relative min-w-[220px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-secondary pointer-events-none" />
+            <input 
+              type="text"
+              placeholder="Buscar matriz o artista..."
+              value={searchTermQuery}
+              onChange={(e) => setSearchTermQuery(e.target.value)}
+              className="w-full pl-8 pr-8 py-1.5 text-xs bg-surface border border-border/80 rounded-xl text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+            {searchTermQuery && (
+              <button 
+                onClick={() => setSearchTermQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary p-0.5 rounded"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <Button onClick={() => setIsModalOpen(true)} size="sm" className="shrink-0">
+            <Plus className="w-4 h-4 mr-1.5" /> Nueva
+          </Button>
+        </div>
       </div>
 
       {matrices.length === 0 ? (
@@ -387,9 +480,16 @@ export default function MatricesPage() {
             Crear la primera matriz
           </Button>
         </div>
+      ) : filteredMatrices.length === 0 ? (
+        <div className="glass rounded-xl p-12 text-center text-text-secondary border border-border">
+          <p className="text-sm">No se encontraron matrices activas con la búsqueda "{searchTermQuery}".</p>
+          <Button variant="ghost" size="sm" onClick={() => setSearchTermQuery('')} className="mt-3 text-accent text-xs">
+            Limpiar búsqueda
+          </Button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {matrices.map((m: any) => (
+          {filteredMatrices.map((m: any) => (
             <div 
               key={m.id} 
               onClick={() => {
@@ -456,52 +556,58 @@ export default function MatricesPage() {
           
           {showCompleted && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-4 duration-300">
-              {completedMatrices.map((m: any) => (
-                <div 
-                  key={m.id} 
-                  onClick={() => {
-                    setActiveMatrix({
-                      id: m.id,
-                      name: m.name,
-                      artistId: m.artistId,
-                      artistName: m.artistName
-                    });
-                  }}
-                  onContextMenu={(e) => handleMatrixContextMenu(e, m, true)}
-                  className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between min-h-[180px] opacity-70 hover:opacity-100 bg-surface/50 cursor-context-menu"
-                >
-                  <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Check className="w-5 h-5 text-success shrink-0" />
-                        <h4 className="font-bold text-base text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
+              {filteredCompleted.length === 0 ? (
+                <div className="col-span-full glass rounded-xl p-6 text-center text-text-secondary border border-border">
+                  <p className="text-xs">No se encontraron matrices completadas que coincidan con la búsqueda.</p>
+                </div>
+              ) : (
+                filteredCompleted.map((m: any) => (
+                  <div 
+                    key={m.id} 
+                    onClick={() => {
+                      setActiveMatrix({
+                        id: m.id,
+                        name: m.name,
+                        artistId: m.artistId,
+                        artistName: m.artistName
+                      });
+                    }}
+                    onContextMenu={(e) => handleMatrixContextMenu(e, m, true)}
+                    className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between min-h-[180px] opacity-70 hover:opacity-100 bg-surface/50 cursor-context-menu"
+                  >
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Check className="w-5 h-5 text-success shrink-0" />
+                          <h4 className="font-bold text-base text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium mb-4">
+                        <User className="w-3.5 h-3.5 text-accent-light" />
+                        <span>Artista:</span>
+                        <span className="text-text-primary hover:text-accent hover:underline transition-colors cursor-pointer" onClick={(e) => { e.stopPropagation(); router.push(`/artists/${m.artistId}`); }}>
+                          {m.artistName || 'Desconocido'}
+                        </span>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-1.5 text-xs text-text-secondary font-medium mb-4">
-                      <User className="w-3.5 h-3.5 text-accent-light" />
-                      <span>Artista:</span>
-                      <span className="text-text-primary hover:text-accent hover:underline transition-colors cursor-pointer" onClick={(e) => { e.stopPropagation(); router.push(`/artists/${m.artistId}`); }}>
-                        {m.artistName || 'Desconocido'}
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-4 text-[10px] text-text-secondary">
-                      <span className="text-success font-medium">Completada</span>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-4 text-[10px] text-text-secondary">
+                        <span className="text-success font-medium">Completada</span>
+                      </div>
+                      
+                      <Button 
+                        className="w-full text-xs h-8" 
+                        variant="outline" 
+                        onClick={() => setActiveMatrix({ id: m.id, name: m.name, artistId: m.artistId, artistName: m.artistName })}
+                      >
+                        Ver Matriz
+                      </Button>
                     </div>
-                    
-                    <Button 
-                      className="w-full text-xs h-8" 
-                      variant="outline" 
-                      onClick={() => setActiveMatrix({ id: m.id, name: m.name, artistId: m.artistId, artistName: m.artistName })}
-                    >
-                      Ver Matriz
-                    </Button>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>
@@ -639,5 +745,17 @@ export default function MatricesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function MatricesPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      </div>
+    }>
+      <MatricesContent />
+    </Suspense>
   );
 }

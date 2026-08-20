@@ -53,7 +53,7 @@ export function GlobalMatricesWidget({ matrices, isLoading }: { matrices: any[],
             matrices.map(m => (
               <Link 
                 key={`${m.artistId}-${m.id}`}
-                href={`/artists/${m.artistId}?tab=matrices`}
+                href={`/matrices?id=${m.id}&artist=${m.artistId}`}
                 className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-surface border border-transparent hover:border-border/50 transition-colors group block shrink-0"
               >
                 <div className="flex-1 min-w-0">

@@ -6,7 +6,7 @@ import {
   Loader2, Music, CheckCircle2, Circle, Headphones, CreditCard,
   AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
   SkipForward, SkipBack, ChevronRight, Lock, Download, ExternalLink,
-  Star, Clock, TrendingUp, ListMusic, Eye, Wrench
+  Star, Clock, TrendingUp, ListMusic, Eye, Wrench, Paperclip, Calendar as CalendarIcon, CheckSquare, ListTodo
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
@@ -318,6 +318,96 @@ export default function PortalPage() {
                             </td>
                             {matrix.productionGrid?.columns?.map((col: any) => {
                               const cell = row.cells?.[col.id] || {};
+                              const colType = col.type || 'status';
+
+                              if (colType === 'file') {
+                                const isAudio = cell.fileName?.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i);
+                                return (
+                                  <td key={col.id} className="p-3 text-center">
+                                    {cell.fileId ? (
+                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs max-w-[180px]">
+                                        {isAudio && (
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              playTrack({
+                                                id: cell.fileId,
+                                                name: cell.fileName?.replace(/\.[^/.]+$/, '') || 'Audio',
+                                                url: `/api/audio/${cell.fileId}`,
+                                                artistName: data?.artistConfig?.artistName || 'Artista'
+                                              });
+                                            }}
+                                            className="text-accent hover:text-accent-light shrink-0"
+                                            title="Reproducir"
+                                          >
+                                            <Play className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                        <span className="truncate" title={cell.fileName}>{cell.fileName}</span>
+                                        <a 
+                                          href={`/api/files/${cell.fileId}?inline=false`} 
+                                          className="text-text-secondary hover:text-text-primary ml-1 shrink-0"
+                                          title="Descargar"
+                                        >
+                                          <Download className="w-3 h-3" />
+                                        </a>
+                                      </div>
+                                    ) : (
+                                      <span className="text-text-secondary/40 text-[11px]">-</span>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              if (colType === 'checklist') {
+                                const list = cell.checklist || [];
+                                const total = list.length;
+                                const done = list.filter((item: any) => item.done).length;
+                                return (
+                                  <td key={col.id} className="p-3 text-center">
+                                    {total > 0 ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface border border-border text-[11px] font-medium text-text-secondary">
+                                        <ListTodo className="w-3 h-3 text-accent" />
+                                        <span>{done}/{total}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-text-secondary/40 text-[11px]">-</span>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              if (colType === 'text') {
+                                const val = cell.textValue || cell.notes;
+                                return (
+                                  <td key={col.id} className="p-3 text-center">
+                                    {val ? (
+                                      <span className="text-xs text-text-primary truncate max-w-[160px] inline-block" title={val}>
+                                        {val}
+                                      </span>
+                                    ) : (
+                                      <span className="text-text-secondary/40 text-[11px]">-</span>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              if (colType === 'date') {
+                                return (
+                                  <td key={col.id} className="p-3 text-center">
+                                    {cell.dueDate ? (
+                                      <span className="inline-flex items-center gap-1 text-[11px] text-text-secondary font-medium">
+                                        <CalendarIcon className="w-3 h-3 text-text-secondary" />
+                                        {cell.dueDate}
+                                      </span>
+                                    ) : (
+                                      <span className="text-text-secondary/40 text-[11px]">-</span>
+                                    )}
+                                  </td>
+                                );
+                              }
+
+                              // Default status column
                               const status = cell.status || 'todo';
                               const statusStyles: Record<string, string> = {
                                 todo: 'border-border bg-surface text-text-secondary',

@@ -1,16 +1,21 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Loader2, KanbanSquare, Circle, Clock, AlertCircle, ArrowRight, CheckCircle2, Play, Download, ExternalLink, MoreHorizontal, Link as LinkIcon, GripVertical } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { 
+  Loader2, KanbanSquare, Circle, Clock, AlertCircle, ArrowRight, 
+  CheckCircle2, Play, Download, ExternalLink, MoreHorizontal, 
+  Link as LinkIcon, GripVertical, Search, X, Filter, Table2 
+} from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { customAlert } from '@/lib/dialog';
 import { useSmoothScroll } from '@/hooks/useSmoothScroll';
+import type { FlexTaskStatus } from '@/types';
 
 import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverlay, defaultDropAnimationSideEffects, useDraggable, useDroppable
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverlay, useDraggable, useDroppable
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -24,7 +29,7 @@ interface PendingTask {
   rowName: string;
   colId: string;
   colName: string;
-  status: 'todo' | 'in_progress' | 'review' | 'completed';
+  status: FlexTaskStatus;
   projectId?: string;
   linkedFile?: { id: string; name: string; webViewLink?: string; webContentLink?: string; mimeType?: string };
 }
@@ -41,7 +46,7 @@ function TaskCard({
   task: PendingTask; 
   borderColor: string; 
   isOverlay?: boolean;
-  onUpdateStatus: (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review' | 'completed') => void;
+  onUpdateStatus: (task: PendingTask, newStatus: FlexTaskStatus) => void;
 }) {
   const { showMenu } = useContextMenu();
   const { playTrack } = useAudio();
@@ -64,7 +69,7 @@ function TaskCard({
       { label: 'Pendiente', icon: 'Circle', iconClassName: 'text-text-secondary', className: 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated', action: () => onUpdateStatus(task, 'todo') },
       { label: 'En Progreso', icon: 'Clock', iconClassName: 'text-warning', className: '!text-warning hover:!text-warning hover:bg-warning/10', action: () => onUpdateStatus(task, 'in_progress') },
       { label: 'En Revisión', icon: 'AlertCircle', iconClassName: 'text-blue-400', className: '!text-blue-400 hover:!text-blue-400 hover:bg-blue-500/10', action: () => onUpdateStatus(task, 'review') },
-      { label: 'Completado', icon: 'CheckCircle2', iconClassName: 'text-success', className: '!text-success hover:!text-success hover:bg-success/10', action: () => onUpdateStatus(task, 'completed') },
+      { label: 'Completado (Hecho)', icon: 'CheckCircle2', iconClassName: 'text-success', className: '!text-success hover:!text-success hover:bg-success/10', action: () => onUpdateStatus(task, 'done') },
     ]);
   };
 
@@ -80,7 +85,7 @@ function TaskCard({
         borderColor,
         "bg-surface hover:bg-surface-elevated",
         isDragging && !isOverlay ? "opacity-40 scale-95" : "opacity-100",
-        isOverlay ? "shadow-2xl shadow-black/10 scale-105 rotate-2 cursor-grabbing" : "hover:-translate-y-0.5 hover:shadow-md hover:shadow-black/5"
+        isOverlay ? "shadow-2xl shadow-black/20 scale-105 rotate-1 cursor-grabbing ring-1 ring-accent" : "hover:-translate-y-0.5 hover:shadow-md hover:shadow-black/5"
       )}
     >
       <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
@@ -91,15 +96,16 @@ function TaskCard({
             <button
               {...(isOverlay ? {} : attributes)}
               {...(isOverlay ? {} : listeners)}
-              className="text-text-secondary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-opacity shrink-0 cursor-grab active:cursor-grabbing"
+              className="text-text-secondary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-opacity shrink-0 cursor-grab active:cursor-grabbing p-0.5"
               title="Arrastrar para mover"
             >
               <GripVertical className="w-3.5 h-3.5" />
             </button>
             <Link 
               href={`/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}`}
-              className="font-semibold text-text-primary text-[13px] hover:text-accent transition-colors z-10"
+              className="font-semibold text-text-primary text-[13px] hover:text-accent transition-colors z-10 truncate max-w-[140px]"
               onPointerDown={(e) => e.stopPropagation()}
+              title={task.rowName}
             >
               {task.rowName}
             </Link>
@@ -110,6 +116,7 @@ function TaskCard({
               href={`/artists/${task.artistId}`}
               className="text-[9px] font-bold tracking-wider uppercase bg-surface-elevated px-1.5 py-0.5 rounded text-text-secondary hover:text-accent hover:bg-accent/10 transition-colors truncate max-w-[80px] z-10 shrink-0"
               onPointerDown={(e) => e.stopPropagation()}
+              title={task.artistName}
             >
               {task.artistName}
             </Link>
@@ -118,12 +125,13 @@ function TaskCard({
               href={task.projectId ? `/projects/${task.projectId}` : `/artists/${task.artistId}?tab=matrices&matrixId=${task.matrixId}`}
               className="text-[9px] font-medium text-text-secondary hover:text-accent transition-colors truncate max-w-[90px] z-10 shrink-0"
               onPointerDown={(e) => e.stopPropagation()}
+              title={task.matrixName}
             >
               {task.matrixName}
             </Link>
           </div>
           <button 
-            className="p-0.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-background/50 transition-colors z-10 shrink-0"
+            className="p-1 text-text-secondary hover:text-text-primary rounded-md hover:bg-background/50 transition-colors z-10 shrink-0"
             onClick={(e) => handleContextMenu(e)}
             onPointerDown={(e) => e.stopPropagation()}
             title="Opciones"
@@ -161,10 +169,11 @@ function TaskCard({
                       pathSegments: pathSegs 
                     }); 
                   }} 
-                  className="bg-accent/10 hover:bg-accent/20 text-accent transition-colors p-1 rounded-md" 
+                  className="bg-accent/10 hover:bg-accent/20 text-accent transition-colors p-1 rounded-md flex items-center gap-1 text-[10px] font-medium" 
                   title="Reproducir audio"
                 >
                   <Play className="w-3 h-3" />
+                  <span className="hidden sm:inline text-[9px]">Audio</span>
                 </button>
               )}
             </div>
@@ -195,7 +204,7 @@ function StatusColumn({
   bgColor: string;
   textColor: string;
   borderColor: string;
-  onUpdateStatus: (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review' | 'completed') => void;
+  onUpdateStatus: (task: PendingTask, newStatus: FlexTaskStatus) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -206,7 +215,7 @@ function StatusColumn({
       ref={setNodeRef}
       className={cn(
         "flex flex-col h-full min-h-0 rounded-[24px] overflow-hidden transition-all duration-300 relative border backdrop-blur-xl",
-        isOver ? "bg-surface/80 border-accent" : "bg-surface/40 border-border/60 hover:border-border/80"
+        isOver ? "bg-surface/90 border-accent shadow-lg shadow-accent/10" : "bg-surface/40 border-border/60 hover:border-border/80"
       )}
     >
       {/* Ambient background glow based on column */}
@@ -229,9 +238,9 @@ function StatusColumn({
       
       <div ref={scrollRef} className="flex-1 p-3 overflow-y-auto custom-scrollbar space-y-3" style={{ willChange: 'scroll-position' }}>
         {columnTasks.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center opacity-40 text-text-secondary min-h-[100px]">
+          <div className="h-full flex flex-col items-center justify-center opacity-40 text-text-secondary min-h-[120px]">
             <CheckCircle2 className="w-8 h-8 mb-2" />
-            <span className="text-xs font-medium">No hay tareas</span>
+            <span className="text-xs font-medium">No hay tareas en este estado</span>
           </div>
         ) : (
           columnTasks.map(task => (
@@ -255,6 +264,10 @@ export function GlobalPendingTasks() {
   const [tasks, setTasks] = useState<PendingTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeDragTask, setActiveDragTask] = useState<PendingTask | null>(null);
+  
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedArtist, setSelectedArtist] = useState<string>('all');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -294,7 +307,7 @@ export function GlobalPendingTasks() {
                   rowName: row.name || 'Sin nombre',
                   colId,
                   colName: colMap[colId] || 'Fase',
-                  status: cell.status,
+                  status: cell.status as FlexTaskStatus,
                   projectId: m.projectId,
                   linkedFile: row.linkedFile
                 });
@@ -313,11 +326,47 @@ export function GlobalPendingTasks() {
       });
   }, []);
 
-  const updateTaskStatus = async (task: PendingTask, newStatus: 'todo' | 'in_progress' | 'review' | 'completed') => {
+  // Unique artists list for dropdown filter
+  const uniqueArtists = useMemo(() => {
+    const set = new Map<string, string>();
+    tasks.forEach(t => {
+      if (t.artistId && t.artistName) {
+        set.set(t.artistId, t.artistName);
+      }
+    });
+    return Array.from(set.entries()).map(([id, name]) => ({ id, name }));
+  }, [tasks]);
+
+  // Filtered tasks based on search and artist dropdown
+  const filteredTasks = useMemo(() => {
+    const normalize = (s: string) => s?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
+    const query = normalize(searchQuery.trim());
+
+    return tasks.filter(t => {
+      const matchesArtist = selectedArtist === 'all' || t.artistId === selectedArtist;
+      if (!matchesArtist) return false;
+
+      if (!query) return true;
+      return (
+        normalize(t.rowName).includes(query) ||
+        normalize(t.artistName).includes(query) ||
+        normalize(t.colName).includes(query) ||
+        normalize(t.matrixName).includes(query)
+      );
+    });
+  }, [tasks, selectedArtist, searchQuery]);
+
+  const updateTaskStatus = async (task: PendingTask, newStatus: FlexTaskStatus) => {
     if (task.status === newStatus) return;
 
-    // 1. Optimistic Update
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    const prevTasks = [...tasks];
+
+    // 1. Optimistic Update (if 'done', remove from pending tasks)
+    if (newStatus === 'done') {
+      setTasks(prev => prev.filter(t => t.id !== task.id));
+    } else {
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    }
 
     try {
       // 2. Fetch specific matrix to get latest state
@@ -349,7 +398,7 @@ export function GlobalPendingTasks() {
       console.error('Failed to update task status:', e);
       customAlert('Error al actualizar el estado en el servidor. Revirtiendo cambio...');
       // Revert optimistic update
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: task.status } : t));
+      setTasks(prevTasks);
     }
   };
 
@@ -365,7 +414,7 @@ export function GlobalPendingTasks() {
     if (!over) return;
 
     const task = tasks.find(t => t.id === active.id);
-    const newStatus = over.id as 'todo' | 'in_progress' | 'review' | 'completed';
+    const newStatus = over.id as FlexTaskStatus;
 
     if (task && task.status !== newStatus) {
       updateTaskStatus(task, newStatus);
@@ -385,37 +434,106 @@ export function GlobalPendingTasks() {
     );
   }
 
-  const todoTasks = tasks.filter(t => t.status === 'todo');
-  const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
-  const reviewTasks = tasks.filter(t => t.status === 'review');
+  const todoTasks = filteredTasks.filter(t => t.status === 'todo');
+  const inProgressTasks = filteredTasks.filter(t => t.status === 'in_progress');
+  const reviewTasks = filteredTasks.filter(t => t.status === 'review');
+
+  const totalActiveTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'review').length;
 
   return (
     <div className="glass rounded-[24px] border border-border p-5 shadow-xl relative overflow-hidden flex flex-col h-full">
       <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
       
-      <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 shrink-0">
+      {/* Header with Search & Stats */}
+      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4 shrink-0">
         <div>
-          <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
-            <KanbanSquare className="w-5 h-5 text-accent" />
-            Flujo de Trabajo Global
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
+              <KanbanSquare className="w-5 h-5 text-accent" />
+              Flujo de Trabajo Global
+            </h2>
+            <Link 
+              href="/matrices" 
+              className="text-xs font-semibold text-accent hover:text-accent-light bg-accent/10 hover:bg-accent/20 px-2.5 py-1 rounded-lg border border-accent/20 transition-all flex items-center gap-1 shrink-0 ml-2"
+              title="Abrir vista completa de matrices"
+            >
+              <Table2 className="w-3.5 h-3.5" />
+              Matrices
+            </Link>
+          </div>
           <p className="text-sm text-text-secondary mt-1">
             Vista unificada de todas las matrices y procesos activos
           </p>
         </div>
         
-        <div className="flex items-center gap-4 bg-surface-elevated px-5 py-2.5 rounded-2xl border border-border/60 shadow-inner">
-          <div className="flex flex-col items-center">
-            <span className="text-xl font-black text-text-primary">{tasks.length}</span>
-            <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Total</span>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search Input */}
+          <div className="relative min-w-[200px] flex-1 sm:flex-initial">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-secondary pointer-events-none" />
+            <input 
+              type="text"
+              placeholder="Buscar tarea, artista..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-8 py-1.5 text-xs bg-surface border border-border/80 rounded-xl text-text-primary placeholder:text-text-secondary/60 focus:outline-none focus:ring-1 focus:ring-accent"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary p-0.5 rounded"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
-          <div className="w-px h-8 bg-border/80" />
-          <div className="flex flex-col items-center">
-            <span className="text-xl font-black text-warning">{inProgressTasks.length + reviewTasks.length}</span>
-            <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider">Activas</span>
+
+          {/* Artist Filter Dropdown */}
+          {uniqueArtists.length > 1 && (
+            <select
+              value={selectedArtist}
+              onChange={(e) => setSelectedArtist(e.target.value)}
+              className="text-xs bg-surface border border-border/80 rounded-xl px-2.5 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+            >
+              <option value="all">Todos los artistas ({tasks.length})</option>
+              {uniqueArtists.map(a => {
+                const count = tasks.filter(t => t.artistId === a.id).length;
+                return (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          )}
+
+          {/* Stat Badges */}
+          <div className="flex items-center gap-4 bg-surface-elevated px-4 py-1.5 rounded-2xl border border-border/60 shadow-inner shrink-0">
+            <div className="flex flex-col items-center">
+              <span className="text-lg font-black text-text-primary">{tasks.length}</span>
+              <span className="text-[9px] text-text-secondary uppercase font-bold tracking-wider">Total</span>
+            </div>
+            <div className="w-px h-6 bg-border/80" />
+            <div className="flex flex-col items-center">
+              <span className="text-lg font-black text-warning">{totalActiveTasks}</span>
+              <span className="text-[9px] text-text-secondary uppercase font-bold tracking-wider">Activas</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Active Filter Notice */}
+      {(searchQuery || selectedArtist !== 'all') && (
+        <div className="relative z-10 flex items-center justify-between text-xs text-text-secondary bg-surface-elevated/40 px-3 py-1.5 rounded-lg border border-border/40 mb-3">
+          <span>Mostrando {filteredTasks.length} de {tasks.length} tareas</span>
+          <button 
+            onClick={() => { setSearchQuery(''); setSelectedArtist('all'); }}
+            className="text-accent hover:underline text-[11px] font-medium"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      )}
 
       <DndContext
         sensors={sensors}

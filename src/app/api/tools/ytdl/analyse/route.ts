@@ -145,8 +145,7 @@ async function getYouTubeOEmbed(videoId: string) {
 async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] = []): Promise<any[]> {
   const commonArgs = [
     '--no-warnings',
-    ...cookieArgs,
-    '--extractor-args', 'youtube:player_client=android,ios,mweb',
+    '--extractor-args', 'youtube:player_client=android',
     '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
   ];
 
@@ -174,26 +173,25 @@ async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] 
   try {
     return await execute([...commonArgs, ...args]);
   } catch (err: any) {
-    console.warn('YTDLP primary client failed, trying fallback client args...', err?.message || err);
+    console.warn('YTDLP android client failed, trying android_vr fallback...', err?.message || err);
     const fallbackArgs = [
       '--no-warnings',
-      ...cookieArgs,
-      '--extractor-args', 'youtube:player_client=android_vr,tv_downgraded',
+      '--extractor-args', 'youtube:player_client=android_vr',
       '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
       ...args
     ];
     try {
       return await execute(fallbackArgs);
     } catch (fallbackErr: any) {
-      console.warn('YTDLP fallback client failed, trying web_creator client args...', fallbackErr?.message || fallbackErr);
-      const webCreatorArgs = [
+      console.warn('YTDLP android_vr fallback failed, trying web with cookies...', fallbackErr?.message || fallbackErr);
+      const webArgs = [
         '--no-warnings',
         ...cookieArgs,
-        '--extractor-args', 'youtube:player_client=android,mweb,web_creator',
-        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+        '--extractor-args', 'youtube:player_client=web,web_safari',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         ...args
       ];
-      return await execute(webCreatorArgs);
+      return await execute(webArgs);
     }
   }
 }
