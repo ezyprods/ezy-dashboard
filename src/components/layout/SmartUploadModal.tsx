@@ -361,7 +361,7 @@ export function SmartUploadModal({
   };
 
   const preCheckItem = async (item: SmartUploadFile, finalFolderId: string): Promise<string | undefined> => {
-    if (item.subType !== 'master') return undefined; // Bounces always create a new file
+    if (item.subType !== 'master' && item.subType !== 'mix') return undefined; // Bounces and others keep new files
     if (!finalFolderId || finalFolderId.startsWith('CREATE_FOLDER::')) return undefined;
 
     try {
@@ -370,15 +370,15 @@ export function SmartUploadModal({
       const data = await res.json();
       const existingFiles: any[] = data.items || [];
 
-      if (item.subType === 'master') {
+      if (item.subType === 'master' || item.subType === 'mix') {
         const itemBaseName = item.customName.toLowerCase().replace(/\.[^.]+$/, '');
-        const masters = existingFiles.filter((f: any) => {
+        const matchingFiles = existingFiles.filter((f: any) => {
           if (!f?.mimeType?.startsWith('audio/')) return false;
           const fBaseName = f.name.toLowerCase().replace(/\.[^.]+$/, '');
           return fBaseName === itemBaseName;
         });
-        if (masters.length > 0) {
-          return masters[0].id;
+        if (matchingFiles.length > 0) {
+          return matchingFiles[0].id;
         }
       }
     } catch {}
