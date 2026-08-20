@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ChevronDown, ExternalLink as ExternalLinkIcon, User, Table2, Clock, Timer } from 'lucide-react';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ExternalLink as ExternalLinkIcon, User, Table2, Clock } from 'lucide-react';
 import { detectAudioFeatures } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
-import { customConfirm, customPrompt, customAlert } from '@/lib/dialog';
+import { customPrompt, customAlert } from '@/lib/dialog';
 import { cn, formatPhoneNumber, getWhatsAppUrl, sortArtistsByRecent, getNormalizedBaseName } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { findBestMatch } from '@/lib/utils';
@@ -35,10 +35,6 @@ export interface SmartUploadFile {
   // Scheduled deletion
   scheduleDelete?: boolean;
   expiresInMs?: number | null;
-  // Background Upload
-  tempId?: string;
-  tempUploadStatus?: 'idle' | 'uploading' | 'success' | 'error';
-  abortController?: AbortController;
 }
 
 interface SmartUploadModalProps {
@@ -50,7 +46,6 @@ interface SmartUploadModalProps {
   onSuccess?: () => void; // Called when all uploads complete successfully
 }
 
-
 const EXPIRATION_OPTIONS = [
   { label: '1 hora', shortLabel: '1h', ms: 60 * 60 * 1000 },
   { label: '6 horas', shortLabel: '6h', ms: 6 * 60 * 60 * 1000 },
@@ -60,15 +55,14 @@ const EXPIRATION_OPTIONS = [
   { label: '30 días', shortLabel: '30d', ms: 30 * 24 * 60 * 60 * 1000 },
 ];
 
-
 // ─── Name Generation ──────────────────────────────────────────────────────────
-function generateName(original: string, subType: string, artistName?: string): string {
+function generateName(original: string, subType: string, _artistName?: string): string {
   if (subType === 'none') return original;
 
   const extMatch = original.match(/\.[^.]+$/);
   const ext = extMatch ? extMatch[0] : '';
   const baseName = original.replace(/\.[^.]+$/, '');
-  let cleanName = baseName.replace(/^\[.*?\]\s*/, '').replace(/^(Master|Bounce|Mix|Stem)_/i, '').trim();
+  const cleanName = baseName.replace(/^\[.*?\]\s*/, '').replace(/^(Master|Bounce|Mix|Stem)_/i, '').trim();
 
   // DD-MM-YYYY
   const now = new Date();
@@ -99,7 +93,7 @@ export function SmartUploadModal({
   const pendingItemsCount = items.filter(i => i.uploadStatus === 'pending').length;
   const isConfiguring = pendingItemsCount > 0;
   
-  // Track globally if we've completed the overall queue to auto-close
+  // Track globally if we've completed the overall queue
   const allDone = items.length > 0 && items.every(i => i.uploadStatus === 'done' || i.uploadStatus === 'error' || i.uploadStatus === 'cancelled');
 
   // Local caching state to avoid infinite loops and multi-fetching
@@ -108,6 +102,7 @@ export function SmartUploadModal({
   const [artistMatricesCache, setArtistMatricesCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
   const [isHovered, setIsHovered] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20);
 
   // Sort artists by recent interaction or update
   useEffect(() => {
@@ -176,21 +171,22 @@ export function SmartUploadModal({
 
     if (newFiles.length === 0) return;
 
-    // We keep the old files in the list so the user sees what was already uploaded
-
-    const newInitialized = newFiles.map((f, i) => {
+    const newInitialized: SmartUploadFile[] = newFiles.map((f) => {
       let mimeGroup: SmartUploadFile['mimeGroup'] = 'other';
       if (f.type.startsWith('audio/')) mimeGroup = 'audio';
       else if (f.type.startsWith('image/')) mimeGroup = 'image';
       else if (f.type.startsWith('video/')) mimeGroup = 'video';
 
-      let subType: 'bounce' | 'master' | 'mix' | 'stem' | 'cover' | 'promo' | 'none' = 'none';
+      let subType: SmartUploadFile['subType'] = 'none';
       if (mimeGroup === 'audio') {
         const nl = f.name?.toLowerCase() || '';
         if (nl.includes('master')) subType = 'master';
+        else if (nl.includes('mix') || nl.includes('mezcla')) subType = 'mix';
         else if (nl.includes('bounce') || nl.includes('demo')) subType = 'bounce';
-        else if (nl.includes('stem')) subType = 'stem';
+        else if (nl.includes('stem') || nl.includes('pista') || nl.includes('track')) subType = 'stem';
         else subType = 'bounce';
+      } else if (mimeGroup === 'image') {
+        subType = 'cover';
       }
 
       // Initial artist detection
@@ -203,14 +199,13 @@ export function SmartUploadModal({
         const normalizedFile = getNormalizedBaseName(f.name);
         const squashedFile = normalizedFile.replace(/\s+/g, '');
         
-        // Pass 1: Exact substring match (handles regular spacing and underscores mapped to spaces)
+        // Pass 1: Exact substring match
         let exactMatch = inlineSortedArtists.find(a => {
            const normArtist = getNormalizedBaseName(a.name);
            return normalizedFile.includes(normArtist);
         });
 
-        // Pass 2: Squashed match (handles missing spaces in filename e.g. "Amory_Odio" vs "AmoryOdio")
-        // Only if artist name is > 3 chars to avoid false positives with short names like 'SAO' in 'pesao'
+        // Pass 2: Squashed match
         if (!exactMatch) {
           exactMatch = inlineSortedArtists.find(a => {
              const squashedArtist = getNormalizedBaseName(a.name).replace(/\s+/g, '');
@@ -223,7 +218,7 @@ export function SmartUploadModal({
           detectedArtistId = exactMatch.id;
           detectedArtistName = exactMatch.name;
         } else {
-          // Pass 3: Fuzzy match (increased threshold to 0.6 to avoid false positives)
+          // Pass 3: Fuzzy match
           const bestArtistMatch = findBestMatch(normalizedFile, inlineSortedArtists, (a: any) => getNormalizedBaseName(a?.name || ''), 0.6);
           if (bestArtistMatch) {
             detectedArtistId = bestArtistMatch.id;
@@ -240,62 +235,39 @@ export function SmartUploadModal({
 
       return {
         file: f,
-        id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // ensure unique IDs
+        id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         mimeGroup,
         subType,
         artistId: detectedArtistId,
-        projectId: preselectedFolderId || '', // Use preselected folder if available
+        projectId: preselectedFolderId || '',
         customName: generateName(f.name, subType, detectedArtistName),
         isAnalyzing: mimeGroup === 'audio',
-        uploadStatus: 'pending' as const,
+        uploadStatus: 'pending',
         uploadProgress: 0,
         notifyArtist: false,
         notifyEmail: true,
         notifyWhatsApp: false,
         scheduleDelete: false,
         expiresInMs: 24 * 60 * 60 * 1000,
-        tempUploadStatus: 'idle' as SmartUploadFile['tempUploadStatus'],
-        abortController: new AbortController(),
       };
-    });
-
-    // Start background uploads immediately
-    newInitialized.forEach(item => {
-      item.tempUploadStatus = 'uploading';
-      const formData = new FormData();
-      formData.append('file', item.file);
-      
-      fetch('/api/files/upload/temp', {
-        method: 'POST',
-        body: formData,
-        signal: item.abortController?.signal
-      }).then(res => res.json()).then(data => {
-        if (data.fileId) {
-          setItems(prev => prev.map(p => p.id === item.id ? { ...p, tempUploadStatus: 'success', tempId: data.fileId } : p));
-        } else {
-          setItems(prev => prev.map(p => p.id === item.id ? { ...p, tempUploadStatus: 'error' } : p));
-        }
-      }).catch(err => {
-        if (err.name !== 'AbortError') {
-          setItems(prev => prev.map(p => p.id === item.id ? { ...p, tempUploadStatus: 'error' } : p));
-        }
-      });
     });
 
     setItems(prev => [...prev, ...newInitialized]);
 
-    // Asynchronous resolution step (runs once independently per new file)
+    // Asynchronous resolution step
     newInitialized.forEach(async (item) => {
-      // Audio BPM/Key
+      // Audio BPM/Key detection
       if (item.mimeGroup === 'audio') {
         detectAudioFeatures(item.file).then(({ bpm, key }) => {
           setItems(prev => prev.map(p => p.id === item.id ? { ...p, bpm, key, isAnalyzing: false } : p));
+        }).catch(() => {
+          setItems(prev => prev.map(p => p.id === item.id ? { ...p, isAnalyzing: false } : p));
         });
       }
 
       // Auto-detect project if applicable
       if (item.artistId && !preselectedFolderId) {
-        fetchMatrices(item.artistId); // Pre-fetch matrices for this artist
+        fetchMatrices(item.artistId);
         
         const folders = await fetchArtistFolders(item.artistId);
         const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
@@ -310,7 +282,7 @@ export function SmartUploadModal({
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialFiles, preselectedArtistId, preselectedFolderId, isArtistsLoading, artists]); // Depend on artists so it runs when they load
+  }, [isOpen, initialFiles, preselectedArtistId, preselectedFolderId, isArtistsLoading, artists]);
 
   // ─── UI Interactions ──────────────────────────────────────────────────────────
   const updateItem = async (id: string, updates: Partial<SmartUploadFile>) => {
@@ -332,7 +304,7 @@ export function SmartUploadModal({
 
     // If artist changed, auto-fetch their projects and guess again
     if (updates.artistId !== undefined) {
-       fetchMatrices(updates.artistId); // Pre-fetch matrices for the new artist
+       fetchMatrices(updates.artistId);
 
        const folders = await fetchArtistFolders(updates.artistId);
        const ignoreList = ['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'];
@@ -348,14 +320,12 @@ export function SmartUploadModal({
   };
 
   const cancelItem = (id: string) => {
-    const item = items.find(i => i.id === id);
-    if (item?.abortController) item.abortController.abort();
     const ctrl = abortControllersRef.current.get(id);
     if (ctrl) ctrl.abort();
     updateItem(id, { uploadStatus: 'cancelled', uploadProgress: 0 });
   };
 
-  // ─── Upload Engine ────────────────────────────────────────────────────────────
+  // ─── Target Folder Resolution ────────────────────────────────────────────────
   const resolveTargetFolderForUpload = async (item: SmartUploadFile): Promise<string> => {
     if (preselectedFolderId) return preselectedFolderId;
 
@@ -365,13 +335,26 @@ export function SmartUploadModal({
       return bouncesFolder ? bouncesFolder.id : item.artistId;
     }
 
-    if (item.subType === 'master' && item.projectId) return item.projectId;
-
-    if (item.projectId && item.subType !== 'none') {
+    if (item.subType === 'master' && item.projectId) {
       const pFolders = await fetchProjectFolders(item.projectId);
-      let mappedName = FOLDER_NAME_MAP[item.subType.charAt(0).toUpperCase() + item.subType.slice(1) as keyof typeof FOLDER_NAME_MAP];
-      const specificFolder = pFolders.find((f: any) => f?.name?.toLowerCase() === item.subType || f?.name === mappedName);
-      return specificFolder ? specificFolder.id : item.projectId;
+      const masterFolder = pFolders.find((f: any) => f?.name?.toLowerCase()?.includes('master') || f?.name === FOLDER_NAME_MAP['Master']);
+      return masterFolder ? masterFolder.id : item.projectId;
+    }
+
+    if (item.subType === 'mix' && item.projectId) {
+      const pFolders = await fetchProjectFolders(item.projectId);
+      const mixFolder = pFolders.find((f: any) => f?.name?.toLowerCase()?.includes('mix') || f?.name?.toLowerCase()?.includes('mezcla') || f?.name === FOLDER_NAME_MAP['Mix']);
+      return mixFolder ? mixFolder.id : item.projectId;
+    }
+
+    if (item.subType === 'stem' && item.projectId) {
+      const pFolders = await fetchProjectFolders(item.projectId);
+      const stemFolder = pFolders.find((f: any) => f?.name?.toLowerCase()?.includes('stem') || f?.name?.toLowerCase()?.includes('pista'));
+      return stemFolder ? stemFolder.id : item.projectId;
+    }
+
+    if (item.projectId) {
+      return item.projectId;
     }
 
     return item.artistId || '';
@@ -387,7 +370,6 @@ export function SmartUploadModal({
       const data = await res.json();
       const existingFiles: any[] = data.items || [];
 
-      // Masters replace the previous file
       if (item.subType === 'master') {
         const itemBaseName = item.customName.toLowerCase().replace(/\.[^.]+$/, '');
         const masters = existingFiles.filter((f: any) => {
@@ -403,18 +385,14 @@ export function SmartUploadModal({
     return undefined;
   };
 
-  const [isHovering, setIsHovering] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(20);
-
+  // ─── Upload Engine (Direct Resumable to Google Drive) ─────────────────────────
   const handleUpload = async () => {
     const itemsToUpload = items.filter(i => i.uploadStatus === 'pending');
     if (itemsToUpload.length === 0) return;
 
-    // Immediately mark them as uploading so they don't get picked up by concurrent calls
-    // and so the UI updates to show them in the progress list
     setItems(prev => prev.map(p => itemsToUpload.some(it => it.id === p.id) ? { ...p, uploadStatus: 'uploading', uploadProgress: 0 } : p));
 
-    const newlyCreatedFolders = new Map<string, string>(); // 'folderName::parentId' -> 'newFolderId'
+    const newlyCreatedFolders = new Map<string, string>();
 
     for (const item of itemsToUpload) {
       if (item.uploadStatus === 'cancelled') continue;
@@ -425,7 +403,7 @@ export function SmartUploadModal({
         let finalFolderId = await resolveTargetFolderForUpload(item);
         
         if (!finalFolderId) {
-          throw new Error('No target folder resolved');
+          throw new Error('No se pudo determinar la carpeta de destino');
         }
 
         // Handle Auto Folder Creation
@@ -442,100 +420,22 @@ export function SmartUploadModal({
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name: fName, parentId: pId })
             });
-            if (!res.ok) throw new Error(`Failed to create subfolder: ${fName}`);
+            if (!res.ok) throw new Error(`No se pudo crear la carpeta: ${fName}`);
             const data = await res.json();
             finalFolderId = data.folderId || data.id; 
             newlyCreatedFolders.set(cacheKey, finalFolderId);
           }
         }
 
-        let fileToProcess = item.file;
+        const fileToProcess = item.file;
         let finalCustomName = item.customName;
-        let extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
-
-        // If we can use the background upload
-        const canUseBackgroundUpload = item.tempUploadStatus === 'success' && item.tempId && !(item.subType === 'bounce' && extension.toLowerCase() === '.wav');
-
-        if (canUseBackgroundUpload) {
-          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: 50 } : it));
-          const expirationTimestamp = item.scheduleDelete && item.expiresInMs ? Date.now() + item.expiresInMs : null;
-          const res = await fetch('/api/files/upload/finalize', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              artistId: item.artistId,
-              folderType: 'Custom',
-              targetFolderId: finalFolderId,
-              tempFiles: [{
-                tempId: item.tempId,
-                originalName: finalCustomName,
-                bpm: item.bpm,
-                key: item.key,
-                expiresInMs: item.scheduleDelete ? item.expiresInMs : null,
-                expiresAt: expirationTimestamp
-              }]
-            })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Error finalizando subida');
-          
-          const uploadedId = data.files?.[0]?.id;
-          if (item.scheduleDelete && item.expiresInMs && uploadedId) {
-            fetch(`/api/files/${uploadedId}/expiration`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ expiresInMs: item.expiresInMs })
-            }).catch(console.error);
-          }
-
-          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: uploadedId } : it));
-          window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
-          continue; // Skip the rest of the traditional upload logic
-        }
-
-        // WAV to MP3 Conversion for Bounces
-        if (item.subType === 'bounce' && extension.toLowerCase() === '.wav') {
-          setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: 10 } : it));
-          
-          try {
-            const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-            const { fetchFile } = await import('@ffmpeg/util');
-
-            const ffmpeg = new FFmpeg();
-            
-            ffmpeg.on('progress', ({ progress }) => {
-              const newPercent = 10 + Math.floor(progress * 20); // 10% to 30% for conversion
-              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: newPercent } : it));
-            });
-
-            await ffmpeg.load({
-              coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-              wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
-            });
-
-            await ffmpeg.writeFile('input.wav', await fetchFile(item.file));
-            await ffmpeg.exec(['-i', 'input.wav', '-b:a', '320k', 'output.mp3']);
-            
-            const data = await ffmpeg.readFile('output.mp3');
-            const mp3Blob = new Blob([data as any], { type: 'audio/mpeg' });
-            
-            fileToProcess = new File([mp3Blob], item.file.name.replace(/\.wav$/i, '.mp3'), { type: 'audio/mpeg' });
-            extension = '.mp3';
-            finalCustomName = finalCustomName.replace(/\.wav$/i, '') + '.mp3';
-          } catch (ffmpegError) {
-            console.error('FFmpeg conversion error:', ffmpegError);
-            throw new Error('No se pudo convertir el archivo WAV a MP3. Verifica que el archivo no esté corrupto.');
-          }
-        }
+        const extension = item.file.name.substring(item.file.name.lastIndexOf('.'));
+        if (!finalCustomName.endsWith(extension)) finalCustomName += extension;
 
         const fileToReplaceId = await preCheckItem({ ...item, customName: finalCustomName }, finalFolderId);
 
         const ctrl = new AbortController();
         abortControllersRef.current.set(item.id, ctrl);
-
-        let finalName = finalCustomName;
-        if (!finalName.endsWith(extension)) finalName += extension;
-        const renamedFile = new File([fileToProcess], finalName, { type: fileToProcess.type });
 
         const appProps: any = {};
         if (item.bpm) appProps.bpm = item.bpm.toString();
@@ -544,12 +444,13 @@ export function SmartUploadModal({
           appProps.expiresAt = (Date.now() + item.expiresInMs).toString();
         }
 
+        // 1. Create resumable upload session with Google Drive
         const sessionRes = await fetch('/api/files/upload-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-             name: finalName,
-             mimeType: renamedFile.type || 'application/octet-stream',
+             name: finalCustomName,
+             mimeType: fileToProcess.type || 'application/octet-stream',
              parentId: finalFolderId,
              fileId: fileToReplaceId,
              appProperties: appProps
@@ -557,26 +458,25 @@ export function SmartUploadModal({
         });
 
         if (!sessionRes.ok) {
-           const errData = await sessionRes.json();
-           throw new Error(errData.error || 'Failed to create upload session');
+           const errData = await sessionRes.json().catch(() => ({}));
+           throw new Error(errData.error || 'Error al conectar con Google Drive para iniciar subida');
         }
 
         const { uploadUrl } = await sessionRes.json();
 
-        // Real upload via XMLHttpRequest
-        const uploadTask = new Promise<void>((resolve, reject) => {
+        // 2. Direct high-speed upload via XMLHttpRequest with real progress
+        await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open('PUT', uploadUrl);
-          xhr.setRequestHeader('Content-Type', renamedFile.type || 'application/octet-stream');
+          xhr.setRequestHeader('Content-Type', fileToProcess.type || 'application/octet-stream');
           
-          let lastXhrPercent = -1;
+          let lastPercent = -1;
           xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              const p = Math.round((e.loaded / e.total) * 90); // 10% to 100%
-              const clamped = Math.max(20, p); // Offset if wav conversion took first 20%
-              if (clamped !== lastXhrPercent) {
-                lastXhrPercent = clamped;
-                setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: clamped } : it));
+            if (e.lengthComputable && e.total > 0) {
+              const p = Math.min(99, Math.round((e.loaded / e.total) * 100));
+              if (p !== lastPercent) {
+                lastPercent = p;
+                setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadProgress: p } : it));
               }
             }
           };
@@ -584,7 +484,7 @@ export function SmartUploadModal({
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               let responseData: any = {};
-              try { responseData = JSON.parse(xhr.responseText); } catch (e) {}
+              try { responseData = JSON.parse(xhr.responseText); } catch {}
               
               if (item.artistId && typeof window !== 'undefined') {
                 localStorage.setItem(`accessed_${item.artistId}`, Date.now().toString());
@@ -603,18 +503,16 @@ export function SmartUploadModal({
               window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
               resolve();
             } else {
-              reject(new Error(xhr.responseText || 'Upload failed'));
+              reject(new Error(xhr.responseText || 'Error durante la subida a Drive'));
             }
           };
 
-          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.onerror = () => reject(new Error('Error de conexión con Google Drive'));
           xhr.onabort = () => reject(new Error('Cancelled by user'));
           
           ctrl.signal.addEventListener('abort', () => xhr.abort());
-          xhr.send(renamedFile);
+          xhr.send(fileToProcess);
         });
-
-        await uploadTask;
 
       } catch (err: any) {
         if (err.message !== 'Cancelled by user') {
@@ -630,8 +528,6 @@ export function SmartUploadModal({
   useEffect(() => {
     let timeout: NodeJS.Timeout | null = null;
     if (allDone) {
-      
-      // Batch notifications
       const successfullyUploadedItems = items.filter(i => i.uploadStatus === 'done' && i.notifyArtist);
       const artistsToNotify = Array.from(new Set(successfullyUploadedItems.map(i => i.artistId)));
 
@@ -640,7 +536,6 @@ export function SmartUploadModal({
         if (!artist) return;
         
         const artistItems = successfullyUploadedItems.filter(i => i.artistId === artistId);
-        
         const shouldEmail = artistItems.some(i => i.notifyEmail);
         const shouldWhatsApp = artistItems.some(i => i.notifyWhatsApp);
 
@@ -676,19 +571,13 @@ export function SmartUploadModal({
         }, 15000);
       }
 
-      // Dispatch global event so any subscriber (e.g. RecentFilesWidget) can refresh
       window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
       if (onSuccess) onSuccess();
     }
     return () => {
       if (timeout) clearTimeout(timeout);
-      
-      // Cleanup abort controllers and temp files if modal closes while pending
       if (items.some(i => i.uploadStatus === 'pending')) {
         abortControllersRef.current.forEach(ctrl => ctrl.abort());
-        items.filter(i => i.uploadStatus === 'pending' && i.tempUploadStatus === 'success' && i.tempId).forEach(item => {
-          fetch(`/api/files/upload/temp?id=${item.tempId}`, { method: 'DELETE', keepalive: true }).catch(() => {});
-        });
       }
     };
   }, [allDone, isHovered, onClose, onSuccess, items, artists]);
@@ -764,11 +653,7 @@ export function SmartUploadModal({
             <div key={item.id} className={`rounded-xl border ${isConfiguring ? 'p-4' : 'p-3'} transition-all duration-300 ${item.uploadStatus === 'done' ? 'border-success/40 bg-success/5' : item.uploadStatus === 'error' ? 'border-danger/40 bg-danger/5' : item.uploadStatus === 'cancelled' ? 'border-border/30 bg-surface/30 opacity-50' : 'border-border bg-surface shadow-sm'}`}>
               <div className={`flex items-center gap-3 ${isConfiguring ? 'mb-3' : (item.uploadStatus === 'uploading' ? 'mb-2' : '')}`}>
                 <div className={`${isConfiguring ? 'w-9 h-9' : 'w-8 h-8'} rounded-xl bg-surface-elevated flex items-center justify-center shrink-0 border border-border/50 overflow-hidden relative`}>
-                  {item.tempUploadStatus === 'uploading' ? (
-                    <div className="absolute inset-0 bg-accent/10 flex flex-col items-center justify-center" title="Subiendo en segundo plano...">
-                       <UploadCloud className="w-4 h-4 text-accent animate-pulse" />
-                    </div>
-                  ) : item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
+                  {item.mimeGroup === 'audio' ? <Music className="w-4 h-4 text-accent" /> : item.mimeGroup === 'image' ? <ImageIcon className="w-4 h-4 text-success" /> : <FileIcon className="w-4 h-4 text-text-secondary" />}
                 </div>
 
                 <div className="flex-1 min-w-0">

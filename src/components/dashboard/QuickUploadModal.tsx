@@ -4,10 +4,11 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
-import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Music, Clock } from 'lucide-react';
+import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Clock } from 'lucide-react';
 
 import type { Artist } from '@/types';
 import { findBestMatch, getNormalizedBaseName } from '@/lib/utils';
+import { FOLDER_NAME_MAP } from '@/lib/constants';
 
 const FOLDER_OPTIONS = ['Bounces', 'Mix', 'Master', 'Sessions', 'Other'] as const;
 type FolderType = typeof FOLDER_OPTIONS[number];
@@ -20,11 +21,9 @@ interface UploadState {
   message: string;
 }
 
-interface TempUpload {
-  originalFile: File;
-  tempId?: string;
-  status: 'uploading' | 'success' | 'error';
-  abortController: AbortController;
+interface SelectedFileItem {
+  file: File;
+  id: string;
 }
 
 interface QuickUploadModalProps {
@@ -38,7 +37,7 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   const [selectedArtistId, setSelectedArtistId] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<FolderType | ''>('');
   
-  const [tempUploads, setTempUploads] = useState<TempUpload[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<SelectedFileItem[]>([]);
   const [scheduleDelete, setScheduleDelete] = useState(false);
   const [expiresInMs, setExpiresInMs] = useState<number>(24 * 60 * 60 * 1000);
 
@@ -49,6 +48,7 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
   // Sort artists by updatedAt descending
   const sortedArtists = [...artists].sort((a, b) => {
@@ -64,36 +64,16 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
     }
   }, [isOpen, selectedArtistId, sortedArtists]);
 
-  const cleanupTempUploads = useCallback((uploadsToClean: TempUpload[]) => {
-    uploadsToClean.forEach((upload) => {
-      if (upload.status === 'uploading') {
-        upload.abortController.abort();
-      } else if (upload.status === 'success' && upload.tempId) {
-        fetch(`/api/files/upload/temp?id=${upload.tempId}`, { 
-          method: 'DELETE',
-          keepalive: true // Ensure it runs even if modal is closing / navigating away
-        }).catch(console.error);
-      }
-    });
-  }, []);
-
-  // Cleanup on unmount if modal is somehow closed
-  useEffect(() => {
-    return () => {
-      if (tempUploads.length > 0 && uploadState.status !== 'success') {
-        cleanupTempUploads(tempUploads);
-      }
-    };
-  }, [tempUploads, cleanupTempUploads, uploadState.status]);
-
   const reset = () => {
     setStep(1);
     setSelectedArtistId('');
     setSelectedFolder('');
     setScheduleDelete(false);
     setExpiresInMs(24 * 60 * 60 * 1000);
-    setTempUploads([]);
+    setSelectedFiles([]);
     setUploadState({ status: 'idle', progress: 0, message: '' });
+    abortControllersRef.current.forEach(c => c.abort());
+    abortControllersRef.current.clear();
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (sortedArtists.length > 0) {
       setSelectedArtistId(sortedArtists[0].id);
@@ -101,65 +81,24 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   };
 
   const handleClose = () => {
-    if (uploadState.status !== 'success') {
-      cleanupTempUploads(tempUploads);
-    }
+    abortControllersRef.current.forEach(c => c.abort());
     reset();
     onClose();
   };
 
-  const startTempUpload = async (file: File) => {
-    const abortController = new AbortController();
-    const tempUpload: TempUpload = {
-      originalFile: file,
-      status: 'uploading',
-      abortController,
-    };
-
-    setTempUploads(prev => [...prev, tempUpload]);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch('/api/files/upload/temp', {
-        method: 'POST',
-        body: formData,
-        signal: abortController.signal,
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
-      setTempUploads(prev => prev.map(u => 
-        u.abortController === abortController 
-          ? { ...u, status: 'success', tempId: data.fileId }
-          : u
-      ));
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        setTempUploads(prev => prev.map(u => 
-          u.abortController === abortController 
-            ? { ...u, status: 'error' }
-            : u
-        ));
-      } else {
-        setTempUploads(prev => prev.filter(u => u.abortController !== abortController));
-      }
-    }
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files);
+      const newFiles = Array.from(e.target.files).map(f => ({
+        file: f,
+        id: `qf-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      }));
       
-      newFiles.forEach(file => startTempUpload(file));
+      setSelectedFiles(prev => [...prev, ...newFiles]);
 
-      const fileName = newFiles[0].name;
+      const fileName = newFiles[0].file.name;
       const normalizedName = getNormalizedBaseName(fileName).toLowerCase();
       
       const exactMatch = sortedArtists.find(a => normalizedName.includes(a.name.toLowerCase()));
-      
       if (exactMatch) {
         setSelectedArtistId(exactMatch.id);
       } else {
@@ -172,48 +111,124 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   };
 
   const removeFile = (index: number) => {
-    setTempUploads((prev) => {
-      const uploadToRemove = prev[index];
-      if (uploadToRemove) {
-        cleanupTempUploads([uploadToRemove]);
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const resolveTargetFolder = async (artistId: string, folderType: FolderType): Promise<string> => {
+    try {
+      const res = await fetch(`/api/files?folderId=${artistId}`);
+      if (!res.ok) return artistId;
+      const data = await res.json();
+      const subfolders: any[] = (data.items || []).filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
+
+      const mappedName = FOLDER_NAME_MAP[folderType] || folderType;
+
+      if (folderType === 'Bounces') {
+        const match = subfolders.find((f) => f.name?.toLowerCase().includes('bounce') || f.name === mappedName);
+        if (match) return match.id;
+        return artistId;
       }
-      return prev.filter((_, i) => i !== index);
-    });
+
+      const directMatch = subfolders.find((f) => f.name === folderType || f.name === mappedName || f.name?.toLowerCase().includes(folderType.toLowerCase()));
+      if (directMatch) return directMatch.id;
+
+      for (const sub of subfolders) {
+        if (!['01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones'].includes(sub.name)) {
+          const pRes = await fetch(`/api/files?folderId=${sub.id}`);
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            const pFolders: any[] = (pData.items || []).filter((i: any) => i.mimeType === 'application/vnd.google-apps.folder');
+            const pMatch = pFolders.find((f) => f.name === folderType || f.name === mappedName || f.name?.toLowerCase().includes(folderType.toLowerCase()));
+            if (pMatch) return pMatch.id;
+          }
+        }
+      }
+    } catch {}
+    return artistId;
   };
 
   const handleUpload = useCallback(async () => {
-    if (!selectedArtistId || !selectedFolder || tempUploads.length === 0) return;
+    if (!selectedArtistId || !selectedFolder || selectedFiles.length === 0) return;
 
-    // Verify all are uploaded successfully
-    const allSuccess = tempUploads.every(u => u.status === 'success');
-    if (!allSuccess) return;
-
-    setUploadState({ status: 'uploading', progress: 50, message: 'Organizando archivos...' });
+    setUploadState({ status: 'uploading', progress: 5, message: 'Preparando subida a Drive...' });
 
     const expirationTimestamp = scheduleDelete && expiresInMs ? Date.now() + expiresInMs : null;
 
-    const tempFilesData = tempUploads.map(u => ({
-      tempId: u.tempId,
-      originalName: u.originalFile.name,
-      expiresInMs: scheduleDelete ? expiresInMs : null,
-      expiresAt: expirationTimestamp,
-    }));
-
     try {
-      const res = await fetch('/api/files/upload/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          artistId: selectedArtistId,
-          folderType: selectedFolder,
-          tempFiles: tempFilesData
-        }),
-      });
+      const targetFolderId = await resolveTargetFolder(selectedArtistId, selectedFolder);
 
-      const data = await res.json();
+      let completedCount = 0;
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const { file, id } = selectedFiles[i];
+        
+        const appProps: any = {};
+        if (scheduleDelete && expiresInMs) {
+          appProps.expiresAt = (Date.now() + expiresInMs).toString();
+        }
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Error al organizar los archivos');
+        const sessionRes = await fetch('/api/files/upload-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+             name: file.name,
+             mimeType: file.type || 'application/octet-stream',
+             parentId: targetFolderId,
+             appProperties: appProps
+          })
+        });
+
+        if (!sessionRes.ok) {
+          const errData = await sessionRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Error al preparar subida para ${file.name}`);
+        }
+
+        const { uploadUrl } = await sessionRes.json();
+
+        const ctrl = new AbortController();
+        abortControllersRef.current.set(id, ctrl);
+
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', uploadUrl);
+          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+          
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && e.total > 0) {
+              const filePercent = (e.loaded / e.total);
+              const overallPercent = Math.min(99, Math.round(((i + filePercent) / selectedFiles.length) * 100));
+              setUploadState({
+                status: 'uploading',
+                progress: overallPercent,
+                message: `Subiendo ${i + 1} de ${selectedFiles.length}: ${file.name} (${Math.round(filePercent * 100)}%)...`
+              });
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              let responseData: any = {};
+              try { responseData = JSON.parse(xhr.responseText); } catch {}
+              const uploadedResultId = responseData.id;
+              if (scheduleDelete && expiresInMs && uploadedResultId) {
+                fetch(`/api/files/${uploadedResultId}/expiration`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ expiresInMs })
+                }).catch(console.error);
+              }
+              completedCount++;
+              resolve();
+            } else {
+              reject(new Error(xhr.responseText || `Error al subir ${file.name}`));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error('Error de conexión con Google Drive'));
+          xhr.onabort = () => reject(new Error('Subida cancelada'));
+          
+          ctrl.signal.addEventListener('abort', () => xhr.abort());
+          xhr.send(file);
+        });
       }
 
       window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
@@ -221,16 +236,16 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
       setUploadState({
         status: 'success',
         progress: 100,
-        message: `${data.files.length} archivo${data.files.length > 1 ? 's' : ''} organizado${data.files.length > 1 ? 's' : ''} correctamente en ${selectedFolder}.`,
+        message: `${completedCount} archivo${completedCount > 1 ? 's' : ''} subido${completedCount > 1 ? 's' : ''} correctamente en ${selectedFolder}.`,
       });
     } catch (err: any) {
       setUploadState({
         status: 'error',
         progress: 0,
-        message: err.message || 'Error desconocido al finalizar subida.',
+        message: err.message || 'Error desconocido al subir archivos.',
       });
     }
-  }, [selectedArtistId, selectedFolder, tempUploads, scheduleDelete, expiresInMs]);
+  }, [selectedArtistId, selectedFolder, selectedFiles, scheduleDelete, expiresInMs]);
 
 
   const selectedArtist = artists.find((a) => a.id === selectedArtistId);
@@ -240,9 +255,6 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
     2: 'Subida Rápida — Selecciona Carpeta',
     3: 'Subida Rápida — Selecciona Archivos',
   };
-
-  const isUploadingAny = tempUploads.some(u => u.status === 'uploading');
-  const hasErrors = tempUploads.some(u => u.status === 'error');
 
   return (
     <Modal
@@ -402,25 +414,20 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
               </div>
 
               {/* File list */}
-              {tempUploads.length > 0 && (
+              {selectedFiles.length > 0 && (
                 <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
-                  {tempUploads.map((upload, i) => (
+                  {selectedFiles.map((item, i) => (
                     <div
-                      key={i}
+                      key={item.id}
                       className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-surface border border-border"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        {upload.status === 'uploading' ? (
-                           <Loader2 className="w-4 h-4 text-accent shrink-0 animate-spin" />
-                        ) : upload.status === 'error' ? (
-                           <AlertCircle className="w-4 h-4 text-error shrink-0" />
-                        ) : (
-                           <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                        )}
-                        <span className="text-sm text-text-primary truncate">{upload.originalFile.name}</span>
+                        <span className="text-sm text-text-primary truncate">{item.file.name}</span>
+                        <span className="text-xs text-text-secondary">({(item.file.size / 1024 / 1024).toFixed(1)} MB)</span>
                       </div>
                       <button
                         onClick={() => removeFile(i)}
+                        disabled={uploadState.status === 'uploading'}
                         className="text-text-secondary hover:text-error shrink-0"
                       >
                         <X className="w-4 h-4" />
@@ -431,7 +438,7 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
               )}
 
               {/* Scheduled deletion option */}
-              {tempUploads.length > 0 && (
+              {selectedFiles.length > 0 && (
 
                 <div className="p-3 bg-surface rounded-xl border border-border/60 space-y-2 animate-fade-in">
                   <div className="flex items-center justify-between">
@@ -510,15 +517,13 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
                 </Button>
                 <Button
                   onClick={handleUpload}
-                  disabled={tempUploads.length === 0 || isUploadingAny || hasErrors || uploadState.status === 'uploading'}
+                  disabled={selectedFiles.length === 0 || uploadState.status === 'uploading'}
                   className="gap-2"
                 >
                   {uploadState.status === 'uploading' ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Organizando...</>
-                  ) : isUploadingAny ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Subiendo en 2º plano...</>
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Subiendo a Drive...</>
                   ) : (
-                    <><CheckCircle2 className="w-4 h-4" /> Finalizar y Organizar</>
+                    <><CheckCircle2 className="w-4 h-4" /> Subir a {selectedFolder || 'Drive'}</>
                   )}
                 </Button>
               </div>
