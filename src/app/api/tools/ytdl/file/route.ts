@@ -6,6 +6,7 @@ import path from 'path';
 import { Readable } from 'stream';
 import { spawn } from 'child_process';
 import { ensureBinaries } from '../binaries';
+import { buildCookieArgs } from '../cookies';
 
 export const maxDuration = 60;
 
@@ -70,6 +71,7 @@ export async function GET(req: Request) {
     }
 
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
+    const cookieArgs = await buildCookieArgs();
     const safeTitle = task?.title || title || 'audio';
     const cleanSafeTitle = safeTitle.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
     const downloadsDir = os.tmpdir();
@@ -82,6 +84,7 @@ export async function GET(req: Request) {
     const executeSpawn = (clientArgs: string[]) => {
       const args = [
         '--no-warnings',
+        ...cookieArgs,
         ...clientArgs,
         target,
         '--extract-audio',

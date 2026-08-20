@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import https from 'https';
 import { ensureYtDlp } from '../binaries';
+import { buildCookieArgs } from '../cookies';
 
 export const maxDuration = 60;
 
@@ -141,9 +142,10 @@ async function getYouTubeOEmbed(videoId: string) {
   }
 }
 
-async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
+async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] = []): Promise<any[]> {
   const commonArgs = [
     '--no-warnings',
+    ...cookieArgs,
     '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
   ];
@@ -175,6 +177,7 @@ async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
     console.warn('YTDLP primary client failed, trying fallback client args...', err?.message || err);
     const fallbackArgs = [
       '--no-warnings',
+      ...cookieArgs,
       '--extractor-args', 'youtube:player_client=android_vr,tv_downgraded',
       '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
       ...args
@@ -185,6 +188,7 @@ async function runYtDlp(ytdlpPath: string, args: string[]): Promise<any[]> {
       console.warn('YTDLP fallback client failed, trying web_creator client args...', fallbackErr?.message || fallbackErr);
       const webCreatorArgs = [
         '--no-warnings',
+        ...cookieArgs,
         '--extractor-args', 'youtube:player_client=android,mweb,web_creator',
         '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
         ...args
@@ -200,6 +204,7 @@ export async function POST(req: Request) {
     if (!url) return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
 
     const ytdlpPath = await ensureYtDlp();
+    const cookieArgs = await buildCookieArgs();
 
     const videoId = getYouTubeVideoId(url);
     let targetUrl = url;
@@ -213,7 +218,7 @@ export async function POST(req: Request) {
         ? `${spotMeta.artist.split(',')[0].trim()} ${spotMeta.track}` 
         : `${spotMeta.fullTitle.replace(/[-|,]/g, ' ')} audio`;
 
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch5:${query}`]);
+      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch5:${query}`], cookieArgs);
       const entry = results[0];
       targetUrl = entry.webpage_url || entry.url;
       title = spotMeta.fullTitle;
@@ -237,9 +242,9 @@ export async function POST(req: Request) {
 
       let results: any[] = [];
       try {
-        results = await runYtDlp(ytdlpPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`]);
+        results = await runYtDlp(ytdlpPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`], cookieArgs);
       } catch (err) {
-        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${videoId}`]);
+        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${videoId}`], cookieArgs);
       }
 
       const entry = results[0] || {};
@@ -250,7 +255,7 @@ export async function POST(req: Request) {
 
     } else if (!url.startsWith('http')) {
       platform = 'search';
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${url}`]);
+      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${url}`], cookieArgs);
       const entry = results[0];
       targetUrl = entry.webpage_url || entry.url;
       title = cleanTitle(entry);
@@ -259,13 +264,13 @@ export async function POST(req: Request) {
 
     } else {
       platform = targetUrl.includes('soundcloud.com') ? 'soundcloud' : 'youtube';
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', '--flat-playlist', targetUrl]);
+      const results = await runYtDlp(ytdlpPath, ['--dump-json', '--flat-playlist', targetUrl], cookieArgs);
       
       if (results.length > 1) {
         return NextResponse.json({
           isPlaylist: true,
           count: results.length,
-          title: results[0].playlist_title || 'Lista de reproducción',
+          title: results[0].playlist_title || 'Lista de reproduccion',
           thumbnail: results[0].thumbnail,
           platform,
           resolvedUrl: targetUrl

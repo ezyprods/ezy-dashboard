@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { tasks, broadcast, completedFileBuffers } from '../state';
 import { ensureBinaries } from '../binaries';
+import { buildCookieArgs } from '../cookies';
 import { spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
@@ -59,6 +60,7 @@ async function processDownload(taskId: string) {
 
   try {
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
+    const cookieArgs = await buildCookieArgs();
     
     const safeTitle = task.title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
     const downloadsDir = os.tmpdir();
@@ -95,6 +97,7 @@ async function processDownload(taskId: string) {
       const args = [
         '--no-warnings',
         '--no-playlist',
+        ...cookieArgs,
         ...clientConfig.args,
         '--extract-audio',
         '--audio-format', 'mp3',
