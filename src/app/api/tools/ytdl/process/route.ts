@@ -21,7 +21,9 @@ function getYouTubeVideoId(urlStr: string): string | null {
       return parsed.pathname.replace(/^\//, '').split('?')[0] || null;
     }
   } catch (e) {
-    const match = urlStr.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    const match = urlStr.match(
+      /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
+    );
     if (match) return match[1];
   }
   return null;
@@ -29,7 +31,15 @@ function getYouTubeVideoId(urlStr: string): string | null {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { url, title, thumbnail, platform, resolvedUrl, clientId, taskId: passedTaskId } = body;
+  const {
+    url,
+    title,
+    thumbnail,
+    platform,
+    resolvedUrl,
+    clientId,
+    taskId: passedTaskId,
+  } = body;
 
   const taskId = passedTaskId || uuidv4();
   const task = {
@@ -41,7 +51,7 @@ export async function POST(req: Request) {
     platform,
     status: 'downloading' as const,
     progress: 0,
-    startTime: Date.now()
+    startTime: Date.now(),
   };
 
   tasks.set(taskId, task);
@@ -52,7 +62,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, taskId });
   } catch (error: any) {
     console.error('[ytdl/process] Fatal error:', error?.message || error);
-    return NextResponse.json({ error: error.message || 'Error en descarga' }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || 'Error en descarga' },
+      { status: 500 }
+    );
   }
 }
 
@@ -65,87 +78,132 @@ async function processDownload(taskId: string) {
     const cookieArgs = await buildCookieArgs();
 
     const downloadsDir = os.tmpdir();
-    // Strictly use taskId as filename — avoids any sanitization mismatch
     const outputTemplate = path.join(downloadsDir, `${taskId}.%(ext)s`);
 
     const videoId = getYouTubeVideoId(task.url);
+    const isYouTube = !!videoId || task.url.includes('youtube.com') || task.url.includes('youtu.be');
 
-    // Ordered list: fastest/most reliable first, fallbacks after.
-    // tv_embedded is the most reliable for YouTube bot-detection bypass.
-    // Using only 2 targets + 2 clients = 4 attempts max (was 3×3=9 before).
-    const downloadMatrix: Array<{
-      targetUrl: string;
+    // -----------------------------------------------------------------------
+    // Download matrix — ordered by reliability on datacenter IPs (Vercel).
+    //
+    // KEY INSIGHT: YouTube blocks datacenter IPs when using browser clients
+    // (web, mweb) because it triggers bot-detection. App clients that use
+    // their own auth bypass this:
+    //
+    //  1. mediaconnect — YouTube Music internal API. Bypasses bot detection
+    //     entirely on server/datacenter IPs. No cookies needed. BEST option.
+    //
+    //  2. tv_embedded — SmartTV client. Low bot-detection. Requires cookies
+    //     to work reliably on blocked IPs but worth trying without.
+    //
+    //  3. android_vr — VR client. Rarely blocked. No cipher needed.
+    //
+    //  4. android — Standard Android client. May need cookies on Vercel.
+    //
+    // For non-YouTube (SoundCloud, etc.) we use generic extractor.
+    // -----------------------------------------------------------------------
+    const youtubeMatrix: Array<{
       clientArgs: string[];
       useCookies: boolean;
-    }> = videoId
-      ? [
-          // Attempt 1: tv_embedded + cookies (highest success rate)
-          {
-            targetUrl: `https://www.youtube.com/watch?v=${videoId}`,
-            clientArgs: [
-              '--extractor-args', 'youtube:player_client=tv_embedded',
-              '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+',
-            ],
-            useCookies: true,
-          },
-          // Attempt 2: android (no cookies needed — different auth path)
-          {
-            targetUrl: `https://www.youtube.com/watch?v=${videoId}`,
-            clientArgs: [
-              '--extractor-args', 'youtube:player_client=android',
-              '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-            ],
-            useCookies: false,
-          },
-          // Attempt 3: android_creator + cookies
-          {
-            targetUrl: `https://www.youtube.com/watch?v=${videoId}`,
-            clientArgs: [
-              '--extractor-args', 'youtube:player_client=android_creator',
-              '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-            ],
-            useCookies: true,
-          },
-          // Attempt 4: mweb as last resort
-          {
-            targetUrl: `https://www.youtube.com/watch?v=${videoId}`,
-            clientArgs: [
-              '--extractor-args', 'youtube:player_client=mweb',
-              '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-            ],
-            useCookies: false,
-          },
-        ]
-      : [
-          // Non-YouTube: single attempt, tv_embedded with cookies
-          {
-            targetUrl: task.url,
-            clientArgs: [
-              '--extractor-args', 'youtube:player_client=tv_embedded',
-              '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+',
-            ],
-            useCookies: true,
-          },
-          // Non-YouTube fallback: no client args
-          {
-            targetUrl: task.url,
-            clientArgs: [],
-            useCookies: true,
-          },
-        ];
+      label: string;
+    }> = [
+      // Attempt 1: mediaconnect — best for datacenter IPs, no cookies needed
+      {
+        label: 'mediaconnect',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=mediaconnect',
+        ],
+        useCookies: false,
+      },
+      // Attempt 2: tv_embedded without cookies
+      {
+        label: 'tv_embedded',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=tv_embedded',
+          '--user-agent',
+          'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+',
+        ],
+        useCookies: false,
+      },
+      // Attempt 3: tv_embedded WITH cookies (if configured in Vercel env)
+      {
+        label: 'tv_embedded+cookies',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=tv_embedded',
+          '--user-agent',
+          'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+',
+        ],
+        useCookies: true,
+      },
+      // Attempt 4: android_vr — VR client, low detection
+      {
+        label: 'android_vr',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=android_vr',
+          '--user-agent',
+          'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        ],
+        useCookies: false,
+      },
+      // Attempt 5: android with cookies
+      {
+        label: 'android+cookies',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=android',
+          '--user-agent',
+          'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        ],
+        useCookies: true,
+      },
+    ];
 
-    const executeDownload = (targetUrl: string, clientArgs: string[], useCookies: boolean): Promise<void> => {
-      const extraCookieArgs = (useCookies && cookieArgs.length > 0) ? cookieArgs : [];
+    const nonYoutubeMatrix: Array<{
+      clientArgs: string[];
+      useCookies: boolean;
+      label: string;
+    }> = [
+      {
+        label: 'default+cookies',
+        clientArgs: [],
+        useCookies: true,
+      },
+      {
+        label: 'default',
+        clientArgs: [],
+        useCookies: false,
+      },
+    ];
+
+    const matrix = isYouTube ? youtubeMatrix : nonYoutubeMatrix;
+    const targetUrl = videoId
+      ? `https://www.youtube.com/watch?v=${videoId}`
+      : task.url;
+
+    const executeDownload = (
+      attempt: (typeof matrix)[0]
+    ): Promise<void> => {
+      const extraCookieArgs =
+        attempt.useCookies && cookieArgs.length > 0 ? cookieArgs : [];
+
       const args = [
         '--no-warnings',
         '--no-playlist',
         ...extraCookieArgs,
-        ...clientArgs,
+        ...attempt.clientArgs,
         '--extract-audio',
-        '--audio-format', 'mp3',
-        '--audio-quality', '320K',
-        '--ffmpeg-location', ffmpegPath,
-        '--output', outputTemplate,
+        '--audio-format',
+        'mp3',
+        '--audio-quality',
+        '320K',
+        '--ffmpeg-location',
+        ffmpegPath,
+        '--output',
+        outputTemplate,
         '--progress',
         '--newline',
         targetUrl,
@@ -167,7 +225,10 @@ async function processDownload(taskId: string) {
             broadcast({ type: 'update', task });
           }
         }
-        if (output.includes('Extracting audio') || output.includes('Destination:')) {
+        if (
+          output.includes('Extracting audio') ||
+          output.includes('Destination:')
+        ) {
           task.status = 'converting';
           broadcast({ type: 'update', task });
         }
@@ -179,20 +240,27 @@ async function processDownload(taskId: string) {
 
       return new Promise<void>((resolve, reject) => {
         ytdlp.on('close', (code: number | null) => {
-          if (code === 0) resolve();
-          else {
-            const errorLines = stderrOut.split('\n').filter(l => l.includes('ERROR'));
-            const msg = errorLines.length > 0
-              ? errorLines[errorLines.length - 1]
-              : `yt-dlp exited code ${code}: ${stderrOut.slice(-300)}`;
+          if (code === 0) {
+            resolve();
+          } else {
+            // Extract the most meaningful error line
+            const errorLines = stderrOut
+              .split('\n')
+              .filter((l) => l.includes('ERROR') || l.includes('error'));
+            const msg =
+              errorLines.length > 0
+                ? errorLines[errorLines.length - 1].trim()
+                : `yt-dlp exited code ${code}: ${stderrOut.slice(-400)}`;
             reject(new Error(msg));
           }
         });
-        ytdlp.on('error', reject);
+        ytdlp.on('error', (err) => {
+          reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
+        });
       });
     };
 
-    // Reset progress for new attempt
+    // Reset progress
     task.progress = 0;
     task.status = 'downloading';
     broadcast({ type: 'update', task });
@@ -200,42 +268,46 @@ async function processDownload(taskId: string) {
     let success = false;
     let lastErr: Error | null = null;
 
-    for (const attempt of downloadMatrix) {
+    for (const attempt of matrix) {
       try {
-        await executeDownload(attempt.targetUrl, attempt.clientArgs, attempt.useCookies);
+        console.log(
+          `[ytdl/process] Trying client "${attempt.label}" for taskId=${taskId}`
+        );
+        await executeDownload(attempt);
+        console.log(
+          `[ytdl/process] Success with client "${attempt.label}"`
+        );
         success = true;
         break;
       } catch (err: any) {
-        const errMsg = err?.message || String(err);
-        console.warn(`[ytdl/process] Attempt failed (url=${attempt.targetUrl}, cookies=${attempt.useCookies}):`, errMsg.slice(0, 200));
+        const errMsg = (err?.message || String(err)).slice(0, 300);
+        console.warn(
+          `[ytdl/process] Client "${attempt.label}" failed: ${errMsg}`
+        );
         lastErr = err;
       }
     }
 
     if (!success) {
-      throw lastErr || new Error('Todos los métodos de descarga fallaron');
+      const errMsg = lastErr?.message || 'Todos los métodos de descarga fallaron';
+      throw new Error(errMsg);
     }
 
     // --- Locate the generated audio file ---
-    // yt-dlp outputs taskId.<ext> then renames after ffmpeg conversion.
-    // After --extract-audio --audio-format mp3, expected: taskId.mp3
-    // But sometimes intermediate files remain (.webm, .m4a etc) if conversion is fast.
     const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
     let foundFile: string | null = null;
 
-    // Small delay to allow filesystem to flush (important on some Linux VMs)
-    await new Promise(r => setTimeout(r, 500));
+    // Small delay for filesystem flush (important on Linux/Vercel)
+    await new Promise((r) => setTimeout(r, 500));
 
     if (fs.existsSync(expectedMp3)) {
       foundFile = expectedMp3;
     } else {
-      // Scan tmpdir for any file matching our taskId
       try {
-        const files = fs.readdirSync(downloadsDir);
         const AUDIO_EXTS = ['.mp3', '.m4a', '.webm', '.opus', '.aac', '.ogg'];
-        const match = files.find(f =>
-          f.startsWith(taskId) &&
-          AUDIO_EXTS.some(ext => f.endsWith(ext))
+        const files = fs.readdirSync(downloadsDir);
+        const match = files.find(
+          (f) => f.startsWith(taskId) && AUDIO_EXTS.some((ext) => f.endsWith(ext))
         );
         if (match) {
           foundFile = path.join(downloadsDir, match);
@@ -246,38 +318,33 @@ async function processDownload(taskId: string) {
     }
 
     if (!foundFile || !fs.existsSync(foundFile)) {
-      // One more attempt: sometimes yt-dlp writes a partial file still named .webm.part
-      // Log what's actually there for diagnosis
       try {
         const files = fs.readdirSync(downloadsDir);
-        const related = files.filter(f => f.includes(taskId));
-        console.error(`[ytdl/process] Expected MP3 not found. Files with taskId "${taskId}" in tmpdir: ${JSON.stringify(related)}`);
+        const related = files.filter((f) => f.includes(taskId));
+        console.error(
+          `[ytdl/process] Expected MP3 not found. Related files in tmpdir: ${JSON.stringify(related)}`
+        );
       } catch (e) {}
       throw new Error('No se encontró el archivo MP3 generado tras la descarga');
     }
 
-    // Read into buffer and cache in memory (same process, same instance)
     const buffer = await fs.promises.readFile(foundFile);
     if (buffer.length === 0) {
-      try { await fs.promises.unlink(foundFile); } catch (e) {}
-      throw new Error('El archivo generado tiene 0 bytes — la conversión falló');
+      try {
+        await fs.promises.unlink(foundFile);
+      } catch (e) {}
+      throw new Error('El archivo generado tiene 0 bytes');
     }
 
-    // Cache buffer keyed by taskId for the /file GET endpoint
+    // Cache buffer in memory (same serverless instance)
     completedFileBuffers.set(taskId, { buffer, title: task.title });
 
-    // Also keep the file on disk as a backup in case the buffer is in a different instance
-    // (Vercel can route /file to a different lambda — disk is shared within same instance)
-    // We'll delete it after a few minutes via a background timer
-    // For now: do NOT delete immediately so /file can re-read if buffer miss
-    // task.downloadPath is used by /file route as disk fallback
+    // Keep file on disk as fallback for /file route (cleaned after 10 min)
     task.downloadPath = foundFile;
-
     task.status = 'completed';
     task.progress = 100;
     broadcast({ type: 'update', task });
 
-    // Schedule file cleanup after 10 minutes
     setTimeout(async () => {
       try {
         if (foundFile && fs.existsSync(foundFile)) {
@@ -286,7 +353,6 @@ async function processDownload(taskId: string) {
         completedFileBuffers.delete(taskId);
       } catch (e) {}
     }, 10 * 60 * 1000);
-
   } catch (err: any) {
     console.error('[ytdl/process] Download error:', err?.message || err);
     task.status = 'error';

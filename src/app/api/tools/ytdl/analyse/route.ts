@@ -143,13 +143,6 @@ async function getYouTubeOEmbed(videoId: string) {
 }
 
 async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] = []): Promise<any[]> {
-  const commonArgs = [
-    '--no-warnings',
-    ...cookieArgs,
-    '--extractor-args', 'youtube:player_client=tv_embedded',
-    '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+'
-  ];
-
   const execute = (cmdArgs: string[]) => new Promise<any[]>((resolve, reject) => {
     const proc = spawn(ytdlpPath, cmdArgs);
     let stdout = '';
@@ -171,30 +164,42 @@ async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] 
     proc.on('error', reject);
   });
 
-  try {
-    return await execute([...commonArgs, ...args]);
-  } catch (err: any) {
-    console.warn('YTDLP tv_embedded client failed, trying android_creator fallback...', err?.message || err);
-    const fallbackArgs = [
-      '--no-warnings',
-      ...cookieArgs,
-      '--extractor-args', 'youtube:player_client=android_creator',
-      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-      ...args
-    ];
-    try {
-      return await execute(fallbackArgs);
-    } catch (fallbackErr: any) {
-      console.warn('YTDLP android_creator fallback failed, trying android standalone...', fallbackErr?.message || fallbackErr);
-      const androidArgs = [
+  // Client priority order for datacenter IPs (Vercel):
+  // mediaconnect bypasses bot detection without cookies
+  const clientConfigs = [
+    {
+      label: 'mediaconnect',
+      extraArgs: ['--no-warnings', '--extractor-args', 'youtube:player_client=mediaconnect']
+    },
+    {
+      label: 'tv_embedded',
+      extraArgs: [
         '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android',
-        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-        ...args
-      ];
-      return await execute(androidArgs);
+        ...cookieArgs,
+        '--extractor-args', 'youtube:player_client=tv_embedded',
+        '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+'
+      ]
+    },
+    {
+      label: 'android_vr',
+      extraArgs: [
+        '--no-warnings',
+        '--extractor-args', 'youtube:player_client=android_vr',
+        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
+      ]
+    },
+  ];
+
+  let lastError: any = null;
+  for (const config of clientConfigs) {
+    try {
+      return await execute([...config.extraArgs, ...args]);
+    } catch (err: any) {
+      console.warn(`[ytdl/analyse] Client "${config.label}" failed:`, (err?.message || err).slice(0, 150));
+      lastError = err;
     }
   }
+  throw lastError || new Error('All yt-dlp clients failed');
 }
 
 export async function POST(req: Request) {

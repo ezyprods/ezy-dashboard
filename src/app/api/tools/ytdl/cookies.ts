@@ -1,8 +1,13 @@
-﻿import fs from 'fs';
+import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const EMBEDDED_COOKIES_BASE64 = 'IyBOZXRzY2FwZSBIVFRQIENvb2tpZSBGaWxlDQojIFRoaXMgZmlsZSBpcyBnZW5lcmF0ZWQgYnkgeXQtZGxwLiAgRG8gbm90IGVkaXQuDQoNCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODAyNzkzMTE1CURFVklDRV9JTkZPCUNoeE9lbGt6VG1wRmVrMTZTVEpPZWtrMFQwUkpORTVVVFhsT1VUMDlFSnZGbk5RR0dJbTFuTlFHDQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc4NzI0MjkyMglHUFMJMQ0KLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDMwMjc0MjkJTklECTUzND1oRkotWFdDS3lKOU41UU1kbG5fdGFnOGZjSGxCMVdsWTBEdHNmUGxQcWJPQWFIN2pxdXM4NVJ3aXBLeDFrRGNOaUNKWVRXS1JVWjlTLXlMS0hJWUxhTlFNdjlSMFZMMXNXdlYtN3VtVUtjcnlDTWtHeEpuUnNvekozSGlhTDNkWHRkaUZhWXZwSDlZWXFpZDBOWmJCbzBNZ0hfajlpOHpBSzcwX0U1TjVheWw2TlQ0SFlBcjAtREkwUHVfNktWeC1KdmNVOWxuYldCOXhVeDRCRHVNbTZ0aEhZY2gyYmtrZlpnDQoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTAJUFJFRglmNj00MDAwMDAwMCZ0ej1VVEMmZjc9MTAwJnJlcGVhdD1OT05FJmF1dG9wbGF5PXRydWUmZjU9MzAwMDAmaGw9ZW4NCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkwCVNPQ1MJQ0FJDQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgwMjc5MzE2OQlWSVNJVE9SX0lORk8xX0xJVkUJM01mLThLZ0gzckENCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODAyNzkzMTY5CVZJU0lUT1JfUFJJVkFDWV9NRVRBREFUQQlDZ0pGVXhJaUVoNFNIQXNNRGc4UUVSSVRGQlVXRnhnWkdoc2NIUjRmSUNFaUl5UWxKaWNnUUElM0QlM0QNCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE4Nzc0NjA1CV9fU2VjdXJlLTFQU0lEVFMJc2lkdHMtQ2pRQlhNdzQxYmpfemFETHNwTHk5bzE1Q2c5LVFWTWljekQxdndhOUpJZklvMVFLQi1vaksxZlJJWHFKUDNoYTQ4VXVmVWcwRUFBDQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgyMTU0NjU1MglfX1NlY3VyZS0zUEFQSVNJRAlmVUY5VXdmZHJyS0ZLUGQzL0Fzb1hJUGhCeVRPMG5mQkstDQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgyMTU0NjU1MglfX1NlY3VyZS0zUFNJRAlnLmEwMDBCQWxNZUQ5V1U2V0Nackc0elJybTEyYk5td3VKOFIyNUFyWm1sN2tWb1V4VFA3LUN6cFMyU2l0NTNZVU1ZbHhLRWZ2Xy13QUNnWUtBUXdTQVJFU0ZRSEdYMk1pSWZMVE1BQ19pWFphX2FEeVlaNWZmaG9WQVVGOHlLcnFsY05BWXVSZ3NHLWIyMzBldXlENDAwNzYNCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE4Nzc1MDU4CV9fU2VjdXJlLTNQU0lEQ0MJQUtFeVh6VlYwRXR2NHhRRnhCQ3BZUldHWm54bFZwSjVNOGRQMVJvbktHWUxqWkFVbF81NkhMWTk2bHA3QlU2alZZMFFtUnhQSGcNCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE4Nzc0NjA1CV9fU2VjdXJlLTNQU0lEVFMJc2lkdHMtQ2pRQlhNdzQxYmpfemFETHNwTHk5bzE1Q2c5LVFWTWljekQxdndhOUpJZklvMVFLQi1vaksxZlJJWHFKUDNoYTQ4VXVmVWcwRUFBDQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5MTMwNTkyMAlfX1NlY3VyZS1CVUNLRVQJQ0p3Qg0KLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDI3NjgyMjQJX19TZWN1cmUtUk9MTE9VVF9UT0tFTglDT3Y2NWFpd3Y3VzJ0Z0VReFotRHB0YndpZ01ZZzhiNG9ldXVsZ00lM0QNCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODAyNzkzMTIyCV9fU2VjdXJlLVlOSUQJMjEuWVQ9UXRkdDhqeWYzVFJieFFiNUloS0FHWUw1aWlJb3FKbDhvSkFxb1BUMGg2ZnY5VjlVc0ZoQ0F3R2hYQk1ncjh1TWctU0d5RUxiN1lUT3E2RWhYSnRlTm82bDhoTk5jSWtiNVJ1S09MVXgtU09MVURHR2puZFpQVldiSjg0UmdfVTNlaDl0a3J4WWVNOTRjeXVKemZIbGNGOTJvZVpTMS13elZBdXpQNWZWVTB4cVdrTzhVdkFPcGtxc3pGWlFsV0VhM1BmWlA3YmVVcFZOOW1FS0U0anpEUTdsX3BYaFBrUjNnN3I5U29tVVVFbjdDczNQUUctWkk5M01WNWJ3NUM4XzZBYU1IbnRMaEptLThvTWFEY1Zvd1JRNzJQcDFOc0VseXNzV0FJV1pBMlFmaEwwU0lFeDhFdS1WYlJXVXBOcE8xdkM5YUViRTRWQzFneEg3RmVuRmFBDQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTg1MDMxMzExNQlfX1NlY3VyZS1ZVF9UVkZBUwl0PTQ5NjQ1NSZzPTMNCi55b3V0dWJlLmNvbQlUUlVFCS90dglUUlVFCTE4MjAwNzMxMTUJX19TZWN1cmUtWVRfREVSUAlDSTNHN3VlS0JRJTNEJTNEDQo=';
+// NOTE: We do NOT embed cookies in source code anymore.
+//       Embedded cookies expire and cause "Sign in to confirm you're not a bot"
+//       errors on datacenter IPs (Vercel). Instead, set YOUTUBE_COOKIES_BASE64
+//       in your Vercel environment variables with fresh cookies when needed.
+//       Most YouTube videos work without cookies when using the mediaconnect
+//       or tv_embedded player clients.
 
 let cookiesFilePath: string | null = null;
 
@@ -13,18 +18,19 @@ export async function getYouTubeCookiesFile(): Promise<string | null> {
 
   let cookiesContent: string | null = null;
 
+  // Priority 1: base64-encoded env var (set in Vercel dashboard)
   if (process.env.YOUTUBE_COOKIES_BASE64) {
     try {
-      cookiesContent = Buffer.from(process.env.YOUTUBE_COOKIES_BASE64, 'base64').toString('utf-8');
-    } catch (e) {}
+      cookiesContent = Buffer.from(
+        process.env.YOUTUBE_COOKIES_BASE64,
+        'base64'
+      ).toString('utf-8');
+    } catch (e) {
+      console.warn('[ytdl/cookies] Failed to decode YOUTUBE_COOKIES_BASE64:', e);
+    }
   }
 
-  if (!cookiesContent && EMBEDDED_COOKIES_BASE64) {
-    try {
-      cookiesContent = Buffer.from(EMBEDDED_COOKIES_BASE64, 'base64').toString('utf-8');
-    } catch (e) {}
-  }
-
+  // Priority 2: plain text env var
   if (!cookiesContent && process.env.YOUTUBE_COOKIES) {
     cookiesContent = process.env.YOUTUBE_COOKIES;
   }
@@ -33,11 +39,28 @@ export async function getYouTubeCookiesFile(): Promise<string | null> {
     return null;
   }
 
+  // Remove BOM if present (common when exporting cookies on Windows)
+  cookiesContent = cookiesContent.replace(/^\uFEFF/, '');
+
+  // Validate it looks like a Netscape cookie file
+  if (
+    !cookiesContent.includes('# Netscape HTTP Cookie File') &&
+    !cookiesContent.includes('.youtube.com')
+  ) {
+    console.warn('[ytdl/cookies] Cookie content does not look like a Netscape cookie file, ignoring');
+    return null;
+  }
+
   cookiesFilePath = path.join(os.tmpdir(), 'yt-cookies.txt');
   try {
-    await fs.promises.writeFile(cookiesFilePath, cookiesContent, 'utf-8');
+    // Write without BOM, UTF-8 only
+    await fs.promises.writeFile(cookiesFilePath, cookiesContent, {
+      encoding: 'utf-8',
+      flag: 'w',
+    });
     return cookiesFilePath;
   } catch (e) {
+    console.error('[ytdl/cookies] Failed to write cookies file:', e);
     return null;
   }
 }
