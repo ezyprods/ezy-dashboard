@@ -1,187 +1,115 @@
-import os from 'os';
 import fs from 'fs';
-import https from 'https';
 import path from 'path';
+import os from 'os';
+import https from 'https';
+import zlib from 'zlib';
 import ffmpegStatic from 'ffmpeg-static';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 
-const execFileAsync = promisify(execFile);
+const YTDLP_LINUX_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+const FFMPEG_LINUX_GZ_URL = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64.gz';
 
-const MIN_YTDLP_VERSION = '2026.08.01';
-const YTDLP_CACHE_KEY = '20260825_v2';
-const YTDLP_URL =
-  os.platform() === 'win32'
-    ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
-    : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
+const CACHE_STAMP = '20260825_v3';
 
-export const downloadFile = (url: string, dest: string): Promise<void> => {
+function downloadFile(url: string, dest: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const tmpDest = `${dest}.tmp.${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(2, 7)}`;
-    const file = fs.createWriteStream(tmpDest);
-
-    const cleanup = () => {
-      file.destroy();
-      fs.unlink(tmpDest, () => {});
-    };
-
-    const follow = (targetUrl: string, depth = 0) => {
-      if (depth > 10) {
-        cleanup();
-        return reject(new Error('Too many redirects'));
+    https.get(url, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return downloadFile(res.headers.location!, dest).then(resolve).catch(reject);
       }
-
-      const req = https.get(targetUrl, (response) => {
-        if (
-          response.statusCode === 301 ||
-          response.statusCode === 302 ||
-          response.statusCode === 303 ||
-          response.statusCode === 307 ||
-          response.statusCode === 308
-        ) {
-          if (!response.headers.location) {
-            cleanup();
-            return reject(new Error('Redirected without location header'));
-          }
-          let location = response.headers.location;
-          if (location.startsWith('/')) {
-            const parsed = new URL(targetUrl);
-            location = `${parsed.protocol}//${parsed.host}${location}`;
-          }
-          response.resume();
-          follow(location, depth + 1);
-        } else if (response.statusCode === 200) {
-          response.pipe(file);
-          file.on('finish', () => {
-            file.close((err) => {
-              if (err) {
-                cleanup();
-                return reject(err);
-              }
-              try {
-                if (os.platform() !== 'win32') {
-                  fs.chmodSync(tmpDest, '755');
-                }
-                fs.renameSync(tmpDest, dest);
-                resolve();
-              } catch (renameErr) {
-                cleanup();
-                reject(renameErr);
-              }
-            });
-          });
-        } else {
-          cleanup();
-          reject(
-            new Error(
-              `Download failed with status code ${response.statusCode} for ${targetUrl}`
-            )
-          );
-        }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`Failed to download binary: HTTP ${res.statusCode}`));
+      }
+      const file = fs.createWriteStream(dest);
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        resolve(dest);
       });
-
-      req.on('error', (err) => {
-        cleanup();
-        reject(err);
-      });
-    };
-
-    follow(url);
+    }).on('error', reject);
   });
-};
-
-async function getYtDlpVersion(ytdlpPath: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(ytdlpPath, ['--version'], {
-      timeout: 10000,
-    });
-    return stdout.trim();
-  } catch {
-    return null;
-  }
 }
 
-function isVersionSufficient(version: string, minVersion: string): boolean {
-  return version.replace(/\./g, '') >= minVersion.replace(/\./g, '');
+function downloadAndGunzip(url: string, dest: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        return downloadAndGunzip(res.headers.location!, dest).then(resolve).catch(reject);
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`Failed to download FFmpeg: HTTP ${res.statusCode}`));
+      }
+      const gunzip = zlib.createGunzip();
+      const out = fs.createWriteStream(dest);
+      res.pipe(gunzip).pipe(out);
+      out.on('finish', () => {
+        out.close();
+        resolve(dest);
+      });
+      gunzip.on('error', reject);
+      out.on('error', reject);
+    }).on('error', reject);
+  });
 }
 
-let binariesPromise: Promise<{ ytdlpPath: string; ffmpegPath: string }> | null =
-  null;
+let cachedYtdlpPath: string | null = null;
+let cachedFfmpegPath: string | null = null;
+let binaryInitPromise: Promise<{ ytdlpPath: string; ffmpegPath: string }> | null = null;
 
-export const ensureBinaries = async (): Promise<{
-  ytdlpPath: string;
-  ffmpegPath: string;
-}> => {
-  if (binariesPromise) {
-    return binariesPromise;
+export async function ensureBinaries(): Promise<{ ytdlpPath: string; ffmpegPath: string }> {
+  if (cachedYtdlpPath && cachedFfmpegPath && fs.existsSync(cachedYtdlpPath) && fs.existsSync(cachedFfmpegPath)) {
+    return { ytdlpPath: cachedYtdlpPath, ffmpegPath: cachedFfmpegPath };
   }
 
-  binariesPromise = (async () => {
-    const tmpDir = os.tmpdir();
+  if (binaryInitPromise) return binaryInitPromise;
+
+  binaryInitPromise = (async () => {
     const isWin = os.platform() === 'win32';
-    
+    const tmpDir = os.tmpdir();
+
     // 1. Prepare yt-dlp binary
-    const ytdlpPath = path.join(
-      tmpDir,
-      isWin ? `yt-dlp-${YTDLP_CACHE_KEY}.exe` : `yt-dlp-${YTDLP_CACHE_KEY}`
-    );
-
-    let ytdlpValid = false;
-
-    if (fs.existsSync(ytdlpPath)) {
-      try {
-        const stat = fs.statSync(ytdlpPath);
-        if (stat.size > 5_000_000) {
-          const version = await getYtDlpVersion(ytdlpPath);
-          if (version && isVersionSufficient(version, MIN_YTDLP_VERSION)) {
-            ytdlpValid = true;
-          } else {
-            fs.unlinkSync(ytdlpPath);
-          }
-        } else {
-          fs.unlinkSync(ytdlpPath);
-        }
-      } catch (e) {
-        ytdlpValid = false;
+    let ytdlpPath: string;
+    if (isWin) {
+      const localExe = path.join(tmpDir, 'yt-dlp-test.exe');
+      if (fs.existsSync(localExe)) {
+        ytdlpPath = localExe;
+      } else {
+        const winBinary = path.join(process.cwd(), 'bin', 'yt-dlp.exe');
+        ytdlpPath = fs.existsSync(winBinary) ? winBinary : 'yt-dlp';
       }
+    } else {
+      const tmpYtdlp = path.join(tmpDir, `yt-dlp-${CACHE_STAMP}`);
+      if (!fs.existsSync(tmpYtdlp) || fs.statSync(tmpYtdlp).size < 1000000) {
+        console.log('[ytdl/binaries] Downloading latest yt-dlp Linux binary...');
+        await downloadFile(YTDLP_LINUX_URL, tmpYtdlp);
+        fs.chmodSync(tmpYtdlp, '755');
+      }
+      ytdlpPath = tmpYtdlp;
     }
 
-    if (!ytdlpValid) {
-      console.log('[ytdl/binaries] Downloading fresh yt-dlp binary...');
-      await downloadFile(YTDLP_URL, ytdlpPath);
-      if (!isWin) {
-        try { fs.chmodSync(ytdlpPath, '755'); } catch (e) {}
-      }
-    }
-
-    // 2. Prepare FFmpeg binary (ensure executable in Linux /tmp)
-    let ffmpegPath = (ffmpegStatic as string) || 'ffmpeg';
-    
-    if (!isWin && ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+    // 2. Prepare FFmpeg binary
+    let ffmpegPath: string;
+    if (isWin) {
+      ffmpegPath = (ffmpegStatic as string) || 'ffmpeg';
+    } else {
       const tmpFfmpeg = path.join(tmpDir, 'ffmpeg_bin');
-      try {
-        if (!fs.existsSync(tmpFfmpeg)) {
-          fs.copyFileSync(ffmpegStatic, tmpFfmpeg);
-          fs.chmodSync(tmpFfmpeg, '755');
-        }
-        ffmpegPath = tmpFfmpeg;
-      } catch (e) {
-        console.warn('[ytdl/binaries] Could not copy ffmpeg to /tmp, using default path:', e);
+      if (!fs.existsSync(tmpFfmpeg) || fs.statSync(tmpFfmpeg).size < 10000000) {
+        console.log('[ytdl/binaries] Downloading and decompressing Linux FFmpeg static binary...');
+        await downloadAndGunzip(FFMPEG_LINUX_GZ_URL, tmpFfmpeg);
+        fs.chmodSync(tmpFfmpeg, '755');
       }
+      ffmpegPath = tmpFfmpeg;
     }
 
+    cachedYtdlpPath = ytdlpPath;
+    cachedFfmpegPath = ffmpegPath;
     return { ytdlpPath, ffmpegPath };
-  })().catch((err) => {
-    binariesPromise = null;
-    throw err;
-  });
+  })();
 
-  return binariesPromise;
-};
+  return binaryInitPromise;
+}
 
-export const ensureYtDlp = async (): Promise<string> => {
+export async function ensureYtDlp(): Promise<string> {
   const { ytdlpPath } = await ensureBinaries();
   return ytdlpPath;
-};
+}
+

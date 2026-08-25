@@ -67,7 +67,15 @@ export async function getYouTubeCookiesFile(): Promise<string | null> {
 export async function buildCookieArgs(): Promise<string[]> {
   const cookiesFile = await getYouTubeCookiesFile();
   if (cookiesFile) {
-    return ['--cookies', cookiesFile];
+    return [
+      '--cookies', cookiesFile,
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      '--add-header', 'Accept-Language: es-ES,es;q=0.9,en;q=0.8',
+    ];
   }
-  return [];
+  return [
+    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    '--add-header', 'Accept-Language: es-ES,es;q=0.9,en;q=0.8',
+  ];
 }
+
