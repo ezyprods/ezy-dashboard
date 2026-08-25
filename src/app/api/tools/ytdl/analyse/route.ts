@@ -272,6 +272,24 @@ export async function POST(req: Request) {
 
     } else if (!url.startsWith('http')) {
       platform = 'search';
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const yts = require('@vreden/youtube_scraper');
+        const sRes = await yts.search(url);
+        const firstVideo = sRes.result?.find((r: any) => r.type === 'video' && r.url);
+        if (firstVideo) {
+          return NextResponse.json({
+            title: cleanTitle({ title: firstVideo.title, uploader: firstVideo.author?.name || '' }),
+            thumbnail: firstVideo.thumbnail || firstVideo.image,
+            duration: firstVideo.seconds || null,
+            platform: 'youtube',
+            resolvedUrl: firstVideo.url,
+            isPlaylist: false
+          });
+        }
+      } catch (e) {}
+
       const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${url}`], cookieArgs);
       const entry = results[0];
       targetUrl = entry.webpage_url || entry.url;

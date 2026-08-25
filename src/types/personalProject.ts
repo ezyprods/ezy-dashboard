@@ -16,6 +16,12 @@ export type PersonalProjectStatus =
   | 'cedido_a_artista' 
   | 'descartado';
 
+export interface PackTrack {
+  fileId: string;
+  fileName: string;
+  driveUrl?: string;
+}
+
 export interface PersonalProject {
   id: string;                         // ID de la carpeta de Drive del proyecto
   title: string;
@@ -37,6 +43,7 @@ export interface PersonalProject {
   notes?: string;
   latestBounceFileId?: string | null; // ID del archivo del último bounce para play instantáneo
   latestBounceName?: string | null;
+  packTracks?: PackTrack[];           // Para sound kits / loop packs con múltiples muestras o stems
   createdAt: string;
   updatedAt: string;
 }

@@ -47,8 +47,42 @@ export async function GET(
       (f: any) => f.mimeType?.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg|aiff)$/i.test(f.name || '')
     );
 
+    // 5. Población Lazy de packTracks y latestBounce si hay audios
+    let updatedProjectConfig = { ...config, driveFolderId: id, id };
+    if (bounces.length > 0) {
+      const packTracks = bounces.map((b: any) => ({
+        fileId: b.id,
+        fileName: b.name,
+        driveUrl: b.webViewLink,
+      }));
+
+      const needsSync = !config.latestBounceFileId || 
+        config.latestBounceFileId !== bounces[0].id ||
+        !config.packTracks || 
+        config.packTracks.length !== packTracks.length;
+
+      if (needsSync) {
+        updatedProjectConfig = {
+          ...updatedProjectConfig,
+          latestBounceFileId: bounces[0].id,
+          latestBounceName: bounces[0].name,
+          packTracks,
+          updatedAt: new Date().toISOString(),
+        };
+
+        // Guardar de fondo sin bloquear
+        saveJsonFile('personal_project_config.json', updatedProjectConfig, id).catch(() => {});
+        getPersonalProjectsDb().then(({ projects, rootFolderId }) => {
+          const updatedList = projects.map(p => (p.id === id ? updatedProjectConfig : p));
+          return savePersonalProjectsDb(updatedList, rootFolderId);
+        }).catch(() => {});
+      } else {
+        updatedProjectConfig.packTracks = config.packTracks || packTracks;
+      }
+    }
+
     return NextResponse.json({
-      project: { ...config, driveFolderId: id, id },
+      project: updatedProjectConfig,
       folders,
       rootFiles,
       tasks: tasksData.tasks || [],
