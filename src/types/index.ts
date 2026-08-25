@@ -5,6 +5,7 @@ export * from './file';
 export * from './communication';
 export * from './portal';
 export * from './campaign';
+export * from './personalProject';
 
 export interface CoverHistoryEntry {
   fileId: string;

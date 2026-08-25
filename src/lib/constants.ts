@@ -78,10 +78,79 @@ export const VIDEO_MIME_TYPES = [
   'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
 ];
 
+// Personal Projects
+export const PERSONAL_PROJECTS_ROOT_FOLDER_NAME = '00_PROYECTOS_PERSONALES';
+
+export const PERSONAL_PROJECT_CATEGORIES: Record<
+  'beat' | 'grabacion' | 'loop_pack' | 'colaboracion' | 'mashup',
+  { label: string; shortLabel: string; folderName: string; color: string; bgColor: string; iconName: string }
+> = {
+  beat: {
+    label: 'Beats / Instrumentales',
+    shortLabel: 'Beat',
+    folderName: 'Beats',
+    color: '#6c5ce7',
+    bgColor: 'rgba(108, 92, 231, 0.15)',
+    iconName: 'Music',
+  },
+  grabacion: {
+    label: 'Grabaciones / Covers',
+    shortLabel: 'Grabación',
+    folderName: 'Grabaciones',
+    color: '#00cec9',
+    bgColor: 'rgba(0, 206, 201, 0.15)',
+    iconName: 'Mic',
+  },
+  loop_pack: {
+    label: 'Sound Kits / Loop Packs',
+    shortLabel: 'Sound Kit',
+    folderName: 'Loop Packs',
+    color: '#fdcb6e',
+    bgColor: 'rgba(253, 203, 110, 0.15)',
+    iconName: 'Layers',
+  },
+  colaboracion: {
+    label: 'Colaboraciones entre Productores',
+    shortLabel: 'Colab',
+    folderName: 'Colaboraciones',
+    color: '#e84393',
+    bgColor: 'rgba(232, 67, 147, 0.15)',
+    iconName: 'Users2',
+  },
+  mashup: {
+    label: 'Mashups / Remezclas',
+    shortLabel: 'Mashup',
+    folderName: 'Mashups',
+    color: '#0984e3',
+    bgColor: 'rgba(9, 132, 227, 0.15)',
+    iconName: 'Disc3',
+  },
+};
+
+export const PERSONAL_PROJECT_STATUS_CONFIG: Record<
+  'idea' | 'en_progreso' | 'terminado' | 'en_pausa' | 'incluido_en_pack' | 'cedido_a_artista' | 'descartado',
+  { label: string; icon: string; color: string; bgColor: string }
+> = {
+  idea: { label: 'Idea / Boceto', icon: '💡', color: '#a29bfe', bgColor: 'rgba(162, 155, 254, 0.15)' },
+  en_progreso: { label: 'En Progreso', icon: '⚡', color: '#6c5ce7', bgColor: 'rgba(108, 92, 231, 0.15)' },
+  terminado: { label: 'Terminado / Maquetado', icon: '🎧', color: '#00b894', bgColor: 'rgba(0, 184, 148, 0.15)' },
+  en_pausa: { label: 'En Pausa', icon: '⏸️', color: '#fdcb6e', bgColor: 'rgba(253, 203, 110, 0.15)' },
+  incluido_en_pack: { label: 'Incluido en Pack / Álbum', icon: '📦', color: '#e17055', bgColor: 'rgba(225, 112, 85, 0.15)' },
+  cedido_a_artista: { label: 'Cedido a Artista', icon: '🤝', color: '#0984e3', bgColor: 'rgba(9, 132, 227, 0.15)' },
+  descartado: { label: 'Descartado', icon: '🗑️', color: '#636e72', bgColor: 'rgba(99, 110, 114, 0.15)' },
+};
+
+export const PERSONAL_PROJECT_SUBFOLDERS = [
+  '01_Bounces_y_Demos',
+  '02_Stems_y_Pistas',
+  '03_Backup_y_Sesiones',
+];
+
 // Navigation items
 export const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { href: '/artists', label: 'Artistas', icon: 'Users' },
+  { href: '/personal-projects', label: 'Proyectos Personales', icon: 'Music' },
   { href: '/payments', label: 'Pagos', icon: 'CreditCard' },
   { href: '/communications', label: 'Comunicaciones', icon: 'MessageSquare' },
   { href: '/settings', label: 'Configuración', icon: 'Settings' },

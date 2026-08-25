@@ -78,12 +78,23 @@ function ArtistDropCard({ artist, onDrop }: { artist: Artist; onDrop: (files: Fi
 export function GlobalDropZone() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isDraggingFiles, droppedFiles, preselectedArtistId, preselectedFolderId, clearDroppedFiles, triggerUploadForArtist } = useGlobalDragDrop();
+  const { 
+    isDraggingFiles, 
+    droppedFiles, 
+    preselectedArtistId, 
+    preselectedFolderId, 
+    preselectedTargetType,
+    preselectedPersonalProjectId,
+    clearDroppedFiles, 
+    triggerUploadForArtist,
+    triggerUploadForPersonalProject
+  } = useGlobalDragDrop();
   const [hoveredZone, setHoveredZone] = useState(false);
   const zoneCounter = useRef(0);
 
   // Detect if we're in a context where DriveExplorer handles its own drops
   const isInsideArtistFolder = pathname.startsWith('/artists/') && pathname !== '/artists';
+  const isInsidePersonalProject = pathname.startsWith('/personal-projects/') && pathname !== '/personal-projects';
   const activeTab = searchParams.get('tab') || 'files';
   const isFilesTab = isInsideArtistFolder && activeTab === 'files';
   const isArtistsList = pathname === '/artists';
@@ -101,16 +112,22 @@ export function GlobalDropZone() {
     setHoveredZone(false);
     const files = Array.from(e.dataTransfer.files);
     
+    if (files.length === 0) return;
+
+    if (isInsidePersonalProject) {
+      const personalProjectId = pathname.split('/')[2];
+      triggerUploadForPersonalProject(files, personalProjectId);
+      return;
+    }
+
     let targetArtistId = preselectedArtistId;
     if (!targetArtistId && isInsideArtistFolder) {
       targetArtistId = pathname.split('/')[2];
     }
     
-    if (files.length > 0) {
-      // Pass empty string when no specific artist is targeted — SmartUploadModal
-      // will auto-detect from filename and fall back to the most-recently-used artist.
-      triggerUploadForArtist(files, targetArtistId || '');
-    }
+    // Pass empty string when no specific artist is targeted — SmartUploadModal
+    // will auto-detect from filename and fall back to the most-recently-used artist.
+    triggerUploadForArtist(files, targetArtistId || '');
   };
 
   if (typeof document === 'undefined') return null;
@@ -126,16 +143,7 @@ export function GlobalDropZone() {
           if (e.clientX === 0 && e.clientY === 0) setHoveredZone(false);
         }}
         onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          setHoveredZone(false);
-          const files = Array.from(e.dataTransfer.files);
-          if (files.length > 0) {
-            // Pass empty string when no specific artist is targeted — SmartUploadModal
-            // will auto-detect from filename and fall back to the most-recently-used artist.
-            triggerUploadForArtist(files, preselectedArtistId || '');
-          }
-        }}
+        onDrop={handleGenericDrop}
       >
         {/* Soft background dimming that sits behind DriveExplorer */}
         <div className={`absolute inset-0 transition-colors duration-150 ${hoveredZone ? 'bg-background/80 backdrop-blur-sm' : 'bg-background/60 backdrop-blur-sm'}`} />
@@ -153,7 +161,7 @@ export function GlobalDropZone() {
               {hoveredZone ? '¡Suelta donde quieras!' : 'Suelta para subir'}
             </h2>
             <p className="text-text-secondary text-sm">
-              Arrastra aquí o sobre los archivos del artista
+              {isInsidePersonalProject ? 'Arrastra para subir a este Proyecto Personal' : 'Arrastra aquí o sobre los archivos'}
             </p>
           </div>
         </div>
@@ -173,6 +181,8 @@ export function GlobalDropZone() {
           initialFiles={droppedFiles}
           preselectedArtistId={preselectedArtistId ?? undefined}
           preselectedFolderId={preselectedFolderId ?? undefined}
+          preselectedTargetType={preselectedTargetType ?? undefined}
+          preselectedPersonalProjectId={preselectedPersonalProjectId ?? undefined}
         />
       )}
     </>

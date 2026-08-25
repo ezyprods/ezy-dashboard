@@ -11,14 +11,19 @@ import { createPortal } from 'react-dom';
 import { findBestMatch } from '@/lib/utils';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
 import { useArtists } from '@/lib/hooks/useArtists';
+import { usePersonalProjects } from '@/lib/hooks/usePersonalProjects';
+import { PERSONAL_PROJECT_CATEGORIES } from '@/lib/constants';
 
 export interface SmartUploadFile {
   file: File;
   id: string;
   mimeGroup: 'audio' | 'image' | 'video' | 'other';
   subType: 'bounce' | 'master' | 'mix' | 'stem' | 'cover' | 'promo' | 'none';
+  targetType?: 'artist' | 'personal';
   artistId: string;
   projectId: string; // empty means artist root folder
+  personalProjectId?: string;
+  personalSubfolder?: string;
   customName: string;
   // Audio analysis
   bpm?: number | null;
@@ -43,6 +48,8 @@ interface SmartUploadModalProps {
   initialFiles: File[];
   preselectedArtistId?: string;
   preselectedFolderId?: string; // If user drops inside DriveExplorer in a specific folder
+  preselectedTargetType?: 'artist' | 'personal';
+  preselectedPersonalProjectId?: string;
   onSuccess?: () => void; // Called when all uploads complete successfully
 }
 

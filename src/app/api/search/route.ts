@@ -1,4 +1,4 @@
-﻿export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getDriveService, listFolders, findAndReadJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
@@ -27,7 +27,36 @@ export async function GET(request: Request) {
       pageSize: 20,
     }).catch(() => ({ data: { files: [] } }));
 
-    const [artistFolders, driveSearchRes] = await Promise.all([artistFoldersPromise, driveSearchPromise]);
+    // Search personal projects
+    const personalProjectsPromise = (async () => {
+      try {
+        const { getPersonalProjectsDb } = await import('@/lib/personalProjects');
+        const { projects } = await getPersonalProjectsDb();
+        return projects
+          .filter(p => 
+            p.title.toLowerCase().includes(q) || 
+            p.category.toLowerCase().includes(q) ||
+            p.tags?.some(t => t.toLowerCase().includes(q))
+          )
+          .slice(0, 5)
+          .map(p => ({
+            id: p.id,
+            title: p.title,
+            category: p.category,
+            bpm: p.bpm,
+            key: p.key,
+            status: p.status,
+          }));
+      } catch {
+        return [];
+      }
+    })();
+
+    const [artistFolders, driveSearchRes, matchedPersonalProjects] = await Promise.all([
+      artistFoldersPromise, 
+      driveSearchPromise,
+      personalProjectsPromise
+    ]);
 
     // Filter artists
     const matchedArtists = artistFolders
@@ -36,7 +65,20 @@ export async function GET(request: Request) {
       .map(f => ({ id: f.id!, name: f.name! }));
 
     // Process drive file results
-    const SYSTEM_FILES = ['artist_config.json', 'project_config.json', 'release_config.json', 'notes.json', 'payments.json', 'payments_db.json', 'matrices.json', 'portal_config.json', 'tasks.json'];
+    const SYSTEM_FILES = [
+      'artist_config.json', 
+      'project_config.json', 
+      'release_config.json', 
+      'notes.json', 
+      'payments.json', 
+      'payments_db.json', 
+      'matrices.json', 
+      'portal_config.json', 
+      'tasks.json',
+      'personal_projects_db.json',
+      'personal_project_config.json',
+      'personal_tasks.json'
+    ];
     
     const allFiles = (driveSearchRes.data.files || [])
       .filter(f => {
@@ -73,11 +115,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       artists: matchedArtists,
+      personalProjects: matchedPersonalProjects,
       audioFiles,
       otherFiles,
     });
   } catch (error: any) {
     console.error('Search API error:', error);
-    return NextResponse.json({ artists: [], audioFiles: [], otherFiles: [], error: error.message }, { status: 500 });
+    return NextResponse.json({ artists: [], personalProjects: [], audioFiles: [], otherFiles: [], error: error.message }, { status: 500 });
   }
 }

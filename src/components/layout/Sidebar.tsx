@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid, Wrench } from 'lucide-react';
+import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid, Wrench, Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const mainNavItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Artistas', href: '/artists', icon: Users },
+  { name: 'Proyectos Personales', href: '/personal-projects', icon: Music },
   { name: 'Matrices', href: '/matrices', icon: Grid },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
   { name: 'Pagos', href: '/payments', icon: CreditCard },
