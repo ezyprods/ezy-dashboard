@@ -1,17 +1,10 @@
 import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
-import { promisify } from 'util';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import https from 'https';
 import { Readable } from 'stream';
-
 import { ensureBinaries } from './binaries';
 import { buildCookieArgs } from './cookies';
 
-export const maxDuration = 60; // Set max duration for Serverless function
-
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   try {
@@ -32,44 +25,52 @@ export async function GET(req: Request) {
         const id = parsed.pathname.replace(/^\//, '').split('?')[0];
         if (id) target = `https://www.youtube.com/watch?v=${id}`;
       }
-    } catch(e) {}
+    } catch (e) {}
 
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
+    const cookieArgs = await buildCookieArgs();
 
-    // Spawn yt-dlp to stream mp3 directly to stdout
-    const ytdlp = spawn(ytdlpPath, [
+    // Stream 320K MP3 directly to stdout via child process pipe
+    const args = [
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=android',
-      '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-      '-x', 
-      '--audio-format', 'mp3',
-      '--audio-quality', '192K',
       '--no-playlist',
-      '--ffmpeg-location', ffmpegPath,
-      '-o', '-', // output to stdout
-      target
-    ]);
-    
-    // Create a web ReadableStream from the child process stdout
-    // Using cast to any to bypass TS complaining about Node.js vs DOM ReadableStream
-    const stream = Readable.toWeb(ytdlp.stdout) as any;
+      ...cookieArgs,
+      '--extract-audio',
+      '--audio-format',
+      'mp3',
+      '--audio-quality',
+      '320K',
+      '--ffmpeg-location',
+      ffmpegPath,
+      '-o',
+      '-', // stdout stream
+      target,
+    ];
+
+    const ytdlp = spawn(ytdlpPath, args);
 
     ytdlp.stderr.on('data', (data) => {
-      console.log(`yt-dlp stderr: ${data}`);
+      console.log(`[ytdl/stream] ${data}`);
     });
 
-    // Make sure title is safe for HTTP headers
-    const safeTitle = encodeURIComponent(title.replace(/[^\w\s-]/gi, '').trim());
+    const stream = Readable.toWeb(ytdlp.stdout) as any;
+
+    const safeTitle = encodeURIComponent(
+      title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio'
+    );
 
     return new NextResponse(stream, {
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`
-      }
+        'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
+        'Cache-Control': 'no-store',
+      },
     });
-
   } catch (error: any) {
-    console.error('YTDLP Serverless Error:', error);
-    return NextResponse.json({ error: error.message || 'Error en el servidor' }, { status: 500 });
+    console.error('[ytdl/stream] Error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Error en el servidor' },
+      { status: 500 }
+    );
   }
 }

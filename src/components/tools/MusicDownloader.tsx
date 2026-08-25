@@ -32,7 +32,6 @@ export function MusicDownloader() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'init') {
-          // Newest first
           setTasks(data.tasks.sort((a: YtdlTask, b: YtdlTask) => b.startTime - a.startTime));
         } else if (data.type === 'update') {
           setTasks(prev => {
@@ -49,12 +48,12 @@ export function MusicDownloader() {
     return () => eventSource.close();
   }, []);
 
-  // Auto-descargar cuando una tarea tuya se completa
+  // Auto-descargar cuando una tarea se completa
   useEffect(() => {
     tasks.forEach(task => {
       if (task.status === 'completed' && task.clientId === clientId && !downloadedTasks.has(task.id)) {
         setDownloadedTasks(prev => new Set(prev).add(task.id));
-        const downloadUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.url)}&title=${encodeURIComponent(task.title)}`;
+        const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
         const a = document.createElement('a');
         a.href = downloadUrl;
         a.download = `${task.title}.mp3`;
@@ -69,7 +68,6 @@ export function MusicDownloader() {
     const inputUrl = url.trim();
     if (!inputUrl) return;
 
-    // Immediately clear input field so user can paste next link right away!
     setUrl('');
     setErrorMsg('');
 
@@ -100,26 +98,39 @@ export function MusicDownloader() {
         throw new Error('Las listas de reproducción no están soportadas aún en la versión web.');
       }
 
+      const songTitle = data.title || inputUrl;
+      const songUrl = data.resolvedUrl || inputUrl;
+
       // Update card title and thumbnail
       setTasks(prev => prev.map(t => t.id === taskId ? {
         ...t,
-        title: data.title || t.title,
+        title: songTitle,
         thumbnail: data.thumbnail,
         platform: data.platform,
-        status: 'downloading'
+        resolvedUrl: songUrl,
+        status: 'downloading',
+        progress: 20
       } : t));
 
-      // Step 2: Queue processing
-      const processRes = await fetch('/api/tools/ytdl/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, url: inputUrl, clientId, taskId })
-      });
+      // Step 2: Trigger direct stream download
+      const directDownloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(songUrl)}&title=${encodeURIComponent(songTitle)}`;
+      const a = document.createElement('a');
+      a.href = directDownloadUrl;
+      a.download = `${songTitle}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
 
-      const processData = await processRes.json();
-      if (!processRes.ok) {
-        throw new Error(processData.error || 'Error al procesar el archivo');
-      }
+      setDownloadedTasks(prev => new Set(prev).add(taskId));
+
+      // Step 3: Complete task state
+      setTimeout(() => {
+        setTasks(prev => prev.map(t => t.id === taskId ? {
+          ...t,
+          status: 'completed',
+          progress: 100
+        } : t));
+      }, 1500);
 
     } catch (err: any) {
       setTasks(prev => prev.map(t => t.id === taskId ? {
@@ -131,13 +142,15 @@ export function MusicDownloader() {
   };
 
   const getStatusIcon = (task: YtdlTask) => {
+    const targetUrl = `/api/tools/ytdl?url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
+
     switch(task.status) {
       case 'downloading': return <Download className="w-5 h-5 text-blue-500 animate-pulse" />;
       case 'converting': return <RefreshCw className="w-5 h-5 text-purple-500 animate-spin" />;
       case 'completed':
         return (
           <a
-            href={`/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.url)}&title=${encodeURIComponent(task.title)}`}
+            href={targetUrl}
             download={`${task.title}.mp3`}
             title="Descargar MP3"
             className="p-1 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
@@ -146,14 +159,25 @@ export function MusicDownloader() {
             <CheckCircle2 className="w-5 h-5 text-emerald-500 hover:scale-110 transition-transform" />
           </a>
         );
-      case 'error': return <AlertCircle className="w-5 h-5 text-danger" />;
+      case 'error': 
+        return (
+          <a
+            href={targetUrl}
+            download={`${task.title}.mp3`}
+            title="Reintentar descarga directa"
+            className="p-1.5 hover:bg-accent/10 rounded-lg text-accent transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download className="w-4 h-4" /> Bajar
+          </a>
+        );
       default: return <Loader2 className="w-5 h-5 text-accent animate-spin" />;
     }
   };
 
   const getStatusText = (task: YtdlTask) => {
     switch(task.status) {
-      case 'downloading': return `Descargando... ${task.progress.toFixed(1)}%`;
+      case 'downloading': return `Descargando... ${task.progress.toFixed(0)}%`;
       case 'converting': return 'Convirtiendo a MP3 (320kbps)...';
       case 'completed': return 'Guardado en Descargas';
       case 'error': return task.error || 'Error';
