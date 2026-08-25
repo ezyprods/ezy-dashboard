@@ -177,10 +177,7 @@ export function MusicDownloader() {
       case 'converting': return 'Convirtiendo a MP3 (320kbps)...';
       case 'completed': return 'Guardado en Descargas';
       case 'error': {
-        if (task.error?.includes('bot') || task.error?.includes('Sign in')) {
-          return 'Bloqueo anti-bot de YouTube en el servidor. Configura PROXY_URL en Vercel para descargar desde YouTube.';
-        }
-        return task.error || 'Error';
+        return task.error || 'Error en la descarga';
       }
       default: return 'Analizando...';
     }

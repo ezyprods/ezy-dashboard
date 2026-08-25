@@ -107,45 +107,45 @@ async function processDownload(taskId: string) {
       useCookies: boolean;
       label: string;
     }> = [
-      // Attempt 1: Default client with cookies (Standard authenticated session)
+      // Attempt 1: Web + mweb player clients (Exact match for exported browser cookies)
+      {
+        label: 'web,mweb+cookies',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=web,mweb',
+        ],
+        useCookies: true,
+      },
+      // Attempt 2: Web player client
+      {
+        label: 'web+cookies',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=web',
+        ],
+        useCookies: true,
+      },
+      // Attempt 3: Mobile Web client
+      {
+        label: 'mweb+cookies',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=mweb',
+        ],
+        useCookies: true,
+      },
+      // Attempt 4: Default authenticated session
       {
         label: 'default+cookies',
         clientArgs: [],
         useCookies: true,
       },
-      // Attempt 2: iOS client with cookies
+      // Attempt 5: iOS client fallback
       {
         label: 'ios+cookies',
         clientArgs: [
           '--extractor-args',
           'youtube:player_client=ios',
-        ],
-        useCookies: true,
-      },
-      // Attempt 3: Android client with cookies
-      {
-        label: 'android+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=android',
-        ],
-        useCookies: true,
-      },
-      // Attempt 4: Web creator client with cookies
-      {
-        label: 'web_creator+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=web_creator',
-        ],
-        useCookies: true,
-      },
-      // Attempt 5: TV client with cookies
-      {
-        label: 'tv+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=tv',
         ],
         useCookies: true,
       },
