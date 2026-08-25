@@ -45,17 +45,27 @@ export async function GET(req: Request) {
     const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
     const cookieArgs = await buildCookieArgs();
     const proxyUrl = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.YTDL_PROXY;
+    const nodePath = process.execPath || 'node';
 
     const args = [
       '--no-warnings',
       '--no-playlist',
+      '--no-check-certificates',
+      '--geo-bypass',
+      '--js-runtimes',
+      `node:${nodePath}`,
       ...cookieArgs,
-      '-f', 'ba/b',
+      '-f',
+      'ba/ba*/bestaudio/b/best',
       '-x',
-      '--audio-format', 'mp3',
-      '--audio-quality', '320K',
-      '--ffmpeg-location', ffmpegPath,
-      '--output', outputTemplate,
+      '--audio-format',
+      'mp3',
+      '--audio-quality',
+      '320K',
+      '--ffmpeg-location',
+      ffmpegPath,
+      '--output',
+      outputTemplate,
     ];
 
     if (proxyUrl) {

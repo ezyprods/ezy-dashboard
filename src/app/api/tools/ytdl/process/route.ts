@@ -179,13 +179,19 @@ async function processDownload(taskId: string) {
       const extraCookieArgs =
         attempt.useCookies && cookieArgs.length > 0 ? cookieArgs : [];
 
+      const nodePath = process.execPath || 'node';
+
       const args = [
         '--no-warnings',
         '--no-playlist',
+        '--no-check-certificates',
+        '--geo-bypass',
+        '--js-runtimes',
+        `node:${nodePath}`,
         ...extraCookieArgs,
         ...attempt.clientArgs,
         '-f',
-        'ba/b',
+        'ba/ba*/bestaudio/b/best',
         '--extract-audio',
         '--audio-format',
         'mp3',

@@ -163,8 +163,8 @@ export async function createPersonalProject(
   const catFolderId = categoryFolders[input.category] || categoryFolders.beat;
 
   const now = new Date();
-  const year = input.year || now.getFullYear();
-  const month = input.month || (now.getMonth() + 1);
+  const year = (input.year && !isNaN(Number(input.year)) && Number(input.year) > 1900) ? Number(input.year) : now.getFullYear();
+  const month = (input.month && !isNaN(Number(input.month)) && Number(input.month) >= 1 && Number(input.month) <= 12) ? Number(input.month) : (now.getMonth() + 1);
 
   // 1. Crear carpeta del proyecto en Drive dentro de la categoría
   const projectFolderId = await createFolder(input.title, catFolderId);
