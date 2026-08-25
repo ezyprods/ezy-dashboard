@@ -33,18 +33,13 @@ const CATEGORY_FOLDER_IDS = {
   mashup: '1iP15foekFVEZ04989k_L4YD0BOTHLh3z',
 };
 
-const SUBFOLDERS = [
-  '01_Bounces_y_Demos',
-  '02_Stems_y_Pistas',
-  '03_Backup_y_Sesiones',
-];
-
 const PROGRESS_FILE = path.join(__dirname, 'import-progress.json');
+const CONCURRENCY = 2; // Procesar 2 proyectos simultáneamente para acelerar la subida
 
 // --- Helper Functions ---
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-async function retry(fn, maxAttempts = 4, delayMs = 2000) {
+async function retry(fn, maxAttempts = 5, delayMs = 2000) {
   let attempt = 0;
   while (attempt < maxAttempts) {
     try {
@@ -52,7 +47,7 @@ async function retry(fn, maxAttempts = 4, delayMs = 2000) {
     } catch (err) {
       attempt++;
       if (attempt >= maxAttempts) throw err;
-      console.warn(`      ⚠️ Error en intento ${attempt}/${maxAttempts} (${err.message}). Reintentando en ${delayMs}ms...`);
+      console.warn(`      ⚠️ Reintentando (${attempt}/${maxAttempts}) tras error: ${err.message}`);
       await sleep(delayMs);
       delayMs *= 2;
     }
@@ -119,7 +114,7 @@ function selectDefinitiveAudio(files) {
     const nameLower = file.name.toLowerCase();
     const ext = path.extname(file.name).toLowerCase();
 
-    // 1. WAV priority (User rule: if wav exists, upload wav)
+    // 1. WAV priority
     if (ext === '.wav') score += 1000;
     else if (ext === '.flac') score += 800;
     else if (ext === '.mp3') score += 500;
@@ -277,7 +272,7 @@ async function uploadAudioToDrive(filePath, fileName, parentId, mimeType) {
       supportsAllDrives: true,
     });
     return res.data;
-  }, 4, 3000);
+  }, 5, 3000);
 }
 
 async function saveJsonToDrive(name, data, parentId) {
@@ -319,28 +314,93 @@ async function saveJsonToDrive(name, data, parentId) {
   });
 }
 
+// Process a single project
+async function processProject(proj, index, total, progressState, existingDbRef) {
+  const startTime = Date.now();
+  const catFolderId = CATEGORY_FOLDER_IDS[proj.category] || CATEGORY_FOLDER_IDS.beat;
+
+  console.log(`[${index + 1}/${total}] 🚀 Importando: "${proj.title}" [${proj.category.toUpperCase()}]`);
+  console.log(`      📁 Origen: ${proj.folderName} | 📅 ${proj.year}/${proj.month} | 🎵 ${proj.bpm ? proj.bpm + ' BPM' : 'N/D'} ${proj.key || ''}`);
+  console.log(`      🔊 Audio: ${proj.audioFile.name} (${proj.audioFile.sizeMB} MB, ${proj.audioFile.ext})`);
+
+  // 1. Crear carpeta del proyecto
+  const projFolderId = await createDriveFolder(proj.title, catFolderId);
+
+  // 2. Crear las 3 subcarpetas en paralelo
+  const [bounceFolderId] = await Promise.all([
+    createDriveFolder('01_Bounces_y_Demos', projFolderId),
+    createDriveFolder('02_Stems_y_Pistas', projFolderId),
+    createDriveFolder('03_Backup_y_Sesiones', projFolderId),
+  ]);
+
+  // 3. Subir archivo de audio
+  const mimeType = proj.audioFile.ext === '.wav' ? 'audio/wav' : 'audio/mpeg';
+  const uploadedAudio = await uploadAudioToDrive(proj.audioFile.path, proj.audioFile.name, bounceFolderId, mimeType);
+
+  // 4. Configuración
+  const nowIso = new Date().toISOString();
+  const createdIso = proj.audioFile.mtime ? new Date(proj.audioFile.mtime).toISOString() : nowIso;
+
+  const projectConfig = {
+    id: projFolderId,
+    title: proj.title,
+    category: proj.category,
+    tags: [],
+    status: 'terminado',
+    bpm: proj.bpm,
+    key: proj.key,
+    year: proj.year,
+    month: proj.month,
+    collaborators: [],
+    notes: '',
+    driveFolderId: projFolderId,
+    latestBounceFileId: uploadedAudio.id,
+    latestBounceName: uploadedAudio.name,
+    createdAt: createdIso,
+    updatedAt: nowIso,
+  };
+
+  // 5. Guardar JSONs en paralelo
+  await Promise.all([
+    saveJsonToDrive('personal_project_config.json', projectConfig, projFolderId),
+    saveJsonToDrive('personal_tasks.json', { tasks: [], workSessions: [] }, projFolderId),
+  ]);
+
+  // 6. Actualizar referencias en memoria y disco
+  existingDbRef.push(projectConfig);
+  progressState.completed[proj.folderPath] = {
+    id: projFolderId,
+    title: proj.title,
+    audioFileId: uploadedAudio.id,
+    uploadedAt: nowIso,
+  };
+
+  fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressState, null, 2));
+
+  const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`      ✅ [${index + 1}/${total}] Subido "${proj.title}" en ${durationSec}s | Drive: ${projFolderId}\n`);
+}
+
 // Main Execution Loop
 async function main() {
   console.log('================================================================');
-  console.log('🚀 INICIANDO IMPORTACIÓN MASIVA DE PROYECTOS A GOOGLE DRIVE');
+  console.log('🚀 INICIANDO IMPORTACIÓN MASIVA ACELERADA A GOOGLE DRIVE');
+  console.log(`⚡ Concurrencia: ${CONCURRENCY} subidas simultáneas`);
   console.log('================================================================\n');
 
-  // Cargar progreso previo si existe
   let progressState = { completed: {}, errors: [] };
   if (fs.existsSync(PROGRESS_FILE)) {
     try {
       progressState = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-      console.log(`📌 Progreso previo cargado: ${Object.keys(progressState.completed).length} proyectos ya importados.`);
+      console.log(`📌 Progreso previo: ${Object.keys(progressState.completed).length} proyectos ya importados.`);
     } catch (e) {}
   }
 
-  // 1. Escaneo de proyectos en disco
   const ezyRoot = 'D:\\FL Studio\\Proyectos\\Proyectos Ezy';
-  console.log('🔍 Escaneando disco local:', ezyRoot);
   const candidates = scanDirectory(ezyRoot, 'beat');
   console.log(`✅ Total proyectos con audio definitivo identificados: ${candidates.length}\n`);
 
-  // 2. Leer estado actual de personal_projects_db.json en Google Drive
+  // Leer estado actual de personal_projects_db.json
   let existingDb = [];
   try {
     const dbList = await drive.files.list({
@@ -349,130 +409,50 @@ async function main() {
     });
     if (dbList.data.files && dbList.data.files.length > 0) {
       const dbRes = await drive.files.get({ fileId: dbList.data.files[0].id, alt: 'media' });
-      if (Array.isArray(dbRes.data)) {
-        existingDb = dbRes.data;
-      }
+      if (Array.isArray(dbRes.data)) existingDb = dbRes.data;
     }
-  } catch (err) {
-    console.warn('Advertencia al leer DB inicial:', err.message);
-  }
+  } catch (err) {}
 
-  console.log(`📊 Base de datos inicial en Drive: ${existingDb.length} proyectos registrados.\n`);
+  // Filtrar items pendientes
+  const pending = candidates.filter(p => !progressState.completed[p.folderPath]);
+  console.log(`📋 Proyectos pendientes por subir: ${pending.length} (de ${candidates.length} totales)\n`);
 
-  let importedCount = 0;
-  let skippedCount = 0;
-  let totalUploadedBytes = 0;
+  let processedCount = 0;
 
-  for (let i = 0; i < candidates.length; i++) {
-    const proj = candidates[i];
-    const indexStr = `[${i + 1}/${candidates.length}]`;
-    const percent = (((i + 1) / candidates.length) * 100).toFixed(1);
+  // Pool de ejecución concurrente
+  for (let i = 0; i < pending.length; i += CONCURRENCY) {
+    const batch = pending.slice(i, i + CONCURRENCY);
+    
+    await Promise.all(
+      batch.map(async (proj, batchIdx) => {
+        const globalIdx = candidates.findIndex(c => c.folderPath === proj.folderPath);
+        try {
+          await processProject(proj, globalIdx, candidates.length, progressState, existingDb);
+          processedCount++;
+        } catch (err) {
+          console.error(`      ❌ Error al importar "${proj.title}":`, err.message);
+          progressState.errors.push({ folderPath: proj.folderPath, title: proj.title, error: err.message });
+          fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressState, null, 2));
+        }
+      })
+    );
 
-    // Comprobar si ya se importó en este progreso o en el DB
-    if (progressState.completed[proj.folderPath]) {
-      skippedCount++;
-      continue;
-    }
-
-    const alreadyInDb = existingDb.find(p => p.title.toLowerCase().trim() === proj.title.toLowerCase().trim());
-    if (alreadyInDb && alreadyInDb.latestBounceFileId) {
-      progressState.completed[proj.folderPath] = { id: alreadyInDb.id, title: alreadyInDb.title };
-      skippedCount++;
-      continue;
-    }
-
-    console.log(`${indexStr} (${percent}%) Importando: "${proj.title}" [${proj.category.toUpperCase()}]`);
-    console.log(`      📁 Origen: ${proj.folderName} | 📅 ${proj.year}/${proj.month} | 🎵 ${proj.bpm ? proj.bpm + ' BPM' : 'N/D'} ${proj.key || ''}`);
-    console.log(`      🔊 Audio: ${proj.audioFile.name} (${proj.audioFile.sizeMB} MB, ${proj.audioFile.ext})`);
-
-    const startTime = Date.now();
-
-    try {
-      const catFolderId = CATEGORY_FOLDER_IDS[proj.category] || CATEGORY_FOLDER_IDS.beat;
-
-      // 1. Crear carpeta del proyecto en Drive
-      const projFolderId = await createDriveFolder(proj.title, catFolderId);
-
-      // 2. Crear subcarpeta de Bounces (y las otras dos estándar)
-      const bounceFolderId = await createDriveFolder('01_Bounces_y_Demos', projFolderId);
-      await createDriveFolder('02_Stems_y_Pistas', projFolderId);
-      await createDriveFolder('03_Backup_y_Sesiones', projFolderId);
-
-      // 3. Subir archivo de audio definitivo
-      const mimeType = proj.audioFile.ext === '.wav' ? 'audio/wav' : 'audio/mpeg';
-      const uploadedAudio = await uploadAudioToDrive(proj.audioFile.path, proj.audioFile.name, bounceFolderId, mimeType);
-
-      // 4. Crear configuración del proyecto
-      const nowIso = new Date().toISOString();
-      const createdIso = proj.audioFile.mtime ? new Date(proj.audioFile.mtime).toISOString() : nowIso;
-
-      const projectConfig = {
-        id: projFolderId,
-        title: proj.title,
-        category: proj.category,
-        tags: [],
-        status: 'terminado',
-        bpm: proj.bpm,
-        key: proj.key,
-        year: proj.year,
-        month: proj.month,
-        collaborators: [],
-        notes: '',
-        driveFolderId: projFolderId,
-        latestBounceFileId: uploadedAudio.id,
-        latestBounceName: uploadedAudio.name,
-        createdAt: createdIso,
-        updatedAt: nowIso,
-      };
-
-      // 5. Guardar personal_project_config.json y personal_tasks.json
-      await saveJsonToDrive('personal_project_config.json', projectConfig, projFolderId);
-      await saveJsonToDrive('personal_tasks.json', { tasks: [], workSessions: [] }, projFolderId);
-
-      // 6. Actualizar array en memoria
-      existingDb = [projectConfig, ...existingDb.filter(p => p.id !== projFolderId)];
-
-      // 7. Guardar progreso local
-      progressState.completed[proj.folderPath] = {
-        id: projFolderId,
-        title: proj.title,
-        audioFileId: uploadedAudio.id,
-        uploadedAt: nowIso,
-      };
-      fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressState, null, 2));
-
-      importedCount++;
-      totalUploadedBytes += proj.audioFile.sizeBytes;
-      const durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
-
-      console.log(`      ✅ Subido con éxito en ${durationSec}s | Drive Folder ID: ${projFolderId}\n`);
-
-      // 8. Sincronizar personal_projects_db.json a Google Drive cada 5 proyectos
-      if (importedCount % 5 === 0 || i === candidates.length - 1) {
-        console.log(`   💾 Sincronizando personal_projects_db.json en Drive (${existingDb.length} proyectos totales)...`);
-        await saveJsonToDrive('personal_projects_db.json', existingDb, ROOT_PERSONAL_FOLDER_ID);
-        console.log(`   💾 Sincronización completada.\n`);
-      }
-
-    } catch (err) {
-      console.error(`      ❌ Error al importar "${proj.title}":`, err.message);
-      progressState.errors.push({ folderPath: proj.folderPath, title: proj.title, error: err.message });
-      fs.writeFileSync(PROGRESS_FILE, JSON.stringify(progressState, null, 2));
+    // Sincronizar DB cada lote
+    if (processedCount % 4 === 0 || i + CONCURRENCY >= pending.length) {
+      console.log(`   💾 Sincronizando personal_projects_db.json en Drive (${existingDb.length} proyectos)...`);
+      await saveJsonToDrive('personal_projects_db.json', existingDb, ROOT_PERSONAL_FOLDER_ID);
+      console.log(`   💾 Sincronización guardada.\n`);
     }
   }
 
   // Sincronización final
-  console.log('\n💾 Guardando sincronización final en personal_projects_db.json...');
+  console.log('💾 Guardando sincronización final en personal_projects_db.json...');
   await saveJsonToDrive('personal_projects_db.json', existingDb, ROOT_PERSONAL_FOLDER_ID);
 
   console.log('\n================================================================');
-  console.log('🎉 PROCESO DE IMPORTACIÓN MASIVA FINALIZADO');
+  console.log('🎉 PROCESO DE IMPORTACIÓN MASIVA COMPLETADO CON ÉXITO');
   console.log('================================================================');
-  console.log(`Total candidatos analizados: ${candidates.length}`);
-  console.log(`Proyectos nuevos importados: ${importedCount}`);
-  console.log(`Proyectos ya existentes omitidos: ${skippedCount}`);
-  console.log(`Volumen total transferido: ${(totalUploadedBytes / (1024 * 1024 * 1024)).toFixed(2)} GB`);
-  console.log(`Total proyectos ahora en la plataforma: ${existingDb.length}`);
+  console.log(`Total proyectos importados en la plataforma: ${existingDb.length}`);
 }
 
 main().catch(err => {
