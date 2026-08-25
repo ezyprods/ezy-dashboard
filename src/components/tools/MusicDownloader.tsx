@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Download, CheckCircle2, AlertCircle, Play, Music, Globe, Search, RefreshCw } from 'lucide-react';
+import { Loader2, Download, CheckCircle2, AlertCircle, Play, Music, Globe, Search, RefreshCw, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface YtdlTask {
@@ -16,6 +16,11 @@ interface YtdlTask {
   progress: number;
   error?: string;
   startTime: number;
+}
+
+function getYouTubeId(url: string): string | null {
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return match ? match[1] : null;
 }
 
 export function MusicDownloader() {
@@ -48,7 +53,7 @@ export function MusicDownloader() {
     return () => eventSource.close();
   }, []);
 
-  // Auto-descargar cuando una tarea se completa
+  // Auto-descargar cuando una tarea se completa legítimamente en el servidor
   useEffect(() => {
     tasks.forEach(task => {
       if (task.status === 'completed' && task.clientId === clientId && !downloadedTasks.has(task.id)) {
@@ -135,6 +140,7 @@ export function MusicDownloader() {
 
   const getStatusIcon = (task: YtdlTask) => {
     const targetUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
+    const ytId = getYouTubeId(task.resolvedUrl || task.url);
 
     switch(task.status) {
       case 'downloading': return <Download className="w-5 h-5 text-blue-500 animate-pulse" />;
@@ -145,23 +151,37 @@ export function MusicDownloader() {
             href={targetUrl}
             download={`${task.title}.mp3`}
             title="Descargar MP3"
-            className="p-1 hover:bg-emerald-500/10 rounded-lg transition-colors cursor-pointer"
+            className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 font-bold text-xs"
             onClick={(e) => e.stopPropagation()}
           >
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 hover:scale-110 transition-transform" />
+            <CheckCircle2 className="w-4 h-4" /> Bajar MP3
           </a>
         );
       case 'error': 
         return (
-          <a
-            href={targetUrl}
-            download={`${task.title}.mp3`}
-            title="Reintentar descarga directa"
-            className="p-1.5 hover:bg-accent/10 rounded-lg text-accent transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Download className="w-4 h-4" /> Bajar
-          </a>
+          <div className="flex items-center gap-1.5">
+            <a
+              href={targetUrl}
+              download={`${task.title}.mp3`}
+              title="Reintentar descarga"
+              className="p-1.5 hover:bg-accent/10 rounded-lg text-accent transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+            </a>
+            {ytId && (
+              <a
+                href={`https://cobalt.tools/?url=https://www.youtube.com/watch?v=${ytId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir en servidor espejo alternativo"
+                className="p-1.5 bg-accent/10 hover:bg-accent/20 text-accent rounded-lg transition-colors flex items-center gap-1 text-xs font-bold"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Espejo
+              </a>
+            )}
+          </div>
         );
       default: return <Loader2 className="w-5 h-5 text-accent animate-spin" />;
     }
@@ -171,8 +191,13 @@ export function MusicDownloader() {
     switch(task.status) {
       case 'downloading': return `Descargando... ${task.progress.toFixed(0)}%`;
       case 'converting': return 'Convirtiendo a MP3 (320kbps)...';
-      case 'completed': return 'Guardado en Descargas';
-      case 'error': return task.error || 'Error';
+      case 'completed': return 'Listo para descargar';
+      case 'error': {
+        if (task.error?.includes('bot') || task.error?.includes('Sign in')) {
+          return 'Bloqueo temporal de YouTube en servidores cloud. Usa el botón "Espejo".';
+        }
+        return task.error || 'Error';
+      }
       default: return 'Analizando...';
     }
   };
