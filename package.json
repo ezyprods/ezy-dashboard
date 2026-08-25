@@ -20,6 +20,7 @@
     "@tiptap/pm": "^3.26.0",
     "@tiptap/react": "^3.26.0",
     "@tiptap/starter-kit": "^3.26.0",
+    "@vreden/youtube_scraper": "^1.2.9",
     "@wavesurfer/react": "^1.0.12",
     "better-auth": "^1.6.15",
     "class-variance-authority": "^0.7.1",

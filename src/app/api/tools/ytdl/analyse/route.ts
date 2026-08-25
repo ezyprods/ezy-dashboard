@@ -240,6 +240,23 @@ export async function POST(req: Request) {
         });
       }
 
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const yts = require('@vreden/youtube_scraper');
+        const meta = await yts.metadata(`https://www.youtube.com/watch?v=${videoId}`);
+        if (meta && meta.status && meta.title) {
+          const thumb = meta.thumbnails?.[meta.thumbnails.length - 1]?.url || meta.thumbnails?.[0]?.url;
+          return NextResponse.json({
+            title: cleanTitle({ title: meta.title, uploader: meta.channel_title }),
+            thumbnail: thumb,
+            duration: null,
+            platform: 'youtube',
+            resolvedUrl: `https://www.youtube.com/watch?v=${videoId}`,
+            isPlaylist: false
+          });
+        }
+      } catch (e) {}
+
       let results: any[] = [];
       try {
         results = await runYtDlp(ytdlpPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`], cookieArgs);

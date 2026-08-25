@@ -83,25 +83,69 @@ async function processDownload(taskId: string) {
     const videoId = getYouTubeVideoId(task.url);
     const isYouTube = !!videoId || task.url.includes('youtube.com') || task.url.includes('youtu.be');
 
-    // -----------------------------------------------------------------------
-    // Download matrix — ordered by reliability on datacenter IPs (Vercel).
-    //
-    // KEY INSIGHT: YouTube blocks datacenter IPs when using browser clients
-    // (web, mweb) because it triggers bot-detection. App clients that use
-    // their own auth bypass this:
-    //
-    //  1. mediaconnect — YouTube Music internal API. Bypasses bot detection
-    //     entirely on server/datacenter IPs. No cookies needed. BEST option.
-    //
-    //  2. tv_embedded — SmartTV client. Low bot-detection. Requires cookies
-    //     to work reliably on blocked IPs but worth trying without.
-    //
-    //  3. android_vr — VR client. Rarely blocked. No cipher needed.
-    //
-    //  4. android — Standard Android client. May need cookies on Vercel.
-    //
-    // For non-YouTube (SoundCloud, etc.) we use generic extractor.
-    // -----------------------------------------------------------------------
+    // =========================================================================
+    // PRIORITY 1: High-Speed Direct MP3 Extraction Engine (@vreden/youtube_scraper)
+    // Bypasses datacenter bot blocks, Sabre challenges, and serverless IP bans.
+    // Fetches 320kbps MP3 stream directly in ~2-4 seconds.
+    // =========================================================================
+    if (isYouTube) {
+      try {
+        console.log(`[ytdl/process] Trying Priority 1 Direct MP3 engine for taskId=${taskId}...`);
+        task.status = 'downloading';
+        task.progress = 25;
+        broadcast({ type: 'update', task });
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const yts = require('@vreden/youtube_scraper');
+        const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : task.url;
+        const resData = await yts.ytmp3(target, '320');
+
+        if (resData && resData.status && resData.download?.url) {
+          task.progress = 60;
+          broadcast({ type: 'update', task });
+
+          const downloadUrl = resData.download.url;
+          const fetchRes = await fetch(downloadUrl);
+          if (!fetchRes.ok) {
+            throw new Error(`HTTP ${fetchRes.status} al descargar stream`);
+          }
+
+          task.status = 'converting';
+          task.progress = 85;
+          broadcast({ type: 'update', task });
+
+          const arrayBuffer = await fetchRes.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+
+          if (buffer.length > 1000) {
+            const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
+            await fs.promises.writeFile(expectedMp3, buffer);
+
+            completedFileBuffers.set(taskId, { buffer, title: task.title });
+            task.downloadPath = expectedMp3;
+            task.status = 'completed';
+            task.progress = 100;
+            broadcast({ type: 'update', task });
+
+            setTimeout(async () => {
+              try {
+                if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
+                completedFileBuffers.delete(taskId);
+              } catch (e) {}
+            }, 10 * 60 * 1000);
+
+            console.log(`[ytdl/process] Success via Direct MP3 engine for taskId=${taskId}, size=${buffer.length}`);
+            return;
+          }
+        }
+      } catch (directErr: any) {
+        console.warn('[ytdl/process] Direct engine fallback to yt-dlp:', directErr?.message || directErr);
+      }
+    }
+
+    // =========================================================================
+    // PRIORITY 2: Local / Serverless Binary yt-dlp Matrix Engine
+    // =========================================================================
     const youtubeMatrix: Array<{
       clientArgs: string[];
       useCookies: boolean;
