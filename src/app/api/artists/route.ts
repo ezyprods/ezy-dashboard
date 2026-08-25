@@ -3,12 +3,12 @@ export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 import { NextResponse } from 'next/server';
 import { listFolders, findAndReadJsonFile, createFolder, saveJsonFile } from '@/lib/drive';
-import { DRIVE_ROOT_FOLDER_ID, ARTIST_FOLDER_STRUCTURE } from '@/lib/constants';
+import { DRIVE_ROOT_FOLDER_ID, ARTIST_FOLDER_STRUCTURE, isSystemOrSpecialFolder } from '@/lib/constants';
 import type { Artist, ArtistConfig, CreateArtistInput } from '@/types';
 
 export async function GET() {
   try {
-    const [folders, artistsDbResult] = await Promise.all([
+    const [foldersRaw, artistsDbResult] = await Promise.all([
       listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {
         if (e.message?.includes('invalid_grant') || e.message?.includes('credentials')) {
           throw new Error('AUTH_REQUIRED');
@@ -18,6 +18,7 @@ export async function GET() {
       findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null)
     ]);
     
+    const folders = (foldersRaw || []).filter(f => !isSystemOrSpecialFolder(f.name));
     const artistsDb = artistsDbResult || [];
     
     // Resolve last project for each artist folder in parallel

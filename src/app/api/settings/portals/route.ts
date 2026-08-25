@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { listFolders, findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
-import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 import type { ArtistConfig, PortalConfig } from '@/types';
 
 const DEFAULT_MODULES = [
@@ -11,7 +11,7 @@ const DEFAULT_MODULES = [
 
 export async function GET() {
   try {
-    const [folders, artistsDbResult] = await Promise.all([
+    const [foldersRaw, artistsDbResult] = await Promise.all([
       listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {
         if (e.message?.includes('invalid_grant') || e.message?.includes('credentials')) {
           throw new Error('AUTH_REQUIRED');
@@ -21,6 +21,7 @@ export async function GET() {
       findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null)
     ]);
     
+    const folders = (foldersRaw || []).filter(f => !isSystemOrSpecialFolder(f.name));
     const artistsDb = artistsDbResult || [];
     
     // Resolve portal config for each artist folder in parallel

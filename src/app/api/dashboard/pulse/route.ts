@@ -3,13 +3,13 @@ export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, listFolders, cleanupExpiredFiles } from '@/lib/drive';
-import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 
 import type { ArtistConfig, Artist } from '@/types';
 
 export async function GET() {
   try {
-    const [folders, artistsDbResult] = await Promise.all([
+    const [foldersRaw, artistsDbResult] = await Promise.all([
       listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {
         if (e.message?.includes('invalid_grant') || e.message?.includes('credentials')) {
           throw new Error('AUTH_REQUIRED');
@@ -22,6 +22,7 @@ export async function GET() {
     // Trigger non-blocking background cleanup of expired files
     cleanupExpiredFiles().catch(err => console.warn('Background cleanupExpiredFiles non-critical error:', err));
 
+    const folders = (foldersRaw || []).filter(f => !isSystemOrSpecialFolder(f.name));
     const artistsDb = artistsDbResult || [];
     
     let totalActiveProjects = 0;

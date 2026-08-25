@@ -81,6 +81,17 @@ export const VIDEO_MIME_TYPES = [
 // Personal Projects
 export const PERSONAL_PROJECTS_ROOT_FOLDER_NAME = '00_PROYECTOS_PERSONALES';
 
+export function isSystemOrSpecialFolder(name: string | null | undefined): boolean {
+  if (!name) return true;
+  const trimmed = name.trim();
+  return (
+    trimmed.startsWith('00_') ||
+    trimmed.startsWith('.') ||
+    trimmed.toLowerCase() === PERSONAL_PROJECTS_ROOT_FOLDER_NAME.toLowerCase() ||
+    trimmed.toLowerCase() === '00_proyectos personales'
+  );
+}
+
 export const PERSONAL_PROJECT_CATEGORIES: Record<
   'beat' | 'grabacion' | 'loop_pack' | 'colaboracion' | 'mashup',
   { label: string; shortLabel: string; folderName: string; color: string; bgColor: string; iconName: string }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, listFolders } from '@/lib/drive';
-import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -8,7 +8,8 @@ export const fetchCache = 'force-no-store';
 
 export async function GET() {
   try {
-    const folders = await listFolders(DRIVE_ROOT_FOLDER_ID);
+    const foldersRaw = await listFolders(DRIVE_ROOT_FOLDER_ID);
+    const folders = (foldersRaw || []).filter(f => !isSystemOrSpecialFolder(f.name));
     const matrixPromises = folders.map(async (folder) => {
       try {
         const data = await findAndReadJsonFile<any>('matrices.json', folder.id!);

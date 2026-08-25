@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getDriveService, listFolders } from '@/lib/drive';
-import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 import fs from 'fs';
 import path from 'path';
 
@@ -86,11 +86,13 @@ export async function GET(request: NextRequest) {
 
         // Check if parent is DRIVE_ROOT_FOLDER_ID -> this folder is the artist folder
         if (folderData.parents && folderData.parents.includes(DRIVE_ROOT_FOLDER_ID)) {
-          resolvedArtist = {
-            id: folderData.id,
-            name: folderData.name,
-            driveFolderId: folderData.id
-          };
+          if (!isSystemOrSpecialFolder(folderData.name)) {
+            resolvedArtist = {
+              id: folderData.id,
+              name: folderData.name,
+              driveFolderId: folderData.id
+            };
+          }
           break;
         }
 
@@ -109,7 +111,7 @@ export async function GET(request: NextRequest) {
     if (!resolvedArtist && currentId) {
       try {
         const rootFolders = await listFolders(DRIVE_ROOT_FOLDER_ID);
-        const match = rootFolders.find(f => f.id === currentId || f.id === targetFolderId);
+        const match = rootFolders.find(f => (f.id === currentId || f.id === targetFolderId) && !isSystemOrSpecialFolder(f.name));
         if (match) {
           resolvedArtist = {
             id: match.id,
