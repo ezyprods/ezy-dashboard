@@ -90,9 +90,12 @@ export function SmartUploadModal({
   initialFiles,
   preselectedArtistId,
   preselectedFolderId,
+  preselectedTargetType,
+  preselectedPersonalProjectId,
   onSuccess
 }: SmartUploadModalProps) {
   const { activeArtists: artists, isLoading: isArtistsLoading } = useArtists();
+  const { projects: personalProjects } = usePersonalProjects();
   const router = useRouter();
   const [items, setItems] = useState<SmartUploadFile[]>([]);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -106,6 +109,7 @@ export function SmartUploadModal({
   // Local caching state to avoid infinite loops and multi-fetching
   const [artistFoldersCache, setArtistFoldersCache] = useState<Record<string, any[]>>({});
   const [projectFoldersCache, setProjectFoldersCache] = useState<Record<string, any[]>>({});
+  const [personalFoldersCache, setPersonalFoldersCache] = useState<Record<string, any[]>>({});
   const [artistMatricesCache, setArtistMatricesCache] = useState<Record<string, any[]>>({});
   const [sortedArtists, setSortedArtists] = useState<any[]>([]);
   const [isHovered, setIsHovered] = useState(false);
@@ -126,6 +130,21 @@ export function SmartUploadModal({
         const data = await res.json();
         const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
         setArtistFoldersCache(prev => ({ ...prev, [artistId]: folders }));
+        return folders;
+      }
+    } catch {}
+    return [];
+  };
+
+  const fetchPersonalFolders = async (projId: string) => {
+    if (!projId) return [];
+    if (personalFoldersCache[projId]) return personalFoldersCache[projId];
+    try {
+      const res = await fetch(`/api/files?folderId=${projId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const folders = (data.items || []).filter((item: any) => item.mimeType === 'application/vnd.google-apps.folder');
+        setPersonalFoldersCache(prev => ({ ...prev, [projId]: folders }));
         return folders;
       }
     } catch {}
@@ -240,13 +259,19 @@ export function SmartUploadModal({
         }
       }
 
+      const initialTargetType: 'artist' | 'personal' = preselectedTargetType || (preselectedPersonalProjectId ? 'personal' : 'artist');
+      const initialPersonalProjectId = preselectedPersonalProjectId || (personalProjects[0]?.id || '');
+
       return {
         file: f,
         id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         mimeGroup,
         subType,
+        targetType: initialTargetType,
         artistId: detectedArtistId,
         projectId: preselectedFolderId || '',
+        personalProjectId: initialPersonalProjectId,
+        personalSubfolder: '',
         customName: generateName(f.name, subType, detectedArtistName),
         isAnalyzing: mimeGroup === 'audio',
         uploadStatus: 'pending',
@@ -335,6 +360,33 @@ export function SmartUploadModal({
   // ─── Target Folder Resolution ────────────────────────────────────────────────
   const resolveTargetFolderForUpload = async (item: SmartUploadFile): Promise<string> => {
     if (preselectedFolderId) return preselectedFolderId;
+
+    if (item.targetType === 'personal') {
+      const pId = item.personalProjectId || (personalProjects[0]?.id || '');
+      if (!pId) throw new Error('Debes seleccionar un proyecto personal de destino');
+
+      if (item.personalSubfolder === '__ROOT__') {
+        return pId;
+      }
+
+      const pFolders = await fetchPersonalFolders(pId);
+
+      if (item.personalSubfolder) {
+        const specific = pFolders.find((f: any) => f?.name === item.personalSubfolder);
+        if (specific) return specific.id;
+      }
+
+      if (item.subType === 'stem') {
+        const stemF = pFolders.find((f: any) => (f?.name || '').toLowerCase().includes('stem') || (f?.name || '').startsWith('02_'));
+        if (stemF) return stemF.id;
+      } else {
+        // Bounces / Demos / Mix / Master / General audio
+        const bounceF = pFolders.find((f: any) => (f?.name || '').toLowerCase().includes('bounce') || (f?.name || '').startsWith('01_'));
+        if (bounceF) return bounceF.id;
+      }
+
+      return pId;
+    }
 
     if (item.subType === 'bounce') {
       const aFolders = await fetchArtistFolders(item.artistId);
@@ -503,6 +555,20 @@ export function SmartUploadModal({
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ expiresInMs: item.expiresInMs })
+                }).catch(console.error);
+              }
+
+              // Update Personal Project latest bounce if applicable
+              if (item.targetType === 'personal' && item.personalProjectId && uploadedResultId && item.mimeGroup === 'audio') {
+                fetch(`/api/personal-projects/${item.personalProjectId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    latestBounceFileId: uploadedResultId,
+                    latestBounceName: finalCustomName,
+                    ...(item.bpm ? { bpm: item.bpm } : {}),
+                    ...(item.key ? { key: item.key } : {}),
+                  })
                 }).catch(console.error);
               }
 
@@ -748,56 +814,78 @@ export function SmartUploadModal({
                   </div>
                   
                   <div className="grid grid-cols-2 gap-2 w-full mt-2">
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
-                      className="w-full text-xs"
-                      onClick={() => {
-                        onClose();
-                        router.push(`/artists/${item.artistId}`);
-                      }}
-                    >
-                      <User className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                      Ver Perfil
-                    </Button>
-                    
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
-                      className="w-full text-xs"
-                      asChild
-                    >
-                      <a 
-                        href={`/portal/${item.artistId}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        onClick={(e) => {
-                          if (!item.artistId) {
-                            e.preventDefault();
-                            customAlert('Error: ID del artista no definido.');
-                          }
+                    {item.targetType === 'personal' ? (
+                      <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        className="w-full text-xs col-span-2 bg-accent/10 hover:bg-accent/20 text-accent border border-accent/30"
+                        onClick={() => {
+                          onClose();
+                          router.push(`/personal-projects/${item.personalProjectId}`);
                         }}
                       >
-                        <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
-                        Ver Portal
-                      </a>
-                    </Button>
+                        <Music className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                        Ver Proyecto Personal
+                      </Button>
+                    ) : (
+                      <>
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="w-full text-xs"
+                          onClick={() => {
+                            onClose();
+                            router.push(`/artists/${item.artistId}`);
+                          }}
+                        >
+                          <User className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                          Ver Perfil
+                        </Button>
+                        
+                        <Button 
+                          variant="secondary" 
+                          size="sm" 
+                          className="w-full text-xs"
+                          asChild
+                        >
+                          <a 
+                            href={`/portal/${item.artistId}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            onClick={(e) => {
+                              if (!item.artistId) {
+                                e.preventDefault();
+                                customAlert('Error: ID del artista no definido.');
+                              }
+                            }}
+                          >
+                            <ExternalLinkIcon className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                            Ver Portal
+                          </a>
+                        </Button>
+                      </>
+                    )}
 
                     <Button 
                       variant="secondary" 
                       size="sm" 
                       className="w-full text-xs"
                       onClick={() => {
-                        if (!item.artistId) {
-                          customAlert('Error: ID del artista no definido.');
-                          return;
+                        if (item.targetType === 'personal') {
+                          navigator.clipboard.writeText(`${window.location.origin}/personal-projects/${item.personalProjectId}`);
+                          customAlert('Enlace al proyecto personal copiado');
+                        } else {
+                          if (!item.artistId) {
+                            customAlert('Error: ID del artista no definido.');
+                            return;
+                          }
+                          navigator.clipboard.writeText(`${window.location.origin}/portal/${item.artistId}`);
+                          customAlert('Enlace al portal copiado');
                         }
-                        navigator.clipboard.writeText(`${window.location.origin}/portal/${item.artistId}`);
-                        customAlert('Enlace al portal copiado');
                       }}
                     >
-                      <UploadCloud className="w-3.5 h-3.5 mr-1.5 shrink-0" /> {/* Reusing icon for copy link */}
-                      Copiar Portal
+                      <UploadCloud className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                      Copiar Enlace
                     </Button>
 
                     {item.resultId && (
@@ -820,7 +908,7 @@ export function SmartUploadModal({
 
                     {/* Option to Open Matrix if linked */}
                     {(() => {
-                      if (!item.projectId) return null;
+                      if (item.targetType === 'personal' || !item.projectId) return null;
                       const linkedMatrix = artistMatricesCache[item.artistId]?.find(m => m.projectId === item.projectId);
                       if (!linkedMatrix) return null;
                       
@@ -848,66 +936,151 @@ export function SmartUploadModal({
               {/* Controls */}
               {item.uploadStatus === 'pending' && isConfiguring && (
                 <div className="grid grid-cols-2 gap-3 mt-2">
-                  <div>
-                    <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
-                    <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
-                      {sortedArtists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
+                  {/* Destination Mode Switcher */}
+                  <div className="col-span-2 flex items-center gap-1.5 p-1 bg-surface-elevated rounded-xl border border-border/70">
+                    <button
+                      type="button"
+                      onClick={() => updateItem(item.id, { targetType: 'artist' })}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                        item.targetType !== 'personal'
+                          ? 'bg-accent text-white shadow-sm'
+                          : 'text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>Artista</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateItem(item.id, { 
+                        targetType: 'personal', 
+                        personalProjectId: item.personalProjectId || personalProjects[0]?.id || '' 
+                      })}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                        item.targetType === 'personal'
+                          ? 'bg-accent text-white shadow-sm'
+                          : 'text-text-secondary hover:text-text-primary'
+                      }`}
+                    >
+                      <Music className="w-3.5 h-3.5" />
+                      <span>Proyecto Personal</span>
+                    </button>
                   </div>
 
-                  <div className={item.subType === 'bounce' ? "opacity-50 pointer-events-none" : ""}>
-                    <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
-                    <select 
-                      value={item.projectId} 
-                      onChange={async e => {
-                        if (e.target.value === '__NEW__') {
-                          const projName = await customPrompt('Introduce el nombre del nuevo proyecto:', '', 'Nuevo Proyecto');
-                          if (!projName || !projName.trim()) {
-                            // User cancelled, reset visually to original state by triggering a no-op update
-                            updateItem(item.id, {});
-                            return;
-                          }
-                          try {
-                            const res = await fetch('/api/folders', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ name: projName.trim(), parentId: item.artistId })
-                            });
-                            if (!res.ok) throw new Error('Error al crear proyecto');
-                            const data = await res.json();
-                            const newFolderId = data.folderId || data.id;
-                            
-                            setArtistFoldersCache(prev => {
-                              const existing = prev[item.artistId] || [];
-                              return {
-                                ...prev,
-                                [item.artistId]: [...existing, { id: newFolderId, name: projName.trim(), mimeType: 'application/vnd.google-apps.folder' }]
-                              };
-                            });
-                            
-                            updateItem(item.id, { projectId: newFolderId });
-                            customAlert('Proyecto creado correctamente');
-                          } catch (err) {
-                            customAlert('Error al crear el proyecto. Revisa tu conexión.');
-                            updateItem(item.id, {});
-                          }
-                        } else {
-                          updateItem(item.id, { projectId: e.target.value });
-                        }
-                      }} 
-                      className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary"
-                    >
-                      {item.subType === 'bounce' ? (
-                         <option value="">Carpeta General (Artista)</option>
-                      ) : (
-                        <>
-                          <option value="">(Selecciona un proyecto)</option>
-                          {projectList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          <option value="__NEW__" className="font-bold text-accent">+ Crear nuevo proyecto...</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
+                  {item.targetType === 'personal' ? (
+                    <>
+                      <div>
+                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto Personal</label>
+                        <select 
+                          value={item.personalProjectId || ''} 
+                          onChange={async (e) => {
+                            if (e.target.value === '__NEW__') {
+                              const projTitle = await customPrompt('Nombre del nuevo proyecto personal:', '', 'Nuevo Proyecto');
+                              if (!projTitle || !projTitle.trim()) return;
+                              try {
+                                const res = await fetch('/api/personal-projects', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ title: projTitle.trim(), category: 'beat' })
+                                });
+                                if (!res.ok) throw new Error('Error al crear proyecto');
+                                const data = await res.json();
+                                updateItem(item.id, { personalProjectId: data.project.id });
+                                customAlert('Proyecto personal creado correctamente.');
+                              } catch {
+                                customAlert('Error al crear el proyecto personal.');
+                              }
+                            } else {
+                              updateItem(item.id, { personalProjectId: e.target.value });
+                            }
+                          }}
+                          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary"
+                        >
+                          {personalProjects.map(p => (
+                            <option key={p.id} value={p.id}>{p.title} ({p.category})</option>
+                          ))}
+                          <option value="__NEW__" className="font-bold text-accent">+ Crear nuevo proyecto personal...</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Carpeta Destino</label>
+                        <select
+                          value={item.personalSubfolder || ''}
+                          onChange={(e) => updateItem(item.id, { personalSubfolder: e.target.value })}
+                          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary"
+                        >
+                          <option value="">🎯 Automático por tipo</option>
+                          <option value="01_Bounces_y_Demos">🎵 01_Bounces_y_Demos</option>
+                          <option value="02_Stems_y_Pistas">✂️ 02_Stems_y_Pistas</option>
+                          <option value="03_Backup_y_Sesiones">💾 03_Backup_y_Sesiones</option>
+                          <option value="__ROOT__">📁 Raíz del proyecto</option>
+                        </select>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Artista Destino</label>
+                        <select value={item.artistId} onChange={e => updateItem(item.id, { artistId: e.target.value })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
+                          {sortedArtists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                        </select>
+                      </div>
+
+                      <div className={item.subType === 'bounce' ? "opacity-50 pointer-events-none" : ""}>
+                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto asociado</label>
+                        <select 
+                          value={item.projectId} 
+                          onChange={async e => {
+                            if (e.target.value === '__NEW__') {
+                              const projName = await customPrompt('Introduce el nombre del nuevo proyecto:', '', 'Nuevo Proyecto');
+                              if (!projName || !projName.trim()) {
+                                updateItem(item.id, {});
+                                return;
+                              }
+                              try {
+                                const res = await fetch('/api/folders', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ name: projName.trim(), parentId: item.artistId })
+                                });
+                                if (!res.ok) throw new Error('Error al crear proyecto');
+                                const data = await res.json();
+                                const newFolderId = data.folderId || data.id;
+                                
+                                setArtistFoldersCache(prev => {
+                                  const existing = prev[item.artistId] || [];
+                                  return {
+                                    ...prev,
+                                    [item.artistId]: [...existing, { id: newFolderId, name: projName.trim(), mimeType: 'application/vnd.google-apps.folder' }]
+                                  };
+                                });
+                                
+                                updateItem(item.id, { projectId: newFolderId });
+                                customAlert('Proyecto creado correctamente');
+                              } catch (err) {
+                                customAlert('Error al crear el proyecto. Revisa tu conexión.');
+                                updateItem(item.id, {});
+                              }
+                            } else {
+                              updateItem(item.id, { projectId: e.target.value });
+                            }
+                          }} 
+                          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary"
+                        >
+                          {item.subType === 'bounce' ? (
+                             <option value="">Carpeta General (Artista)</option>
+                          ) : (
+                            <>
+                              <option value="">(Selecciona un proyecto)</option>
+                              {projectList.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                              <option value="__NEW__" className="font-bold text-accent">+ Crear nuevo proyecto...</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+                    </>
+                  )}
 
                   {item.mimeGroup === 'audio' && (
                     <div>
