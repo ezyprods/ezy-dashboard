@@ -3,7 +3,6 @@ import { tasks, completedFileBuffers } from '../state';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { Readable } from 'stream';
 import { spawn } from 'child_process';
 import { ensureBinaries } from '../binaries';
 import { buildCookieArgs } from '../cookies';
@@ -82,7 +81,7 @@ export async function GET(req: Request) {
       }
     }
 
-    // 3. Fallback: Stream directly to HTTP response in real-time
+    // 3. Direct Streaming fallback via TransformStream
     const url = task?.url || paramUrl;
     if (!url) {
       return NextResponse.json(
@@ -108,19 +107,40 @@ export async function GET(req: Request) {
       '--ffmpeg-location',
       ffmpegPath,
       '-o',
-      '-', // stdout stream
+      '-',
       target,
     ];
 
     const ytdlp = spawn(ytdlpPath, args);
-    const stream = Readable.toWeb(ytdlp.stdout) as any;
     const safeTitle = encodeURIComponent(title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio');
 
-    return new NextResponse(stream, {
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    ytdlp.stdout.on('data', async (chunk: Buffer) => {
+      try {
+        await writer.write(new Uint8Array(chunk));
+      } catch (e) {}
+    });
+
+    ytdlp.on('close', async () => {
+      try {
+        await writer.close();
+      } catch (e) {}
+    });
+
+    ytdlp.on('error', async (err) => {
+      try {
+        await writer.abort(err);
+      } catch (e) {}
+    });
+
+    return new NextResponse(readable, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
-        'Cache-Control': 'no-store',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
 

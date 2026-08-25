@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { spawn } from 'child_process';
-import { Readable } from 'stream';
 import { ensureBinaries } from './binaries';
 import { buildCookieArgs } from './cookies';
 
@@ -30,7 +29,6 @@ export async function GET(req: Request) {
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
     const cookieArgs = await buildCookieArgs();
 
-    // Stream 320K MP3 directly to stdout via child process pipe
     const args = [
       '--no-warnings',
       '--no-playlist',
@@ -43,31 +41,53 @@ export async function GET(req: Request) {
       '--ffmpeg-location',
       ffmpegPath,
       '-o',
-      '-', // stdout stream
+      '-',
       target,
     ];
 
     const ytdlp = spawn(ytdlpPath, args);
 
-    ytdlp.stderr.on('data', (data) => {
-      console.log(`[ytdl/stream] ${data}`);
-    });
-
-    const stream = Readable.toWeb(ytdlp.stdout) as any;
-
     const safeTitle = encodeURIComponent(
       title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio'
     );
 
-    return new NextResponse(stream, {
+    // Use Web TransformStream to ensure Vercel Serverless stream stays open
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    ytdlp.stdout.on('data', async (chunk: Buffer) => {
+      try {
+        await writer.write(new Uint8Array(chunk));
+      } catch (e) {}
+    });
+
+    ytdlp.stderr.on('data', (d: Buffer) => {
+      console.log(`[ytdl/stream] ${d.toString()}`);
+    });
+
+    ytdlp.on('close', async () => {
+      try {
+        await writer.close();
+      } catch (e) {}
+    });
+
+    ytdlp.on('error', async (err) => {
+      console.error('[ytdl/stream] Spawn error:', err);
+      try {
+        await writer.abort(err);
+      } catch (e) {}
+    });
+
+    return new NextResponse(readable, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
-        'Cache-Control': 'no-store',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
   } catch (error: any) {
-    console.error('[ytdl/stream] Error:', error);
+    console.error('[ytdl/stream] Fatal Error:', error);
     return NextResponse.json(
       { error: error.message || 'Error en el servidor' },
       { status: 500 }
