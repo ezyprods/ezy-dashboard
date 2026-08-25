@@ -16,6 +16,8 @@ import type { Artist } from '@/types';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert } from '@/lib/dialog';
 
+import { useAppData } from '@/lib/contexts/AppDataContext';
+
 export default function DashboardPage() {
   const [isNewArtistModalOpen, setIsNewArtistModalOpen] = useState(false);
   const [isQuickUploadOpen, setIsQuickUploadOpen] = useState(false);
@@ -23,41 +25,13 @@ export default function DashboardPage() {
   const router = useRouter();
   const { showMenu } = useContextMenu();
 
-  const [pulseData, setPulseData] = useState<{ artists: Artist[]; globalStats: any }>({ artists: [], globalStats: null });
-  const [artists, setArtists] = useState<Artist[]>([]);
-  const [matrices, setMatrices] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isMatricesLoading, setIsMatricesLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/dashboard/pulse?t=${Date.now()}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.needsAuth) {
-          console.warn('Drive token needs refresh - check .env.local or Vercel env vars');
-          setIsLoading(false);
-          return;
-        }
-        setPulseData(data);
-        setArtists(data.artists || []);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error('Failed to load dashboard pulse', err);
-        setIsLoading(false);
-      });
-
-    fetch('/api/dashboard/matrices')
-      .then(res => res.json())
-      .then(data => {
-        setMatrices(data.matrices || []);
-        setIsMatricesLoading(false);
-      })
-      .catch(err => {
-        console.error('Error fetching global matrices', err);
-        setIsMatricesLoading(false);
-      });
-  }, []);
+  const { 
+    pulseData, 
+    pulseLoading, 
+    artists, 
+    matrices, 
+    matricesLoading: isMatricesLoading 
+  } = useAppData();
 
   const activeProjectsCount = matrices.length;
   const alertMsg = pulseData.globalStats?.priorityAlerts?.[0] || 'El estudio esta al dia. No hay tareas urgentes.';

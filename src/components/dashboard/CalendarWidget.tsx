@@ -16,34 +16,10 @@ interface CalendarEvent {
   htmlLink: string;
 }
 
+import { useAppData } from '@/lib/contexts/AppDataContext';
+
 export function CalendarWidget() {
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    fetchEvents();
-  }, []);
-
-  const fetchEvents = async () => {
-    try {
-      const res = await fetch(`/api/calendar?days=7&t=${Date.now()}`);
-      const data = await res.json();
-      
-      if (!res.ok) {
-        if (data.needsAuth) {
-          throw new Error('Faltan permisos de Calendario. Por favor, asegúrate de actualizar tu GOOGLE_REFRESH_TOKEN tras añadir los nuevos scopes.');
-        }
-        throw new Error(data.error || 'Failed to fetch calendar');
-      }
-      
-      setEvents(data.events || []);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { calendarEvents: events, calendarLoading: isLoading, calendarError: error } = useAppData();
 
   const formatEventDate = (dateStr: string) => {
     const date = parseISO(dateStr);

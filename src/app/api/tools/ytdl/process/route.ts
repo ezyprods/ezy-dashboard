@@ -107,43 +107,41 @@ async function processDownload(taskId: string) {
       useCookies: boolean;
       label: string;
     }> = [
-      // Attempt 1: android_music (Verified: Downloads full 12.7 MB MP3 without bot challenges or cookies)
+      // ALL attempts use cookies — datacenter IPs (Vercel/AWS) get bot-blocked without them.
+      // android_music is the most reliable client for audio extraction.
       {
-        label: 'android_music',
+        label: 'android_music+cookies',
         clientArgs: [
           '--extractor-args',
           'youtube:player_client=android_music',
         ],
-        useCookies: false,
+        useCookies: true,
       },
-      // Attempt 2: android_creator
       {
-        label: 'android_creator',
+        label: 'android_creator+cookies',
         clientArgs: [
           '--extractor-args',
           'youtube:player_client=android_creator',
         ],
-        useCookies: false,
+        useCookies: true,
       },
-      // Attempt 3: android_music,android
       {
-        label: 'android_music,android',
+        label: 'ios+cookies',
         clientArgs: [
           '--extractor-args',
-          'youtube:player_client=android_music,android',
+          'youtube:player_client=ios',
         ],
-        useCookies: false,
+        useCookies: true,
       },
-      // Attempt 4: ios,android
       {
-        label: 'ios,android',
+        label: 'android+cookies',
         clientArgs: [
           '--extractor-args',
-          'youtube:player_client=ios,android',
+          'youtube:player_client=android',
         ],
-        useCookies: false,
+        useCookies: true,
       },
-      // Attempt 5: Default client with cookies
+      // Last resort: default client with cookies
       {
         label: 'default+cookies',
         clientArgs: [],

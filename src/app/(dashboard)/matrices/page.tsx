@@ -9,14 +9,23 @@ import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
+import { useAppData } from '@/lib/contexts/AppDataContext';
+
 function MatricesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [matrices, setMatrices] = useState<any[]>([]);
-  const [completedMatrices, setCompletedMatrices] = useState<any[]>([]);
-  const [artists, setArtists] = useState<any[]>([]);
+  const { 
+    matrices, 
+    completedMatrices, 
+    artists, 
+    matricesLoading: isLoading, 
+    fetchMatrices, 
+    fetchArtists,
+    setMatrices, 
+    setCompletedMatrices 
+  } = useAppData();
+
   const [showCompleted, setShowCompleted] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [activeMatrix, setActiveMatrixState] = useState<{ id: string; name: string; artistId: string; artistName: string } | null>(null);
   const [searchTermQuery, setSearchTermQuery] = useState('');
 
@@ -58,9 +67,12 @@ function MatricesContent() {
     };
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const fetchData = async () => {
+    await Promise.all([
+      fetchMatrices(true),
+      fetchArtists(true)
+    ]);
+  };
 
   useEffect(() => {
     const directId = searchParams.get('id');
@@ -93,76 +105,6 @@ function MatricesContent() {
         .catch(err => console.error('Direct link fetch error:', err));
     }
   }, [searchParams, matrices, completedMatrices]);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const [matricesRes, artistsRes] = await Promise.all([
-        fetch('/api/dashboard/matrices'),
-        fetch('/api/artists')
-      ]);
-      
-      if (matricesRes.ok && artistsRes.ok) {
-        const matricesData = await matricesRes.json();
-        const artistsData = await artistsRes.json();
-
-        if (artistsData.needsAuth || matricesData.needsAuth) {
-          console.warn('Drive token needs refresh - check .env.local or Vercel env vars');
-          return;
-        }
-        
-        const allActives = matricesData.matrices || [];
-        const allCompleteds = matricesData.completedMatrices || [];
-        const allArtistsList = artistsData.artists || [];
-
-        setMatrices(allActives);
-        setCompletedMatrices(allCompleteds);
-        setArtists(allArtistsList);
-
-        // Check if direct link params are present in URL
-        const directId = searchParams.get('id');
-        const directArtist = searchParams.get('artist');
-        if (directId) {
-          const allMatricesList = [...allActives, ...allCompleteds];
-          const found = allMatricesList.find(m => m.id === directId);
-          if (found) {
-            setActiveMatrixState({
-              id: found.id,
-              name: found.name,
-              artistId: found.artistId,
-              artistName: found.artistName
-            });
-          } else if (directArtist) {
-            // Fetch directly from artist matrices endpoint if not in global list
-            try {
-              const res = await fetch(`/api/artists/${directArtist}/matrices`);
-              if (res.ok) {
-                const artistMatricesData = await res.json();
-                const specificMatrix = (artistMatricesData.matrices || []).find((m: any) => m.id === directId);
-                const artistObj = allArtistsList.find((a: any) => a.id === directArtist);
-                if (specificMatrix) {
-                  setActiveMatrixState({
-                    id: specificMatrix.id,
-                    name: specificMatrix.name,
-                    artistId: directArtist,
-                    artistName: artistObj?.name || 'Artista'
-                  });
-                }
-              }
-            } catch (err) {
-              console.error('Error resolving direct matrix link', err);
-            }
-          }
-        }
-      } else {
-        console.error('Error fetching data');
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleCreateMatrix = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -324,7 +266,6 @@ function MatricesContent() {
     const newName = await customPrompt('Nombre de la nueva matriz (plantilla):', `${currentName} (Copia)`, 'Duplicar Matriz');
     if (!newName) return;
     
-    setIsLoading(true);
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices`, {
         method: 'POST',
@@ -336,11 +277,9 @@ function MatricesContent() {
         customAlert('Matriz duplicada con éxito. Se ha copiado la estructura.');
       } else {
         customAlert('Error al duplicar la matriz');
-        setIsLoading(false);
       }
     } catch (e) {
       customAlert('Error de red al duplicar la matriz');
-      setIsLoading(false);
     }
   };
 

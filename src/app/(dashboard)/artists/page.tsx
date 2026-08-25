@@ -18,7 +18,7 @@ import { ArtistAvatar } from "@/components/ui/ArtistAvatar";
 
 
 export default function ArtistsPage() {
-  const { artists, activeArtists, archivedArtists, isLoading, error } = useArtists();
+  const { artists, activeArtists, archivedArtists, isLoading, error, deleteArtistFromState } = useArtists();
   const [isNewArtistModalOpen, setIsNewArtistModalOpen] = useState(false);
   const router = useRouter();
   const { showMenu } = useContextMenu();
@@ -35,8 +35,8 @@ export default function ArtistsPage() {
     try {
       const res = await fetch(`/api/artists/${artistId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el artista');
+      deleteArtistFromState?.(artistId);
       customAlert('Artista eliminado correctamente');
-      window.location.reload(); // Quick refresh
     } catch (e: any) {
       customAlert(e.message);
     }

@@ -21,40 +21,13 @@ interface DriveFile {
   expiresAt?: number | null;
 }
 
+import { useAppData } from '@/lib/contexts/AppDataContext';
+
 export function RecentFilesWidget() {
-  const [files, setFiles] = useState<DriveFile[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { recentFiles: files, recentFilesLoading: isLoading, fetchRecentFiles } = useAppData();
   const [explorerContext, setExplorerContext] = useState<{ folderId: string; fileId: string; fileName: string } | null>(null);
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const loadFiles = useCallback(() => {
-    fetch('/api/dashboard/recent-files')
-      .then(res => res.json())
-      .then(data => {
-        if (data.files) {
-          setFiles(data.files);
-        }
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error('Failed to load recent files', err);
-        setIsLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    loadFiles();
-  }, [loadFiles]);
-
-  // Listen for global refresh events dispatched by SmartUploadModal on success
-  useEffect(() => {
-    const handleRefresh = () => {
-      loadFiles();
-    };
-    window.addEventListener('recentfiles:refresh', handleRefresh);
-    return () => window.removeEventListener('recentfiles:refresh', handleRefresh);
-  }, [loadFiles]);
 
   const handlePlay = (file: DriveFile) => {
     const isCurrentTrack = currentTrack?.id === file.id;

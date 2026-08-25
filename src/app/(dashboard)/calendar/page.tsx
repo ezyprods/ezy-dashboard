@@ -42,13 +42,20 @@ interface CalendarEvent {
   htmlLink: string;
 }
 
+import { useAppData } from '@/lib/contexts/AppDataContext';
+
 export default function CalendarPage() {
   const router = useRouter();
   const { showMenu } = useContextMenu();
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [artists, setArtists] = useState<Artist[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const { 
+    calendarEvents: events, 
+    artists, 
+    calendarLoading: isLoading, 
+    calendarError: error, 
+    fetchCalendar, 
+    fetchArtists 
+  } = useAppData();
+
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -77,26 +84,11 @@ export default function CalendarPage() {
   }, []);
 
   const fetchEvents = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [calendarData, artistsData] = await Promise.all([
-        fetch('/api/calendar?days=60').then(res => res.json()),
-        fetch('/api/artists').then(res => res.json()),
-      ]);
-      if (calendarData.needsAuth || calendarData.error) {
-        setError(calendarData.error || 'Autenticación requerida');
-      } else {
-        setEvents(calendarData.events || []);
-      }
-      setArtists(artistsData.artists || []);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+    await Promise.all([
+      fetchCalendar(true),
+      fetchArtists(true),
+    ]);
+  }, [fetchCalendar, fetchArtists]);
 
   const detectArtist = (summary: string) => {
     if (!summary) return null;

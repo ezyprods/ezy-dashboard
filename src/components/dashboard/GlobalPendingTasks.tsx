@@ -257,12 +257,14 @@ function StatusColumn({
   );
 }
 
+import { useAppData } from '@/lib/contexts/AppDataContext';
+
 // ----------------------------------------------------------------------
 // Main GlobalPendingTasks Component
 // ----------------------------------------------------------------------
 export function GlobalPendingTasks() {
+  const { matrices, matricesLoading: isLoading, fetchMatrices } = useAppData();
   const [tasks, setTasks] = useState<PendingTask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [activeDragTask, setActiveDragTask] = useState<PendingTask | null>(null);
   
   // Search & Filter State
@@ -278,53 +280,43 @@ export function GlobalPendingTasks() {
   );
 
   useEffect(() => {
-    fetch('/api/dashboard/matrices')
-      .then(res => res.json())
-      .then(data => {
-        const matrices = data.matrices || [];
-        const extracted: PendingTask[] = [];
+    const extracted: PendingTask[] = [];
 
-        matrices.forEach((m: any) => {
-          if (!m.productionGrid || !m.productionGrid.rows || !m.productionGrid.columns) return;
-          
-          const colMap: Record<string, string> = {};
-          m.productionGrid.columns.forEach((c: any) => {
-            colMap[c.id] = c.name;
-          });
-
-          m.productionGrid.rows.forEach((row: any) => {
-            if (!row.cells) return;
-            Object.keys(row.cells).forEach((colId) => {
-              const cell = row.cells[colId];
-              if (cell && (cell.status === 'todo' || cell.status === 'in_progress' || cell.status === 'review')) {
-                extracted.push({
-                  id: `${m.id}-${row.id}-${colId}`,
-                  artistId: m.artistId,
-                  artistName: m.artistName || 'Desconocido',
-                  matrixId: m.id,
-                  matrixName: m.name,
-                  rowId: row.id,
-                  rowName: row.name || 'Sin nombre',
-                  colId,
-                  colName: colMap[colId] || 'Fase',
-                  status: cell.status as FlexTaskStatus,
-                  projectId: m.projectId,
-                  linkedFile: row.linkedFile
-                });
-              }
-            });
-          });
-        });
-
-        extracted.sort((a, b) => a.artistName.localeCompare(b.artistName) || a.rowName.localeCompare(b.rowName));
-        setTasks(extracted);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error('Error fetching global tasks', err);
-        setIsLoading(false);
+    matrices.forEach((m: any) => {
+      if (!m.productionGrid || !m.productionGrid.rows || !m.productionGrid.columns) return;
+      
+      const colMap: Record<string, string> = {};
+      m.productionGrid.columns.forEach((c: any) => {
+        colMap[c.id] = c.name;
       });
-  }, []);
+
+      m.productionGrid.rows.forEach((row: any) => {
+        if (!row.cells) return;
+        Object.keys(row.cells).forEach((colId) => {
+          const cell = row.cells[colId];
+          if (cell && (cell.status === 'todo' || cell.status === 'in_progress' || cell.status === 'review')) {
+            extracted.push({
+              id: `${m.id}-${row.id}-${colId}`,
+              artistId: m.artistId,
+              artistName: m.artistName || 'Desconocido',
+              matrixId: m.id,
+              matrixName: m.name,
+              rowId: row.id,
+              rowName: row.name || 'Sin nombre',
+              colId,
+              colName: colMap[colId] || 'Fase',
+              status: cell.status as FlexTaskStatus,
+              projectId: m.projectId,
+              linkedFile: row.linkedFile
+            });
+          }
+        });
+      });
+    });
+
+    extracted.sort((a, b) => a.artistName.localeCompare(b.artistName) || a.rowName.localeCompare(b.rowName));
+    setTasks(extracted);
+  }, [matrices]);
 
   // Unique artists list for dropdown filter
   const uniqueArtists = useMemo(() => {
@@ -393,6 +385,7 @@ export function GlobalPendingTasks() {
         body: JSON.stringify({ productionGrid: newGrid, projectId: task.projectId || matrix.projectId })
       });
       if (!putRes.ok) throw new Error('Failed to save matrix');
+      fetchMatrices(true);
 
     } catch (e) {
       console.error('Failed to update task status:', e);
