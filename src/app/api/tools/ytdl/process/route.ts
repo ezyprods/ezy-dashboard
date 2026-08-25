@@ -107,43 +107,47 @@ async function processDownload(taskId: string) {
       useCookies: boolean;
       label: string;
     }> = [
-      // Attempt 1: visionos,web_embedded,android (Verified: Downloads full 12.7 MB MP3 without bot detection)
+      // Attempt 1: iOS client with cookies & browser headers (bypasses bot challenges)
       {
-        label: 'visionos,web_embedded,android',
+        label: 'ios+cookies',
         clientArgs: [
           '--extractor-args',
-          'youtube:player_client=visionos,web_embedded,android',
+          'youtube:player_client=ios',
         ],
-        useCookies: false,
+        useCookies: true,
       },
-      // Attempt 2: mediaconnect without cookies
+      // Attempt 2: Android client with cookies
       {
-        label: 'mediaconnect',
+        label: 'android+cookies',
         clientArgs: [
           '--extractor-args',
-          'youtube:player_client=mediaconnect',
+          'youtube:player_client=android',
         ],
-        useCookies: false,
+        useCookies: true,
       },
-      // Attempt 3: tv_embedded without cookies
+      // Attempt 3: Default authenticated client
       {
-        label: 'tv_embedded',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=tv_embedded',
-          '--user-agent',
-          'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+',
-        ],
-        useCookies: false,
+        label: 'default+cookies',
+        clientArgs: [],
+        useCookies: true,
       },
-      // Attempt 4: visionos with cookies
+      // Attempt 4: VisionOS client with cookies
       {
         label: 'visionos+cookies',
         clientArgs: [
           '--extractor-args',
-          'youtube:player_client=visionos,web_embedded,android',
+          'youtube:player_client=visionos,web_embedded',
         ],
         useCookies: true,
+      },
+      // Attempt 5: VisionOS without cookies (fallback)
+      {
+        label: 'visionos',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=visionos,web_embedded,android',
+        ],
+        useCookies: false,
       },
     ];
 
