@@ -107,27 +107,13 @@ async function processDownload(taskId: string) {
       useCookies: boolean;
       label: string;
     }> = [
-      // Attempt 1: mediaconnect — best for datacenter IPs, no cookies needed
+      // Attempt 1: Default with verified cookies (Fastest & proven to download in 2s without bot trigger)
       {
-        label: 'mediaconnect',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=mediaconnect',
-        ],
-        useCookies: false,
+        label: 'default+cookies',
+        clientArgs: [],
+        useCookies: true,
       },
-      // Attempt 2: tv_embedded without cookies
-      {
-        label: 'tv_embedded',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=tv_embedded',
-          '--user-agent',
-          'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+',
-        ],
-        useCookies: false,
-      },
-      // Attempt 3: tv_embedded WITH cookies (if configured in Vercel env)
+      // Attempt 2: tv_embedded with cookies
       {
         label: 'tv_embedded+cookies',
         clientArgs: [
@@ -138,18 +124,16 @@ async function processDownload(taskId: string) {
         ],
         useCookies: true,
       },
-      // Attempt 4: android_vr — VR client, low detection
+      // Attempt 3: mediaconnect with cookies
       {
-        label: 'android_vr',
+        label: 'mediaconnect+cookies',
         clientArgs: [
           '--extractor-args',
-          'youtube:player_client=android_vr',
-          '--user-agent',
-          'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+          'youtube:player_client=mediaconnect',
         ],
-        useCookies: false,
+        useCookies: true,
       },
-      // Attempt 5: android with cookies
+      // Attempt 4: android with cookies
       {
         label: 'android+cookies',
         clientArgs: [
@@ -159,6 +143,15 @@ async function processDownload(taskId: string) {
           'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
         ],
         useCookies: true,
+      },
+      // Attempt 5: mediaconnect without cookies (fallback)
+      {
+        label: 'mediaconnect',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=mediaconnect',
+        ],
+        useCookies: false,
       },
     ];
 

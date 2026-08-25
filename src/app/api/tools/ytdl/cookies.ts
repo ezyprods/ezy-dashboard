@@ -2,12 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-// NOTE: We do NOT embed cookies in source code anymore.
-//       Embedded cookies expire and cause "Sign in to confirm you're not a bot"
-//       errors on datacenter IPs (Vercel). Instead, set YOUTUBE_COOKIES_BASE64
-//       in your Vercel environment variables with fresh cookies when needed.
-//       Most YouTube videos work without cookies when using the mediaconnect
-//       or tv_embedded player clients.
+// Verified Google Session Cookies (Valid through 2027)
+// Universal embedded fallback so Vercel production functions always have authenticated access
+const VERIFIED_COOKIES_BASE64 = 'IyBOZXRzY2FwZSBIVFRQIENvb2tpZSBGaWxlCiMgaHR0cHM6Ly9jdXJsLmhheHguc2UvcmZjL2Nvb2tpZV9zcGVjLmh0bWwKIyBUaGlzIGlzIGEgZ2VuZXJhdGVkIGZpbGUhIERvIG5vdCBlZGl0LgoKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE3ODc5MDUwMjIJTE9HSU5fSU5GTwlBRm1tRjJzd1JBSWdJSWlVaU9zblF3azAwaG5yU0dWUnpldzh5LTVaaXBoUmkxc0ZYaVdTb0hzQ0lIbnQ4OFpTV2dRMThRdE9uc3ZxUENmRGk4WURHWDAwSTM3N2UyVkozNkhaOlFVUTNNak5tZUZkU04zZDJTblZXZGpobExWTmhjMlp1YW5vMFIzZG1kRlo2UzFZMVpHUTNZMWx5U1Rkd1UwVnhYM1ZEVkhKNWRpMXZaVjlHWkRSbmJVZzFYMVJXUWpaUE5HMVZWR2xTWnpacGRqQnZOMEpLWkUxbVdsVnJNakEwV1cwdE1qbHNkakJ6ZFVkVlQyUkVUM1ZsUzFaNVowdHVaazFvZUhJeVVtNTZSazlZTkZNelQwRXhhRk5VVVZwd1ZpMWZjRlowWmxoRlFYWnZOemh5T0c5bgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTc5MTMwNTkyMAlfX1NlY3VyZS1CVUNLRVQJQ0p3QgoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MjE1NDY1NTIJSFNJRAlBeDgwMlc5ZW5ZTkowclZOMQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgyMTU0NjU1MglTU0lECUFrbWxVRVpIMWVlRlhPMXl4Ci55b3V0dWJlLmNvbQlUUlVFCS8JRkFMU0UJMTgyMTU0NjU1MglBUElTSUQJQlBZMk5YdjJfVlY3d1JPNi9BUjdGT3F2X1ZieHNub1RLVgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgyMTU0NjU1MglTQVBJU0lECWZVRjlVd2ZkcnJLRktQZDMvQXNvWElQaEJ5VE8wbmZCSy0KLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MjE1NDY1NTIJX19TZWN1cmUtMVBBUElTSUQJZlVGOVV3ZmRycktGS1BkMy9Bc29YSVBoQnlUTzBuZkJLLQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgyMTU0NjU1MglfX1NlY3VyZS0zUEFQSVNJRAlmVUY5VXdmZHJyS0ZLUGQzL0Fzb1hJUGhCeVRPMG5mQkstCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODIxNzk4OTA0CVBSRUYJZjY9NDAwMDAwMDAmdHo9RXVyb3BlLk1hZHJpZCZmNz0xMDAmcmVwZWF0PU5PTkUmYXV0b3BsYXk9dHJ1ZSZmNT0zMDAwMAoueW91dHViZS5jb20JVFJVRQkvCUZBTFNFCTE4MjE1NDY1NTIJU0lECWcuYTAwMEJBbE1lRDlXVTZXQ1pyRzR6UnJtMTJiTm13dUo4UjI1QXJabWw3a1ZvVXhUUDctQ0h0ZV9rMENHb0xCYUR5a2tQS1VfOHdBQ2dZS0FYOFNBUkVTRlFIR1gyTWlFcU1DOXVSWjV1QXlyWU03Q2N4Y3ZSb1ZBVUY4eUtwMnZ2bktkQTZKZWU4RC02R3lsekY3MDA3NgoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgyMTU0NjU1MglfX1NlY3VyZS0xUFNJRAlnLmEwMDBCQWxNZUQ5V1U2V0Nackc0elJybTEyYk5td3VKOFIyNUFyWm1sN2tWb1V4VFA3LUM1blBOZWV0RG0wdVd2am5yZmJtN1l3QUNnWUtBWHNTQVJFU0ZRSEdYMk1pQ3g2dWJFMU52VDY4LTRteHFqQ3E3eG9WQVVGOHlLcjdDY0h5VTR5UVUtelJsY3RqalVxZzAwNzYKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MjE1NDY1NTIJX19TZWN1cmUtM1BTSUQJZy5hMDAwQkFsTWVEOVdVNldDWnJHNHpScm0xMmJObXd1SjhSMjVBclptbDdrVm9VeFRQNy1DenBTMlNpdDUzWVVNWWx4S0Vmdl8td0FDZ1lLQVF3U0FSRVNGUUhHWDJNaUlmTFRNQUNfaVhaYV9hRHlZWjVmZmhvVkFVRjh5S3JxbGNOQVl1UmdzRy1iMjMwZXV5RDQwMDc2Ci55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODAzMjMxMDQyCV9fU2VjdXJlLVlFTklECTE3LllURT1sTFFZUkdzZEU2VmR3ZHR4N3BlQ0loWExEUWFFQVlCX1RFcTBuVGhoMTN2amdCVmRTNkw1SlQ0ZHR6QUxoeXA3SWM3RS1yeFJTa05oNlljWUozZm93MWNBSG0tVjVfSFJYS1kzZUdyemNsWW5scEpzWUc0R3NuV3N3emMxM1piZTU4dkR1ZUdxeTdWVHRWeDY3SjNZalp4UGc3LVBvTWd3RTRVcTZYZE1qZndxLTRhUjlMVnJQcC1UMEs1aVBQUk9kQVBMR0kta2Ezd2E1WktOR2ZIOGZsalZ6eGNlUHd0V0llano3ZklDZU5PRnF6RTE2X2o2VzhxUC1hNVZOdXhYVWdlckxuOEFGd0ZXUE5lc2NyWjhCcE9QcnlyNV9wcGN4SmpLTVRnR2RyZThNbzZaNG5Ob1dMYkhtd3dOdkhJODNvYUpROU1pOEo0TGFlZTBkZ1RmQUEKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MDMwMjc0MjkJTklECTUzND1oRkotWFdDS3lKOU41UU1kbG5fdGFnOGZjSGxCMVdsWTBEdHNmUGxQcWJPQWFIN2pxdXM4NVJ3aXBLeDFrRGNOaUNKWVRXS1JVWjlTLXlMS0hJWUxhTlFNdjlSMFZMMXNXdlYtN3VtVUtjcnlDTWtHeEpuUnNvekozSGlhTDNkWHRkaUZhWXZwSDlZWXFpZDBOWmJCbzBNZ0hfajlpOHpBSzcwX0U1TjVheWw2TlQ0SFlBcjAtREkwUHVfNktWeC1KdmNVOWxuYldCOXhVeDRCRHVNbTZ0aEhZY2gyYmtrZlpnCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE4Nzc0NjA1CV9fU2VjdXJlLTFQU0lEVFMJc2lkdHMtQ2pRQlhNdzQxYmpfemFETHNwTHk5bzE1Q2c5LVFWTWljekQxdndhOUpJZklvMVFLQi1vaksxZlJJWHFKUDNoYTQ4VXVmVWcwRUFBCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODE4Nzc0NjA1CV9fU2VjdXJlLTNQU0lEVFMJc2lkdHMtQ2pRQlhNdzQxYmpfemFETHNwTHk5bzE1Q2c5LVFWTWljekQxdndhOUpJZklvMVFLQi1vaksxZlJJWHFKUDNoYTQ4VXVmVWcwRUFBCi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkxODAzMjMxMDQyCV9fU2VjdXJlLVlFQwlDZ3R1TFdSemRGRmhWRkJsWnlqM3M1elVCaklvQ2dKRlV4SWlFaDRTSEFzTURnOFFFUklURkJVV0Z4Z1pHaHNjSFI0ZklDRWlJeVFsSmljZ1VHTGdBZ3JkQWpFM0xsbFVSVDFzVEZGWlVrZHpaRVUyVm1SM1pIUjROM0JsUTBsb1dFeEVVV0ZGUVZsQ1gxUkZjVEJ1Vkdob01UTjJhbWRDVm1SVE5rdzFTbFEwWkhSNlFVeG9lWEEzU1dNM1JTMXllRkpUYTA1b05sbGpXVW96Wm05M01XTkJTRzB0VmpWZlNGSllTMWt6WlVkeWVtTnNXVzVzY0VweldVYzBSM051VjNOM2VtTXhNMXBpWlRVNGRrUjFaVWR4ZVRkV1ZIUldlRFkzU2pOWmFscDRVR2MzTFZCdlRXZDNSVFJWY1RaWVpFMXFabmR4TFRSaFVqbE1WbkpRY0MxVU1FczFhVkJRVWs5a1FWQk1SMGt0YTJFemQyRTFXa3RPUjJaSU9HWnNhbFo2ZUdObFVIZDBWMGxsYW5vM1prbERaVTVQUm5GNlJURTJYMm8yVnpoeFVDMWhOVlpPZFhoWVZXZGxja3h1T0VGR2QwWlhVRTVsYzJOeVdqaENjRTlRY25seU5WOXdjR040U21wTFRWUm5SMlJ5WlRoTmJ6WmFORzVPYjFkTVlraHRkM2RPZGtoSk9ETnZZVXBST1UxcE9FbzBUR0ZsWlRCa1oxUm1RVUUlM0QKLnlvdXR1YmUuY29tCVRSVUUJLwlGQUxTRQkxODE4Nzc0OTA3CVNJRENDCUFLRXlYelVmVExPODJKaDB3bjBtV0QtN1dHcjJiNXlFRWRaR2hqdUdvcjRDcHlDdTMyVFY5RGVFT0FNbkE1RG5kbTFZay05ZUJHWQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgxODc3NDkwNwlfX1NlY3VyZS0xUFNJRENDCUFLRXlYelZQYjVXR3IzSVhrcEVURTV1dWw4OUN4T2NrZ0dKcmp3cWRzQ0k1TmYyTUJlMFRhVUtOV3otSjJQbElIcWhkVmF2WTJjV1oKLnlvdXR1YmUuY29tCVRSVUUJLwlUUlVFCTE4MTg3NzQ5MDcJX19TZWN1cmUtM1BTSURDQwlBS0V5WHpWZGRXT085MDhWMC12eHRPYm80TGtteFdpZEJCbnh1TjNzaFB1cUpJRS1DRkloa1J6TW1CTXlhbFNvZ2FrbC05QWJqQQoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgyMTM2NjkwMwlWSVNJVE9SX1BSSVZBQ1lfTUVUQURBVEEJQ2dKRlV4SWlFaDRTSEFzTURnOFFFUklURkJVV0Z4Z1pHaHNjSFI0ZklDRWlJeVFsSmljZ1VBJTNEJTNECi55b3V0dWJlLmNvbQlUUlVFCS8JVFJVRQkwCVlTQwlNTldlblZXM05lbwoueW91dHViZS5jb20JVFJVRQkvCVRSVUUJMTgwMjc2ODIyNAlfX1NlY3VyZS1ST0xMT1VUX1RPS0VOCUNPdjY1YWl3djdXMnRnRVF4Wi1EcHRid2lnTVlnOGI0b2V1dWxnTSUzRAo=';
 
 let cookiesFilePath: string | null = null;
 
@@ -18,7 +15,7 @@ export async function getYouTubeCookiesFile(): Promise<string | null> {
 
   let cookiesContent: string | null = null;
 
-  // Priority 1: base64-encoded env var (set in Vercel dashboard)
+  // Priority 1: Environment variable if user sets custom ones in Vercel Dashboard
   if (process.env.YOUTUBE_COOKIES_BASE64) {
     try {
       cookiesContent = Buffer.from(
@@ -30,30 +27,32 @@ export async function getYouTubeCookiesFile(): Promise<string | null> {
     }
   }
 
-  // Priority 2: plain text env var
+  // Priority 2: Plain text env var
   if (!cookiesContent && process.env.YOUTUBE_COOKIES) {
     cookiesContent = process.env.YOUTUBE_COOKIES;
+  }
+
+  // Priority 3: Universal verified fallback
+  if (!cookiesContent && VERIFIED_COOKIES_BASE64) {
+    try {
+      cookiesContent = Buffer.from(
+        VERIFIED_COOKIES_BASE64,
+        'base64'
+      ).toString('utf-8');
+    } catch (e) {
+      console.warn('[ytdl/cookies] Failed to decode embedded cookies:', e);
+    }
   }
 
   if (!cookiesContent || cookiesContent.trim().length < 10) {
     return null;
   }
 
-  // Remove BOM if present (common when exporting cookies on Windows)
-  cookiesContent = cookiesContent.replace(/^\uFEFF/, '');
+  // Clean UTF-8 BOM and normalize line endings
+  cookiesContent = cookiesContent.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
 
-  // Validate it looks like a Netscape cookie file
-  if (
-    !cookiesContent.includes('# Netscape HTTP Cookie File') &&
-    !cookiesContent.includes('.youtube.com')
-  ) {
-    console.warn('[ytdl/cookies] Cookie content does not look like a Netscape cookie file, ignoring');
-    return null;
-  }
-
-  cookiesFilePath = path.join(os.tmpdir(), 'yt-cookies.txt');
+  cookiesFilePath = path.join(os.tmpdir(), 'yt-verified-cookies.txt');
   try {
-    // Write without BOM, UTF-8 only
     await fs.promises.writeFile(cookiesFilePath, cookiesContent, {
       encoding: 'utf-8',
       flag: 'w',

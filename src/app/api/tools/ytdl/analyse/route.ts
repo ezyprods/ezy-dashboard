@@ -168,8 +168,8 @@ async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] 
   // mediaconnect bypasses bot detection without cookies
   const clientConfigs = [
     {
-      label: 'mediaconnect',
-      extraArgs: ['--no-warnings', '--extractor-args', 'youtube:player_client=mediaconnect']
+      label: 'default+cookies',
+      extraArgs: ['--no-warnings', ...cookieArgs]
     },
     {
       label: 'tv_embedded',
@@ -181,12 +181,8 @@ async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] 
       ]
     },
     {
-      label: 'android_vr',
-      extraArgs: [
-        '--no-warnings',
-        '--extractor-args', 'youtube:player_client=android_vr',
-        '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36'
-      ]
+      label: 'mediaconnect',
+      extraArgs: ['--no-warnings', ...cookieArgs, '--extractor-args', 'youtube:player_client=mediaconnect']
     },
   ];
 

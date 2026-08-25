@@ -138,10 +138,9 @@ export async function GET(req: Request) {
     };
 
     const retryMatrix: Array<{ clientArgs: string[]; useCookies: boolean }> = [
-      // mediaconnect — bypasses bot detection on datacenter IPs without cookies
       {
-        clientArgs: ['--extractor-args', 'youtube:player_client=mediaconnect'],
-        useCookies: false,
+        clientArgs: [],
+        useCookies: true,
       },
       {
         clientArgs: [
@@ -151,10 +150,11 @@ export async function GET(req: Request) {
         useCookies: true,
       },
       {
-        clientArgs: [
-          '--extractor-args', 'youtube:player_client=android_vr',
-          '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-        ],
+        clientArgs: ['--extractor-args', 'youtube:player_client=mediaconnect'],
+        useCookies: true,
+      },
+      {
+        clientArgs: ['--extractor-args', 'youtube:player_client=mediaconnect'],
         useCookies: false,
       },
     ];
