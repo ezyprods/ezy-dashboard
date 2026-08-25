@@ -8,13 +8,8 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
-// Minimum required version (YYYY.MM.DD). Update this string to force a
-// re-download whenever YouTube breaks older yt-dlp builds.
 const MIN_YTDLP_VERSION = '2026.08.01';
-
-// Using a version-stamped filename forces fresh download when we bump the
-// MIN_YTDLP_VERSION above, even if the old binary is still on disk.
-const YTDLP_CACHE_KEY = '20260825'; // bump this to force re-download
+const YTDLP_CACHE_KEY = '20260825_v2';
 const YTDLP_URL =
   os.platform() === 'win32'
     ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
@@ -50,13 +45,12 @@ export const downloadFile = (url: string, dest: string): Promise<void> => {
             cleanup();
             return reject(new Error('Redirected without location header'));
           }
-          // Handle relative redirects
           let location = response.headers.location;
           if (location.startsWith('/')) {
             const parsed = new URL(targetUrl);
             location = `${parsed.protocol}//${parsed.host}${location}`;
           }
-          response.resume(); // drain the response
+          response.resume();
           follow(location, depth + 1);
         } else if (response.statusCode === 200) {
           response.pipe(file);
@@ -110,7 +104,6 @@ async function getYtDlpVersion(ytdlpPath: string): Promise<string | null> {
 }
 
 function isVersionSufficient(version: string, minVersion: string): boolean {
-  // Versions are YYYY.MM.DD[.patch] — lexicographic comparison works
   return version.replace(/\./g, '') >= minVersion.replace(/\./g, '');
 }
 
@@ -128,12 +121,12 @@ export const ensureBinaries = async (): Promise<{
   binariesPromise = (async () => {
     const tmpDir = os.tmpdir();
     const isWin = os.platform() === 'win32';
-    // Cache key in filename forces re-download when we update YTDLP_CACHE_KEY
+    
+    // 1. Prepare yt-dlp binary
     const ytdlpPath = path.join(
       tmpDir,
       isWin ? `yt-dlp-${YTDLP_CACHE_KEY}.exe` : `yt-dlp-${YTDLP_CACHE_KEY}`
     );
-    const ffmpegPath = (ffmpegStatic as string) || 'ffmpeg';
 
     let ytdlpValid = false;
 
@@ -141,25 +134,16 @@ export const ensureBinaries = async (): Promise<{
       try {
         const stat = fs.statSync(ytdlpPath);
         if (stat.size > 5_000_000) {
-          // Size check passes, also verify the version is recent enough
           const version = await getYtDlpVersion(ytdlpPath);
           if (version && isVersionSufficient(version, MIN_YTDLP_VERSION)) {
             ytdlpValid = true;
-            console.log(`[ytdl/binaries] yt-dlp ${version} — OK`);
           } else {
-            console.log(
-              `[ytdl/binaries] yt-dlp version ${version} is too old (need >= ${MIN_YTDLP_VERSION}), re-downloading`
-            );
             fs.unlinkSync(ytdlpPath);
           }
         } else {
-          console.log(
-            `[ytdl/binaries] yt-dlp binary too small (${stat.size} bytes), re-downloading`
-          );
           fs.unlinkSync(ytdlpPath);
         }
       } catch (e) {
-        console.warn('[ytdl/binaries] Error checking existing binary:', e);
         ytdlpValid = false;
       }
     }
@@ -167,8 +151,25 @@ export const ensureBinaries = async (): Promise<{
     if (!ytdlpValid) {
       console.log('[ytdl/binaries] Downloading fresh yt-dlp binary...');
       await downloadFile(YTDLP_URL, ytdlpPath);
-      const version = await getYtDlpVersion(ytdlpPath);
-      console.log(`[ytdl/binaries] Downloaded yt-dlp ${version}`);
+      if (!isWin) {
+        try { fs.chmodSync(ytdlpPath, '755'); } catch (e) {}
+      }
+    }
+
+    // 2. Prepare FFmpeg binary (ensure executable in Linux /tmp)
+    let ffmpegPath = (ffmpegStatic as string) || 'ffmpeg';
+    
+    if (!isWin && ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+      const tmpFfmpeg = path.join(tmpDir, 'ffmpeg_bin');
+      try {
+        if (!fs.existsSync(tmpFfmpeg)) {
+          fs.copyFileSync(ffmpegStatic, tmpFfmpeg);
+          fs.chmodSync(tmpFfmpeg, '755');
+        }
+        ffmpegPath = tmpFfmpeg;
+      } catch (e) {
+        console.warn('[ytdl/binaries] Could not copy ffmpeg to /tmp, using default path:', e);
+      }
     }
 
     return { ytdlpPath, ffmpegPath };
