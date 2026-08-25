@@ -191,8 +191,14 @@ async function processDownload(taskId: string) {
         outputTemplate,
         '--progress',
         '--newline',
-        targetUrl,
       ];
+
+      const proxyUrl = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.YTDL_PROXY;
+      if (proxyUrl) {
+        args.push('--proxy', proxyUrl);
+      }
+
+      args.push(targetUrl);
 
       const ytdlp = spawn(ytdlpPath, args);
       let stderrOut = '';

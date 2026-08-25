@@ -6,6 +6,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { ensureBinaries } from '../binaries';
+import { buildCookieArgs } from '../cookies';
 
 const execFileAsync = promisify(execFile);
 
@@ -101,17 +102,26 @@ export async function GET(req: Request) {
     const tempId = `ondemand_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
 
+    const cookieArgs = await buildCookieArgs();
+    const proxyUrl = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.YTDL_PROXY;
+
     const args = [
       '--no-warnings',
       '--no-playlist',
+      ...cookieArgs,
       '--extractor-args', 'youtube:player_client=visionos,web_embedded,android',
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', '320K',
       '--ffmpeg-location', ffmpegPath,
       '--output', outputTemplate,
-      target,
     ];
+
+    if (proxyUrl) {
+      args.push('--proxy', proxyUrl);
+    }
+
+    args.push(target);
 
     await execFileAsync(ytdlpPath, args, { timeout: 120000 });
 
