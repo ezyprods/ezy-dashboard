@@ -46,12 +46,6 @@ async function runDeepAudit() {
     }
   });
 
-  // Handle confirmation dialogs automatically
-  page.on('dialog', async dialog => {
-    console.log(`   [Dialog Intercepted] "${dialog.message()}" -> Aceptando`);
-    await dialog.accept();
-  });
-
   try {
     // -------------------------------------------------------------
     // FASE 0: Acceso / PasswordGuard
@@ -100,48 +94,46 @@ async function runDeepAudit() {
     });
     if (todosBtn && todosBtn.asElement()) await todosBtn.asElement().click();
 
-    // 1.2 Test Búsqueda textual
-    // Búsqueda positiva
-    await page.evaluate(() => {
-      const input = document.querySelector('input[placeholder*="Buscar"]');
-      if (input) {
-        input.value = 'Sunset';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+    // 1.2 Test Búsqueda textual en la galería
+    const searchInput = await page.$('input[placeholder*="Buscar por título"]');
+    if (searchInput) {
+      // Búsqueda positiva
+      await searchInput.click();
+      await searchInput.type('Cyberpunk');
+      await sleep(400);
+      const textWithSearch = await page.evaluate(() => document.body.innerText);
+      if (textWithSearch.includes('Cyberpunk Drill')) {
+        addResult('Búsqueda Positiva ("Cyberpunk")', 'PASS', 'Encontró "Cyberpunk Drill"');
+      } else {
+        addResult('Búsqueda Positiva ("Cyberpunk")', 'FAIL', 'No filtró correctamente');
       }
-    });
-    await sleep(400);
-    const textWithSearch = await page.evaluate(() => document.body.innerText);
-    if (textWithSearch.includes('Sunset Horizon')) {
-      addResult('Búsqueda Positiva ("Sunset")', 'PASS', 'Encontró "Sunset Horizon"');
-    } else {
-      addResult('Búsqueda Positiva ("Sunset")', 'FAIL', 'No filtró correctamente');
-    }
 
-    // Búsqueda sin resultados
-    await page.evaluate(() => {
-      const input = document.querySelector('input[placeholder*="Buscar"]');
-      if (input) {
-        input.value = 'NonExistentProjectXYZ999';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    });
-    await sleep(400);
-    const emptyText = await page.evaluate(() => document.body.innerText);
-    if (emptyText.includes('No se encontraron proyectos') || emptyText.includes('filtros')) {
-      addResult('Búsqueda Vacía (Estado Empty)', 'PASS', 'Muestra estado vacío correctamente');
-    } else {
-      addResult('Búsqueda Vacía (Estado Empty)', 'FAIL', 'No mostró mensaje de estado vacío');
-    }
+      // Búsqueda sin resultados (Empty State)
+      await searchInput.click({ clickCount: 3 });
+      await page.keyboard.press('Backspace');
+      await searchInput.type('NonExistentProjectXYZ999');
+      await sleep(500);
 
-    // Limpiar búsqueda
-    await page.evaluate(() => {
-      const input = document.querySelector('input[placeholder*="Buscar"]');
-      if (input) {
-        input.value = '';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+      const emptyText = await page.evaluate(() => document.body.innerText);
+      if (emptyText.includes('No se encontraron proyectos') || emptyText.includes('filtros')) {
+        addResult('Búsqueda Vacía (Estado Empty)', 'PASS', 'Muestra estado vacío correctamente');
+      } else {
+        addResult('Búsqueda Vacía (Estado Empty)', 'FAIL', 'No mostró mensaje de estado vacío');
       }
-    });
-    await sleep(300);
+
+      // Limpiar búsqueda
+      const clearSearchBtn = await page.evaluateHandle(() => {
+        const btns = Array.from(document.querySelectorAll('button'));
+        return btns.find(b => b.innerText.includes('Limpiar Filtros'));
+      });
+      if (clearSearchBtn && clearSearchBtn.asElement()) {
+        await clearSearchBtn.asElement().click();
+      } else {
+        await searchInput.click({ clickCount: 3 });
+        await page.keyboard.press('Backspace');
+      }
+      await sleep(400);
+    }
 
     // -------------------------------------------------------------
     // FASE 2: Creación de Proyecto (Casos Límite y Validaciones)
@@ -172,7 +164,7 @@ async function runDeepAudit() {
       // 2.2 Creación con Caracteres Especiales y Metadatos Completos
       const titleInput = await page.$('input#proj-title');
       if (titleInput) {
-        await titleInput.type('04 - Am 120BPM - Velvet Nights @ezyprods');
+        await titleInput.type('07 - Gm 126BPM - Solar Eclipse @ezyprods');
         await sleep(400);
 
         // Verificar autocompletado de BPM y Key
@@ -185,8 +177,8 @@ async function runDeepAudit() {
           return input ? input.value : null;
         });
 
-        if (detectedBpm === '120' && detectedKey === 'Am') {
-          addResult('Detección Automática BPM (120) y Key (Am)', 'PASS');
+        if (detectedBpm === '126' && detectedKey === 'Gm') {
+          addResult('Detección Automática BPM (126) y Key (Gm)', 'PASS');
         } else {
           addResult('Detección Automática BPM y Key', 'FAIL', `BPM=${detectedBpm}, Key=${detectedKey}`);
         }
@@ -201,25 +193,16 @@ async function runDeepAudit() {
           await sleep(200);
         }
 
-        // Seleccionar estado: En Progreso
-        await page.evaluate(() => {
-          const statusSelect = Array.from(document.querySelectorAll('select')).find(s => s.value === 'idea');
-          if (statusSelect) {
-            statusSelect.value = 'en_progreso';
-            statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
-          }
-        });
-
         // Enviar formulario
         const submitBtn = await page.evaluateHandle(() => {
           return Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Crear Proyecto'));
         });
         if (submitBtn && submitBtn.asElement()) {
-          console.log('   Enviando creación de "Velvet Nights" a Google Drive...');
+          console.log('   Enviando creación de "Solar Eclipse" a Google Drive...');
           await submitBtn.asElement().click();
           
           // Esperar hasta que aparezca en la galería
-          await page.waitForFunction(() => document.body.innerText.includes('Velvet Nights'), { timeout: 20000 });
+          await page.waitForFunction(() => document.body.innerText.includes('Solar Eclipse'), { timeout: 25000 });
           addResult('Persistencia y Renderizado de Nuevo Proyecto en Galería', 'PASS');
         }
       }
@@ -232,7 +215,7 @@ async function runDeepAudit() {
 
     const projectDetailUrl = await page.evaluate(() => {
       const links = Array.from(document.querySelectorAll('a'));
-      const found = links.find(a => a.innerText.includes('Velvet Nights') && a.href.includes('/personal-projects/'));
+      const found = links.find(a => a.innerText.includes('Solar Eclipse') && a.href.includes('/personal-projects/'));
       return found ? found.href : null;
     });
 
@@ -244,13 +227,13 @@ async function runDeepAudit() {
 
       // 3.1 Cabecera
       const headerText = await page.evaluate(() => document.body.innerText);
-      if (headerText.includes('Velvet Nights') && headerText.includes('120 BPM') && headerText.includes('Am')) {
+      if (headerText.includes('Solar Eclipse') && headerText.includes('126 BPM') && headerText.includes('Gm')) {
         addResult('Cabecera de Proyecto: Título, BPM y Key correctos', 'PASS');
       } else {
         addResult('Cabecera de Proyecto', 'FAIL', 'Metadatos incorrectos en cabecera');
       }
 
-      // 3.2 Modal de Edición de Proyecto (Modificar BPM a 124)
+      // 3.2 Modal de Edición de Proyecto (Modificar BPM a 132)
       console.log('\n--- FASE 4: Modal de Edición de Proyecto ---');
       const editProjectBtn = await page.evaluateHandle(() => {
         return Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Editar'));
@@ -259,28 +242,26 @@ async function runDeepAudit() {
         await editProjectBtn.asElement().click();
         await sleep(500);
 
-        // Cambiar BPM a 124
+        // Cambiar BPM a 132 usando setter reactivo
         await page.evaluate(() => {
-          const numInput = document.querySelector('input#proj-bpm') || document.querySelector('input[type="number"]');
-          if (numInput) {
-            numInput.value = '124';
-            numInput.dispatchEvent(new Event('input', { bubbles: true }));
+          const el = document.querySelector('input#edit-proj-bpm');
+          if (el) {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(el, '132');
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
           }
         });
+        await sleep(200);
 
         const saveChangesBtn = await page.evaluateHandle(() => {
           return Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Guardar Cambios'));
         });
         if (saveChangesBtn && saveChangesBtn.asElement()) {
           await saveChangesBtn.asElement().click();
-          await sleep(3000);
-
-          const afterEditText = await page.evaluate(() => document.body.innerText);
-          if (afterEditText.includes('124 BPM')) {
-            addResult('Edición de Proyecto: Modificación de BPM a 124 reflejada', 'PASS');
-          } else {
-            addResult('Edición de Proyecto', 'FAIL', 'No se actualizó el BPM en pantalla');
-          }
+          await page.waitForFunction(() => document.body.innerText.includes('132 BPM'), { timeout: 15000 });
+          addResult('Edición de Proyecto: Modificación de BPM a 132 reflejada', 'PASS');
+          await sleep(500);
         }
       }
 
@@ -291,33 +272,50 @@ async function runDeepAudit() {
       });
       if (cloneProjectBtn && cloneProjectBtn.asElement()) {
         await cloneProjectBtn.asElement().click();
-        await sleep(500);
+        await sleep(600);
 
-        const artistSelect = await page.$('select');
+        // Esperar a que cargue el selector de artistas en el modal
+        await page.waitForFunction(() => {
+          return !!document.querySelector('.fixed select');
+        }, { timeout: 10000 }).catch(() => {});
+
+        const artistSelect = await page.$('.fixed select');
         if (artistSelect) {
           addResult('Modal de Ceder a Artista: Selector disponible', 'PASS');
           
           // Cancelar modal
           const cancelBtn = await page.evaluateHandle(() => {
-            return Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Cancelar'));
+            const btns = Array.from(document.querySelectorAll('button'));
+            return btns.find(b => b.innerText.includes('Cancelar'));
           });
           if (cancelBtn && cancelBtn.asElement()) {
             await cancelBtn.asElement().click();
-            await sleep(300);
+            await sleep(400);
           }
         } else {
           addResult('Modal de Ceder a Artista', 'FAIL', 'No se encontró selector de artista');
         }
       }
 
-      // 3.4 Eliminación de Proyecto y Verificación F5
+      // 3.4 Eliminación de Proyecto con Confirmación en DialogProvider
       console.log('\n--- FASE 6: Eliminación de Proyecto & Verificación de Caché ---');
       const deleteProjectBtn = await page.evaluateHandle(() => {
         return Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Eliminar'));
       });
       if (deleteProjectBtn && deleteProjectBtn.asElement()) {
         await deleteProjectBtn.asElement().click();
-        await sleep(4000); // Esperar DELETE API + redirección
+        await sleep(500);
+
+        // Aceptar confirmación en DialogProvider
+        const confirmBtn = await page.evaluateHandle(() => {
+          const btns = Array.from(document.querySelectorAll('button'));
+          return btns.find(b => b.innerText === 'Confirmar');
+        });
+        if (confirmBtn && confirmBtn.asElement()) {
+          console.log('   Confirmando eliminación en modal CustomDialog...');
+          await confirmBtn.asElement().click();
+          await sleep(5000); // Esperar DELETE en Drive y redirección
+        }
 
         // Refrescar página para validar persistencia real
         console.log('   Refrescando /personal-projects con F5...');
@@ -326,7 +324,7 @@ async function runDeepAudit() {
         await sleep(1500);
 
         const finalGalleryText = await page.evaluate(() => document.body.innerText);
-        if (!finalGalleryText.includes('Velvet Nights')) {
+        if (!finalGalleryText.includes('Solar Eclipse')) {
           addResult('Eliminación: Proyecto eliminado de la UI y no reaparece tras F5', 'PASS');
         } else {
           addResult('Eliminación: Persistencia tras F5', 'FAIL', 'El proyecto reapareció tras recargar la página');
