@@ -196,10 +196,10 @@ async function runAudit() {
       await newBtn.asElement().click();
       await sleep(600);
 
-      const titleInput = await page.$('input[placeholder*="Ej: 01 - Gm 130BPM"]');
+      const titleInput = await page.$('#proj-title');
       if (titleInput) {
-        await titleInput.type('01 - Gm 130BPM - QA High Density Test @ezyprods');
-        await sleep(300);
+        await titleInput.type('01 - G#m 130BPM - QA High Density Test @ezyprods');
+        await sleep(400);
 
         // Usar título limpio detectado si aparece
         const useCleanBtn = await page.evaluate(() => {
@@ -215,10 +215,21 @@ async function runAudit() {
 
         if (submitBtn && submitBtn.asElement()) {
           await submitBtn.asElement().click();
-          await sleep(5000); // Esperar creación en Google Drive
+          // Esperar a que el modal termine de procesar y se cierre
+          await page.waitForFunction(() => !document.body.innerText.includes('Nuevo Proyecto Personal'), { timeout: 15000 }).catch(() => {});
+          await sleep(1500);
           addResult('Creación de proyecto en Drive y formulario', 'PASS');
         }
       }
+    }
+
+    // Asegurar que la categoría "Todos" y el filtro de audio "Todos" están seleccionados
+    const allCatBtn = await page.evaluateHandle(() => {
+      return Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim().startsWith('Todos'));
+    });
+    if (allCatBtn && allCatBtn.asElement()) {
+      await allCatBtn.asElement().click();
+      await sleep(500);
     }
 
     // Verificar que aparece en la vista de lista
