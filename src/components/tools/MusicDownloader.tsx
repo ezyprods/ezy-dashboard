@@ -64,11 +64,13 @@ export function MusicDownloader() {
     });
   }, [tasks, clientId, downloadedTasks]);
 
-  const handleSubmit = async () => {
-    const inputUrl = url.trim();
+  const handleSubmit = async (targetUrlOverride?: string) => {
+    const inputUrl = (targetUrlOverride || url).trim();
     if (!inputUrl) return;
 
-    setUrl('');
+    if (!targetUrlOverride) {
+      setUrl('');
+    }
     setErrorMsg('');
 
     const taskId = Math.random().toString(36).substring(2, 15);
@@ -153,15 +155,17 @@ export function MusicDownloader() {
         );
       case 'error': 
         return (
-          <a
-            href={targetUrl}
-            download={`${task.title}.mp3`}
+          <button
+            type="button"
             title="Reintentar descarga"
             className="p-1.5 hover:bg-accent/10 rounded-lg text-accent transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSubmit(task.url);
+            }}
           >
             <RefreshCw className="w-3.5 h-3.5" /> Reintentar
-          </a>
+          </button>
         );
       default: return <Loader2 className="w-5 h-5 text-accent animate-spin" />;
     }
@@ -209,7 +213,7 @@ export function MusicDownloader() {
             className="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-text-primary px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base placeholder:text-text-secondary/50"
           />
           <Button 
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={!url.trim()}
             className="rounded-xl px-4 sm:px-6 py-2 sm:py-3 font-bold shrink-0 whitespace-nowrap w-full sm:w-auto"
           >

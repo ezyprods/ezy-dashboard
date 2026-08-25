@@ -16,6 +16,7 @@ interface SearchResult {
   artists: { id: string; name: string }[];
   audioFiles: { id: string; name: string; mimeType: string; modifiedTime?: string; bpm?: string | null; key?: string | null; isAudio: boolean }[];
   otherFiles: { id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string; isAudio: boolean }[];
+  personalProjects?: { id: string; title: string; category: string; status: string; bpm?: number | null; key?: string | null; tags?: string[] }[];
 }
 
 function getBpmColor(bpm: number): string {
@@ -111,7 +112,7 @@ export function CommandMenu() {
   }, []);
 
   const hasResults = results && (
-    results.artists.length > 0 || results.audioFiles.length > 0 || results.otherFiles.length > 0
+    results.artists.length > 0 || results.audioFiles.length > 0 || results.otherFiles.length > 0 || (results.personalProjects?.length ?? 0) > 0
   );
 
   const isQueryActive = query.trim().length >= 2;
@@ -272,6 +273,43 @@ export function CommandMenu() {
                     ))}
                   </div>
                 )}
+
+                {results?.personalProjects && results.personalProjects.length > 0 && (
+                  <div className="mb-1">
+                    <p className="text-[10px] font-bold text-text-secondary/60 uppercase tracking-widest px-3 py-2">Proyectos Personales</p>
+                    {results.personalProjects.map(proj => {
+                      const bpmNum = proj.bpm ? Number(proj.bpm) : null;
+                      return (
+                        <button
+                          key={proj.id}
+                          onClick={() => runCommand(() => router.push(`/personal-projects/${proj.id}`))}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-accent/5 hover:text-accent transition-all group text-left"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
+                            <Music className="w-4 h-4 text-violet-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-text-primary truncate group-hover:text-accent">{proj.title}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border bg-violet-500/10 text-violet-400 border-violet-500/20 capitalize">{proj.category}</span>
+                              {bpmNum && (
+                                <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${getBpmColor(bpmNum)}`}>
+                                  {bpmNum} BPM
+                                </span>
+                              )}
+                              {proj.key && (
+                                <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border text-blue-400 bg-blue-500/10 border-blue-500/20">
+                                  {proj.key}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </>
             )}
 
@@ -307,7 +345,7 @@ export function CommandMenu() {
           <div className="border-t border-border/40 px-3 py-2 bg-surface/80 flex items-center justify-between">
             <p className="text-[10px] text-text-secondary/50">
               {isQueryActive ? (
-                isSearching ? 'Buscando...' : `${(results?.artists.length || 0) + (results?.audioFiles.length || 0) + (results?.otherFiles.length || 0)} resultados`
+                isSearching ? 'Buscando...' : `${(results?.artists.length || 0) + (results?.audioFiles.length || 0) + (results?.otherFiles.length || 0) + (results?.personalProjects?.length || 0)} resultados`
               ) : 'Comandos rápidos'}
             </p>
             <div className="hidden xs:flex items-center gap-2 text-[10px] text-text-secondary/50">
