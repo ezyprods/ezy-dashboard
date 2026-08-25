@@ -3,9 +3,11 @@ import { tasks, completedFileBuffers } from '../state';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { ensureBinaries } from '../binaries';
-import { buildCookieArgs } from '../cookies';
+
+const execFileAsync = promisify(execFile);
 
 export const maxDuration = 300;
 
@@ -61,6 +63,7 @@ export async function GET(req: Request) {
           'Content-Type': 'audio/mpeg',
           'Content-Length': cached.buffer.length.toString(),
           'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
+          'Cache-Control': 'public, max-age=3600',
         },
       });
     }
@@ -76,12 +79,13 @@ export async function GET(req: Request) {
             'Content-Type': 'audio/mpeg',
             'Content-Length': buffer.length.toString(),
             'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
+            'Cache-Control': 'public, max-age=3600',
           },
         });
       }
     }
 
-    // 3. Direct Streaming fallback via TransformStream
+    // 3. On-demand generation fallback
     const url = task?.url || paramUrl;
     if (!url) {
       return NextResponse.json(
@@ -91,56 +95,43 @@ export async function GET(req: Request) {
     }
 
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
-    const cookieArgs = await buildCookieArgs();
     const videoId = getYouTubeVideoId(url);
     const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
+
+    const tempId = `ondemand_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
 
     const args = [
       '--no-warnings',
       '--no-playlist',
-      ...cookieArgs,
-      '--extract-audio',
-      '--audio-format',
-      'mp3',
-      '--audio-quality',
-      '320K',
-      '--ffmpeg-location',
-      ffmpegPath,
-      '-o',
-      '-',
+      '--extractor-args', 'youtube:player_client=visionos,web_embedded,android',
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '320K',
+      '--ffmpeg-location', ffmpegPath,
+      '--output', outputTemplate,
       target,
     ];
 
-    const ytdlp = spawn(ytdlpPath, args);
+    await execFileAsync(ytdlpPath, args, { timeout: 120000 });
+
+    const expectedMp3 = path.join(os.tmpdir(), `${tempId}.mp3`);
+    let foundFile = fs.existsSync(expectedMp3) ? expectedMp3 : findAudioFileInTmpDir(tempId);
+
+    if (!foundFile || !fs.existsSync(foundFile)) {
+      throw new Error('No se pudo generar el archivo MP3');
+    }
+
+    const buffer = await fs.promises.readFile(foundFile);
+    try { await fs.promises.unlink(foundFile); } catch (e) {}
+
     const safeTitle = encodeURIComponent(title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio');
 
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-
-    ytdlp.stdout.on('data', async (chunk: Buffer) => {
-      try {
-        await writer.write(new Uint8Array(chunk));
-      } catch (e) {}
-    });
-
-    ytdlp.on('close', async () => {
-      try {
-        await writer.close();
-      } catch (e) {}
-    });
-
-    ytdlp.on('error', async (err) => {
-      try {
-        await writer.abort(err);
-      } catch (e) {}
-    });
-
-    return new NextResponse(readable, {
+    return new NextResponse(buffer as any, {
       headers: {
         'Content-Type': 'audio/mpeg',
+        'Content-Length': buffer.length.toString(),
         'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
-        'Transfer-Encoding': 'chunked',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
 

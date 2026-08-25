@@ -1,9 +1,30 @@
 import { NextResponse } from 'next/server';
-import { spawn } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { ensureBinaries } from './binaries';
-import { buildCookieArgs } from './cookies';
+
+const execFileAsync = promisify(execFile);
 
 export const maxDuration = 300;
+
+function getYouTubeVideoId(urlStr: string): string | null {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.hostname.includes('youtube.com')) {
+      return parsed.searchParams.get('v') || null;
+    }
+    if (parsed.hostname.includes('youtu.be')) {
+      return parsed.pathname.replace(/^\//, '').split('?')[0] || null;
+    }
+  } catch (e) {
+    const match = urlStr.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 export async function GET(req: Request) {
   try {
@@ -15,79 +36,56 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
     }
 
-    let target = rawUrl;
-    try {
-      const parsed = new URL(rawUrl);
-      if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
-        target = `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
-      } else if (parsed.hostname.includes('youtu.be')) {
-        const id = parsed.pathname.replace(/^\//, '').split('?')[0];
-        if (id) target = `https://www.youtube.com/watch?v=${id}`;
-      }
-    } catch (e) {}
-
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
-    const cookieArgs = await buildCookieArgs();
+    const videoId = getYouTubeVideoId(rawUrl);
+    const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : rawUrl;
+
+    const tempId = `direct_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
 
     const args = [
       '--no-warnings',
       '--no-playlist',
-      ...cookieArgs,
-      '--extract-audio',
-      '--audio-format',
-      'mp3',
-      '--audio-quality',
-      '320K',
-      '--ffmpeg-location',
-      ffmpegPath,
-      '-o',
-      '-',
+      '--extractor-args', 'youtube:player_client=visionos,web_embedded,android',
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '320K',
+      '--ffmpeg-location', ffmpegPath,
+      '--output', outputTemplate,
       target,
     ];
 
-    const ytdlp = spawn(ytdlpPath, args);
+    await execFileAsync(ytdlpPath, args, { timeout: 120000 });
+
+    const expectedMp3 = path.join(os.tmpdir(), `${tempId}.mp3`);
+    let foundFile = fs.existsSync(expectedMp3) ? expectedMp3 : null;
+
+    if (!foundFile) {
+      const files = fs.readdirSync(os.tmpdir());
+      const match = files.find(f => f.startsWith(tempId) && f.endsWith('.mp3'));
+      if (match) foundFile = path.join(os.tmpdir(), match);
+    }
+
+    if (!foundFile || !fs.existsSync(foundFile)) {
+      throw new Error('No se pudo generar el archivo MP3');
+    }
+
+    const buffer = await fs.promises.readFile(foundFile);
+    try { await fs.promises.unlink(foundFile); } catch (e) {}
 
     const safeTitle = encodeURIComponent(
       title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio'
     );
 
-    // Use Web TransformStream to ensure Vercel Serverless stream stays open
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-
-    ytdlp.stdout.on('data', async (chunk: Buffer) => {
-      try {
-        await writer.write(new Uint8Array(chunk));
-      } catch (e) {}
-    });
-
-    ytdlp.stderr.on('data', (d: Buffer) => {
-      console.log(`[ytdl/stream] ${d.toString()}`);
-    });
-
-    ytdlp.on('close', async () => {
-      try {
-        await writer.close();
-      } catch (e) {}
-    });
-
-    ytdlp.on('error', async (err) => {
-      console.error('[ytdl/stream] Spawn error:', err);
-      try {
-        await writer.abort(err);
-      } catch (e) {}
-    });
-
-    return new NextResponse(readable, {
+    return new NextResponse(buffer as any, {
       headers: {
         'Content-Type': 'audio/mpeg',
+        'Content-Length': buffer.length.toString(),
         'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
-        'Transfer-Encoding': 'chunked',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
   } catch (error: any) {
-    console.error('[ytdl/stream] Fatal Error:', error);
+    console.error('[ytdl/direct] Error:', error?.message || error);
     return NextResponse.json(
       { error: error.message || 'Error en el servidor' },
       { status: 500 }

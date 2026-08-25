@@ -53,7 +53,7 @@ export function MusicDownloader() {
     tasks.forEach(task => {
       if (task.status === 'completed' && task.clientId === clientId && !downloadedTasks.has(task.id)) {
         setDownloadedTasks(prev => new Set(prev).add(task.id));
-        const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
+        const downloadUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
         const a = document.createElement('a');
         a.href = downloadUrl;
         a.download = `${task.title}.mp3`;
@@ -109,28 +109,20 @@ export function MusicDownloader() {
         platform: data.platform,
         resolvedUrl: songUrl,
         status: 'downloading',
-        progress: 20
+        progress: 10
       } : t));
 
-      // Step 2: Trigger direct stream download
-      const directDownloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(songUrl)}&title=${encodeURIComponent(songTitle)}`;
-      const a = document.createElement('a');
-      a.href = directDownloadUrl;
-      a.download = `${songTitle}.mp3`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      // Step 2: Process download in background
+      const processRes = await fetch('/api/tools/ytdl/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, url: inputUrl, clientId, taskId })
+      });
 
-      setDownloadedTasks(prev => new Set(prev).add(taskId));
-
-      // Step 3: Complete task state
-      setTimeout(() => {
-        setTasks(prev => prev.map(t => t.id === taskId ? {
-          ...t,
-          status: 'completed',
-          progress: 100
-        } : t));
-      }, 1500);
+      const processData = await processRes.json();
+      if (!processRes.ok) {
+        throw new Error(processData.error || 'Error al procesar el archivo');
+      }
 
     } catch (err: any) {
       setTasks(prev => prev.map(t => t.id === taskId ? {
@@ -142,7 +134,7 @@ export function MusicDownloader() {
   };
 
   const getStatusIcon = (task: YtdlTask) => {
-    const targetUrl = `/api/tools/ytdl?url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
+    const targetUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
 
     switch(task.status) {
       case 'downloading': return <Download className="w-5 h-5 text-blue-500 animate-pulse" />;
