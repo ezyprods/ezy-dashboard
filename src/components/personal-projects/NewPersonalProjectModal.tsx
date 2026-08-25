@@ -18,6 +18,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
+import { toast } from 'sonner';
 import { 
   PERSONAL_PROJECT_CATEGORIES, 
   PERSONAL_PROJECT_STATUS_CONFIG 
@@ -27,7 +28,7 @@ import type {
   PersonalProjectCategory, 
   PersonalProjectStatus 
 } from '@/types';
-import { customAlert } from '@/lib/dialog';
+import { parseAudioFilename, formatMusicalKey, getShortKey } from '@/lib/utils/audio';
 
 interface NewPersonalProjectModalProps {
   isOpen: boolean;
@@ -56,16 +57,12 @@ export function NewPersonalProjectModal({
   const handleTitleChange = (val: string) => {
     setTitle(val);
 
-    // Try detecting BPM (e.g., 140BPM or 140 bpm or [140])
-    const bpmMatch = val.match(/(\d{2,3})\s*(?:bpm|\s)/i);
-    if (bpmMatch && !bpm) {
-      setBpm(bpmMatch[1]);
+    const parsed = parseAudioFilename(val);
+    if (parsed.bpm && !bpm) {
+      setBpm(parsed.bpm.toString());
     }
-
-    // Try detecting Key (e.g. G#m, D# Minor, Cmaj, Am)
-    const keyMatch = val.match(/\b([A-G][#b]?(?:m|min|minor|maj|major)?)\b/i);
-    if (keyMatch && !key && keyMatch[1].length <= 5) {
-      setKey(keyMatch[1]);
+    if (parsed.key && !key) {
+      setKey(getShortKey(parsed.key));
     }
   };
 
@@ -73,7 +70,7 @@ export function NewPersonalProjectModal({
     e.preventDefault();
 
     if (!title.trim()) {
-      customAlert('Por favor, introduce el nombre del proyecto.');
+      toast.error('Por favor, introduce el nombre del proyecto.');
       return;
     }
 
@@ -114,7 +111,7 @@ export function NewPersonalProjectModal({
       onClose();
     } catch (err: any) {
       console.error(err);
-      customAlert(err.message || 'Error al crear el proyecto personal.');
+      toast.error(err.message || 'Error al crear el proyecto personal.');
     } finally {
       setIsSubmitting(false);
     }

@@ -46,13 +46,18 @@ export function formatMusicalKey(keyStr: string | null | undefined): string | nu
   let base = keyStr.trim();
   let isMinor = false;
   
-  if (base.toLowerCase().includes('menor') || base.toLowerCase().includes('minor') || base.endsWith('m')) {
+  if (base.toLowerCase().includes('menor') || base.toLowerCase().includes('minor') || base.endsWith('m') || base.endsWith('min')) {
     isMinor = true;
   }
   
   // Extract just the note (e.g. C, C#, Bb)
   let note = base.replace(/mayor|menor|major|minor|maj|min/gi, '').trim();
   
+  // Normalize casing (e.g. g# -> G#, bb -> Bb)
+  if (note.length > 0) {
+    note = note.charAt(0).toUpperCase() + note.slice(1).toLowerCase();
+  }
+
   // Remove trailing 'm' if it was there so we have a clean note
   if (note.endsWith('m')) {
     note = note.slice(0, -1).trim();
@@ -63,6 +68,162 @@ export function formatMusicalKey(keyStr: string | null | undefined): string | nu
   if (isMinor) note += 'm';
 
   return RELATIVE_KEYS[note] || keyStr;
+}
+
+export function getShortKey(keyStr: string | null | undefined): string {
+  if (!keyStr) return '';
+  if (keyStr.includes('|')) {
+    const firstPart = keyStr.split('|')[0].trim();
+    // E.g., "C# / Db" -> "C#" or "G#m / Abm" -> "G#m"
+    return firstPart.split('/')[0].trim();
+  }
+  return keyStr.trim();
+}
+
+export interface ParsedAudioFilename {
+  bpm: number | null;
+  key: string | null;
+  rawKey: string | null;
+  cleanTitle: string;
+  index: string | null;
+  hasProducerTag: boolean;
+}
+
+/**
+ * Robust audio filename parser for producer naming conventions.
+ * Handles patterns such as:
+ * - "01 - G#m 130BPM - Midnight Dream @ezyprods.wav"
+ * - "12 - 140 BPM D#min - Fuego Lento @ezyprods.mp3"
+ * - "Midnight Dream [G#m 130BPM] @ezyprods.wav"
+ * - "DARK_DRILL_142BPM_C#m_@ezyprods.wav"
+ * - "Am 120BPM - Guitar Loop.wav"
+ */
+export function parseAudioFilename(fileName: string): ParsedAudioFilename {
+  if (!fileName) {
+    return { bpm: null, key: null, rawKey: null, cleanTitle: '', index: null, hasProducerTag: false };
+  }
+
+  // Strip file extension
+  const extMatch = fileName.match(/\.[^.]+$/);
+  let working = fileName.replace(/\.[^.]+$/, '').trim();
+
+  // Check producer tag
+  const hasProducerTag = /@ezyprods\b|prod\.?\s*by\s*ezy/i.test(working);
+  working = working.replace(/@ezyprods\b/gi, '').replace(/\(prod\.?\s*(?:by)?\s*ezy\)/gi, '').trim();
+
+  // Extract index prefix (e.g., "01 - ", "[01] ", "1. ", "03_")
+  let index: string | null = null;
+  const indexMatch = working.match(/^(?:\[(\d{1,3})\]|(\d{1,3})\s*[-_.)]\s*)/);
+  if (indexMatch) {
+    index = indexMatch[1] || indexMatch[2];
+    working = working.replace(/^(?:\[\d{1,3}\]|\d{1,3}\s*[-_.)]\s*)/, '').trim();
+  }
+
+  // 1. Extract BPM
+  let bpm: number | null = null;
+  // Match "130BPM", "130 BPM", "130.5 bpm"
+  const bpmExplicitMatch = working.match(/\b(\d{2,3}(?:\.\d+)?)\s*(?:bpm|BPM)\b/i);
+  if (bpmExplicitMatch) {
+    bpm = Math.round(parseFloat(bpmExplicitMatch[1]));
+    working = working.replace(/\b\d{2,3}(?:\.\d+)?\s*(?:bpm|BPM)\b/gi, ' ').trim();
+  } else {
+    // Fallback: bracketed or isolated number between 55 and 210 (not years like 2024)
+    const bpmIsolatedMatch = working.match(/[\[\(_\-\s](\d{2,3})[\]\)_\-\s]/);
+    if (bpmIsolatedMatch) {
+      const val = parseInt(bpmIsolatedMatch[1], 10);
+      if (val >= 55 && val <= 210 && val !== 100) {
+        bpm = val;
+        working = working.replace(bpmIsolatedMatch[0], ' ').trim();
+      }
+    }
+  }
+
+  // 2. Extract Key (Tonalidad)
+  let rawKey: string | null = null;
+  let key: string | null = null;
+
+  // Regex matches:
+  // - Notes with explicit mode: "G#m", "G#min", "G# Minor", "C#menor", "F#maj", "Bb Major", "Am", "Dm"
+  // - Notes with accidentals: "C#", "F#", "G#", "Eb", "Bb", "Ab", "D#"
+  // - Single note letter when next to BPM or standalone: "A min", "C Maj"
+  const keyExplicitRegex = /\b([A-Ga-g][#b]?)\s*(min|minor|menor|maj|major|mayor|m)?\b/i;
+  const keyMatches = Array.from(working.matchAll(new RegExp(keyExplicitRegex, 'gi')));
+
+  for (const km of keyMatches) {
+    const note = km[1].toUpperCase();
+    const mode = (km[2] || '').toLowerCase();
+    
+    // Ignore false positive English words like "A", "In" unless it has an accidental or explicit mode
+    const isSinglePlainLetter = /^[A-G]$/.test(note);
+    if (isSinglePlainLetter && !mode) {
+      continue;
+    }
+
+    rawKey = km[0].trim();
+    let normalized = note;
+    if (mode.startsWith('m') && !mode.startsWith('maj') && !mode.startsWith('may')) {
+      normalized += 'm';
+    }
+    key = formatMusicalKey(normalized);
+    
+    // Remove detected key from working title
+    working = working.replace(km[0], ' ').trim();
+    break;
+  }
+
+  // 3. Clean up the remaining title
+  let cleanTitle = working
+    .replace(/^\[.*?\]\s*/, '')
+    .replace(/^(Master|Bounce|Mix|Stem|Demo)_/i, '')
+    .replace(/[\[\](){}_]/g, ' ')
+    .replace(/\s*-\s*-\s*/g, ' - ')
+    .replace(/^[-_\s]+|[-_\s]+$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (!cleanTitle) {
+    cleanTitle = fileName.replace(/\.[^.]+$/, '').trim();
+  }
+
+  return {
+    bpm,
+    key,
+    rawKey,
+    cleanTitle,
+    index,
+    hasProducerTag,
+  };
+}
+
+/**
+ * Formats a filename according to the producer's standard pattern:
+ * "[Key] [BPM]BPM - [Title] @ezyprods.ext"
+ */
+export function formatProducerFilename(
+  originalFileName: string,
+  title?: string,
+  bpm?: number | null,
+  key?: string | null
+): string {
+  const extMatch = originalFileName.match(/\.[^.]+$/);
+  const ext = extMatch ? extMatch[0] : '';
+  const cleanTitle = (title || originalFileName.replace(/\.[^.]+$/, '')).trim();
+
+  const parts: string[] = [];
+  if (key) {
+    parts.push(getShortKey(key));
+  }
+  if (bpm) {
+    parts.push(`${bpm}BPM`);
+  }
+
+  const prefix = parts.join(' ');
+  const baseWithPrefix = prefix ? `${prefix} - ${cleanTitle}` : cleanTitle;
+  const finalWithTag = baseWithPrefix.toLowerCase().includes('@ezyprods')
+    ? baseWithPrefix
+    : `${baseWithPrefix} @ezyprods`;
+
+  return `${finalWithTag}${ext}`;
 }
 
 // ─── Audio Feature Detection (Client-Side Only) ──────────────────────────────

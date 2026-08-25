@@ -95,6 +95,7 @@ export function GlobalDropZone() {
   // Detect if we're in a context where DriveExplorer handles its own drops
   const isInsideArtistFolder = pathname.startsWith('/artists/') && pathname !== '/artists';
   const isInsidePersonalProject = pathname.startsWith('/personal-projects/') && pathname !== '/personal-projects';
+  const isPersonalProjectsGallery = pathname === '/personal-projects';
   const activeTab = searchParams.get('tab') || 'files';
   const isFilesTab = isInsideArtistFolder && activeTab === 'files';
   const isArtistsList = pathname === '/artists';
@@ -117,6 +118,11 @@ export function GlobalDropZone() {
     if (isInsidePersonalProject) {
       const personalProjectId = pathname.split('/')[2];
       triggerUploadForPersonalProject(files, personalProjectId);
+      return;
+    }
+
+    if (isPersonalProjectsGallery) {
+      triggerUploadForPersonalProject(files, '');
       return;
     }
 
@@ -161,7 +167,7 @@ export function GlobalDropZone() {
               {hoveredZone ? '¡Suelta donde quieras!' : 'Suelta para subir'}
             </h2>
             <p className="text-text-secondary text-sm">
-              {isInsidePersonalProject ? 'Arrastra para subir a este Proyecto Personal' : 'Arrastra aquí o sobre los archivos'}
+              {isInsidePersonalProject || isPersonalProjectsGallery ? 'Arrastra para subir a Proyectos Personales' : 'Arrastra aquí o sobre los archivos'}
             </p>
           </div>
         </div>

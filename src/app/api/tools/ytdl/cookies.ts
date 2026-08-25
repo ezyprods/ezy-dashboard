@@ -48,8 +48,13 @@ export async function getYouTubeCookiesFile(): Promise<string | null> {
     return null;
   }
 
-  // Clean UTF-8 BOM and normalize line endings
-  cookiesContent = cookiesContent.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+  // Clean UTF-8 BOM, normalize line endings, and unescape literal \n or \t if pasted via CLI/Vercel
+  cookiesContent = cookiesContent
+    .replace(/^\uFEFF/, '')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\r\n/g, '\n');
 
   cookiesFilePath = path.join(os.tmpdir(), 'yt-verified-cookies.txt');
   try {

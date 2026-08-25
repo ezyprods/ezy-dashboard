@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ExternalLink as ExternalLinkIcon, User, Table2, Clock } from 'lucide-react';
-import { detectAudioFeatures } from '@/lib/utils/audio';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ExternalLink as ExternalLinkIcon, User, Table2, Clock, Plus, Sparkles } from 'lucide-react';
+import { detectAudioFeatures, parseAudioFilename, formatProducerFilename, getShortKey, formatMusicalKey } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { customPrompt, customAlert } from '@/lib/dialog';
 import { cn, formatPhoneNumber, getWhatsAppUrl, sortArtistsByRecent, getNormalizedBaseName } from '@/lib/utils';
 import { createPortal } from 'react-dom';
@@ -13,6 +14,7 @@ import { FOLDER_NAME_MAP } from '@/lib/constants';
 import { useArtists } from '@/lib/hooks/useArtists';
 import { usePersonalProjects } from '@/lib/hooks/usePersonalProjects';
 import { PERSONAL_PROJECT_CATEGORIES } from '@/lib/constants';
+import type { PersonalProjectCategory } from '@/types';
 
 export interface SmartUploadFile {
   file: File;
@@ -95,10 +97,18 @@ export function SmartUploadModal({
   onSuccess
 }: SmartUploadModalProps) {
   const { activeArtists: artists, isLoading: isArtistsLoading } = useArtists();
-  const { projects: personalProjects } = usePersonalProjects();
+  const { projects: personalProjects, createProject: createPersonalProject } = usePersonalProjects();
   const router = useRouter();
   const [items, setItems] = useState<SmartUploadFile[]>([]);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  // Inline mini-form state for creating personal project inside upload modal
+  const [inlineNewProjectForId, setInlineNewProjectForId] = useState<string | null>(null);
+  const [newProjTitle, setNewProjTitle] = useState('');
+  const [newProjCategory, setNewProjCategory] = useState<PersonalProjectCategory>('beat');
+  const [newProjYear, setNewProjYear] = useState<number>(new Date().getFullYear());
+  const [newProjMonth, setNewProjMonth] = useState<number>(new Date().getMonth() + 1);
+  const [isCreatingInlineProj, setIsCreatingInlineProj] = useState(false);
 
   const pendingItemsCount = items.filter(i => i.uploadStatus === 'pending').length;
   const isConfiguring = pendingItemsCount > 0;
@@ -259,8 +269,14 @@ export function SmartUploadModal({
         }
       }
 
+      const parsedAudio = f.type.startsWith('audio/') ? parseAudioFilename(f.name) : null;
       const initialTargetType: 'artist' | 'personal' = preselectedTargetType || (preselectedPersonalProjectId ? 'personal' : 'artist');
       const initialPersonalProjectId = preselectedPersonalProjectId || (personalProjects[0]?.id || '');
+
+      let initialCustomName = generateName(f.name, subType, detectedArtistName);
+      if (initialTargetType === 'personal') {
+        initialCustomName = formatProducerFilename(f.name, parsedAudio?.cleanTitle, parsedAudio?.bpm, parsedAudio?.key);
+      }
 
       return {
         file: f,
@@ -272,8 +288,10 @@ export function SmartUploadModal({
         projectId: preselectedFolderId || '',
         personalProjectId: initialPersonalProjectId,
         personalSubfolder: '',
-        customName: generateName(f.name, subType, detectedArtistName),
-        isAnalyzing: mimeGroup === 'audio',
+        customName: initialCustomName,
+        bpm: parsedAudio?.bpm ?? null,
+        key: parsedAudio?.key ?? null,
+        isAnalyzing: mimeGroup === 'audio' && (!parsedAudio?.bpm || !parsedAudio?.key),
         uploadStatus: 'pending',
         uploadProgress: 0,
         notifyArtist: false,
@@ -288,10 +306,24 @@ export function SmartUploadModal({
 
     // Asynchronous resolution step
     newInitialized.forEach(async (item) => {
-      // Audio BPM/Key detection
+      // Audio BPM/Key detection via Web Audio API (fallback if missing from name)
       if (item.mimeGroup === 'audio') {
         detectAudioFeatures(item.file).then(({ bpm, key }) => {
-          setItems(prev => prev.map(p => p.id === item.id ? { ...p, bpm, key, isAnalyzing: false } : p));
+          setItems(prev => prev.map(p => {
+            if (p.id !== item.id) return p;
+            const finalBpm = p.bpm || bpm;
+            const finalKey = p.key || key;
+            const finalCustomName = p.targetType === 'personal'
+              ? formatProducerFilename(p.file.name, parseAudioFilename(p.file.name).cleanTitle, finalBpm, finalKey)
+              : p.customName;
+            return {
+              ...p,
+              bpm: finalBpm,
+              key: finalKey,
+              customName: finalCustomName,
+              isAnalyzing: false,
+            };
+          }));
         }).catch(() => {
           setItems(prev => prev.map(p => p.id === item.id ? { ...p, isAnalyzing: false } : p));
         });
@@ -322,9 +354,33 @@ export function SmartUploadModal({
       if (item.id !== id) return item;
       const updated = { ...item, ...updates };
 
-      if (updates.subType !== undefined || updates.artistId !== undefined) {
-        const artistName = artists.find(a => a.id === updated.artistId)?.name;
-        updated.customName = generateName(updated.file.name, updated.subType, artistName);
+      if (updates.targetType !== undefined) {
+        if (updates.targetType === 'personal') {
+          const parsed = parseAudioFilename(updated.file.name);
+          const finalBpm = updated.bpm !== undefined ? updated.bpm : parsed.bpm;
+          const finalKey = updated.key !== undefined ? updated.key : parsed.key;
+          updated.customName = formatProducerFilename(updated.file.name, parsed.cleanTitle, finalBpm, finalKey);
+        } else {
+          const artistName = artists.find(a => a.id === updated.artistId)?.name;
+          updated.customName = generateName(updated.file.name, updated.subType, artistName);
+        }
+      } else if (updates.subType !== undefined || updates.artistId !== undefined) {
+        if (updated.targetType === 'artist') {
+          const artistName = artists.find(a => a.id === updated.artistId)?.name;
+          updated.customName = generateName(updated.file.name, updated.subType, artistName);
+        }
+      }
+
+      if (updates.bpm !== undefined || updates.key !== undefined) {
+        if (updated.targetType === 'personal') {
+          const parsed = parseAudioFilename(updated.file.name);
+          updated.customName = formatProducerFilename(
+            updated.file.name,
+            parsed.cleanTitle,
+            updates.bpm !== undefined ? updates.bpm : updated.bpm,
+            updates.key !== undefined ? updates.key : updated.key
+          );
+        }
       }
 
       if (updates.artistId !== undefined && updates.artistId !== item.artistId && !preselectedFolderId) {
@@ -969,41 +1025,51 @@ export function SmartUploadModal({
 
                   {item.targetType === 'personal' ? (
                     <>
-                      <div>
-                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Proyecto Personal</label>
+                      {/* Personal Project Selector */}
+                      <div className="col-span-2 sm:col-span-1">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider">Proyecto Personal</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const parsed = parseAudioFilename(item.file.name);
+                              setInlineNewProjectForId(inlineNewProjectForId === item.id ? null : item.id);
+                              setNewProjTitle(parsed.cleanTitle || '');
+                              setNewProjCategory('beat');
+                            }}
+                            className="text-xs text-accent hover:text-accent-light font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>{inlineNewProjectForId === item.id ? 'Cancelar' : 'Nuevo'}</span>
+                          </button>
+                        </div>
+
                         <select 
                           value={item.personalProjectId || ''} 
-                          onChange={async (e) => {
+                          onChange={(e) => {
                             if (e.target.value === '__NEW__') {
-                              const projTitle = await customPrompt('Nombre del nuevo proyecto personal:', '', 'Nuevo Proyecto');
-                              if (!projTitle || !projTitle.trim()) return;
-                              try {
-                                const res = await fetch('/api/personal-projects', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ title: projTitle.trim(), category: 'beat' })
-                                });
-                                if (!res.ok) throw new Error('Error al crear proyecto');
-                                const data = await res.json();
-                                updateItem(item.id, { personalProjectId: data.project.id });
-                                customAlert('Proyecto personal creado correctamente.');
-                              } catch {
-                                customAlert('Error al crear el proyecto personal.');
-                              }
+                              const parsed = parseAudioFilename(item.file.name);
+                              setInlineNewProjectForId(item.id);
+                              setNewProjTitle(parsed.cleanTitle || '');
+                              setNewProjCategory('beat');
                             } else {
                               updateItem(item.id, { personalProjectId: e.target.value });
                             }
                           }}
                           className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary"
                         >
+                          <option value="" disabled>(Selecciona un proyecto personal)</option>
                           {personalProjects.map(p => (
-                            <option key={p.id} value={p.id}>{p.title} ({p.category})</option>
+                            <option key={p.id} value={p.id}>
+                              {p.title} ({PERSONAL_PROJECT_CATEGORIES[p.category]?.label || p.category})
+                            </option>
                           ))}
                           <option value="__NEW__" className="font-bold text-accent">+ Crear nuevo proyecto personal...</option>
                         </select>
                       </div>
 
-                      <div>
+                      {/* Destination Folder */}
+                      <div className="col-span-2 sm:col-span-1">
                         <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Carpeta Destino</label>
                         <select
                           value={item.personalSubfolder || ''}
@@ -1016,6 +1082,183 @@ export function SmartUploadModal({
                           <option value="03_Backup_y_Sesiones">💾 03_Backup_y_Sesiones</option>
                           <option value="__ROOT__">📁 Raíz del proyecto</option>
                         </select>
+                      </div>
+
+                      {/* Inline Mini-Form for New Personal Project */}
+                      {inlineNewProjectForId === item.id && (
+                        <div className="col-span-2 p-3.5 bg-surface-elevated/95 border border-accent/40 rounded-xl space-y-3 shadow-md animate-in fade-in-50 duration-200">
+                          <div className="flex items-center justify-between border-b border-border/50 pb-2">
+                            <span className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-accent" />
+                              Crear Proyecto Personal en Drive
+                            </span>
+                            <button 
+                              type="button" 
+                              onClick={() => setInlineNewProjectForId(null)}
+                              className="text-text-secondary hover:text-text-primary p-0.5"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <div className="space-y-2.5">
+                            <div>
+                              <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1">Título del Proyecto *</label>
+                              <Input
+                                value={newProjTitle}
+                                onChange={(e) => setNewProjTitle(e.target.value)}
+                                placeholder="Ej: Midnight Dream"
+                                className="text-xs h-8"
+                                autoFocus
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1">Categoría</label>
+                                <select
+                                  value={newProjCategory}
+                                  onChange={(e) => setNewProjCategory(e.target.value as PersonalProjectCategory)}
+                                  className="w-full bg-surface border border-border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent text-text-primary"
+                                >
+                                  {(Object.entries(PERSONAL_PROJECT_CATEGORIES) as [PersonalProjectCategory, any][]).map(([k, cfg]) => (
+                                    <option key={k} value={k}>{cfg.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1">Año / Mes</label>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    value={newProjYear}
+                                    onChange={(e) => setNewProjYear(Number(e.target.value))}
+                                    className="w-16 bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text-primary font-mono"
+                                  />
+                                  <select
+                                    value={newProjMonth}
+                                    onChange={(e) => setNewProjMonth(Number(e.target.value))}
+                                    className="flex-1 bg-surface border border-border rounded-lg px-2 py-1.5 text-xs text-text-primary"
+                                  >
+                                    {[
+                                      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                                      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+                                    ].map((m, idx) => (
+                                      <option key={idx + 1} value={idx + 1}>{m}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 px-3"
+                                onClick={() => setInlineNewProjectForId(null)}
+                              >
+                                Cancelar
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isCreatingInlineProj || !newProjTitle.trim()}
+                                className="text-xs h-7 px-3 bg-accent hover:bg-accent-light text-white"
+                                onClick={async () => {
+                                  if (!newProjTitle.trim()) return;
+                                  setIsCreatingInlineProj(true);
+                                  try {
+                                    const created = await createPersonalProject({
+                                      title: newProjTitle.trim(),
+                                      category: newProjCategory,
+                                      year: newProjYear,
+                                      month: newProjMonth,
+                                      bpm: item.bpm || undefined,
+                                      key: item.key ? getShortKey(item.key) : undefined,
+                                      status: 'idea',
+                                    });
+                                    updateItem(item.id, { personalProjectId: created.id });
+                                    setInlineNewProjectForId(null);
+                                    customAlert('Proyecto creado correctamente en Google Drive.');
+                                  } catch (err: any) {
+                                    console.error(err);
+                                    customAlert(err.message || 'Error al crear el proyecto.');
+                                  } finally {
+                                    setIsCreatingInlineProj(false);
+                                  }
+                                }}
+                              >
+                                {isCreatingInlineProj ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+                                Crear y Asignar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* File Type */}
+                      {item.mimeGroup === 'audio' && (
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Tipo de Archivo</label>
+                          <select 
+                            value={item.subType} 
+                            onChange={e => updateItem(item.id, { subType: e.target.value as any })} 
+                            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary"
+                          >
+                            <option value="bounce">🎵 Bounce / Demo</option>
+                            <option value="mix">🎛️ Mix</option>
+                            <option value="master">💿 Master (Final)</option>
+                            <option value="stem">✂️ Stem / Pista</option>
+                            <option value="none">📄 Ninguno (Subir tal cual)</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Editable BPM & Key */}
+                      {item.mimeGroup === 'audio' && (
+                        <div className="col-span-2 sm:col-span-1 grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <Activity className="w-3 h-3 text-accent" />
+                              BPM
+                            </label>
+                            <input
+                              type="number"
+                              value={item.bpm || ''}
+                              placeholder="130"
+                              onChange={e => updateItem(item.id, { bpm: e.target.value ? parseInt(e.target.value, 10) : null })}
+                              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent text-text-primary font-mono"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <Music className="w-3 h-3 text-accent" />
+                              Key
+                            </label>
+                            <input
+                              type="text"
+                              value={item.key ? getShortKey(item.key) : ''}
+                              placeholder="G#m"
+                              onChange={e => updateItem(item.id, { key: e.target.value.trim() || null })}
+                              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent text-text-primary font-mono"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Drive Name */}
+                      <div className="col-span-2 flex flex-col">
+                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Nombre final en Drive</label>
+                        <input 
+                          type="text" 
+                          value={item.customName} 
+                          onChange={e => updateItem(item.id, { customName: e.target.value })}
+                          className="w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none font-mono"
+                        />
                       </div>
                     </>
                   ) : (
@@ -1079,187 +1322,186 @@ export function SmartUploadModal({
                           )}
                         </select>
                       </div>
+
+                      {item.mimeGroup === 'audio' && (
+                        <div>
+                          <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Tipo de Archivo</label>
+                          <select value={item.subType} onChange={e => updateItem(item.id, { subType: e.target.value as any })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
+                            <option value="bounce">🎵 Bounce (Demo)</option>
+                            <option value="mix">🎛️ Mix</option>
+                            <option value="master">💿 Master (Final)</option>
+                            <option value="stem">✂️ Stem / Pista</option>
+                            <option value="none">📄 Ninguno (Subir tal cual)</option>
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="col-span-2 flex flex-col">
+                        <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Nombre final en Drive</label>
+                        <input 
+                          type="text" 
+                          value={item.customName} 
+                          onChange={e => updateItem(item.id, { customName: e.target.value })}
+                          className="w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-2 mt-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id={`notify-${item.id}`}
+                            checked={!!item.notifyArtist}
+                            onChange={e => updateItem(item.id, { notifyArtist: e.target.checked, notifyEmail: false, notifyWhatsApp: false })}
+                            className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated"
+                          />
+                          <label htmlFor={`notify-${item.id}`} className="text-sm font-medium text-text-primary cursor-pointer hover:text-accent transition-colors">
+                            Notificar al artista tras subir
+                          </label>
+                        </div>
+
+                        {item.notifyArtist && (
+                          <div className="ml-6 pl-4 border-l-2 border-border/50 flex flex-col gap-3">
+                            
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`notify-email-${item.id}`}
+                                checked={!!item.notifyEmail}
+                                onChange={e => updateItem(item.id, { notifyEmail: e.target.checked })}
+                                className="w-3.5 h-3.5 rounded border-border/60 text-blue-500 focus:ring-blue-500 bg-surface-elevated"
+                              />
+                              <label htmlFor={`notify-email-${item.id}`} className="text-sm text-text-secondary cursor-pointer">
+                                Enviar Email
+                              </label>
+                              {(() => {
+                                const currentArtist = artists.find(a => a.id === item.artistId);
+                                if (currentArtist && !currentArtist.email) {
+                                  return (
+                                    <span 
+                                      className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
+                                      onClick={async () => {
+                                        const newEmail = await customPrompt('El artista no tiene email. Introduce uno nuevo:', '', 'Añadir Email');
+                                        if (newEmail && newEmail.trim()) {
+                                          try {
+                                            await fetch(`/api/artists/${item.artistId}`, {
+                                              method: 'PUT',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ email: newEmail.trim() })
+                                            });
+                                            customAlert('Email guardado correctamente. Recarga la lista o sube otro archivo para que se actualice globalmente, pero para esta sesión ya está guardado en base de datos.');
+                                            currentArtist.email = newEmail.trim(); 
+                                          } catch {}
+                                        }
+                                      }}
+                                    >
+                                      Sin Email (Añadir)
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`notify-wa-${item.id}`}
+                                checked={!!item.notifyWhatsApp}
+                                onChange={e => updateItem(item.id, { notifyWhatsApp: e.target.checked })}
+                                className="w-3.5 h-3.5 rounded border-border/60 text-green-500 focus:ring-green-500 bg-surface-elevated"
+                              />
+                              <label htmlFor={`notify-wa-${item.id}`} className="text-sm text-text-secondary cursor-pointer">
+                                Aviso WhatsApp
+                              </label>
+                              {(() => {
+                                const currentArtist = artists.find(a => a.id === item.artistId);
+                                if (currentArtist && !currentArtist.phone) {
+                                  return (
+                                    <span 
+                                      className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
+                                      onClick={async () => {
+                                        const newPhone = await customPrompt('El artista no tiene teléfono. Introduce uno nuevo:', '+34 ', 'Añadir Teléfono');
+                                        if (newPhone && newPhone.trim()) {
+                                          try {
+                                            const finalPhone = formatPhoneNumber(newPhone.trim());
+                                            await fetch(`/api/artists/${item.artistId}`, {
+                                              method: 'PUT',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ phone: finalPhone })
+                                            });
+                                            customAlert('Teléfono guardado correctamente.');
+                                            currentArtist.phone = finalPhone; 
+                                          } catch {}
+                                        }
+                                      }}
+                                    >
+                                      Sin Teléfono (Añadir)
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Scheduled deletion option for Artist flow */}
+                      <div className="col-span-2 flex flex-col gap-2 mt-1 pt-3 border-t border-border/40">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id={`schedule-${item.id}`}
+                              checked={!!item.scheduleDelete}
+                              onChange={e => updateItem(item.id, {
+                                scheduleDelete: e.target.checked,
+                                expiresInMs: e.target.checked ? (item.expiresInMs || 24 * 60 * 60 * 1000) : null
+                              })}
+                              className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated cursor-pointer"
+                            />
+                            <label htmlFor={`schedule-${item.id}`} className="text-sm font-medium text-text-primary cursor-pointer hover:text-accent flex items-center gap-1.5 transition-colors">
+                              <Clock className="w-3.5 h-3.5 text-accent" />
+                              Eliminado programado (Autodestrucción)
+                            </label>
+                          </div>
+                          {item.scheduleDelete && (
+                            <span className="text-[10px] font-mono font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+                              Caducará
+                            </span>
+                          )}
+                        </div>
+
+                        {item.scheduleDelete && (
+                          <div className="ml-6 pl-4 border-l-2 border-accent/30 flex flex-col gap-1.5 animate-fade-in">
+                            <p className="text-[11px] text-text-secondary">¿Cuánto tiempo debe durar subido?</p>
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                              {EXPIRATION_OPTIONS.map(opt => {
+                                const isSelected = (item.expiresInMs || (24 * 60 * 60 * 1000)) === opt.ms;
+                                return (
+                                  <button
+                                    key={opt.label}
+                                    type="button"
+                                    onClick={() => updateItem(item.id, { expiresInMs: opt.ms })}
+                                    className={cn(
+                                      "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center",
+                                      isSelected
+                                        ? "bg-accent text-white border-accent shadow-sm"
+                                        : "bg-surface-elevated hover:bg-surface border-border/60 text-text-secondary hover:text-text-primary"
+                                    )}
+                                    title={`Se eliminará automáticamente tras ${opt.label}`}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </>
                   )}
-
-                  {item.mimeGroup === 'audio' && (
-                    <div>
-                      <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Tipo de Archivo</label>
-                      <select value={item.subType} onChange={e => updateItem(item.id, { subType: e.target.value as any })} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent transition-colors text-text-primary">
-                        <option value="bounce">🎵 Bounce (Demo)</option>
-                        <option value="mix">🎛️ Mix</option>
-                        <option value="master">💿 Master (Final)</option>
-                        <option value="stem">✂️ Stem / Pista</option>
-                        <option value="none">📄 Ninguno (Subir tal cual)</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <div className="col-span-2 flex flex-col">
-                    <label className="block text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5">Nombre final en Drive</label>
-                    <input 
-                      type="text" 
-                      value={item.customName} 
-                      onChange={e => updateItem(item.id, { customName: e.target.value })}
-                      className="w-full bg-surface border border-border/60 rounded-lg px-3 py-2 text-sm text-text-primary focus:ring-1 focus:ring-accent outline-none"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-2 mt-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id={`notify-${item.id}`}
-                        checked={!!item.notifyArtist}
-                        onChange={e => updateItem(item.id, { notifyArtist: e.target.checked, notifyEmail: false, notifyWhatsApp: false })}
-                        className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated"
-                      />
-                      <label htmlFor={`notify-${item.id}`} className="text-sm font-medium text-text-primary cursor-pointer hover:text-accent transition-colors">
-                        Notificar al artista tras subir
-                      </label>
-                    </div>
-
-                    {item.notifyArtist && (
-                      <div className="ml-6 pl-4 border-l-2 border-border/50 flex flex-col gap-3">
-                        
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`notify-email-${item.id}`}
-                            checked={!!item.notifyEmail}
-                            onChange={e => updateItem(item.id, { notifyEmail: e.target.checked })}
-                            className="w-3.5 h-3.5 rounded border-border/60 text-blue-500 focus:ring-blue-500 bg-surface-elevated"
-                          />
-                          <label htmlFor={`notify-email-${item.id}`} className="text-sm text-text-secondary cursor-pointer">
-                            Enviar Email
-                          </label>
-                          {(() => {
-                            const currentArtist = artists.find(a => a.id === item.artistId);
-                            if (currentArtist && !currentArtist.email) {
-                              return (
-                                <span 
-                                  className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
-                                  onClick={async () => {
-                                    const newEmail = await customPrompt('El artista no tiene email. Introduce uno nuevo:', '', 'Añadir Email');
-                                    if (newEmail && newEmail.trim()) {
-                                      try {
-                                        await fetch(`/api/artists/${item.artistId}`, {
-                                          method: 'PUT',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ email: newEmail.trim() })
-                                        });
-                                        customAlert('Email guardado correctamente. Recarga la lista o sube otro archivo para que se actualice globalmente, pero para esta sesión ya está guardado en base de datos.');
-                                        // Update local state temporarily so it works for the batch
-                                        currentArtist.email = newEmail.trim(); 
-                                      } catch {}
-                                    }
-                                  }}
-                                >
-                                  Sin Email (Añadir)
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`notify-wa-${item.id}`}
-                            checked={!!item.notifyWhatsApp}
-                            onChange={e => updateItem(item.id, { notifyWhatsApp: e.target.checked })}
-                            className="w-3.5 h-3.5 rounded border-border/60 text-green-500 focus:ring-green-500 bg-surface-elevated"
-                          />
-                          <label htmlFor={`notify-wa-${item.id}`} className="text-sm text-text-secondary cursor-pointer">
-                            Aviso WhatsApp
-                          </label>
-                          {(() => {
-                            const currentArtist = artists.find(a => a.id === item.artistId);
-                            if (currentArtist && !currentArtist.phone) {
-                              return (
-                                <span 
-                                  className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
-                                  onClick={async () => {
-                                    const newPhone = await customPrompt('El artista no tiene teléfono. Introduce uno nuevo:', '+34 ', 'Añadir Teléfono');
-                                    if (newPhone && newPhone.trim()) {
-                                      try {
-                                        const finalPhone = formatPhoneNumber(newPhone.trim());
-                                        await fetch(`/api/artists/${item.artistId}`, {
-                                          method: 'PUT',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ phone: finalPhone })
-                                        });
-                                        customAlert('Teléfono guardado correctamente.');
-                                        currentArtist.phone = finalPhone; 
-                                      } catch {}
-                                    }
-                                  }}
-                                >
-                                  Sin Teléfono (Añadir)
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Scheduled deletion option */}
-                  <div className="col-span-2 flex flex-col gap-2 mt-1 pt-3 border-t border-border/40">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id={`schedule-${item.id}`}
-                          checked={!!item.scheduleDelete}
-                          onChange={e => updateItem(item.id, {
-                            scheduleDelete: e.target.checked,
-                            expiresInMs: e.target.checked ? (item.expiresInMs || 24 * 60 * 60 * 1000) : null
-                          })}
-                          className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated cursor-pointer"
-                        />
-                        <label htmlFor={`schedule-${item.id}`} className="text-sm font-medium text-text-primary cursor-pointer hover:text-accent flex items-center gap-1.5 transition-colors">
-                          <Clock className="w-3.5 h-3.5 text-accent" />
-                          Eliminado programado (Autodestrucción)
-                        </label>
-                      </div>
-                      {item.scheduleDelete && (
-                        <span className="text-[10px] font-mono font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
-                          Caducará
-                        </span>
-                      )}
-                    </div>
-
-                    {item.scheduleDelete && (
-                      <div className="ml-6 pl-4 border-l-2 border-accent/30 flex flex-col gap-1.5 animate-fade-in">
-                        <p className="text-[11px] text-text-secondary">¿Cuánto tiempo debe durar subido?</p>
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-                          {EXPIRATION_OPTIONS.map(opt => {
-                            const isSelected = (item.expiresInMs || (24 * 60 * 60 * 1000)) === opt.ms;
-                            return (
-                              <button
-                                key={opt.label}
-                                type="button"
-                                onClick={() => updateItem(item.id, { expiresInMs: opt.ms })}
-                                className={cn(
-                                  "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center",
-                                  isSelected
-                                    ? "bg-accent text-white border-accent shadow-sm"
-                                    : "bg-surface-elevated hover:bg-surface border-border/60 text-text-secondary hover:text-text-primary"
-                                )}
-                                title={`Se eliminará automáticamente tras ${opt.label}`}
-                              >
-                                {opt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
