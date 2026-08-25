@@ -288,7 +288,7 @@ export function EditPersonalProjectModal({
           <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={isSubmitting} className="bg-accent hover:bg-accent-light text-white">
+          <Button type="submit" disabled={isSubmitting || !title.trim()} className="bg-accent hover:bg-accent-light text-white">
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

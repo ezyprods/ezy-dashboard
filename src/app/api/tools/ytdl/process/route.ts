@@ -107,24 +107,13 @@ async function processDownload(taskId: string) {
       useCookies: boolean;
       label: string;
     }> = [
-      // ALL attempts use cookies — datacenter IPs (Vercel/AWS) get bot-blocked without them.
-      // android_music is the most reliable client for audio extraction.
+      // Attempt 1: Default client with cookies (Standard authenticated session)
       {
-        label: 'android_music+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=android_music',
-        ],
+        label: 'default+cookies',
+        clientArgs: [],
         useCookies: true,
       },
-      {
-        label: 'android_creator+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=android_creator',
-        ],
-        useCookies: true,
-      },
+      // Attempt 2: iOS client with cookies
       {
         label: 'ios+cookies',
         clientArgs: [
@@ -133,6 +122,7 @@ async function processDownload(taskId: string) {
         ],
         useCookies: true,
       },
+      // Attempt 3: Android client with cookies
       {
         label: 'android+cookies',
         clientArgs: [
@@ -141,10 +131,22 @@ async function processDownload(taskId: string) {
         ],
         useCookies: true,
       },
-      // Last resort: default client with cookies
+      // Attempt 4: Web creator client with cookies
       {
-        label: 'default+cookies',
-        clientArgs: [],
+        label: 'web_creator+cookies',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=web_creator',
+        ],
+        useCookies: true,
+      },
+      // Attempt 5: TV client with cookies
+      {
+        label: 'tv+cookies',
+        clientArgs: [
+          '--extractor-args',
+          'youtube:player_client=tv',
+        ],
         useCookies: true,
       },
     ];
@@ -182,6 +184,8 @@ async function processDownload(taskId: string) {
         '--no-playlist',
         ...extraCookieArgs,
         ...attempt.clientArgs,
+        '-f',
+        'ba/b',
         '--extract-audio',
         '--audio-format',
         'mp3',

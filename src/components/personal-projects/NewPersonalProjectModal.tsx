@@ -58,11 +58,11 @@ export function NewPersonalProjectModal({
     setTitle(val);
 
     const parsed = parseAudioFilename(val);
-    if (parsed.bpm && !bpm) {
+    if (parsed.bpm) {
       setBpm(parsed.bpm.toString());
     }
-    if (parsed.key && !key) {
-      setKey(getShortKey(parsed.key));
+    if (parsed.shortKey) {
+      setKey(parsed.shortKey);
     }
   };
 
@@ -170,6 +170,24 @@ export function NewPersonalProjectModal({
             className="w-full"
             autoFocus
           />
+          {(() => {
+            const parsed = parseAudioFilename(title);
+            if (title.trim() && parsed.cleanTitle && parsed.cleanTitle !== title.trim()) {
+              return (
+                <div className="flex items-center justify-between mt-1.5 px-2.5 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-xs text-text-secondary animate-in fade-in">
+                  <span className="truncate">💡 Título limpio: <strong className="text-text-primary">{parsed.cleanTitle}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setTitle(parsed.cleanTitle)}
+                    className="text-accent hover:text-accent-light font-bold ml-2 shrink-0 underline"
+                  >
+                    Usar
+                  </button>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
 
         {/* BPM & Key */}
@@ -307,7 +325,7 @@ export function NewPersonalProjectModal({
           <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={isSubmitting} className="bg-accent hover:bg-accent-light text-white">
+          <Button type="submit" disabled={isSubmitting || !title.trim()} className="bg-accent hover:bg-accent-light text-white">
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />

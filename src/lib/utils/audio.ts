@@ -83,6 +83,7 @@ export function getShortKey(keyStr: string | null | undefined): string {
 export interface ParsedAudioFilename {
   bpm: number | null;
   key: string | null;
+  shortKey: string | null;
   rawKey: string | null;
   cleanTitle: string;
   index: string | null;
@@ -100,7 +101,7 @@ export interface ParsedAudioFilename {
  */
 export function parseAudioFilename(fileName: string): ParsedAudioFilename {
   if (!fileName) {
-    return { bpm: null, key: null, rawKey: null, cleanTitle: '', index: null, hasProducerTag: false };
+    return { bpm: null, key: null, shortKey: null, rawKey: null, cleanTitle: '', index: null, hasProducerTag: false };
   }
 
   // Strip file extension
@@ -140,6 +141,7 @@ export function parseAudioFilename(fileName: string): ParsedAudioFilename {
 
   // 2. Extract Key (Tonalidad)
   let rawKey: string | null = null;
+  let shortKey: string | null = null;
   let key: string | null = null;
 
   // Regex matches:
@@ -164,6 +166,7 @@ export function parseAudioFilename(fileName: string): ParsedAudioFilename {
     if (mode.startsWith('m') && !mode.startsWith('maj') && !mode.startsWith('may')) {
       normalized += 'm';
     }
+    shortKey = normalized;
     key = formatMusicalKey(normalized);
     
     // Remove detected key from working title
@@ -188,6 +191,7 @@ export function parseAudioFilename(fileName: string): ParsedAudioFilename {
   return {
     bpm,
     key,
+    shortKey,
     rawKey,
     cleanTitle,
     index,

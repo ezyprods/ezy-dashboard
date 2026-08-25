@@ -109,7 +109,7 @@ export async function GET(req: Request) {
       '--no-warnings',
       '--no-playlist',
       ...cookieArgs,
-      '--extractor-args', 'youtube:player_client=android_music',
+      '-f', 'ba/b',
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', '320K',
