@@ -5,10 +5,10 @@ import https from 'https';
 import zlib from 'zlib';
 import ffmpegStatic from 'ffmpeg-static';
 
-const YTDLP_LINUX_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+const YTDLP_LINUX_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
 const FFMPEG_LINUX_GZ_URL = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64.gz';
 
-const CACHE_STAMP = '20260825_v3';
+const CACHE_STAMP = '20260825_v4';
 
 function downloadFile(url: string, dest: string): Promise<string> {
   return new Promise((resolve, reject) => {
