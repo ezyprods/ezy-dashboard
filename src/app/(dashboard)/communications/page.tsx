@@ -7,7 +7,7 @@ import { useArtists } from '@/lib/hooks/useArtists';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { ArtistAvatar } from '@/components/ui/ArtistAvatar';
 import { customAlert } from '@/lib/dialog';
-import { cn, formatPhoneNumber, getWhatsAppUrl } from '@/lib/utils';
+import { cn, formatPhoneNumber, getWhatsAppUrl, sortArtistsByRecent } from '@/lib/utils';
 
 export default function CommunicationsPage() {
   const { activeArtists, isLoading: isLoadingArtists, updateArtist } = useArtists();
@@ -19,7 +19,8 @@ export default function CommunicationsPage() {
   const [tempContactValue, setTempContactValue] = useState('');
   
   const [activeTab, setActiveTab] = useState<'email' | 'whatsapp'>('email');
-  const [message, setMessage] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [waMessage, setWaMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
 
   const [isArtistDropdownOpen, setIsArtistDropdownOpen] = useState(false);
@@ -29,19 +30,7 @@ export default function CommunicationsPage() {
   const [projectSearch, setProjectSearch] = useState('');
 
   const sortedArtists = useMemo(() => {
-    return [...activeArtists].sort((a, b) => {
-      // Intentamos usar el último acceso local o la fecha de modificación
-      let timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      let timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      
-      if (typeof window !== 'undefined') {
-        const storedA = localStorage.getItem(`accessed_${a.id}`);
-        const storedB = localStorage.getItem(`accessed_${b.id}`);
-        if (storedA) timeA = Math.max(timeA, parseInt(storedA, 10));
-        if (storedB) timeB = Math.max(timeB, parseInt(storedB, 10));
-      }
-      return timeB - timeA;
-    });
+    return sortArtistsByRecent(activeArtists);
   }, [activeArtists]);
   
   const selectedArtist = useMemo(() => activeArtists.find(a => a.id === selectedArtistId), [activeArtists, selectedArtistId]);
@@ -49,12 +38,12 @@ export default function CommunicationsPage() {
 
   const filteredArtists = useMemo(() => {
     if (!artistSearch) return sortedArtists;
-    return sortedArtists.filter(a => a.name.toLowerCase().includes(artistSearch.toLowerCase()));
+    return sortedArtists.filter(a => (a.name || '').toLowerCase().includes((artistSearch || '').toLowerCase()));
   }, [sortedArtists, artistSearch]);
 
   const filteredProjects = useMemo(() => {
     if (!projectSearch) return projects;
-    return projects.filter(p => p.title.toLowerCase().includes(projectSearch.toLowerCase()));
+    return projects.filter(p => (p.title || '').toLowerCase().includes((projectSearch || '').toLowerCase()));
   }, [projects, projectSearch]);
 
   const portalUrl = typeof window !== 'undefined' && selectedArtist ? `${window.location.origin}/portal/${selectedArtist.id}` : '';
@@ -81,14 +70,14 @@ export default function CommunicationsPage() {
           artistEmail: selectedArtist.email,
           artistName: selectedArtist.name,
           projectName: selectedProject.title,
-          message: message || defaultEmailMessage,
+          message: emailMessage || defaultEmailMessage,
           portalUrl
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al enviar email');
       customAlert('¡Email enviado correctamente!');
-      setMessage('');
+      setEmailMessage('');
     } catch (e: any) {
       customAlert(e.message);
     } finally {
@@ -103,7 +92,7 @@ export default function CommunicationsPage() {
       return;
     }
 
-    const text = message || defaultWaMessage;
+    const text = waMessage || defaultWaMessage;
     window.open(getWhatsAppUrl(selectedArtist.phone, text), '_blank');
   };
 
@@ -393,8 +382,8 @@ export default function CommunicationsPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-text-secondary">Mensaje Adicional (Opcional)</label>
                   <textarea 
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    value={emailMessage}
+                    onChange={(e) => setEmailMessage(e.target.value)}
                     placeholder={defaultEmailMessage}
                     className="w-full h-32 bg-surface-elevated border border-border/50 rounded-xl p-4 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent transition-all resize-none"
                   />
@@ -426,15 +415,15 @@ export default function CommunicationsPage() {
                 <div className="bg-surface-elevated p-4 rounded-xl border border-border/50 flex flex-col gap-2">
                   <div className="text-sm text-text-secondary">Previsualización del mensaje que se enviará a WhatsApp:</div>
                   <div className="text-text-primary whitespace-pre-wrap font-mono text-sm bg-surface p-3 rounded-lg border border-border/30">
-                    {message || defaultWaMessage}
+                    {waMessage || defaultWaMessage}
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-text-secondary">Edita tu mensaje aquí</label>
                   <textarea 
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
+                    value={waMessage}
+                    onChange={(e) => setWaMessage(e.target.value)}
                     placeholder={defaultWaMessage}
                     className="w-full h-32 bg-surface-elevated border border-border/50 rounded-xl p-4 text-text-primary focus:outline-none focus:ring-2 focus:ring-green-500 transition-all resize-none"
                   />

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile, getDriveService } from '@/lib/drive';
+import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 import type { Artist, ArtistConfig } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -70,10 +71,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const { id } = resolvedParams;
     const body: Partial<ArtistConfig> = await request.json();
 
-    const config = await findAndReadJsonFile<ArtistConfig>('artist_config.json', id);
+    let config = await findAndReadJsonFile<ArtistConfig>('artist_config.json', id);
     
     if (!config) {
-      return NextResponse.json({ error: 'Artist config not found. Sync folder first.' }, { status: 404 });
+      // Auto-inicializar si no existía el json en Drive
+      const drive = getDriveService();
+      const folderRes = await drive.files.get({
+        fileId: id,
+        fields: 'id, name, createdTime',
+      }).catch(() => null);
+
+      config = {
+        id: id,
+        name: folderRes?.data?.name || body.name || 'Artista',
+        genre: [],
+        tags: [],
+        services: [],
+        status: 'active',
+        createdAt: folderRes?.data?.createdTime || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
     }
 
     const updatedConfig: ArtistConfig = {
@@ -85,14 +102,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     await saveJsonFile('artist_config.json', updatedConfig, id);
 
     // Actualizar la base de datos global
-    const artistsDb = (await findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', process.env.DRIVE_ROOT_FOLDER_ID!)) || [];
+    const artistsDb = (await findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', DRIVE_ROOT_FOLDER_ID)) || [];
     const index = artistsDb.findIndex(a => a.id === id);
     if (index !== -1) {
       artistsDb[index] = updatedConfig;
     } else {
       artistsDb.push(updatedConfig);
     }
-    await saveJsonFile('ezy_artists_db.json', artistsDb, process.env.DRIVE_ROOT_FOLDER_ID!);
+    await saveJsonFile('ezy_artists_db.json', artistsDb, DRIVE_ROOT_FOLDER_ID);
 
     // Opcional: si el nombre cambia, renombrar la carpeta en Drive
     if (body.name && body.name !== config.name) {

@@ -631,7 +631,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Filtered artists lists
-  const activeArtists = useMemo(() => artists.filter(a => a.status === 'active'), [artists]);
+  const activeArtists = useMemo(() => artists.filter(a => a.status !== 'archived'), [artists]);
   const archivedArtists = useMemo(() => artists.filter(a => a.status === 'archived'), [artists]);
 
   const value = useMemo<AppDataContextType>(() => ({
