@@ -82,11 +82,16 @@ function MatricesContent() {
     const allMatricesList = [...matrices, ...completedMatrices];
     const found = allMatricesList.find(m => m.id === directId);
     if (found) {
-      setActiveMatrixState({
-        id: found.id,
-        name: found.name,
-        artistId: found.artistId,
-        artistName: found.artistName
+      setActiveMatrixState(prev => {
+        if (prev?.id === found.id && prev?.name === found.name && prev?.artistId === found.artistId) {
+          return prev;
+        }
+        return {
+          id: found.id,
+          name: found.name,
+          artistId: found.artistId,
+          artistName: found.artistName
+        };
       });
     } else if (directArtist) {
       fetch(`/api/artists/${directArtist}/matrices`)
@@ -94,11 +99,16 @@ function MatricesContent() {
         .then(data => {
           const specific = (data.matrices || []).find((m: any) => m.id === directId);
           if (specific) {
-            setActiveMatrixState({
-              id: specific.id,
-              name: specific.name,
-              artistId: directArtist,
-              artistName: specific.artistName || 'Artista'
+            setActiveMatrixState(prev => {
+              if (prev?.id === specific.id && prev?.name === specific.name && prev?.artistId === directArtist) {
+                return prev;
+              }
+              return {
+                id: specific.id,
+                name: specific.name,
+                artistId: directArtist,
+                artistName: specific.artistName || 'Artista'
+              };
             });
           }
         })

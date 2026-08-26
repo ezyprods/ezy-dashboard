@@ -260,10 +260,6 @@ export function ProductionGridBoard({
   );
 
   useEffect(() => {
-    fetchGrid();
-    fetchProjects();
-    fetchCampaigns();
-
     const handleOpenLink = (e: any) => setLinkingRowId(e.detail.rowId);
     const handleUnlink = (e: any) => {
       setGrid(prev => {
@@ -316,9 +312,10 @@ export function ProductionGridBoard({
   }, [artistId, matrixId]);
 
   useEffect(() => {
-    // Always fetch files — if no project linked, fetchFiles will only scan artist bounces
-    fetchFiles(linkedProjectId);
-  }, [linkedProjectId, campaigns]);
+    if (artistId) {
+      fetchFiles(linkedProjectId);
+    }
+  }, [artistId, linkedProjectId]);
 
   const fetchGrid = async () => {
     if (!grid.rows.length && !grid.columns.length) {
