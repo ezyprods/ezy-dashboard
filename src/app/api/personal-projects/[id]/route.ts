@@ -151,12 +151,24 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // 1. Eliminar carpeta en Google Drive
+    // 1. Intentar eliminar carpeta en Google Drive
+    //    Si ya no existe (404), se considera eliminada correctamente
     const drive = getDriveService();
-    await drive.files.delete({
-      fileId: id,
-      supportsAllDrives: true,
-    });
+    try {
+      await drive.files.delete({
+        fileId: id,
+        supportsAllDrives: true,
+      });
+    } catch (driveErr: any) {
+      const is404 = driveErr?.code === 404 || driveErr?.status === 404 ||
+        driveErr?.message?.includes('File not found') ||
+        driveErr?.message?.includes('not found');
+      if (!is404) {
+        // Solo relanzar si NO es un 404 (el archivo/carpeta ya no existía)
+        throw driveErr;
+      }
+      console.warn(`[DELETE personal-project] Drive folder ${id} already gone (404), removing from DB only.`);
+    }
 
     // 2. Eliminar del índice maestro personal_projects_db.json
     try {
