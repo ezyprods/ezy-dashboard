@@ -120,23 +120,8 @@ export function WaveformPlayer({
           } catch (e) { }
         }
 
-        // OPTIMIZATION: Resolve a direct Google Drive URL first so that the
-        // audio download for waveform analysis bypasses Vercel entirely.
-        // /api/audio/[id]/resolve returns the pre-signed Drive content URL.
-        let audioFetchUrl = `/api/audio/${activeId}`;
-        try {
-          const resolveRes = await fetch(`/api/audio/${activeId}/resolve`);
-          if (resolveRes.ok) {
-            const { url } = await resolveRes.json();
-            if (url && !url.includes('ServiceLogin')) {
-              audioFetchUrl = url;
-            }
-          }
-        } catch {
-          // Fall back to proxy if resolve fails
-        }
-
-        const response = await fetch(audioFetchUrl);
+        const response = await fetch(`/api/audio/${activeId}`);
+        if (!response.ok) throw new Error('Failed to fetch audio for waveform');
         const arrayBuffer = await response.arrayBuffer();
         if (cancelled) return;
 

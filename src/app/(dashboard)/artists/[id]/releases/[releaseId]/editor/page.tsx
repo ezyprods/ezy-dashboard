@@ -206,18 +206,7 @@ export default function ReleaseEditorPage() {
       for (const track of tracksToConvert) {
         setConversionState({ active: true, progress: 0, trackTitle: `Descargando: ${track.title}` });
         
-        // OPTIMIZATION: Resolve direct Google Drive URL to avoid Vercel proxy bandwidth
-        // for potentially large WAV files during FFmpeg conversion
-        let audioUrl = `/api/audio/${track.originalFileId}`;
-        try {
-          const resolveRes = await fetch(`/api/audio/${track.originalFileId}/resolve`);
-          if (resolveRes.ok) {
-            const { url } = await resolveRes.json();
-            if (url && !url.includes('ServiceLogin')) audioUrl = url;
-          }
-        } catch { /* Fall back to proxy */ }
-
-        const response = await fetch(audioUrl);
+        const response = await fetch(`/api/audio/${track.originalFileId}`);
         if (!response.ok) throw new Error('No se pudo descargar ' + track.title);
         const blob = await response.blob();
         

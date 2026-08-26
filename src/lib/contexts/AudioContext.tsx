@@ -70,22 +70,29 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       // New track: update src and play
       setCurrentTrack(track);
       setIsLoading(true);
+      setCurrentTime(0);
+      setDuration(0);
       
       let finalUrl = track.url;
-      // If it's a direct Google Drive link, bypass the warning page by using our high-speed streaming proxy
-      if (finalUrl && (finalUrl.includes('drive.google.com') || finalUrl.includes('googleusercontent.com')) && track.id) {
+      // Guarantee reliable streaming endpoint
+      if (!finalUrl || (finalUrl.includes('drive.google.com') || finalUrl.includes('googleusercontent.com')) && track.id) {
+        finalUrl = `/api/audio/${track.id}`;
+      } else if (track.id && !finalUrl.startsWith('/api/audio/')) {
         finalUrl = `/api/audio/${track.id}`;
       }
       
       audioRef.current.src = finalUrl;
+      audioRef.current.load();
       
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise.then(() => {
           setIsPlaying(true);
+          setIsLoading(false);
         }).catch(e => {
           console.warn('Audio play block/interrupt:', e);
           setIsPlaying(false);
+          setIsLoading(false);
         });
       }
 
@@ -110,11 +117,21 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const togglePlay = () => {
     if (!audioRef.current || !currentTrack) return;
     if (audioRef.current.paused) {
-      audioRef.current.play().catch(e => console.error('Audio resume error:', e));
-      setIsPlaying(true);
+      setIsLoading(true);
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+        })
+        .catch(e => {
+          console.error('Audio resume error:', e);
+          setIsLoading(false);
+          setIsPlaying(false);
+        });
     } else {
       audioRef.current.pause();
       setIsPlaying(false);
+      setIsLoading(false);
     }
   };
 
@@ -146,12 +163,32 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       <audio
         ref={audioRef}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onEnded={() => setIsPlaying(false)}
+        onLoadedMetadata={(e) => {
+          setDuration(e.currentTarget.duration);
+          setIsLoading(false);
+        }}
+        onLoadedData={() => setIsLoading(false)}
+        onEnded={() => {
+          setIsPlaying(false);
+          setIsLoading(false);
+        }}
         onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPlaying={() => {
+          setIsPlaying(true);
+          setIsLoading(false);
+        }}
+        onPause={() => {
+          setIsPlaying(false);
+          setIsLoading(false);
+        }}
         onCanPlay={() => setIsLoading(false)}
+        onCanPlayThrough={() => setIsLoading(false)}
         onWaiting={() => setIsLoading(true)}
+        onError={(e) => {
+          console.error('HTMLAudioElement error:', e);
+          setIsLoading(false);
+          setIsPlaying(false);
+        }}
         style={{ display: 'none' }}
       />
     </AudioContext.Provider>

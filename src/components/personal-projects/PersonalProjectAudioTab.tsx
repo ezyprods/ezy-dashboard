@@ -125,17 +125,7 @@ export function PersonalProjectAudioTab({
   const handleAnalyzeRemoteFile = async (fileItem: any) => {
     setIsAnalyzing(fileItem.id);
     try {
-      // OPTIMIZATION: Resolve direct Google Drive URL first to avoid Vercel proxy bandwidth
-      let audioFetchUrl = `/api/audio/${fileItem.id}`;
-      try {
-        const resolveRes = await fetch(`/api/audio/${fileItem.id}/resolve`);
-        if (resolveRes.ok) {
-          const { url } = await resolveRes.json();
-          if (url && !url.includes('ServiceLogin')) audioFetchUrl = url;
-        }
-      } catch { /* Fall back to proxy */ }
-
-      const res = await fetch(audioFetchUrl);
+      const res = await fetch(`/api/audio/${fileItem.id}`);
       if (!res.ok) throw new Error('No se pudo descargar el audio para análisis');
       const blob = await res.blob();
       const file = new File([blob], fileItem.name, { type: blob.type });

@@ -113,12 +113,21 @@ export function useAudioPlayer({
       setProgress((audio.currentTime / audio.duration) * 100);
     };
 
-    const handleLoadedMetadata = () => setDuration(audio.duration);
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setIsBuffering(false);
+    };
     const handleWaiting = () => setIsBuffering(true);
     const handleCanPlay = () => setIsBuffering(false);
     const handlePlaying = () => setIsBuffering(false);
+    const handleError = (e: any) => {
+      console.error('useAudioPlayer audio error:', e);
+      setIsBuffering(false);
+      setIsPlaying(false);
+    };
     const handleEnded = () => {
       setIsPlaying(false);
+      setIsBuffering(false);
       onTrackEnd();
     };
 
@@ -127,6 +136,7 @@ export function useAudioPlayer({
     audio.addEventListener('waiting', handleWaiting);
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('error', handleError);
     audio.addEventListener('ended', handleEnded);
 
     if (isPlaying) {
@@ -146,6 +156,7 @@ export function useAudioPlayer({
       audio.removeEventListener('waiting', handleWaiting);
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
     };
   }, [currentTrackUrl]); // Notice we don't depend on isPlaying to avoid remounting, the start logic uses the current state
