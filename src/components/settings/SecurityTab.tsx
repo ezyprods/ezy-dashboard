@@ -1,12 +1,11 @@
 'use client';
 
 import { Shield, Lock, LogOut } from 'lucide-react';
+import { clearAuth } from '@/components/layout/PasswordGuard';
 
 export function SecurityTab() {
-  const handleLogout = () => {
-    // Auth is managed by local storage and cookie keys in PasswordGuard
-    localStorage.removeItem('ezy_dashboard_secure_auth');
-    document.cookie = 'ezy_dashboard_secure_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+  const handleLogout = async () => {
+    await clearAuth();
     window.location.reload();
   };
 

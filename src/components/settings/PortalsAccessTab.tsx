@@ -80,12 +80,16 @@ export function PortalsAccessTab() {
     updateArtistConfig(artist.artistId, { ...artist.config, [property]: !currentVal });
   };
 
-  const handleCopyLink = (artistId: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/portal/${artistId}`);
-    customAlert('Enlace al portal copiado');
+  const handleCopyLink = async (artistId: string) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/portal/${artistId}`);
+      customAlert('Enlace al portal copiado');
+    } catch {
+      customAlert(`Enlace al portal: ${window.location.origin}/portal/${artistId}`);
+    }
   };
 
-  const filteredArtists = artists.filter(a => a.artistName.toLowerCase().includes(search.toLowerCase()));
+  const filteredArtists = artists.filter(a => (a.artistName || '').toLowerCase().includes((search || '').toLowerCase()));
 
   if (isLoading) {
     return (
@@ -199,10 +203,10 @@ export function PortalsAccessTab() {
                       <td className="px-6 py-3 sticky left-0 bg-background/95 backdrop-blur z-10 border-r border-border/50">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent/20 to-surface-elevated border border-border flex items-center justify-center text-text-primary font-bold text-xs shrink-0">
-                            {artist.artistName.charAt(0).toUpperCase()}
+                            {(artist.artistName || 'A').charAt(0).toUpperCase()}
                           </div>
                           <span className="font-semibold text-text-primary truncate max-w-[180px]">
-                            {artist.artistName}
+                            {artist.artistName || 'Artista'}
                           </span>
                         </div>
                       </td>

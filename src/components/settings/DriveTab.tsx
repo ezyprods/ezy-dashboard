@@ -52,17 +52,18 @@ export function DriveTab() {
   const formatBytes = (bytesStr?: string) => {
     if (!bytesStr) return '0 B';
     const bytes = parseInt(bytesStr, 10);
-    if (bytes === 0) return '0 B';
+    if (isNaN(bytes) || bytes <= 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const i = Math.min(sizes.length - 1, Math.floor(Math.log(bytes) / Math.log(k)));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-48">
+      <div className="flex flex-col justify-center items-center h-48 text-text-secondary gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-accent" />
+        <span className="text-sm font-medium">Conectando con Google Drive...</span>
       </div>
     );
   }
@@ -80,9 +81,11 @@ export function DriveTab() {
     );
   }
 
-  const limitBytes = parseInt(status?.storageQuota.limit || '1', 10);
-  const usageBytes = parseInt(status?.storageQuota.usage || '0', 10);
-  const percentage = Math.min(100, Math.round((usageBytes / limitBytes) * 100));
+  const limitBytes = status?.storageQuota?.limit ? parseInt(status.storageQuota.limit, 10) : 0;
+  const usageBytes = status?.storageQuota?.usage ? parseInt(status.storageQuota.usage, 10) : 0;
+  const isUnlimited = !status?.storageQuota?.limit || limitBytes === 0;
+  const percentage = isUnlimited ? 0 : Math.min(100, Math.max(0, Math.round((usageBytes / limitBytes) * 100)));
+  const freeBytes = Math.max(0, limitBytes - usageBytes);
   
   // Determine color based on usage percentage
   let progressColor = 'bg-accent';
@@ -149,7 +152,7 @@ export function DriveTab() {
                   </div>
                 </div>
                 <div className="text-sm font-medium text-text-secondary pb-1">
-                  de {formatBytes(status.storageQuota.limit)}
+                  {isUnlimited ? 'Almacenamiento Ilimitado' : `de ${formatBytes(status.storageQuota.limit)}`}
                 </div>
               </div>
 
@@ -157,9 +160,9 @@ export function DriveTab() {
                 <div className="h-6 bg-surface-elevated rounded-full overflow-hidden border border-black/20 shadow-inner relative p-1">
                   <div 
                     className={`h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden shadow-sm ${
-                      percentage > 95 ? 'bg-gradient-to-r from-error to-red-400' : percentage > 80 ? 'bg-gradient-to-r from-warning to-yellow-400' : 'bg-gradient-to-r from-accent to-accent-light'
+                      isUnlimited ? 'bg-gradient-to-r from-accent to-accent-light' : percentage > 95 ? 'bg-gradient-to-r from-error to-red-400' : percentage > 80 ? 'bg-gradient-to-r from-warning to-yellow-400' : 'bg-gradient-to-r from-accent to-accent-light'
                     }`}
-                    style={{ width: `${percentage}%` }}
+                    style={{ width: isUnlimited ? '100%' : `${percentage}%` }}
                   >
                     <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)] w-[200%] animate-[shimmer_2s_infinite]" />
                   </div>
@@ -167,8 +170,10 @@ export function DriveTab() {
               </div>
               
               <div className="flex justify-between items-center text-xs font-semibold text-text-secondary uppercase tracking-wider relative z-10">
-                <span className={percentage > 80 ? (percentage > 95 ? 'text-error' : 'text-warning') : 'text-accent'}>{percentage}% utilizado</span>
-                <span>{formatBytes((limitBytes - usageBytes).toString())} libres</span>
+                <span className={isUnlimited ? 'text-accent' : percentage > 80 ? (percentage > 95 ? 'text-error' : 'text-warning') : 'text-accent'}>
+                  {isUnlimited ? 'Sin límite de cuota' : `${percentage}% utilizado`}
+                </span>
+                <span>{isUnlimited ? 'Ilimitado' : `${formatBytes(freeBytes.toString())} libres`}</span>
               </div>
             </div>
           </div>

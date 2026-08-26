@@ -95,6 +95,19 @@ async function persistAuth(): Promise<void> {
   await idbSet(AUTH_KEY, now);
 }
 
+// ── Purgar las 3 capas al cerrar sesión ──
+export async function clearAuth(): Promise<void> {
+  try { localStorage.removeItem(AUTH_KEY); } catch { /* ignore */ }
+  try { document.cookie = `${AUTH_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`; } catch { /* ignore */ }
+  try {
+    const db = await openDB();
+    if (db) {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).delete(AUTH_KEY);
+    }
+  } catch { /* ignore */ }
+}
+
 // ── Leer de cualquiera de las 3 capas y devolver el timestamp ──
 async function readAuth(): Promise<string | null> {
   // 1. IndexedDB (más fiable)
