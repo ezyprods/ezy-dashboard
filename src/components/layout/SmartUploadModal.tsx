@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ExternalLink as ExternalLinkIcon, User, Table2, Clock, Plus, Sparkles } from 'lucide-react';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ExternalLink as ExternalLinkIcon, User, Table2, Clock, Plus, Sparkles, Copy, Check } from 'lucide-react';
 import { detectAudioFeatures, parseAudioFilename, formatProducerFilename, getShortKey, formatMusicalKey } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -42,6 +42,7 @@ export interface SmartUploadFile {
   // Scheduled deletion
   scheduleDelete?: boolean;
   expiresInMs?: number | null;
+  shareLink?: string | null; // Direct download link for scheduled-delete files
 }
 
 interface SmartUploadModalProps {
@@ -83,6 +84,51 @@ function generateName(original: string, subType: string, _artistName?: string): 
   }
 
   return original;
+}
+
+// ─── Share Link Banner (for scheduled-delete files) ─────────────────────────
+function ShareLinkBanner({ shareLink, expiresInMs }: { shareLink: string; expiresInMs?: number | null }) {
+  const [copied, setCopied] = useState(false);
+  const expiresAt = expiresInMs ? Date.now() + expiresInMs : null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(shareLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 p-3 bg-accent/10 border border-accent/30 rounded-xl animate-fade-in">
+      <div className="flex items-center gap-1.5 text-accent">
+        <Clock className="w-3.5 h-3.5 shrink-0" />
+        <span className="text-xs font-bold">Enlace de Descarga Directa</span>
+        {expiresAt && (
+          <span className="ml-auto text-[10px] text-text-secondary font-mono">
+            Caduca: {new Date(expiresAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          readOnly
+          value={shareLink}
+          className="flex-1 bg-surface border border-border/60 rounded-lg px-2.5 py-1.5 text-xs font-mono text-text-secondary truncate focus:outline-none"
+          onClick={(e) => (e.target as HTMLInputElement).select()}
+        />
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="shrink-0 p-1.5 bg-accent hover:bg-accent-light text-white rounded-lg transition-colors"
+          title="Copiar enlace de descarga"
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+      </div>
+      <p className="text-[10px] text-text-secondary">
+        Cualquier persona con este enlace puede descargar el archivo. Se eliminará automáticamente al caducar.
+      </p>
+    </div>
+  );
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -606,13 +652,27 @@ export function SmartUploadModal({
               }
               
               const uploadedResultId = responseData.id || fileToReplaceId;
+
               if (item.scheduleDelete && item.expiresInMs && uploadedResultId) {
+                // Set expiration metadata on the file
                 fetch(`/api/files/${uploadedResultId}/expiration`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ expiresInMs: item.expiresInMs })
                 }).catch(console.error);
+
+                // Make the file publicly accessible (anyone with the link can download)
+                fetch(`/api/files/${uploadedResultId}/share`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ role: 'reader', type: 'anyone' })
+                }).catch(console.error);
               }
+
+              // Build the direct download share link for temporary files
+              const directDownloadLink = uploadedResultId
+                ? `${window.location.origin}/api/files/${uploadedResultId}`
+                : null;
 
               // Update Personal Project latest bounce if applicable
               if (item.targetType === 'personal' && item.personalProjectId && uploadedResultId && item.mimeGroup === 'audio') {
@@ -628,7 +688,13 @@ export function SmartUploadModal({
                 }).catch(console.error);
               }
 
-              setItems(prev => prev.map(it => it.id === item.id ? { ...it, uploadStatus: 'done', uploadProgress: 100, resultId: uploadedResultId } : it));
+              setItems(prev => prev.map(it => it.id === item.id ? {
+                ...it,
+                uploadStatus: 'done',
+                uploadProgress: 100,
+                resultId: uploadedResultId,
+                shareLink: item.scheduleDelete ? directDownloadLink : null,
+              } : it));
               window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
               resolve();
             } else {
@@ -868,7 +934,12 @@ export function SmartUploadModal({
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span className="text-sm font-semibold">Subida completada</span>
                   </div>
-                  
+
+                  {/* Scheduled deletion share link — most prominent element */}
+                  {item.scheduleDelete && item.shareLink && (
+                    <ShareLinkBanner shareLink={item.shareLink} expiresInMs={item.expiresInMs} />
+                  )}
+
                   <div className="grid grid-cols-2 gap-2 w-full mt-2">
                     {item.targetType === 'personal' ? (
                       <Button 

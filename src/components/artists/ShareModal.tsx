@@ -275,14 +275,14 @@ export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, web
               variant="outline"
               size="sm"
               onClick={() => {
-                const directUrl = `${window.location.origin}/api/files/${fileId}?inline=true`;
+                const directUrl = `${window.location.origin}/api/files/${fileId}`;
                 navigator.clipboard.writeText(directUrl);
-                customAlert('Enlace directo copiado al portapapeles.');
+                customAlert('Enlace de descarga directa copiado.');
               }}
               className="gap-1.5 text-xs h-9 border-accent/30 text-accent hover:bg-accent/10"
             >
               <Download className="w-3.5 h-3.5" />
-              Enlace Directo
+              Enlace Descarga
             </Button>
           </div>
           <Button onClick={onClose} variant="default" size="sm" className="h-9 px-4">Hecho</Button>
