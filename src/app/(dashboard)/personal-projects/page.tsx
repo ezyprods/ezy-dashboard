@@ -271,11 +271,11 @@ export default function PersonalProjectsPage() {
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchTitle = proj.title.toLowerCase().includes(q);
-        const matchTags = proj.tags?.some(t => t.toLowerCase().includes(q));
-        const matchNotes = proj.notes?.toLowerCase().includes(q);
-        const matchCollabs = proj.collaborators?.some(c => c.toLowerCase().includes(q));
-        const matchKey = proj.key?.toLowerCase().includes(q);
+        const matchTitle = (proj.title || '').toLowerCase().includes(q);
+        const matchTags = proj.tags?.some(t => (t || '').toLowerCase().includes(q));
+        const matchNotes = (proj.notes || '').toLowerCase().includes(q);
+        const matchCollabs = proj.collaborators?.some(c => (c || '').toLowerCase().includes(q));
+        const matchKey = (proj.key || '').toLowerCase().includes(q);
         const matchBpm = proj.bpm ? String(proj.bpm).includes(q) : false;
 
         if (!matchTitle && !matchTags && !matchNotes && !matchCollabs && !matchKey && !matchBpm) {
@@ -313,11 +313,11 @@ export default function PersonalProjectsPage() {
       }
 
       if (sortBy === 'title_asc') {
-        return a.title.localeCompare(b.title);
+        return (a.title || '').localeCompare(b.title || '');
       }
 
       if (sortBy === 'title_desc') {
-        return b.title.localeCompare(a.title);
+        return (b.title || '').localeCompare(a.title || '');
       }
 
       return 0;

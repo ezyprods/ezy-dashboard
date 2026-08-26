@@ -185,7 +185,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         onCanPlayThrough={() => setIsLoading(false)}
         onWaiting={() => setIsLoading(true)}
         onError={(e) => {
-          console.error('HTMLAudioElement error:', e);
+          if (currentTrack && audioRef.current?.src) {
+            console.error('HTMLAudioElement error:', e);
+          }
           setIsLoading(false);
           setIsPlaying(false);
         }}

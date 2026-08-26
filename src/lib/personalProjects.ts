@@ -270,7 +270,7 @@ export async function clonePersonalProjectToArtist(
     ];
 
     const audioFiles = allProjectFiles.filter(
-      (f: any) => f.mimeType?.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg)$/i.test(f.name || '')
+      (f: any) => f.mimeType?.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg|aiff|aif|aac)$/i.test(f.name || '')
     );
 
     const targetBouncesFolderId = createdSubfolders['Bounces'] || clonedProjectFolderId;
