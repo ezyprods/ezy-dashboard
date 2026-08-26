@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Search, 
@@ -30,6 +30,10 @@ import { PersonalProjectListItem } from '@/components/personal-projects/Personal
 import { NewPersonalProjectModal } from '@/components/personal-projects/NewPersonalProjectModal';
 import { EditPersonalProjectModal } from '@/components/personal-projects/EditPersonalProjectModal';
 import { CloneToArtistModal } from '@/components/personal-projects/CloneToArtistModal';
+import { 
+  ReplaceAudioUndoToast, 
+  type PendingAudioReplacement 
+} from '@/components/personal-projects/ReplaceAudioUndoToast';
 import { 
   PERSONAL_PROJECT_CATEGORIES, 
   PERSONAL_PROJECT_STATUS_CONFIG 
@@ -90,6 +94,7 @@ export default function PersonalProjectsPage() {
     fetchProjects, 
     createProject, 
     updateProject, 
+    replaceAudio,
     deleteProject, 
     cloneToArtist 
   } = usePersonalProjects();
@@ -134,6 +139,81 @@ export default function PersonalProjectsPage() {
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<PersonalProject | null>(null);
   const [cloningProject, setCloningProject] = useState<PersonalProject | null>(null);
+
+  // Pending Audio Replacement with 5s Undo Window (Ctrl+Z)
+  const [pendingReplacement, setPendingReplacement] = useState<PendingAudioReplacement | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingRef = useRef<PendingAudioReplacement | null>(null);
+  pendingRef.current = pendingReplacement;
+
+  const handleInitiateReplaceAudio = (project: PersonalProject, file: File) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    setPendingReplacement({
+      project,
+      file,
+      secondsLeft: 5,
+      status: 'counting',
+    });
+  };
+
+  const handleCancelReplaceAudio = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setPendingReplacement(null);
+  };
+
+  const executeReplaceAudio = async (project: PersonalProject, file: File) => {
+    try {
+      await replaceAudio(project.id, file);
+      setPendingReplacement(prev => prev ? { ...prev, status: 'done' } : null);
+      setTimeout(() => {
+        setPendingReplacement(null);
+      }, 2500);
+    } catch (err: any) {
+      setPendingReplacement(prev => prev ? { ...prev, status: 'error', error: err.message } : null);
+      setTimeout(() => {
+        setPendingReplacement(null);
+      }, 4000);
+    }
+  };
+
+  // 5s Countdown Timer
+  useEffect(() => {
+    if (!pendingReplacement || pendingReplacement.status !== 'counting') return;
+
+    const interval = setInterval(() => {
+      setPendingReplacement(prev => {
+        if (!prev || prev.status !== 'counting') return prev;
+        if (prev.secondsLeft <= 1) {
+          clearInterval(interval);
+          executeReplaceAudio(prev.project, prev.file);
+          return { ...prev, secondsLeft: 0, status: 'uploading' };
+        }
+        return { ...prev, secondsLeft: prev.secondsLeft - 1 };
+      });
+    }, 1000);
+
+    timerRef.current = interval;
+    return () => clearInterval(interval);
+  }, [pendingReplacement?.status]);
+
+  // Global Ctrl+Z / Cmd+Z Undo Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (pendingRef.current && pendingRef.current.status === 'counting') {
+          e.preventDefault();
+          handleCancelReplaceAudio();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Derive unique years & tags
   const availableYears = useMemo(() => {
@@ -632,6 +712,7 @@ export default function PersonalProjectsPage() {
                     onEdit={(p) => setEditingProject(p)}
                     onDelete={handleDelete}
                     onCloneToArtist={(p) => setCloningProject(p)}
+                    onReplaceAudio={handleInitiateReplaceAudio}
                   />
                 ))}
               </div>
@@ -648,6 +729,7 @@ export default function PersonalProjectsPage() {
                   onEdit={(p) => setEditingProject(p)}
                   onDelete={handleDelete}
                   onCloneToArtist={(p) => setCloningProject(p)}
+                  onReplaceAudio={handleInitiateReplaceAudio}
                 />
               ))}
             </div>
@@ -671,6 +753,12 @@ export default function PersonalProjectsPage() {
           )}
         </div>
       )}
+
+      {/* Reversible Audio Replacement Undo Toast (with 5s countdown & Ctrl+Z) */}
+      <ReplaceAudioUndoToast
+        pending={pendingReplacement}
+        onCancel={handleCancelReplaceAudio}
+      />
 
       {/* Modals */}
       <NewPersonalProjectModal

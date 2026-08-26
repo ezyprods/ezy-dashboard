@@ -13,6 +13,7 @@ export function usePersonalProjects() {
     fetchProjects: appData.fetchPersonalProjects,
     createProject: appData.createPersonalProject,
     updateProject: appData.updatePersonalProject,
+    replaceAudio: appData.replacePersonalProjectAudio,
     deleteProject: appData.deletePersonalProject,
     cloneToArtist: appData.clonePersonalProjectToArtist,
   };

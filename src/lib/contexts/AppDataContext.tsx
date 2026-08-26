@@ -57,6 +57,7 @@ interface AppDataContextType {
   fetchPersonalProjects: (force?: boolean) => Promise<PersonalProject[]>;
   createPersonalProject: (input: CreatePersonalProjectInput) => Promise<PersonalProject>;
   updatePersonalProject: (id: string, updates: Partial<PersonalProject>) => Promise<PersonalProject>;
+  replacePersonalProjectAudio: (id: string, file: File) => Promise<PersonalProject>;
   deletePersonalProject: (id: string) => Promise<void>;
   clonePersonalProjectToArtist: (id: string, artistId: string, customTitle?: string, projectType?: string) => Promise<any>;
 
@@ -537,6 +538,26 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     return updatedProj;
   }, []);
 
+  const replacePersonalProjectAudio = useCallback(async (id: string, file: File): Promise<PersonalProject> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`/api/personal-projects/${id}/replace-audio`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Error al sustituir el archivo de audio');
+    }
+
+    const data = await res.json();
+    const updatedProj: PersonalProject = data.project;
+    setPersonalProjects(prev => prev.map(p => (p.id === id ? updatedProj : p)));
+    return updatedProj;
+  }, []);
+
   const deletePersonalProject = useCallback(async (id: string): Promise<void> => {
     const res = await fetch(`/api/personal-projects/${id}`, {
       method: 'DELETE',
@@ -632,6 +653,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     fetchPersonalProjects,
     createPersonalProject,
     updatePersonalProject,
+    replacePersonalProjectAudio,
     deletePersonalProject,
     clonePersonalProjectToArtist,
 

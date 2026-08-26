@@ -17,7 +17,9 @@ import {
   Share2, 
   Activity, 
   ListMusic,
-  ChevronDown
+  ChevronDown,
+  RefreshCw,
+  UploadCloud
 } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { 
@@ -32,6 +34,7 @@ interface PersonalProjectCardProps {
   onEdit?: (project: PersonalProject) => void;
   onDelete?: (project: PersonalProject) => void;
   onCloneToArtist?: (project: PersonalProject) => void;
+  onReplaceAudio?: (project: PersonalProject, file: File) => void;
 }
 
 const getCategoryIcon = (category: string) => {
@@ -62,14 +65,17 @@ export function PersonalProjectCard({
   onEdit,
   onDelete,
   onCloneToArtist,
+  onReplaceAudio,
 }: PersonalProjectCardProps) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
   const [showMenu, setShowMenu] = useState(false);
   const [showPackMenu, setShowPackMenu] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<PackTrack | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   
   const menuRef = useRef<HTMLDivElement>(null);
   const packMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categoryConfig = PERSONAL_PROJECT_CATEGORIES[project.category] || PERSONAL_PROJECT_CATEGORIES.beat;
   const statusConfig = PERSONAL_PROJECT_STATUS_CONFIG[project.status] || PERSONAL_PROJECT_STATUS_CONFIG.idea;
@@ -120,11 +126,73 @@ export function PersonalProjectCard({
     }
   };
 
+  // Drag & drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg|aiff)$/i.test(file.name);
+      if (isAudio && onReplaceAudio) {
+        onReplaceAudio(project, file);
+      }
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (onReplaceAudio) {
+        onReplaceAudio(project, file);
+      }
+      e.target.value = '';
+    }
+  };
+
   return (
-    <div className={cn(
-      "group relative bg-surface/70 hover:bg-surface border border-border/70 hover:border-accent/40 rounded-2xl p-3.5 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-[0_8px_25px_rgba(108,92,231,0.12)] min-h-[160px]",
-      isThisPlaying && "border-accent/50 bg-accent/5"
-    )}>
+    <div 
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        "group relative bg-surface/70 hover:bg-surface border border-border/70 hover:border-accent/40 rounded-2xl p-3.5 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-[0_8px_25px_rgba(108,92,231,0.12)] min-h-[160px]",
+        isThisPlaying && "border-accent/50 bg-accent/5",
+        isDragOver && "border-accent ring-2 ring-accent/40 bg-accent/15 scale-[1.02] shadow-[0_0_20px_rgba(108,92,231,0.25)]"
+      )}
+    >
+      {/* Dragging Overlay Badge */}
+      {isDragOver && (
+        <div className="absolute inset-0 z-20 rounded-2xl bg-accent/20 backdrop-blur-xs flex flex-col items-center justify-center gap-1.5 border-2 border-dashed border-accent pointer-events-none animate-in fade-in-50">
+          <UploadCloud className="w-6 h-6 text-accent animate-bounce" />
+          <span className="text-xs font-bold text-accent bg-surface-elevated/90 px-2.5 py-1 rounded-lg shadow-md text-center">
+            Soltar audio para sustituir
+          </span>
+        </div>
+      )}
+
+      {/* Hidden File Input for Replace Audio */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        accept="audio/*,.wav,.mp3,.flac,.m4a,.ogg,.aiff"
+        className="hidden"
+      />
+
       {/* Top Header inside Card: Category, Status & Menu */}
       <div className="flex items-center justify-between gap-1.5 mb-2">
         <span 
@@ -178,6 +246,21 @@ export function PersonalProjectCard({
                   <CategoryIcon className="w-3.5 h-3.5 text-accent" />
                   <span>Abrir Proyecto</span>
                 </Link>
+
+                {/* Sustituir Audio Option */}
+                {onReplaceAudio && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-accent hover:bg-accent/10 transition-colors text-left"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-accent" />
+                    <span>Sustituir Audio</span>
+                  </button>
+                )}
 
                 {onEdit && (
                   <button
