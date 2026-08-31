@@ -33,7 +33,10 @@ export default function PortalPage() {
   useEffect(() => {
     const fetchPortal = async () => {
       try {
-        const res = await fetch(`/api/portal/${params.id}`);
+        const res = await fetch(`/api/portal/${params.id}`, {
+          cache: 'no-store',
+          headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+        });
         if (!res.ok) throw new Error('Portal no encontrado');
         const json = await res.json();
         setData(json);
