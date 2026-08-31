@@ -164,7 +164,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setArtistsLoading(true);
     const promise = (async () => {
       try {
-        const res = await fetch(`/api/artists?t=${Date.now()}`);
+        const res = await fetch('/api/artists');
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.error || 'Failed to fetch artists');
@@ -204,7 +204,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setPulseLoading(true);
     const promise = (async () => {
       try {
-        const res = await fetch(`/api/dashboard/pulse?t=${Date.now()}`);
+        const res = await fetch('/api/dashboard/pulse');
         if (!res.ok) throw new Error('Failed to fetch dashboard pulse');
         const data = await res.json();
         if (!data.needsAuth) {
@@ -241,7 +241,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setMatricesLoading(true);
     const promise = (async () => {
       try {
-        const res = await fetch(`/api/dashboard/matrices?t=${Date.now()}`);
+        const res = await fetch('/api/dashboard/matrices');
         if (!res.ok) throw new Error('Failed to fetch matrices');
         const data = await res.json();
         const actives = data.matrices || [];
@@ -277,7 +277,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setPersonalProjectsLoading(true);
     const promise = (async () => {
       try {
-        const res = await fetch(`/api/personal-projects?t=${Date.now()}`);
+        const res = await fetch('/api/personal-projects');
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || 'Error al cargar los proyectos personales');
@@ -314,7 +314,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setPaymentsLoading(true);
     const promise = (async () => {
       try {
-        const res = await fetch(`/api/payments?t=${Date.now()}`);
+        const res = await fetch('/api/payments');
         if (!res.ok) throw new Error('Failed to fetch payments');
         const data = await res.json();
         const list: Payment[] = data.payments || [];
@@ -348,7 +348,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setRecentFilesLoading(true);
     const promise = (async () => {
       try {
-        const res = await fetch(`/api/dashboard/recent-files?t=${Date.now()}`);
+        const res = await fetch('/api/dashboard/recent-files');
         if (!res.ok) throw new Error('Failed to load recent files');
         const data = await res.json();
         const list: DriveFile[] = data.files || [];
@@ -380,7 +380,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setCalendarLoading(true);
     const promise = (async () => {
       try {
-        const res = await fetch(`/api/calendar?days=60&t=${Date.now()}`);
+        const res = await fetch('/api/calendar?days=60');
         const data = await res.json();
         if (!res.ok) {
           throw new Error(data.error || 'Failed to fetch calendar');

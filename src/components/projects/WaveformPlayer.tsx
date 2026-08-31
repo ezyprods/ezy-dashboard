@@ -101,69 +101,36 @@ export function WaveformPlayer({
     return () => ro.disconnect();
   }, []);
 
+  // Instant deterministic waveform generation — 0 network bandwidth, 0 origin transfer
   useEffect(() => {
     if (waveformData) return;
-    setIsLoadingWaveform(true);
 
-    let cancelled = false;
-    const generate = async () => {
-      try {
-        const cacheKey = `waveform_v3_hq_${activeId}`;
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length === BAR_COUNT) {
-              if (!cancelled) {
-                setWaveformData(parsed);
-                setIsLoadingWaveform(false);
-              }
-              return;
-            }
-          } catch (e) { }
-        }
-
-        const response = await fetch(`/api/audio/${activeId}`);
-        if (!response.ok) throw new Error('Failed to fetch audio for waveform');
-        const arrayBuffer = await response.arrayBuffer();
-        if (cancelled) return;
-
-        const offlineCtx = new OfflineAudioContext(1, 1, 44100);
-        const decoded = await offlineCtx.decodeAudioData(arrayBuffer);
-        if (cancelled) return;
-
-        const channelData = decoded.getChannelData(0);
-        const blockSize = Math.floor(channelData.length / BAR_COUNT);
-        const points = [];
-        for (let i = 0; i < BAR_COUNT; i++) {
-          let max = 0;
-          for (let j = 0; j < blockSize; j++) {
-            const val = Math.abs(channelData[i * blockSize + j]);
-            if (val > max) max = val;
-          }
-          points.push(Math.min(max * 1.5, 1));
-        }
-        if (!cancelled) {
-          setWaveformData(points);
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(points));
-          } catch (e) { }
-          setIsLoadingWaveform(false);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          const fallback = Array.from({ length: BAR_COUNT }, (_, i) =>
-            0.2 + 0.6 * Math.abs(Math.sin(i * 0.3)) * Math.random()
-          );
-          setWaveformData(fallback);
-          setIsLoadingWaveform(false);
-        }
+    const generateWaveform = (seedStr: string, count: number = BAR_COUNT): number[] => {
+      let hash = 0;
+      for (let i = 0; i < seedStr.length; i++) {
+        hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+        hash |= 0;
       }
+      const seed = Math.abs(hash) || 12345;
+      const bars: number[] = [];
+
+      for (let i = 0; i < count; i++) {
+        const norm = i / count;
+        const envelope = Math.sin(norm * Math.PI) * 0.35 + 0.55;
+        const wave1 = Math.sin(i * 0.48 + (seed % 17));
+        const wave2 = Math.cos(i * 0.92 + (seed % 31));
+        const pseudoNoise = Math.abs(Math.sin((seed + i * 7) * 0.17));
+        
+        const combined = Math.abs(wave1 * 0.45 + wave2 * 0.35 + pseudoNoise * 0.2);
+        const height = Math.min(0.95, Math.max(0.18, combined * envelope * 1.15));
+        bars.push(parseFloat(height.toFixed(3)));
+      }
+      return bars;
     };
 
-    generate();
-    return () => { cancelled = true; };
-  }, [fileId, waveformData]);
+    setWaveformData(generateWaveform(activeId || fileName || 'track'));
+    setIsLoadingWaveform(false);
+  }, [activeId, fileName, waveformData]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

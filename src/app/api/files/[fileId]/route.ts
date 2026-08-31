@@ -17,8 +17,8 @@ export async function GET(
     const inline = request.nextUrl.searchParams.get('inline') === 'true';
     const accessToken = await getGoogleAccessToken();
 
-    // 1. Fetch metadata for filename, mimeType, webViewLink
-    const metaUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,size,webViewLink&supportsAllDrives=true`;
+    // 1. Fetch metadata for filename, mimeType, webViewLink, webContentLink, thumbnailLink
+    const metaUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,size,webViewLink,webContentLink,thumbnailLink&supportsAllDrives=true`;
     const metaFetch = await fetch(metaUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -30,7 +30,22 @@ export async function GET(
       return NextResponse.redirect(meta.webViewLink, { status: 307 });
     }
 
-    // 2. Stream binary/media file with Range support
+    // For images, redirect directly to Google's high-speed global thumbnail CDN (0 byte Vercel bandwidth)
+    if (meta.mimeType?.startsWith('image/')) {
+      const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+      const res = NextResponse.redirect(imgUrl, { status: 307 });
+      res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      return res;
+    }
+
+    // For non-inline downloads, if direct download link exists, redirect to Google Drive CDN
+    if (!inline && meta.webContentLink) {
+      const res = NextResponse.redirect(meta.webContentLink, { status: 307 });
+      res.headers.set('Cache-Control', 'public, max-age=86400');
+      return res;
+    }
+
+    // 2. Stream binary/media file with Range support as fallback
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
@@ -64,7 +79,7 @@ export async function GET(
     const disposition = inline ? 'inline' : 'attachment';
     const safeName = meta.name ? encodeURIComponent(meta.name) : 'archivo';
     responseHeaders.set('Content-Disposition', `${disposition}; filename*=UTF-8''${safeName}`);
-    responseHeaders.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    responseHeaders.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
 
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,
@@ -75,4 +90,5 @@ export async function GET(
     return new NextResponse(error?.message || 'Error fetching file', { status: 500 });
   }
 }
+
 

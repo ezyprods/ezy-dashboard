@@ -38,8 +38,17 @@ export async function GET(
       });
     }
 
-    const responseHeaders = new Headers();
     const contentType = gDriveRes.headers.get('content-type') || 'audio/mpeg';
+
+    // If requested file is an image (cover art), redirect directly to Google thumbnail CDN to save origin bandwidth
+    if (contentType.startsWith('image/')) {
+      const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+      const res = NextResponse.redirect(imgUrl, { status: 307 });
+      res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      return res;
+    }
+
+    const responseHeaders = new Headers();
     const contentRange = gDriveRes.headers.get('content-range');
     const contentLength = gDriveRes.headers.get('content-length');
 
@@ -48,8 +57,8 @@ export async function GET(
     if (contentRange) responseHeaders.set('Content-Range', contentRange);
     if (contentLength) responseHeaders.set('Content-Length', contentLength);
 
-    // Cache audio chunks in the browser to minimize repeated network bandwidth
-    responseHeaders.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    // Cache audio chunks in the browser and edge to minimize repeated network bandwidth
+    responseHeaders.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
 
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,
@@ -60,4 +69,5 @@ export async function GET(
     return new NextResponse(error?.message || 'Error streaming audio', { status: 500 });
   }
 }
+
 

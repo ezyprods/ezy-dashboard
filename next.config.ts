@@ -47,6 +47,46 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Cache dashboard metrics and pulse
+        source: "/api/dashboard/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=30, stale-while-revalidate=60",
+          },
+        ],
+      },
+      {
+        // Cache personal projects listing
+        source: "/api/personal-projects",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=30, stale-while-revalidate=60",
+          },
+        ],
+      },
+      {
+        // Cache payments listing
+        source: "/api/payments",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=30, stale-while-revalidate=60",
+          },
+        ],
+      },
+      {
+        // Cache calendar events
+        source: "/api/calendar",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=60, stale-while-revalidate=120",
+          },
+        ],
+      },
+      {
         // The audio resolve endpoint result can be cached briefly
         // (Drive pre-signed URLs are valid for ~1h)
         source: "/api/audio/:fileId/resolve",
@@ -58,18 +98,18 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // The audio redirect itself — short private cache
-        // Browser remembers the redirect target so it won't hit Vercel again
+        // The audio redirect/streaming endpoint — browser cache
         source: "/api/audio/:fileId",
         headers: [
           {
             key: "Cache-Control",
-            value: "private, max-age=300",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
           },
         ],
       },
     ];
   },
 };
+
 
 export default nextConfig;
