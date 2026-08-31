@@ -13,9 +13,10 @@ When working with Demucs audio separation in Python:
 1. On Windows, installing `torchcodec` often causes `[end of libtorchcodec loading traceback]` errors due to DLL issues. Instead, uninstall `torchcodec`, install `soundfile`, and modify `demucs/audio.py` to pass `backend="soundfile"` to `torchaudio.save()`.
 2. To check if Demucs is installed, run `python -m demucs --help`. Do not use `--version` as it will trigger an error.
 
-# Automatic GitHub Sync
+# Automatic GitHub Sync & Vercel Deploy
 After finishing any user request that introduces, modifies, or deletes code/files in the repository:
 1. Automatically activate the `github-auto-push` skill.
 2. Stage modified files (`git add .`), make a descriptive commit message, and push to GitHub (`git push`).
-3. Never end a request with unpushed workspace changes unless explicitly requested by the user.
+3. Trigger the Vercel Deploy Hook to compile the new build immediately in Production.
+4. Never end a request with unpushed workspace changes or pending deployments unless explicitly requested by the user.
 

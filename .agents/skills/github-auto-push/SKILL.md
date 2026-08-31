@@ -16,3 +16,8 @@ This skill ensures that whenever changes, fixes, or additions are made to the co
 3. **Commit**: Create a concise and descriptive commit message explaining what was done.
 4. **Push**: Run `git push origin <current-branch>`.
 5. **Verify**: Ensure git push succeeds.
+6. **Trigger Vercel Deploy Hook**: Always run:
+   ```bash
+   node -e "fetch('https://api.vercel.com/v1/integrations/deploy/prj_4u156DrxjxOFavPEY7P0OuOqzi0V/Thx5eA8KNs', { method: 'POST' }).then(r => r.json()).then(d => console.log('Vercel Deploy Triggered:', d)).catch(console.error);"
+   ```
+   This guarantees that Vercel compiles and deploys the latest commit to Production immediately without waiting for GitHub webhooks.
