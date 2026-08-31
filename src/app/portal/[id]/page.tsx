@@ -7,7 +7,7 @@ import {
   AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
   SkipForward, SkipBack, ChevronRight, Lock, Download, ExternalLink,
   Star, Clock, TrendingUp, ListMusic, Eye, Wrench, Paperclip, Calendar as CalendarIcon, CheckSquare, ListTodo,
-  FolderArchive, FileText, FileImage, Film, File as FileIcon, Archive, Folder
+  FolderArchive, FileText, FileImage, Film, File as FileIcon, Archive, Folder, RefreshCw
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
@@ -30,38 +30,41 @@ export default function PortalPage() {
 
   // Theme is now enforced by ThemeContext based on route
 
-  useEffect(() => {
-    const fetchPortal = async () => {
-      try {
-        const res = await fetch(`/api/portal/${params.id}`, {
-          cache: 'no-store',
-          headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
-        });
-        if (!res.ok) throw new Error('Portal no encontrado');
-        const json = await res.json();
-        // Debug: log all files received
-        console.log('[Portal] Projects received:', json.projects?.map((p: any) => ({ id: p.id, title: p.title, fileCount: p.bounces?.length || 0, files: p.bounces?.map((f: any) => f.name) })));
-        setData(json);
-        if (json.projects && json.projects.length > 0) {
-          setSelectedProjectId(json.projects[0].id);
-        }
-        if (json.releases && json.releases.length > 0) {
-          setActiveReleaseId(json.releases[0].id);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-        }
-        
-        // Update browser tab title
-        if (json.artist?.name) {
-          document.title = json.artist.name;
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
+  const fetchPortal = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/portal/${params.id}`, {
+        cache: 'no-store',
+        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+      });
+      if (!res.ok) throw new Error('Portal no encontrado');
+      const json = await res.json();
+      // Debug: log all files received
+      console.log('[Portal] Projects received:', json.projects?.map((p: any) => ({ id: p.id, title: p.title, fileCount: p.bounces?.length || 0, files: p.bounces?.map((f: any) => f.name) })));
+      setData(json);
+      if (json.projects && json.projects.length > 0) {
+        setSelectedProjectId(json.projects[0].id);
       }
-    };
+      if (json.releases && json.releases.length > 0) {
+        setActiveReleaseId(json.releases[0].id);
+      }
+      // Update browser tab title
+      if (json.artist?.name) {
+        document.title = json.artist.name;
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchPortal();
-  }, [params.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, refreshKey]);
 
   if (isLoading) {
     return (
@@ -815,9 +818,19 @@ export default function PortalPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-text-secondary px-3 py-1.5 rounded-full bg-surface-elevated border border-border">
-            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            <span className="font-medium hidden sm:block">Seguro</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setRefreshKey(k => k + 1)}
+              className="flex items-center gap-1.5 text-xs text-text-secondary px-3 py-1.5 rounded-full bg-surface-elevated border border-border hover:border-accent/40 hover:text-accent transition-all"
+              title="Actualizar archivos"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="font-medium hidden sm:block">Actualizar</span>
+            </button>
+            <div className="flex items-center gap-2 text-xs text-text-secondary px-3 py-1.5 rounded-full bg-surface-elevated border border-border">
+              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <span className="font-medium hidden sm:block">Seguro</span>
+            </div>
           </div>
         </div>
       </header>
