@@ -6,10 +6,12 @@ import {
   Loader2, Music, CheckCircle2, Circle, Headphones, CreditCard,
   AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
   SkipForward, SkipBack, ChevronRight, Lock, Download, ExternalLink,
-  Star, Clock, TrendingUp, ListMusic, Eye, Wrench, Paperclip, Calendar as CalendarIcon, CheckSquare, ListTodo
+  Star, Clock, TrendingUp, ListMusic, Eye, Wrench, Paperclip, Calendar as CalendarIcon, CheckSquare, ListTodo,
+  FolderArchive, FileText, FileImage, Film, File as FileIcon, Archive, Folder
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
+import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { isBrowserCompatible } from '@/lib/utils';
 
@@ -96,15 +98,228 @@ export default function PortalPage() {
   const showSidebar = (hasReleases && visibleModules.some((m: any) => m.type === 'releases')) ||
                       (hasFinances && visibleModules.some((m: any) => m.type === 'finances'));
 
+  const formatFileSize = (bytes?: string | number) => {
+    if (!bytes) return '';
+    const num = typeof bytes === 'string' ? parseInt(bytes, 10) : bytes;
+    if (isNaN(num) || num <= 0) return '';
+    if (num < 1024) return `${num} B`;
+    if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+    if (num < 1024 * 1024 * 1024) return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(num / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  const formatFileDate = (timeStr?: string) => {
+    if (!timeStr) return '';
+    const date = new Date(timeStr);
+    if (isNaN(date.getTime())) return '';
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const d = pad(date.getDate());
+    const m = pad(date.getMonth() + 1);
+    const y = date.getFullYear();
+    const h = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    return `${d}/${m}/${y} ${h}:${min}`;
+  };
+
+  const getFileCategory = (mimeType?: string, fileName?: string) => {
+    const name = (fileName || '').toLowerCase();
+    const mime = (mimeType || '').toLowerCase();
+
+    const AUDIO_EXTS = /\.(wav|mp3|m4a|flac|aiff|aif|ogg|opus|wma|alac)$/i;
+    if (mime.startsWith('audio/') || AUDIO_EXTS.test(name)) return 'audio';
+
+    const ARCHIVE_EXTS = /\.(zip|rar|7z|tar|gz|bz2|xz|iso)$/i;
+    if (
+      mime.includes('zip') || 
+      mime.includes('rar') || 
+      mime.includes('tar') || 
+      mime.includes('7z') || 
+      mime.includes('compressed') || 
+      mime.includes('archive') || 
+      ARCHIVE_EXTS.test(name)
+    ) return 'archive';
+
+    const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i;
+    if (mime.startsWith('image/') || IMAGE_EXTS.test(name)) return 'image';
+
+    const VIDEO_EXTS = /\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/i;
+    if (mime.startsWith('video/') || VIDEO_EXTS.test(name)) return 'video';
+
+    const PDF_EXTS = /\.pdf$/i;
+    if (mime.includes('pdf') || PDF_EXTS.test(name)) return 'pdf';
+
+    const DOC_EXTS = /\.(doc|docx|txt|rtf|odt|pages|md)$/i;
+    if (
+      mime.includes('document') || 
+      mime.includes('word') || 
+      mime.includes('text') || 
+      DOC_EXTS.test(name)
+    ) return 'document';
+
+    const SHEET_EXTS = /\.(xls|xlsx|csv|numbers)$/i;
+    if (mime.includes('sheet') || mime.includes('excel') || mime.includes('csv') || SHEET_EXTS.test(name)) return 'spreadsheet';
+
+    if (name.endsWith('.flp')) return 'flp';
+
+    return 'other';
+  };
+
+  const renderFileIcon = (mimeType?: string, fileName?: string) => {
+    const category = getFileCategory(mimeType, fileName);
+    if (category === 'archive') {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
+          <FolderArchive className="w-5 h-5" />
+        </div>
+      );
+    }
+    if (category === 'image') {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+          <FileImage className="w-5 h-5" />
+        </div>
+      );
+    }
+    if (category === 'video') {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 shrink-0">
+          <Film className="w-5 h-5" />
+        </div>
+      );
+    }
+    if (category === 'pdf') {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/25 flex items-center justify-center text-orange-400 shrink-0">
+          <FileText className="w-5 h-5" />
+        </div>
+      );
+    }
+    if (category === 'document' || category === 'spreadsheet') {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 shrink-0">
+          <FileText className="w-5 h-5" />
+        </div>
+      );
+    }
+    if (category === 'flp') {
+      return (
+        <div className="w-10 h-10 rounded-xl bg-[#ff793f]/10 border border-[#ff793f]/25 flex items-center justify-center shrink-0">
+          <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#ff793f]">
+            <path d="M12 2c1.2 1.5 1.5 3 .5 4.5 1.5-1 2.2-2.5 1.5-4.5z" fill="#2ed573" />
+            <path d="M12 5.5c-3.5 0-6 2-6 5.5 0 3.2 2 6.5 6 11 4-4.5 6-7.8 6-11 0-3.5-2.5-5.5-6-5.5z" />
+            <ellipse cx="12" cy="11" rx="1.5" ry="2" fill="#ffa502" opacity="0.7" />
+          </svg>
+        </div>
+      );
+    }
+    return (
+      <div className="w-10 h-10 rounded-xl bg-surface border border-border flex items-center justify-center text-text-secondary shrink-0">
+        <FileIcon className="w-5 h-5" />
+      </div>
+    );
+  };
+
+  const renderNonAudioFile = (file: any) => {
+    const isViewableInBrowser = isBrowserCompatible(file.mimeType) || file.mimeType?.startsWith('image/') || file.mimeType?.startsWith('video/') || file.mimeType?.includes('pdf');
+    const sizeFormatted = formatFileSize(file.size);
+    const dateFormatted = formatFileDate(file.modifiedTime || file.createdTime);
+
+    return (
+      <div
+        key={file.id}
+        className="p-3.5 md:p-4 rounded-xl border border-border/60 bg-surface-elevated/40 hover:bg-surface-elevated/70 hover:border-accent/40 transition-all flex items-center justify-between gap-3 group/file"
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {renderFileIcon(file.mimeType, file.name)}
+
+          <div className="flex-1 min-w-0 pr-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="text-[13px] font-semibold text-text-primary truncate max-w-full group-hover/file:text-accent transition-colors"
+                title={file.name}
+              >
+                {file.name}
+              </span>
+              {file.expiresAt && (
+                <RealtimeCountdown expiresAt={file.expiresAt} />
+              )}
+              {sizeFormatted && (
+                <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0">
+                  {sizeFormatted}
+                </span>
+              )}
+              {dateFormatted && (
+                <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0 hidden sm:inline-block">
+                  {dateFormatted}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {paywallLocked ? (
+            <button
+              onClick={() => customAlert('Descarga bloqueada. Tienes pagos pendientes.')}
+              className="p-2 text-warning hover:text-warning/80 rounded-lg hover:bg-warning/10 transition-all"
+              title="Pago pendiente"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
+          ) : (
+            <>
+              {isViewableInBrowser && (
+                <a
+                  href={`/api/files/${file.id}?inline=true`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 text-text-secondary hover:text-accent rounded-lg hover:bg-surface transition-all"
+                  title="Ver archivo"
+                >
+                  <Eye className="w-4 h-4" />
+                </a>
+              )}
+              <a
+                href={`/api/files/${file.id}?inline=false`}
+                download={file.name}
+                className="p-2 text-text-secondary hover:text-accent-light rounded-lg hover:bg-surface transition-all"
+                title="Descargar archivo"
+              >
+                <Download className="w-4 h-4" />
+              </a>
+            </>
+          )}
+
+          <a
+            href={file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 text-text-secondary hover:text-accent rounded-lg hover:bg-surface transition-all"
+            title="Abrir en Google Drive"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        </div>
+      </div>
+    );
+  };
+
   const renderBounces = () => {
     const mod = visibleModules.find((m: any) => m.type === 'bounces');
     if (!mod || !activeProject) return null;
+    const filesList = activeProject.bounces || activeProject.files || [];
+
     return (
       <div key={mod.id} className="bg-surface rounded-2xl border border-border p-6 flex flex-col gap-4 shadow-sm">
         <div className="flex items-center justify-between pb-3 border-b border-border">
           <div className="flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-accent" />
-            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Últimas Mezclas / Audios'}</h3>
+            <FolderArchive className="w-5 h-5 text-accent" />
+            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Últimas Mezclas y Archivos'}</h3>
+            {filesList.length > 0 && (
+              <span className="text-[10px] bg-accent/15 text-accent px-2 py-0.5 rounded-full font-bold">
+                {filesList.length}
+              </span>
+            )}
           </div>
           {paywallLocked && (
             <div className="flex items-center gap-1.5 text-[10px] text-warning bg-[#fdcb6e]/10 border border-[#fdcb6e]/20 px-2.5 py-1 rounded-full font-semibold">
@@ -113,9 +328,9 @@ export default function PortalPage() {
           )}
         </div>
 
-        {activeProject.bounces && activeProject.bounces.length > 0 ? (
-          <div className="space-y-4">
-            {[...activeProject.bounces].sort((a, b) => {
+        {filesList && filesList.length > 0 ? (
+          <div className="space-y-3">
+            {[...filesList].sort((a, b) => {
               const parseDate = (filename: string) => {
                 const match = filename.match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
                 if (match) {
@@ -130,26 +345,35 @@ export default function PortalPage() {
               if (dateA !== dateB) {
                 return dateB - dateA; // Newest first
               }
-              // Fallback to modifiedTime
-              const timeA = new Date(a.modifiedTime || 0).getTime();
-              const timeB = new Date(b.modifiedTime || 0).getTime();
+              // Fallback to modifiedTime or createdTime
+              const timeA = new Date(a.modifiedTime || a.createdTime || 0).getTime();
+              const timeB = new Date(b.modifiedTime || b.createdTime || 0).getTime();
               return timeB - timeA;
-            }).map((file: any) => (
-              <WaveformPlayer
-                key={file.id}
-                fileId={file.id}
-                fileName={file.name}
-                artistName={data.artist.name}
-                isPortal={true}
-                paywallLocked={paywallLocked}
-                modifiedTime={file.modifiedTime}
-              />
-            ))}
+            }).map((file: any) => {
+              const isAudio = getFileCategory(file.mimeType, file.name) === 'audio';
+              if (isAudio) {
+                return (
+                  <WaveformPlayer
+                    key={file.id}
+                    fileId={file.id}
+                    fileName={file.name}
+                    artistName={data.artist.name}
+                    isPortal={true}
+                    paywallLocked={paywallLocked}
+                    modifiedTime={file.modifiedTime}
+                    expiresAt={file.expiresAt}
+                    bpm={file.bpm}
+                    trackKey={file.key}
+                  />
+                );
+              }
+              return renderNonAudioFile(file);
+            })}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-center bg-white/2 rounded-xl border border-dashed border-border">
             <Music className="w-10 h-10 text-text-secondary opacity-40 mb-2" />
-            <p className="text-sm text-text-secondary italic">No hay audios disponibles para este proyecto.</p>
+            <p className="text-sm text-text-secondary italic">No hay archivos disponibles para este proyecto.</p>
           </div>
         )}
       </div>

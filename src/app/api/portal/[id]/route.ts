@@ -80,16 +80,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             ...foldersWithFiles.flatMap((f: any) => f.files.map((file: any) => ({ ...file, parentFolderName: f.name })))
           ];
           
-          const AUDIO_EXTS = /\.(wav|mp3|m4a|flac|aiff|aif|ogg|opus|wma|alac)$/i;
           bounces = allFiles
-            .filter((f: any) => (f.mimeType?.startsWith('audio/') || AUDIO_EXTS.test(f.name || '')) && !f.trashed)
-            .filter((f: any) => {
-              const parentLower = (f.parentFolderName || '').toLowerCase();
-              const nameLower = (f.name || '').toLowerCase();
-              // Exclude stem files
-              if (parentLower.includes('stem') || nameLower.includes('stem')) return false;
-              return true;
-            })
+            .filter((f: any) => !f.trashed)
             .sort((a: any, b: any) => {
               const timeA = new Date(a.modifiedTime || a.createdTime || 0).getTime();
               const timeB = new Date(b.modifiedTime || b.createdTime || 0).getTime();
@@ -97,7 +89,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             });
             
         } catch (e) {
-          console.error('Error fetching project audios:', e);
+          console.error('Error fetching project files:', e);
         }
 
         return {
@@ -110,51 +102,66 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           driveUrl: projectFolder.webViewLink,
           tasks: flatTasks,
           bounces,
+          files: bounces,
         };
       })
     );
 
-    // 3.5 Fetch loose bounces (from Artist Root and Root Bounces folder)
+    // 3.5 Fetch loose files (from Artist Root and any other non-project folders)
     let looseBounces: any[] = [];
     try {
       const drive = getDriveService();
-      const AUDIO_EXTS = /\.(wav|mp3|m4a|flac|aiff|aif|ogg|opus|wma|alac)$/i;
       
-      // Root Audio files directly in Artist Folder
+      // Root files directly in Artist Folder
       const query = `'${id}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false`;
       const res = await drive.files.list({
         q: query,
-        fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size)',
+        fields: 'files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size, appProperties)',
         supportsAllDrives: true,
-        includeItemsFromAllDrives: true
+        includeItemsFromAllDrives: true,
+        pageSize: 1000,
       });
       if (res.data.files) {
-        const SYSTEM_FILES = ['artist_config.json', 'portal_config.json', 'portal_feedback.json', 'matrices.json', 'payments.json'];
-        const rootAudioFiles = res.data.files.filter(f => 
-          !SYSTEM_FILES.includes(f.name || '') &&
-          (f.mimeType?.startsWith('audio/') || AUDIO_EXTS.test(f.name || ''))
-        );
-        looseBounces.push(...rootAudioFiles);
+        const SYSTEM_FILES = [
+          'artist_config.json', 'portal_config.json', 'portal_feedback.json', 
+          'matrices.json', 'payments.json', 'tasks.json', 'project_config.json', 
+          'release_config.json', 'notes.json', 'payments_db.json'
+        ];
+        for (const f of res.data.files) {
+          if (SYSTEM_FILES.includes(f.name || '') || f.name?.endsWith('.json') || f.mimeType === 'application/json') {
+            continue;
+          }
+          const expiresAt = f.appProperties?.expiresAt ? parseInt(f.appProperties.expiresAt, 10) : null;
+          if (expiresAt && expiresAt < Date.now()) {
+            drive.files.delete({ fileId: f.id!, supportsAllDrives: true }).catch(console.error);
+            continue;
+          }
+          looseBounces.push({
+            ...f,
+            expiresAt,
+            bpm: f.appProperties?.bpm || null,
+            key: f.appProperties?.key || null
+          });
+        }
       }
       
-      // Root Bounces folder
-      const bouncesFolder = folders.find(f => {
-        const nameLower = f.name?.toLowerCase() || '';
-        return nameLower === 'bounces' || nameLower === '02_bounces_y_grabaciones' || nameLower.endsWith('bounces');
-      });
-      if (bouncesFolder) {
-        const { folders: bSubFolders, files: bRootFiles } = await fetchFoldersRecursively(drive, bouncesFolder.id);
-        const bAllFiles = [
-          ...bRootFiles,
-          ...bSubFolders.flatMap(sf => sf.files)
-        ];
-        const bAudioFiles = bAllFiles.filter(f => 
-          (f.mimeType?.startsWith('audio/') || AUDIO_EXTS.test(f.name || '')) && !f.trashed
-        );
-        looseBounces.push(...bAudioFiles);
+      // Extra non-project folders (e.g. Bounces, Documents, Stems, etc.)
+      const nonProjectFolders = folders.filter(f => ignoreFolders.includes(f.name || ''));
+      for (const folder of nonProjectFolders) {
+        if (folder.name === 'Releases' || folder.name === 'releases') continue; // Releases are handled separately
+        try {
+          const { folders: subFolders, files: subRootFiles } = await fetchFoldersRecursively(drive, folder.id);
+          const allSubFiles = [
+            ...subRootFiles.map((f: any) => ({ ...f, parentFolderName: folder.name })),
+            ...subFolders.flatMap((sf: any) => sf.files.map((file: any) => ({ ...file, parentFolderName: sf.name })))
+          ];
+          looseBounces.push(...allSubFiles.filter((f: any) => !f.trashed));
+        } catch (err) {
+          console.error(`Error fetching folder ${folder.name}:`, err);
+        }
       }
     } catch (e) {
-      console.error('Error fetching loose bounces:', e);
+      console.error('Error fetching loose files:', e);
     }
 
     const bouncesMap = new Map<string, any>();
@@ -180,7 +187,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         requirePaymentForDownload: false,
         driveUrl: '',
         tasks: projectsData.flatMap(p => p.tasks),
-        bounces: allGlobalBounces
+        bounces: allGlobalBounces,
+        files: allGlobalBounces
       });
     } else {
       projectsData.push({
@@ -192,7 +200,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         requirePaymentForDownload: false,
         driveUrl: '',
         tasks: [],
-        bounces: allGlobalBounces
+        bounces: allGlobalBounces,
+        files: allGlobalBounces
       });
     }
 

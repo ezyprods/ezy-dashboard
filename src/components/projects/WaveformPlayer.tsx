@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { MiniDAWModal } from './MiniDAWModal';
 import { DAWErrorBoundary } from './DAWErrorBoundary';
+import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 
 
 interface WaveformPlayerProps {
@@ -23,6 +24,7 @@ interface WaveformPlayerProps {
   modifiedTime?: string;
   bpm?: number | string | null;
   trackKey?: string | null;
+  expiresAt?: number | null;
 }
 
 const BAR_COUNT = 70; // Fewer, thicker bars for minimalist look
@@ -53,7 +55,8 @@ export function WaveformPlayer({
   paywallLocked = false,
   modifiedTime,
   bpm,
-  trackKey
+  trackKey,
+  expiresAt
 }: WaveformPlayerProps) {
   const { currentTrack, isPlaying, duration, currentTime, playTrack, togglePlay, seek } = useAudio();
 
@@ -400,6 +403,9 @@ export function WaveformPlayer({
                 >
                   {displayName}
                 </span>
+                {expiresAt && (
+                  <RealtimeCountdown expiresAt={expiresAt} />
+                )}
                 {modifiedTime && (
                   <span className={cn("text-[10px] text-text-secondary font-mono bg-surface/50 px-1.5 py-0.5 rounded border border-border/20 shrink-0", !isPortal && "hidden sm:inline-block")} title="Fecha de subida">
                     {formatModificationTime(modifiedTime)}

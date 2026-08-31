@@ -204,15 +204,31 @@ export async function fetchFoldersRecursively(drive: any, parentId: string, pare
   } while (pageToken);
   
   // Archivos directos en este parent (ocultamos los de sistema)
-  const SYSTEM_FILES = ['tasks.json', 'project_config.json', 'release_config.json', 'notes.json', 'payments.json', 'payments_db.json'];
+  const SYSTEM_FILES = [
+    'tasks.json', 'project_config.json', 'release_config.json', 
+    'notes.json', 'payments.json', 'payments_db.json', 
+    'artist_config.json', 'portal_config.json', 'portal_feedback.json', 'matrices.json'
+  ];
   const files = items.filter((f: any) => 
     f.mimeType !== 'application/vnd.google-apps.folder' && 
-    !SYSTEM_FILES.includes(f.name)
-  ).map((f: any) => ({
-    ...f,
-    bpm: f.appProperties?.bpm || null,
-    key: f.appProperties?.key || null
-  }));
+    !SYSTEM_FILES.includes(f.name) &&
+    !f.name?.endsWith('.json') &&
+    f.mimeType !== 'application/json'
+  ).map((f: any) => {
+    const expiresAt = f.appProperties?.expiresAt ? parseInt(f.appProperties.expiresAt, 10) : null;
+    return {
+      ...f,
+      bpm: f.appProperties?.bpm || null,
+      key: f.appProperties?.key || null,
+      expiresAt,
+    };
+  }).filter((f: any) => {
+    if (f.expiresAt && f.expiresAt < Date.now()) {
+      drive.files.delete({ fileId: f.id, supportsAllDrives: true }).catch(console.error);
+      return false;
+    }
+    return true;
+  });
   rootFiles = files;
 
   // Carpetas directas

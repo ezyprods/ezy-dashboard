@@ -25,9 +25,13 @@ export function PortalTrackPickerModal({ bounces, selectedFileIds = [], onClose,
   };
 
   const filteredItems = useMemo(() => {
-    if (!searchQuery) return bounces;
+    const AUDIO_EXTS = /\.(wav|mp3|m4a|flac|aiff|aif|ogg|opus|wma|alac)$/i;
+    const audioBounces = bounces.filter(item => 
+      (item.mimeType?.startsWith('audio/') || AUDIO_EXTS.test(item.name || ''))
+    );
+    if (!searchQuery) return audioBounces;
     const q = searchQuery.toLowerCase();
-    return bounces.filter(item => (item.name || '').toLowerCase().includes(q));
+    return audioBounces.filter(item => (item.name || '').toLowerCase().includes(q));
   }, [bounces, searchQuery]);
 
   const displayItems = filteredItems.slice(0, visibleCount);
