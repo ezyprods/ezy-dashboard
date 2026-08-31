@@ -40,23 +40,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const drive = getDriveService();
 
-    // 2. Traversal recursivo — misma lógica que /api/files que usa DriveExplorer (garantiza igualdad)
+    // 2. Traversal recursivo — acumula todos los archivos y mapea carpetas de proyectos
     const SYSTEM_FILES_SET = new Set([
       'artist_config.json', 'portal_config.json', 'portal_feedback.json', 
       'matrices.json', 'payments.json', 'tasks.json', 'project_config.json', 
-      'release_config.json', 'notes.json', 'payments_db.json'
+      'release_config.json', 'notes.json', 'payments_db.json', 'ezy-config.json'
     ]);
 
     const allArtistFiles: any[] = [];
-    const folderFilesMap = new Map<string, any[]>(); // folderId -> archivos directos (no recursivos)
+    const folderFilesMap = new Map<string, any[]>(); // folderId -> todos los archivos de esa carpeta y sus subcarpetas
     const rootSubfolders: { id: string; name: string; webViewLink?: string }[] = [];
 
-    // Traverse idéntico al de /api/files/route.ts — el único cambio es que también construye
-    // rootSubfolders y folderFilesMap para los proyectos
-    async function traverse(folderId: string, pathLabel: string, isRoot: boolean) {
+    async function traverse(folderId: string, pathLabel: string, isRoot: boolean): Promise<any[]> {
       const query = `'${folderId}' in parents and trashed=false`;
       let pageToken: string | undefined = undefined;
-      const directFiles: any[] = [];
+      const allFilesInBranch: any[] = [];
 
       do {
         const response: any = await drive.files.list({
@@ -74,8 +72,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           const name = item.name || '';
           if (item.mimeType === 'application/vnd.google-apps.folder') {
             if (isRoot) rootSubfolders.push({ id: item.id, name: item.name, webViewLink: item.webViewLink });
-            // Recursión en TODA carpeta (sin excluir nada en la recursión)
-            await traverse(item.id, pathLabel ? `${pathLabel} / ${name}` : name, false);
+            // Recursión en toda subcarpeta
+            const subFiles = await traverse(item.id, pathLabel ? `${pathLabel} / ${name}` : name, false);
+            allFilesInBranch.push(...subFiles);
           } else {
             // Filtrar archivos de sistema
             if (SYSTEM_FILES_SET.has(name) || name.endsWith('.json') || item.mimeType === 'application/json') continue;
@@ -93,41 +92,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
               bpm: item.appProperties?.bpm || null,
               key: item.appProperties?.key || null,
             };
-            directFiles.push(fileObj);
+            allFilesInBranch.push(fileObj);
             allArtistFiles.push(fileObj);
           }
         }
         pageToken = response.data.nextPageToken || undefined;
       } while (pageToken);
 
-      // Guardar archivos DIRECTOS (no recursivos) de esta carpeta para el mapa de proyectos
-      if (!folderFilesMap.has(folderId)) {
-        folderFilesMap.set(folderId, directFiles);
-      }
-      return directFiles;
+      folderFilesMap.set(folderId, allFilesInBranch);
+      return allFilesInBranch;
     }
 
     await traverse(id, '', true);
 
-    console.log(`[Portal Debug] Artist ${id}: Found ${allArtistFiles.length} total files:`);
-    allArtistFiles.forEach(f => console.log(`  - [${f.id}] ${f.name} (${f.mimeType}) parent="${f.parentFolderName || 'ROOT'}"`));
-    console.log(`[Portal Debug] rootSubfolders:`, rootSubfolders.map(f => `${f.name}(${f.id})`));
+    const getEffectiveDate = (file: any) => {
+      const match = (file.name || '').match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
+      if (match) {
+        const [, day, month, year] = match;
+        const parsed = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)).getTime();
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+      return new Date(file.modifiedTime || file.createdTime || 0).getTime();
+    };
 
     const dateSorter = (a: any, b: any) => {
-      const parseDate = (filename: string) => {
-        const match = (filename || '').match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
-        if (match) {
-          const [, day, month, year] = match;
-          return new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).getTime();
-        }
-        return 0;
-      };
-      const dateA = parseDate(a.name || '');
-      const dateB = parseDate(b.name || '');
-      if (dateA !== dateB) return dateB - dateA;
-      const timeA = new Date(a.modifiedTime || a.createdTime || 0).getTime();
-      const timeB = new Date(b.modifiedTime || b.createdTime || 0).getTime();
-      return timeB - timeA;
+      return getEffectiveDate(b) - getEffectiveDate(a);
     };
 
     allArtistFiles.sort(dateSorter);

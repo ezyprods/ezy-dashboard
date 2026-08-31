@@ -4,18 +4,21 @@ import { useState, useEffect } from 'react';
 import { Timer } from 'lucide-react';
 
 interface RealtimeCountdownProps {
-  expiresAt: number;
+  expiresAt: number | string;
   onClick?: (e: React.MouseEvent) => void;
 }
 
 export function RealtimeCountdown({ expiresAt, onClick }: RealtimeCountdownProps) {
+  const numericExpiresAt = typeof expiresAt === 'string' ? parseInt(expiresAt, 10) : expiresAt;
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
+    if (!numericExpiresAt || isNaN(numericExpiresAt)) return;
+
     const updateCountdown = () => {
       const now = Date.now();
-      const diff = expiresAt - now;
+      const diff = numericExpiresAt - now;
 
       if (diff <= 0) {
         setTimeLeft('Expirado');
@@ -43,7 +46,9 @@ export function RealtimeCountdown({ expiresAt, onClick }: RealtimeCountdownProps
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [expiresAt]);
+  }, [numericExpiresAt]);
+
+  if (!numericExpiresAt || isNaN(numericExpiresAt)) return null;
 
   return (
     <span 
@@ -53,7 +58,7 @@ export function RealtimeCountdown({ expiresAt, onClick }: RealtimeCountdownProps
           ? 'bg-error/10 text-error border-error/20' 
           : 'bg-accent/10 text-accent border-accent/20'
       } ${onClick ? 'cursor-pointer hover:opacity-80 active:scale-95' : ''}`}
-      title={`Expira: ${new Date(expiresAt).toLocaleString()}`}
+      title={`Expira: ${new Date(numericExpiresAt).toLocaleString()}`}
     >
       <Timer className="w-3 h-3 shrink-0 opacity-70" />
       {timeLeft}

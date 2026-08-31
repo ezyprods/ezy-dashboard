@@ -30,22 +30,15 @@ export async function GET(
       return NextResponse.redirect(meta.webViewLink, { status: 307 });
     }
 
-    // For images, redirect directly to Google's high-speed global thumbnail CDN (0 byte Vercel bandwidth)
-    if (meta.mimeType?.startsWith('image/')) {
+    // For images with inline view, redirect directly to Google's high-speed global thumbnail CDN
+    if (inline && meta.mimeType?.startsWith('image/')) {
       const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
       const res = NextResponse.redirect(imgUrl, { status: 307 });
       res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
       return res;
     }
 
-    // For non-inline downloads, if direct download link exists, redirect to Google Drive CDN
-    if (!inline && meta.webContentLink) {
-      const res = NextResponse.redirect(meta.webContentLink, { status: 307 });
-      res.headers.set('Cache-Control', 'public, max-age=86400');
-      return res;
-    }
-
-    // 2. Stream binary/media file with Range support as fallback
+    // 2. Stream binary/media file with Range support (RAR, ZIP, WAV, FLAC, PDF, etc.)
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,

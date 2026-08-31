@@ -340,24 +340,16 @@ export default function PortalPage() {
         {filesList && filesList.length > 0 ? (
           <div className="space-y-3">
             {[...filesList].sort((a, b) => {
-              const parseDate = (filename: string) => {
-                const match = filename.match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
+              const getEffectiveDate = (f: any) => {
+                const match = (f.name || '').match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
                 if (match) {
                   const [, day, month, year] = match;
-                  return new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).getTime();
+                  const parsed = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)).getTime();
+                  if (!isNaN(parsed) && parsed > 0) return parsed;
                 }
-                return 0;
+                return new Date(f.modifiedTime || f.createdTime || 0).getTime();
               };
-              const dateA = parseDate(a.name || '');
-              const dateB = parseDate(b.name || '');
-              
-              if (dateA !== dateB) {
-                return dateB - dateA; // Newest first
-              }
-              // Fallback to modifiedTime or createdTime
-              const timeA = new Date(a.modifiedTime || a.createdTime || 0).getTime();
-              const timeB = new Date(b.modifiedTime || b.createdTime || 0).getTime();
-              return timeB - timeA;
+              return getEffectiveDate(b) - getEffectiveDate(a);
             }).map((file: any) => {
               const isAudio = getFileCategory(file.mimeType, file.name) === 'audio';
               if (isAudio) {
