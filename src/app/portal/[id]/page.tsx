@@ -7,7 +7,7 @@ import {
   AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
   SkipForward, SkipBack, ChevronRight, Lock, Download, ExternalLink,
   Star, Clock, TrendingUp, ListMusic, Eye, Wrench, Paperclip, Calendar as CalendarIcon, CheckSquare, ListTodo,
-  FolderArchive, FileText, FileImage, Film, File as FileIcon, Archive, Folder, RefreshCw
+  FolderArchive, FileText, FileImage, Film, File as FileIcon, Archive, Folder, RefreshCw, FileSpreadsheet
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
@@ -177,43 +177,50 @@ export default function PortalPage() {
     const category = getFileCategory(mimeType, fileName);
     if (category === 'archive') {
       return (
-        <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
-          <FolderArchive className="w-5 h-5" />
+        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-sm" title="Archivo comprimido (Stems/RAR/ZIP)">
+          <FolderArchive className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </div>
       );
     }
     if (category === 'image') {
       return (
-        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
-          <FileImage className="w-5 h-5" />
+        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-sm" title="Imagen">
+          <FileImage className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </div>
       );
     }
     if (category === 'video') {
       return (
-        <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 shrink-0">
-          <Film className="w-5 h-5" />
+        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0 shadow-sm" title="Vídeo">
+          <Film className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </div>
       );
     }
     if (category === 'pdf') {
       return (
-        <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/25 flex items-center justify-center text-orange-400 shrink-0">
-          <FileText className="w-5 h-5" />
+        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 shrink-0 shadow-sm" title="Documento PDF">
+          <FileText className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </div>
       );
     }
-    if (category === 'document' || category === 'spreadsheet') {
+    if (category === 'spreadsheet') {
       return (
-        <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 shrink-0">
-          <FileText className="w-5 h-5" />
+        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 shadow-sm" title="Hoja de cálculo">
+          <FileSpreadsheet className="w-4 h-4 md:w-3.5 md:h-3.5" />
+        </div>
+      );
+    }
+    if (category === 'document') {
+      return (
+        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-sm" title="Documento">
+          <FileText className="w-4 h-4 md:w-3.5 md:h-3.5" />
         </div>
       );
     }
     if (category === 'flp') {
       return (
-        <div className="w-10 h-10 rounded-xl bg-[#ff793f]/10 border border-[#ff793f]/25 flex items-center justify-center shrink-0">
-          <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#ff793f]">
+        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-[#ff793f]/15 border border-[#ff793f]/30 flex items-center justify-center shrink-0 shadow-sm" title="Proyecto FL Studio">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 md:w-3.5 md:h-3.5 fill-[#ff793f]">
             <path d="M12 2c1.2 1.5 1.5 3 .5 4.5 1.5-1 2.2-2.5 1.5-4.5z" fill="#2ed573" />
             <path d="M12 5.5c-3.5 0-6 2-6 5.5 0 3.2 2 6.5 6 11 4-4.5 6-7.8 6-11 0-3.5-2.5-5.5-6-5.5z" />
             <ellipse cx="12" cy="11" rx="1.5" ry="2" fill="#ffa502" opacity="0.7" />
@@ -222,8 +229,8 @@ export default function PortalPage() {
       );
     }
     return (
-      <div className="w-10 h-10 rounded-xl bg-surface border border-border flex items-center justify-center text-text-secondary shrink-0">
-        <FileIcon className="w-5 h-5" />
+      <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-surface border border-border flex items-center justify-center text-text-secondary shrink-0 shadow-sm">
+        <FileIcon className="w-4 h-4 md:w-3.5 md:h-3.5" />
       </div>
     );
   };
@@ -234,80 +241,87 @@ export default function PortalPage() {
     const dateFormatted = formatFileDate(file.modifiedTime || file.createdTime);
 
     return (
-      <div
-        key={keyVal || file.id}
-        className="p-3.5 md:p-4 rounded-xl border border-border/60 bg-surface-elevated/40 hover:bg-surface-elevated/70 hover:border-accent/40 transition-all flex items-center justify-between gap-3 group/file"
-      >
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          {renderFileIcon(file.mimeType, file.name)}
+      <div key={keyVal || file.id} className="flex flex-col gap-2 w-full min-w-0">
+        <div
+          className="py-2 px-3 rounded-xl border border-border/60 bg-surface-elevated/40 hover:bg-surface-elevated/70 hover:border-accent/40 flex items-center justify-between gap-4 transition-all group/file shadow-sm hover:shadow-md"
+        >
+          <div className="flex flex-col w-full gap-2">
+            <div className="flex items-center gap-3 w-full">
+              {renderFileIcon(file.mimeType, file.name)}
 
-          <div className="flex-1 min-w-0 pr-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className="text-[13px] font-semibold text-text-primary truncate max-w-full group-hover/file:text-accent transition-colors"
-                title={file.name}
-              >
-                {file.name}
-              </span>
-              {file.expiresAt && (
-                <RealtimeCountdown expiresAt={file.expiresAt} />
-              )}
-              {sizeFormatted && (
-                <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0">
-                  {sizeFormatted}
-                </span>
-              )}
-              {dateFormatted && (
-                <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0 hidden sm:inline-block">
-                  {dateFormatted}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+              <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="text-[13px] font-semibold text-text-primary truncate max-w-full group-hover/file:text-accent transition-colors"
+                    title={file.name}
+                  >
+                    {file.name}
+                  </span>
+                  {file.expiresAt && (
+                    <RealtimeCountdown expiresAt={file.expiresAt} />
+                  )}
+                  {sizeFormatted && (
+                    <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0">
+                      {sizeFormatted}
+                    </span>
+                  )}
+                  {dateFormatted && (
+                    <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0 hidden sm:inline-block">
+                      {dateFormatted}
+                    </span>
+                  )}
+                </div>
+              </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {paywallLocked ? (
-            <button
-              onClick={() => customAlert('Descarga bloqueada. Tienes pagos pendientes.')}
-              className="p-2 text-warning hover:text-warning/80 rounded-lg hover:bg-warning/10 transition-all"
-              title="Pago pendiente"
-            >
-              <Lock className="w-4 h-4" />
-            </button>
-          ) : (
-            <>
-              {isViewableInBrowser && (
+              <div className="flex items-center gap-0.5 md:gap-1.5 shrink-0">
+                {paywallLocked ? (
+                  <button
+                    onClick={() => customAlert('Descarga bloqueada. Tienes pagos pendientes.')}
+                    className="p-2 md:p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 transition-all"
+                    title="Pago pendiente"
+                  >
+                    <Lock className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </button>
+                ) : (
+                  <>
+                    {isViewableInBrowser && (
+                      <a
+                        href={`/api/files/${file.id}?inline=true`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
+                        title="Ver archivo"
+                      >
+                        <Eye className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                      </a>
+                    )}
+                    <a
+                      href={`/api/files/${file.id}?inline=false`}
+                      download={file.name}
+                      className="p-2 md:p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface transition-all"
+                      title="Descargar archivo"
+                    >
+                      <Download className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                    </a>
+                  </>
+                )}
+
                 <a
-                  href={`/api/files/${file.id}?inline=true`}
+                  href={file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-2 text-text-secondary hover:text-accent rounded-lg hover:bg-surface transition-all"
-                  title="Ver archivo"
+                  className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
+                  title="Abrir en Google Drive"
                 >
-                  <Eye className="w-4 h-4" />
+                  <ExternalLink className="w-4 h-4 md:w-3.5 md:h-3.5" />
                 </a>
-              )}
-              <a
-                href={`/api/files/${file.id}?inline=false`}
-                download={file.name}
-                className="p-2 text-text-secondary hover:text-accent-light rounded-lg hover:bg-surface transition-all"
-                title="Descargar archivo"
-              >
-                <Download className="w-4 h-4" />
-              </a>
-            </>
-          )}
+              </div>
+            </div>
 
-          <a
-            href={file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="p-2 text-text-secondary hover:text-accent rounded-lg hover:bg-surface transition-all"
-            title="Abrir en Google Drive"
-          >
-            <ExternalLink className="w-4 h-4" />
-          </a>
+            <div className="w-full h-3 md:h-1 bg-border/20 rounded-full overflow-hidden">
+              <div className="w-full h-full bg-gradient-to-r from-accent/20 to-transparent" />
+            </div>
+          </div>
         </div>
       </div>
     );
