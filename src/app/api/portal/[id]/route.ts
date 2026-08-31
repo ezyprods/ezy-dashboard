@@ -40,49 +40,46 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const drive = getDriveService();
 
-    // 2. Traversal recursivo exhaustivo de todos los archivos y carpetas del artista
-    const SYSTEM_FILES = [
+    // 2. Traversal recursivo — misma lógica que /api/files que usa DriveExplorer (garantiza igualdad)
+    const SYSTEM_FILES_SET = new Set([
       'artist_config.json', 'portal_config.json', 'portal_feedback.json', 
       'matrices.json', 'payments.json', 'tasks.json', 'project_config.json', 
       'release_config.json', 'notes.json', 'payments_db.json'
-    ];
-    const SYSTEM_FOLDERS = [
-      'Images', 'images', 'Releases', 'releases',
-      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones',
-      'Bounces', 'bounces', 'Documents', 'documents', 'Contracts', 'contracts'
-    ];
+    ]);
 
     const allArtistFiles: any[] = [];
-    const folderFilesMap = new Map<string, any[]>();
+    const folderFilesMap = new Map<string, any[]>(); // folderId -> archivos directos (no recursivos)
     const rootSubfolders: { id: string; name: string; webViewLink?: string }[] = [];
 
-    async function traverseFolder(folderId: string, currentPath: string = '', isRoot: boolean = false) {
+    // Traverse idéntico al de /api/files/route.ts — el único cambio es que también construye
+    // rootSubfolders y folderFilesMap para los proyectos
+    async function traverse(folderId: string, pathLabel: string, isRoot: boolean) {
+      const query = `'${folderId}' in parents and trashed=false`;
       let pageToken: string | undefined = undefined;
       const directFiles: any[] = [];
-      const subFolders: any[] = [];
 
       do {
         const response: any = await drive.files.list({
-          q: `'${folderId}' in parents and trashed=false`,
+          q: query,
           fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size, appProperties)',
           orderBy: 'folder, name',
-          pageSize: 1000,
-          pageToken: pageToken,
           includeItemsFromAllDrives: true,
           supportsAllDrives: true,
+          pageSize: 1000,
+          pageToken,
         });
         const items = response.data.files || [];
+
         for (const item of items) {
+          const name = item.name || '';
           if (item.mimeType === 'application/vnd.google-apps.folder') {
-            subFolders.push(item);
-            if (isRoot) {
-              rootSubfolders.push({ id: item.id, name: item.name, webViewLink: item.webViewLink });
-            }
+            if (isRoot) rootSubfolders.push({ id: item.id, name: item.name, webViewLink: item.webViewLink });
+            // Recursión en TODA carpeta (sin excluir nada en la recursión)
+            await traverse(item.id, pathLabel ? `${pathLabel} / ${name}` : name, false);
           } else {
-            const name = item.name || '';
-            if (SYSTEM_FILES.includes(name) || name.endsWith('.json') || item.mimeType === 'application/json') {
-              continue;
-            }
+            // Filtrar archivos de sistema
+            if (SYSTEM_FILES_SET.has(name) || name.endsWith('.json') || item.mimeType === 'application/json') continue;
+            // Filtrar expirados
             const expiresAt = item.appProperties?.expiresAt ? parseInt(item.appProperties.expiresAt, 10) : null;
             if (expiresAt && expiresAt < Date.now()) {
               drive.files.delete({ fileId: item.id, supportsAllDrives: true }).catch(console.error);
@@ -91,7 +88,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             const fileObj = {
               ...item,
               parentFolderId: folderId,
-              parentFolderName: currentPath,
+              parentFolderName: pathLabel,
               expiresAt,
               bpm: item.appProperties?.bpm || null,
               key: item.appProperties?.key || null,
@@ -103,21 +100,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         pageToken = response.data.nextPageToken || undefined;
       } while (pageToken);
 
-      for (const sf of subFolders) {
-        if (isRoot && (sf.name === 'Releases' || sf.name === 'releases')) continue; // Releases are managed separately
-        const subPath = currentPath ? `${currentPath} / ${sf.name}` : sf.name;
-        const subFolderFiles = await traverseFolder(sf.id, subPath, false);
-        directFiles.push(...subFolderFiles);
+      // Guardar archivos DIRECTOS (no recursivos) de esta carpeta para el mapa de proyectos
+      if (!folderFilesMap.has(folderId)) {
+        folderFilesMap.set(folderId, directFiles);
       }
-
-      folderFilesMap.set(folderId, directFiles);
       return directFiles;
     }
 
-    await traverseFolder(id, '', true);
+    await traverse(id, '', true);
 
     console.log(`[Portal Debug] Artist ${id}: Found ${allArtistFiles.length} total files:`);
-    allArtistFiles.forEach(f => console.log(`  - [${f.id}] ${f.name} (${f.mimeType}) parentFolderId=${f.parentFolderId} path="${f.parentFolderName || 'ROOT'}"`));
+    allArtistFiles.forEach(f => console.log(`  - [${f.id}] ${f.name} (${f.mimeType}) parent="${f.parentFolderName || 'ROOT'}"`));
     console.log(`[Portal Debug] rootSubfolders:`, rootSubfolders.map(f => `${f.name}(${f.id})`));
 
     const dateSorter = (a: any, b: any) => {
@@ -139,8 +132,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     allArtistFiles.sort(dateSorter);
 
-    // 3. Proyectos del artista
-    const projectFolders = rootSubfolders.filter(f => !SYSTEM_FOLDERS.includes(f.name || ''));
+    // 3. Proyectos del artista — carpetas de la raíz del artista que NO son carpetas del sistema
+    const SYSTEM_FOLDERS = new Set([
+      'Images', 'images', 'Releases', 'releases',
+      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones',
+      'Bounces', 'bounces', 'Documents', 'documents', 'Contracts', 'contracts', 'Stems', 'stems'
+    ]);
+    const projectFolders = rootSubfolders.filter(f => !SYSTEM_FOLDERS.has(f.name || ''));
     const projectsData = await Promise.all(
       projectFolders.map(async (projectFolder) => {
         const projectConfig = await findAndReadJsonFile<any>('project_config.json', projectFolder.id) || { title: projectFolder.name, type: 'Project' };
