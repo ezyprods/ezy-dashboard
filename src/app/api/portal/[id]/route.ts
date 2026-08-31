@@ -116,6 +116,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     await traverseFolder(id, '', true);
 
+    console.log(`[Portal Debug] Artist ${id}: Found ${allArtistFiles.length} total files:`);
+    allArtistFiles.forEach(f => console.log(`  - [${f.id}] ${f.name} (${f.mimeType}) parentFolderId=${f.parentFolderId} path="${f.parentFolderName || 'ROOT'}"`));
+    console.log(`[Portal Debug] rootSubfolders:`, rootSubfolders.map(f => `${f.name}(${f.id})`));
+
     const dateSorter = (a: any, b: any) => {
       const parseDate = (filename: string) => {
         const match = (filename || '').match(/\[(\d{2})-(\d{2})-(\d{4})\]/);

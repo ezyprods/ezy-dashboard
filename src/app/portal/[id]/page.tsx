@@ -39,12 +39,15 @@ export default function PortalPage() {
         });
         if (!res.ok) throw new Error('Portal no encontrado');
         const json = await res.json();
+        // Debug: log all files received
+        console.log('[Portal] Projects received:', json.projects?.map((p: any) => ({ id: p.id, title: p.title, fileCount: p.bounces?.length || 0, files: p.bounces?.map((f: any) => f.name) })));
         setData(json);
         if (json.projects && json.projects.length > 0) {
           setSelectedProjectId(json.projects[0].id);
         }
         if (json.releases && json.releases.length > 0) {
           setActiveReleaseId(json.releases[0].id);
+
         }
         
         // Update browser tab title
@@ -222,14 +225,14 @@ export default function PortalPage() {
     );
   };
 
-  const renderNonAudioFile = (file: any) => {
+  const renderNonAudioFile = (file: any, keyVal?: string) => {
     const isViewableInBrowser = isBrowserCompatible(file.mimeType) || file.mimeType?.startsWith('image/') || file.mimeType?.startsWith('video/') || file.mimeType?.includes('pdf');
     const sizeFormatted = formatFileSize(file.size);
     const dateFormatted = formatFileDate(file.modifiedTime || file.createdTime);
 
     return (
       <div
-        key={file.id}
+        key={keyVal || file.id}
         className="p-3.5 md:p-4 rounded-xl border border-border/60 bg-surface-elevated/40 hover:bg-surface-elevated/70 hover:border-accent/40 transition-all flex items-center justify-between gap-3 group/file"
       >
         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -370,7 +373,7 @@ export default function PortalPage() {
                   />
                 );
               }
-              return renderNonAudioFile(file);
+              return renderNonAudioFile(file, file.id);
             })}
           </div>
         ) : (
