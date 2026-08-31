@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Loader2, Trash2, Clock, X, AlertTriangle, CalendarDays, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { customAlert } from '@/lib/dialog';
@@ -30,6 +30,7 @@ export function DeleteModal({
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<boolean>(!!currentExpiration);
   const [customMode, setCustomMode] = useState(false);
+  const deleteBtnRef = useRef<HTMLButtonElement>(null);
   
   const targetIds = fileIds && fileIds.length > 0 ? fileIds : [fileId];
 
@@ -53,8 +54,6 @@ export function DeleteModal({
   }, []);
   const [customDateTime, setCustomDateTime] = useState<string>(defaultCustomDate);
 
-  if (!isOpen) return null;
-
   const calculatedExpirationTimestamp = customMode
     ? new Date(customDateTime).getTime()
     : Date.now() + selectedExpirationMs;
@@ -63,6 +62,45 @@ export function DeleteModal({
     dateStyle: 'full',
     timeStyle: 'short',
   });
+
+  // Auto-focus on open
+  useEffect(() => {
+    if (isOpen && !scheduleMode) {
+      setTimeout(() => {
+        deleteBtnRef.current?.focus();
+      }, 50);
+    }
+  }, [isOpen, scheduleMode]);
+
+  // Teclado: Enter para eliminar inmediatamente, Escape para cerrar
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        // Si el usuario está escribiendo en el selector de fecha, no interferir salvo que pulse enter explícito
+        e.preventDefault();
+        if (!scheduleMode) {
+          if (!isDeleting) {
+            handleDeleteNow();
+          }
+        } else if (!isScheduling && !currentExpiration) {
+          handleScheduleDelete();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, scheduleMode, isDeleting, isScheduling, currentExpiration, targetIds, calculatedExpirationTimestamp]);
+
+  if (!isOpen) return null;
 
   const handleDeleteNow = async () => {
     setIsDeleting(true);
@@ -199,6 +237,7 @@ export function DeleteModal({
                 </div>
               </div>
               <Button 
+                ref={deleteBtnRef}
                 onClick={handleDeleteNow} 
                 className="w-full bg-error hover:bg-error/90 text-white gap-2 h-11" 
                 disabled={isDeleting}
