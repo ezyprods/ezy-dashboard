@@ -6,7 +6,14 @@ import path from 'path';
 import os from 'os';
 import { ensureBinaries } from './binaries';
 import { buildCookieArgs } from './cookies';
-import { downloadWithEngines, getYouTubeVideoId, isYouTubeUrl } from './engines';
+import {
+  downloadWithEngines,
+  getYouTubeVideoId,
+  isYouTubeUrl,
+  isSpotifyUrl,
+  isSoundCloudUrl,
+  searchYouTubeFirstVideoId,
+} from './engines';
 
 const execFileAsync = promisify(execFile);
 
@@ -16,18 +23,39 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const rawUrl = searchParams.get('url') || searchParams.get('resolvedUrl');
-    const title = searchParams.get('title') || 'ezy_audio';
+    let title = searchParams.get('title') || 'ezy_audio';
 
     if (!rawUrl) {
       return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
     }
 
-    const videoId = getYouTubeVideoId(rawUrl);
-    const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : rawUrl;
-    const isYouTube = isYouTubeUrl(rawUrl);
+    let videoId = getYouTubeVideoId(rawUrl);
 
-    // Priority 1: Multi-engine API system (for YouTube)
-    if (isYouTube && videoId) {
+    // If Spotify link
+    if (!videoId && isSpotifyUrl(rawUrl)) {
+      try {
+        const spotOembed = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(rawUrl)}`).then(r => r.json());
+        if (spotOembed.title) {
+          title = spotOembed.title;
+          videoId = await searchYouTubeFirstVideoId(`${spotOembed.title} audio`);
+        }
+      } catch (e) {}
+    }
+
+    // If SoundCloud link
+    if (!videoId && isSoundCloudUrl(rawUrl)) {
+      try {
+        const scOembed = await fetch(`https://soundcloud.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`).then(r => r.json());
+        if (scOembed.title) {
+          const scTitle = (scOembed.title || '').replace(/by.*$/i, '').trim();
+          title = scOembed.author_name ? `${scOembed.author_name} - ${scTitle}` : scTitle;
+          videoId = await searchYouTubeFirstVideoId(title);
+        }
+      } catch (e) {}
+    }
+
+    // Primary: Multi-engine API system
+    if (videoId) {
       try {
         const result = await downloadWithEngines(videoId);
         const safeTitle = encodeURIComponent(
@@ -42,11 +70,11 @@ export async function GET(req: Request) {
         });
       } catch (e: any) {
         console.warn('[ytdl/direct] Multi-engine failed in GET:', e?.message);
-        // Fall through to yt-dlp
       }
     }
 
-    // Fallback: yt-dlp binary
+    // Fallback: yt-dlp binary (for other URLs)
+    const target = rawUrl;
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
     const tempId = `direct_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);

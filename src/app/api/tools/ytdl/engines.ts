@@ -1,24 +1,28 @@
 import { createDecipheriv } from 'crypto';
 
 /**
- * Multi-Engine YouTube MP3 Download System
+ * Multi-Engine YouTube/Spotify/SoundCloud MP3 Download System
  * 
  * Provides self-contained, high-performance download engines that convert 
- * YouTube videos to 320kbps MP3 without triggering bot blocks on serverless
- * datacenter IPs (like Vercel / AWS / GCP).
+ * YouTube, Spotify, and SoundCloud audio to 320kbps MP3 without triggering
+ * bot blocks on serverless datacenter IPs (like Vercel / AWS / GCP).
  */
 
 const AES_KEY_HEX = 'C5D58EF67A7584E4A29F6C35BBC4EB12';
 
 function decodeAesPayload(encBase64: string): any {
-  const data = Buffer.from(encBase64, 'base64');
-  const iv = data.subarray(0, 16);
-  const content = data.subarray(16);
-  const key = Buffer.from(AES_KEY_HEX, 'hex');
+  try {
+    const data = Buffer.from(encBase64, 'base64');
+    const iv = data.subarray(0, 16);
+    const content = data.subarray(16);
+    const key = Buffer.from(AES_KEY_HEX, 'hex');
 
-  const decipher = createDecipheriv('aes-128-cbc', key, iv);
-  const decrypted = Buffer.concat([decipher.update(content), decipher.final()]);
-  return JSON.parse(decrypted.toString('utf-8'));
+    const decipher = createDecipheriv('aes-128-cbc', key, iv);
+    const decrypted = Buffer.concat([decipher.update(content), decipher.final()]);
+    return JSON.parse(decrypted.toString('utf-8'));
+  } catch (e) {
+    return null;
+  }
 }
 
 // Ordered by response speed and reliability
@@ -181,6 +185,14 @@ export function isYouTubeUrl(url: string): boolean {
   );
 }
 
+export function isSpotifyUrl(url: string): boolean {
+  return url.includes('spotify.com') || url.includes('spotify.link');
+}
+
+export function isSoundCloudUrl(url: string): boolean {
+  return url.includes('soundcloud.com');
+}
+
 export function getYouTubeVideoId(urlStr: string): string | null {
   try {
     const parsed = new URL(urlStr);
@@ -196,5 +208,42 @@ export function getYouTubeVideoId(urlStr: string): string | null {
     );
     if (match) return match[1];
   }
+  return null;
+}
+
+/**
+ * Searches YouTube search results HTML directly to find the first matching video ID
+ * without depending on local yt-search bot-prone scrapers.
+ */
+export async function searchYouTubeFirstVideoId(query: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map(m => m[1]);
+      const uniqueIds = Array.from(new Set(matches));
+      if (uniqueIds.length > 0) {
+        return uniqueIds[0];
+      }
+    }
+  } catch (e) {}
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const yts = require('@vreden/youtube_scraper');
+    const sRes = await yts.search(query);
+    const list = sRes.results || sRes.result || [];
+    const first = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
+    if (first) {
+      return first.videoId || (first.url ? getYouTubeVideoId(first.url) : null);
+    }
+  } catch (e) {}
+
   return null;
 }

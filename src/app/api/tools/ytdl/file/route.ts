@@ -7,7 +7,14 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { ensureBinaries } from '../binaries';
 import { buildCookieArgs } from '../cookies';
-import { downloadWithEngines, getYouTubeVideoId, isYouTubeUrl } from '../engines';
+import {
+  downloadWithEngines,
+  getYouTubeVideoId,
+  isYouTubeUrl,
+  isSpotifyUrl,
+  isSoundCloudUrl,
+  searchYouTubeFirstVideoId,
+} from '../engines';
 
 const execFileAsync = promisify(execFile);
 
@@ -72,7 +79,7 @@ export async function GET(req: Request) {
     }
 
     // 3. On-demand generation fallback
-    const url = task?.url || paramUrl;
+    const url = task?.resolvedUrl || task?.url || paramUrl;
     if (!url) {
       return NextResponse.json(
         { error: 'URL o taskId no encontrado' },
@@ -80,12 +87,32 @@ export async function GET(req: Request) {
       );
     }
 
-    const videoId = getYouTubeVideoId(url);
-    const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
-    const isYouTube = isYouTubeUrl(url);
+    let videoId = getYouTubeVideoId(url);
 
-    // Priority 1: Multi-engine API system (for YouTube)
-    if (isYouTube && videoId) {
+    // Spotify fallback resolution
+    if (!videoId && isSpotifyUrl(url)) {
+      try {
+        const spotOembed = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`).then(r => r.json());
+        if (spotOembed.title) {
+          videoId = await searchYouTubeFirstVideoId(`${spotOembed.title} audio`);
+        }
+      } catch (e) {}
+    }
+
+    // SoundCloud fallback resolution
+    if (!videoId && isSoundCloudUrl(url)) {
+      try {
+        const scOembed = await fetch(`https://soundcloud.com/oembed?url=${encodeURIComponent(url)}&format=json`).then(r => r.json());
+        if (scOembed.title) {
+          const scTitle = (scOembed.title || '').replace(/by.*$/i, '').trim();
+          const q = scOembed.author_name ? `${scOembed.author_name} - ${scTitle}` : scTitle;
+          videoId = await searchYouTubeFirstVideoId(q);
+        }
+      } catch (e) {}
+    }
+
+    // Priority 1: Multi-engine API system
+    if (videoId) {
       try {
         const result = await downloadWithEngines(videoId);
         const safeTitle = encodeURIComponent(title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio');
@@ -135,7 +162,7 @@ export async function GET(req: Request) {
       args.push('--proxy', proxyUrl);
     }
 
-    args.push(target);
+    args.push(url);
 
     await execFileAsync(ytdlpPath, args, { timeout: 120000 });
 

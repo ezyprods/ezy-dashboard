@@ -13,7 +13,7 @@ export function QuickMP3Downloader() {
     setStatus('extracting');
 
     try {
-      const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(url)}`;
+      const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(url.trim())}`;
       const a = document.createElement('a');
       a.href = downloadUrl;
       a.target = '_blank';
@@ -48,7 +48,7 @@ export function QuickMP3Downloader() {
       <div className="flex-1 min-w-0 relative z-10 flex flex-col justify-center h-full">
         <input 
           type="text" 
-          placeholder="Pegar link YouTube..."
+          placeholder="Pegar link (YouTube, Spotify, SoundCloud)..."
           value={url}
           onChange={e => setUrl(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && status === 'idle' && handleDownload()}
@@ -57,8 +57,8 @@ export function QuickMP3Downloader() {
         />
         <p className="text-[11px] text-text-secondary font-medium mt-0.5 leading-tight">
           {status === 'idle' && "Presiona Enter para descargar MP3"}
-          {status === 'extracting' && "Procesando..."}
-          {status === 'done' && "¡Descargado!"}
+          {status === 'extracting' && "Procesando audio..."}
+          {status === 'done' && "¡Descarga iniciada!"}
           {status === 'error' && "Error al descargar"}
         </p>
       </div>
