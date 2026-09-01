@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import https from 'https';
 import { createDecipheriv } from 'crypto';
 import { extractPlaylistId, fetchYouTubePlaylist, isRadioOrMix } from '../playlist';
+import { isSpotifyPlaylistOrAlbum, fetchSpotifyPlaylist } from '../spotify_playlist';
 
 export const maxDuration = 60;
 
@@ -266,25 +267,25 @@ export async function POST(req: Request) {
     const playlistId = extractPlaylistId(trimmedUrl);
 
     // =========================================================================
-    // CASE A: Pure YouTube Playlist URL (No videoId present)
+    // 1. SPOTIFY PLAYLISTS & ALBUMS
     // =========================================================================
-    if (!videoId && playlistId && !isRadioOrMix(playlistId)) {
-      const playlist = await fetchYouTubePlaylist(playlistId);
-      if (playlist && playlist.tracks.length > 0) {
+    if (isSpotifyPlaylistOrAlbum(trimmedUrl)) {
+      const spotifyPl = await fetchSpotifyPlaylist(trimmedUrl);
+      if (spotifyPl && spotifyPl.tracks.length > 0) {
         return NextResponse.json({
           isPlaylist: true,
-          playlistId: playlist.id,
-          title: playlist.title,
-          thumbnail: playlist.thumbnail,
-          trackCount: playlist.trackCount,
-          tracks: playlist.tracks,
-          platform: 'youtube',
+          playlistId: spotifyPl.id,
+          title: spotifyPl.title,
+          thumbnail: spotifyPl.thumbnail,
+          trackCount: spotifyPl.trackCount,
+          tracks: spotifyPl.tracks,
+          platform: 'spotify',
         });
       }
     }
 
     // =========================================================================
-    // CASE B: Spotify Tracks
+    // 2. SPOTIFY INDIVIDUAL TRACKS
     // =========================================================================
     if (trimmedUrl.includes('spotify.com') || trimmedUrl.includes('spotify.link')) {
       const spotMeta = await getSpotifyMetadata(trimmedUrl);
@@ -315,7 +316,24 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // CASE C: SoundCloud Tracks
+    // 3. PURE YOUTUBE PLAYLIST URL (No videoId present)
+    // =========================================================================
+    } else if (!videoId && playlistId && !isRadioOrMix(playlistId)) {
+      const playlist = await fetchYouTubePlaylist(playlistId);
+      if (playlist && playlist.tracks.length > 0) {
+        return NextResponse.json({
+          isPlaylist: true,
+          playlistId: playlist.id,
+          title: playlist.title,
+          thumbnail: playlist.thumbnail,
+          trackCount: playlist.trackCount,
+          tracks: playlist.tracks,
+          platform: 'youtube',
+        });
+      }
+
+    // =========================================================================
+    // 4. SOUNDCLOUD TRACKS
     // =========================================================================
     } else if (trimmedUrl.includes('soundcloud.com')) {
       const scMeta = await getSoundCloudMetadata(trimmedUrl);
@@ -342,10 +360,9 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // CASE D: YouTube Video (With or Without Playlist parameters)
+    // 5. YOUTUBE VIDEO (With or Without Playlist parameters)
     // =========================================================================
     } else if (videoId) {
-      // Step 1: Resolve Video Info
       let videoTitle = `YouTube Audio (${videoId})`;
       let videoThumb = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
       let videoDuration: number | null = null;
@@ -363,7 +380,7 @@ export async function POST(req: Request) {
         }
       }
 
-      // Step 2: Check if this video link includes a real Playlist (not Radio/Mix)
+      // Check if this video link includes a real Playlist (not Radio/Mix)
       let playlistInfo: any = null;
       if (playlistId && !isRadioOrMix(playlistId)) {
         try {
@@ -392,7 +409,7 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // CASE E: Search Query (Plain song name or artist)
+    // 6. SEARCH QUERY (Plain song name or artist)
     // =========================================================================
     } else if (!trimmedUrl.startsWith('http')) {
       const matchedVideoId = await searchYouTubeFirstVideoId(trimmedUrl);
@@ -418,7 +435,7 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // CASE F: Other Direct Audio URLs
+    // 7. OTHER DIRECT AUDIO URLS
     // =========================================================================
     } else {
       return NextResponse.json({ 

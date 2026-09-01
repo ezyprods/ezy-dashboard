@@ -3,7 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { tasks, broadcast, completedFileBuffers } from '../state';
 import { ensureBinaries } from '../binaries';
 import { buildCookieArgs } from '../cookies';
-import { downloadWithEngines, getYouTubeVideoId, isYouTubeUrl } from '../engines';
+import {
+  downloadWithEngines,
+  getYouTubeVideoId,
+  isYouTubeUrl,
+  searchYouTubeFirstVideoId,
+} from '../engines';
 import { spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
@@ -57,15 +62,33 @@ async function processDownload(taskId: string) {
   if (!task) throw new Error('Task not found');
 
   try {
-    const videoId = getYouTubeVideoId(task.url);
-    const isYouTube = isYouTubeUrl(task.url);
+    let videoId = getYouTubeVideoId(task.url);
+
+    // Spotify track resolution if not yet mapped to YouTube
+    if (!videoId && (task.url.includes('spotify.com') || task.url.includes('spotify.link'))) {
+      const matchedId = await searchYouTubeFirstVideoId(`${task.title} audio`);
+      if (matchedId) {
+        videoId = matchedId;
+        task.url = `https://www.youtube.com/watch?v=${matchedId}`;
+      }
+    }
+
+    // SoundCloud track resolution if not yet mapped to YouTube
+    if (!videoId && task.url.includes('soundcloud.com')) {
+      const matchedId = await searchYouTubeFirstVideoId(task.title);
+      if (matchedId) {
+        videoId = matchedId;
+        task.url = `https://www.youtube.com/watch?v=${matchedId}`;
+      }
+    }
+
+    const isYouTube = isYouTubeUrl(task.url) || !!videoId;
     const downloadsDir = os.tmpdir();
 
     // =========================================================================
-    // YOUTUBE: Use direct multi-engine API system (no yt-dlp binary needed)
-    // Works reliably on any IP (including Vercel / AWS serverless instances).
+    // MULTI-ENGINE API SYSTEM (SaveTube direct CDN 320kbps)
     // =========================================================================
-    if (isYouTube && videoId) {
+    if (videoId) {
       console.log(`[ytdl/process] Starting multi-engine download for taskId=${taskId}, videoId=${videoId}`);
       
       task.status = 'downloading';
@@ -105,7 +128,7 @@ async function processDownload(taskId: string) {
     }
 
     // =========================================================================
-    // NON-YOUTUBE (SoundCloud, direct media URLs, etc.): yt-dlp binary
+    // FALLBACK: yt-dlp binary (for other direct media links)
     // =========================================================================
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
     const cookieArgs = await buildCookieArgs();
@@ -242,7 +265,7 @@ async function processDownload(taskId: string) {
       throw new Error(errMsg);
     }
 
-    // --- Locate the generated audio file ---
+    // Locate the generated audio file
     const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
     let foundFile: string | null = null;
 
