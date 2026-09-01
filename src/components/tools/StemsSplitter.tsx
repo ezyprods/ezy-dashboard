@@ -571,10 +571,20 @@ export function StemsSplitter() {
                       <AlertTriangle className="w-8 h-8 text-red-500" />
                     </div>
                     <p className="font-bold text-lg text-red-500">Error en el proceso</p>
-                    <p className="text-sm text-text-secondary">{task.error}</p>
-                    <Button onClick={() => setTask(null)} variant="outline" className="mt-4">
-                      Intentar de nuevo
-                    </Button>
+                    <p className="text-sm text-text-secondary max-w-md mx-auto">{task.error}</p>
+                    <div className="flex items-center justify-center gap-3 pt-2">
+                      <Button onClick={() => setTask(null)} variant="outline">
+                        Intentar de nuevo
+                      </Button>
+                      {(task.error?.toLowerCase().includes('token') || task.error?.toLowerCase().includes('crédito') || task.error?.toLowerCase().includes('replicate') || task.error?.toLowerCase().includes('gpu')) && (
+                        <Button 
+                          onClick={() => { setTask(null); setShowTokenSettings(true); }} 
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                          Configurar Token IA
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Download, CheckCircle2, Play, Music, Search, RefreshCw } from 'lucide-react';
+import { Loader2, Download, CheckCircle2, Play, Music, Search, RefreshCw, ListMusic, Check, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface YtdlTask {
@@ -18,12 +18,38 @@ interface YtdlTask {
   startTime: number;
 }
 
+interface PlaylistTrackItem {
+  videoId: string;
+  url: string;
+  title: string;
+  thumbnail: string;
+  duration?: string;
+}
+
+interface PlaylistPromptData {
+  type: 'pure_playlist' | 'video_with_playlist';
+  singleVideo?: {
+    title: string;
+    thumbnail: string;
+    resolvedUrl: string;
+    platform: string;
+  };
+  playlist: {
+    id: string;
+    title: string;
+    trackCount: number;
+    thumbnail?: string;
+    tracks: PlaylistTrackItem[];
+  };
+  originalTaskId?: string;
+}
+
 export function MusicDownloader() {
   const [clientId] = useState(() => Math.random().toString(36).substring(2, 15));
-  const [downloadedTasks, setDownloadedTasks] = useState(new Set<string>());
   const [url, setUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [tasks, setTasks] = useState<YtdlTask[]>([]);
+  const [playlistPrompt, setPlaylistPrompt] = useState<PlaylistPromptData | null>(null);
   const downloadedRef = useRef<Set<string>>(new Set());
 
   // Listen to SSE events for cross-tab or server-driven updates
@@ -36,7 +62,6 @@ export function MusicDownloader() {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'init' && Array.isArray(data.tasks)) {
-            // MERGE server tasks with active client tasks (never wipe out in-flight client tasks)
             setTasks(prev => {
               const activeLocal = prev.filter(t => t.status === 'analysing' || t.status === 'downloading' || t.status === 'converting');
               const serverTaskIds = new Set(data.tasks.map((t: YtdlTask) => t.id));
@@ -69,7 +94,6 @@ export function MusicDownloader() {
   const triggerDownload = (taskId: string, targetUrl: string, title: string) => {
     if (downloadedRef.current.has(taskId)) return;
     downloadedRef.current.add(taskId);
-    setDownloadedTasks(prev => new Set(prev).add(taskId));
 
     const downloadUrl = `/api/tools/ytdl/file?taskId=${taskId}&url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(title)}`;
     const a = document.createElement('a');
@@ -88,6 +112,120 @@ export function MusicDownloader() {
       }
     });
   }, [tasks, clientId]);
+
+  const processSingleTrackDownload = async (track: {
+    url: string;
+    resolvedUrl?: string;
+    title: string;
+    thumbnail?: string;
+    platform?: string;
+    existingTaskId?: string;
+  }) => {
+    const taskId = track.existingTaskId || Math.random().toString(36).substring(2, 15);
+    
+    if (!track.existingTaskId) {
+      const initialTask: YtdlTask = {
+        id: taskId,
+        clientId,
+        url: track.url,
+        resolvedUrl: track.resolvedUrl || track.url,
+        title: track.title,
+        thumbnail: track.thumbnail,
+        platform: track.platform || 'youtube',
+        status: 'downloading',
+        progress: 15,
+        startTime: Date.now(),
+      };
+      setTasks(prev => [initialTask, ...prev]);
+    } else {
+      setTasks(prev => prev.map(t => t.id === taskId ? {
+        ...t,
+        title: track.title,
+        thumbnail: track.thumbnail,
+        platform: track.platform || 'youtube',
+        resolvedUrl: track.resolvedUrl || track.url,
+        status: 'downloading',
+        progress: 25,
+      } : t));
+    }
+
+    let currentProgress = 20;
+    const progressInterval = setInterval(() => {
+      currentProgress = Math.min(currentProgress + 8, 88);
+      setTasks(prev => prev.map(t => {
+        if (t.id === taskId && (t.status === 'downloading' || t.status === 'analysing')) {
+          return {
+            ...t,
+            progress: Math.max(t.progress, currentProgress),
+            status: currentProgress > 65 ? 'converting' : 'downloading'
+          };
+        }
+        return t;
+      }));
+    }, 450);
+
+    try {
+      const songUrl = track.resolvedUrl || track.url;
+      const processRes = await fetch('/api/tools/ytdl/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: track.url,
+          resolvedUrl: songUrl,
+          title: track.title,
+          thumbnail: track.thumbnail,
+          platform: track.platform || 'youtube',
+          clientId,
+          taskId
+        })
+      });
+
+      const processData = await processRes.json();
+      clearInterval(progressInterval);
+
+      if (!processRes.ok) {
+        throw new Error(processData.error || 'Error al procesar el archivo');
+      }
+
+      setTasks(prev => prev.map(t => t.id === taskId ? {
+        ...t,
+        status: 'completed',
+        progress: 100
+      } : t));
+
+      triggerDownload(taskId, songUrl, track.title);
+
+    } catch (err: any) {
+      clearInterval(progressInterval);
+      setTasks(prev => prev.map(t => t.id === taskId ? {
+        ...t,
+        status: 'error',
+        error: err.message || 'Error en descarga'
+      } : t));
+    }
+  };
+
+  const handleDownloadFullPlaylist = async (tracks: PlaylistTrackItem[], originalTaskId?: string) => {
+    // If there was an original analyzing task, remove it from list
+    if (originalTaskId) {
+      setTasks(prev => prev.filter(t => t.id !== originalTaskId));
+    }
+    setPlaylistPrompt(null);
+
+    // Queue all tracks with slight staggered delay to prevent network lockup
+    for (let i = 0; i < tracks.length; i++) {
+      const tr = tracks[i];
+      setTimeout(() => {
+        processSingleTrackDownload({
+          url: tr.url,
+          resolvedUrl: tr.url,
+          title: tr.title,
+          thumbnail: tr.thumbnail,
+          platform: 'youtube',
+        });
+      }, i * 350);
+    }
+  };
 
   const handleSubmit = async (targetUrlOverride?: string) => {
     const inputUrl = (targetUrlOverride || url).trim();
@@ -111,24 +249,8 @@ export function MusicDownloader() {
 
     setTasks(prev => [initialTask, ...prev]);
 
-    // Smooth simulated progress while waiting for backend response
-    let currentProgress = 15;
-    const progressInterval = setInterval(() => {
-      currentProgress = Math.min(currentProgress + 8, 88);
-      setTasks(prev => prev.map(t => {
-        if (t.id === taskId && (t.status === 'downloading' || t.status === 'analysing')) {
-          return {
-            ...t,
-            progress: Math.max(t.progress, currentProgress),
-            status: currentProgress > 65 ? 'converting' : 'downloading'
-          };
-        }
-        return t;
-      }));
-    }, 450);
-
     try {
-      // Step 1: Fast Analyse (~50ms)
+      // Step 1: Analyse URL
       const res = await fetch('/api/tools/ytdl/analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,49 +259,60 @@ export function MusicDownloader() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al analizar el enlace');
 
-      if (data.isPlaylist) {
-        throw new Error('Las listas de reproducción completas no están soportadas aún en la versión web.');
+      // Case 1: Pure Playlist URL
+      if (data.isPlaylist && Array.isArray(data.tracks) && data.tracks.length > 0) {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+        setPlaylistPrompt({
+          type: 'pure_playlist',
+          playlist: {
+            id: data.playlistId || 'playlist',
+            title: data.title || 'Lista de Reproducción',
+            trackCount: data.trackCount || data.tracks.length,
+            thumbnail: data.thumbnail,
+            tracks: data.tracks,
+          },
+          originalTaskId: taskId,
+        });
+        return;
       }
 
+      // Case 2: Video link that is also part of a Playlist
+      if (data.hasPlaylistContext && data.playlistInfo && Array.isArray(data.playlistInfo.tracks) && data.playlistInfo.tracks.length > 1) {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+        setPlaylistPrompt({
+          type: 'video_with_playlist',
+          singleVideo: {
+            title: data.title || 'Vídeo seleccionado',
+            thumbnail: data.thumbnail,
+            resolvedUrl: data.resolvedUrl || inputUrl,
+            platform: data.platform || 'youtube',
+          },
+          playlist: {
+            id: data.playlistInfo.id,
+            title: data.playlistInfo.title,
+            trackCount: data.playlistInfo.trackCount || data.playlistInfo.tracks.length,
+            thumbnail: data.playlistInfo.thumbnail,
+            tracks: data.playlistInfo.tracks,
+          },
+          originalTaskId: taskId,
+        });
+        return;
+      }
+
+      // Case 3: Standard single song / track
       const songTitle = data.title || inputUrl;
       const songUrl = data.resolvedUrl || inputUrl;
 
-      // Update card title and thumbnail
-      setTasks(prev => prev.map(t => t.id === taskId ? {
-        ...t,
+      await processSingleTrackDownload({
+        url: inputUrl,
+        resolvedUrl: songUrl,
         title: songTitle,
         thumbnail: data.thumbnail,
         platform: data.platform,
-        resolvedUrl: songUrl,
-        status: 'downloading',
-        progress: 25
-      } : t));
-
-      // Step 2: Process download in background
-      const processRes = await fetch('/api/tools/ytdl/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, url: inputUrl, clientId, taskId })
+        existingTaskId: taskId,
       });
 
-      const processData = await processRes.json();
-      clearInterval(progressInterval);
-
-      if (!processRes.ok) {
-        throw new Error(processData.error || 'Error al procesar el archivo');
-      }
-
-      // Step 3: Complete task immediately and trigger download
-      setTasks(prev => prev.map(t => t.id === taskId ? {
-        ...t,
-        status: 'completed',
-        progress: 100
-      } : t));
-
-      triggerDownload(taskId, songUrl, songTitle);
-
     } catch (err: any) {
-      clearInterval(progressInterval);
       setTasks(prev => prev.map(t => t.id === taskId ? {
         ...t,
         status: 'error',
@@ -290,13 +423,13 @@ export function MusicDownloader() {
             <Play className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-2 sm:mb-3">SoundBox Cloud</h2>
-          <p className="text-sm sm:text-base text-text-secondary">Descarga audios de <strong className="text-text-primary">YouTube</strong>, <strong className="text-emerald-400">Spotify</strong> y <strong className="text-orange-400">SoundCloud</strong> en segundo plano y conviértelos a MP3 (320K) automáticamente.</p>
+          <p className="text-sm sm:text-base text-text-secondary">Descarga canciones o listas completas de <strong className="text-text-primary">YouTube</strong>, <strong className="text-emerald-400">Spotify</strong> y <strong className="text-orange-400">SoundCloud</strong> a MP3 (320K) automáticamente.</p>
         </div>
 
         <div className="glass p-1.5 sm:p-2 rounded-2xl border border-border flex flex-col sm:flex-row items-stretch sm:items-center gap-2 focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/50 transition-all">
           <input 
             type="text" 
-            placeholder="Pega enlace de YouTube, Spotify, SoundCloud o busca..."
+            placeholder="Pega enlace de YouTube (canción o playlist), Spotify, SoundCloud..."
             value={url}
             onChange={e => {
               setUrl(e.target.value);
@@ -316,6 +449,121 @@ export function MusicDownloader() {
 
         {errorMsg && <p className="text-sm text-danger font-medium animate-in fade-in slide-in-from-top-2">{errorMsg}</p>}
       </div>
+
+      {/* MODAL / DIALOG PARA LISTAS DE REPRODUCCIÓN */}
+      {playlistPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-surface border border-border rounded-2xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative space-y-6 animate-in zoom-in-95 duration-200">
+            <button 
+              type="button"
+              onClick={() => setPlaylistPrompt(null)}
+              className="absolute top-4 right-4 p-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0">
+                <ListMusic className="w-6 h-6 text-accent" />
+              </div>
+              <div>
+                <h3 className="text-lg sm:text-xl font-bold text-text-primary">
+                  {playlistPrompt.type === 'pure_playlist' ? 'Lista de Reproducción Detectada' : '¿Qué deseas descargar?'}
+                </h3>
+                <p className="text-xs sm:text-sm text-text-secondary">
+                  {playlistPrompt.type === 'pure_playlist'
+                    ? `Se encontraron ${playlistPrompt.playlist.trackCount} canciones en esta lista.`
+                    : 'El enlace incluye una canción específica y pertenece a una lista.'}
+                </p>
+              </div>
+            </div>
+
+            {/* CASO: VIDEO DENTRO DE UNA PLAYLIST (ELECCIÓN INTELIGENTE) */}
+            {playlistPrompt.type === 'video_with_playlist' && playlistPrompt.singleVideo && (
+              <div className="space-y-3">
+                {/* Opción A: Solo el vídeo individual */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sv = playlistPrompt.singleVideo!;
+                    setPlaylistPrompt(null);
+                    processSingleTrackDownload({
+                      url: sv.resolvedUrl,
+                      resolvedUrl: sv.resolvedUrl,
+                      title: sv.title,
+                      thumbnail: sv.thumbnail,
+                      platform: sv.platform,
+                    });
+                  }}
+                  className="w-full text-left p-4 rounded-xl border-2 border-accent/40 bg-accent/5 hover:bg-accent/10 hover:border-accent transition-all flex items-center gap-4 group cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center shrink-0 text-accent group-hover:scale-105 transition-transform">
+                    <Music className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[11px] font-bold text-accent uppercase tracking-wider block">Opción Recomendada</span>
+                    <h4 className="font-bold text-sm text-text-primary line-clamp-1">{playlistPrompt.singleVideo.title}</h4>
+                    <p className="text-xs text-text-secondary">Descargar únicamente esta canción</p>
+                  </div>
+                  <Check className="w-5 h-5 text-accent shrink-0" />
+                </button>
+
+                {/* Opción B: Toda la lista de reproducción */}
+                <button
+                  type="button"
+                  onClick={() => handleDownloadFullPlaylist(playlistPrompt.playlist.tracks, playlistPrompt.originalTaskId)}
+                  className="w-full text-left p-4 rounded-xl border border-border/80 bg-surface-elevated/40 hover:bg-surface-elevated hover:border-border transition-all flex items-center gap-4 group cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-surface-elevated flex items-center justify-center shrink-0 text-text-secondary group-hover:scale-105 transition-transform">
+                    <ListMusic className="w-5 h-5 text-text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider block">Lista Completa</span>
+                    <h4 className="font-bold text-sm text-text-primary line-clamp-1">{playlistPrompt.playlist.title}</h4>
+                    <p className="text-xs text-text-secondary">Descargar las {playlistPrompt.playlist.trackCount} canciones de la lista</p>
+                  </div>
+                  <Download className="w-5 h-5 text-text-secondary shrink-0" />
+                </button>
+              </div>
+            )}
+
+            {/* CASO: PURE PLAYLIST */}
+            {playlistPrompt.type === 'pure_playlist' && (
+              <div className="space-y-4">
+                <div className="p-4 bg-surface-elevated rounded-xl border border-border flex items-center gap-3">
+                  {playlistPrompt.playlist.thumbnail ? (
+                    <img src={playlistPrompt.playlist.thumbnail} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-surface flex items-center justify-center">
+                      <ListMusic className="w-6 h-6 text-accent" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-sm sm:text-base text-text-primary line-clamp-1">{playlistPrompt.playlist.title}</h4>
+                    <p className="text-xs text-text-secondary">{playlistPrompt.playlist.trackCount} canciones listas para descargar</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => handleDownloadFullPlaylist(playlistPrompt.playlist.tracks, playlistPrompt.originalTaskId)}
+                    className="flex-1 py-3 font-bold rounded-xl"
+                  >
+                    <Download className="w-4 h-4 mr-2" /> Descargar {playlistPrompt.playlist.trackCount} canciones
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPlaylistPrompt(null)}
+                    className="py-3 px-5 font-bold rounded-xl"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Lista de Tareas */}
       {tasks.length > 0 && (

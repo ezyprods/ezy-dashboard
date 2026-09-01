@@ -244,8 +244,9 @@ async function processDemucsLocal(taskId: string, inputPath: string, outDir: str
 
     task.status = 'completed';
     task.progress = 100;
-    // Demucs output structure: outDir / htdemucs / filename_without_ext / vocals.wav
-    const finalDir = path.join(outDir, 'htdemucs', `${taskId}_${baseName}`);
+    // Demucs output structure: outDir / htdemucs / inputBasename / vocals.wav
+    const inputBasename = path.parse(inputPath).name;
+    const finalDir = path.join(outDir, 'htdemucs', inputBasename);
     task.outputDir = finalDir; 
 
     broadcastStems(taskId, { type: 'update', task });
