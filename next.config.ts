@@ -1,6 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: [
+    '@vreden/youtube_scraper',
+    'ffmpeg-static',
+    'ffprobe-static',
+    'yt-dlp-exec',
+    'music-tempo',
+    'meyda',
+    'node-id3',
+  ],
   async headers() {
     return [
       {

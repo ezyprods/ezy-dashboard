@@ -6,26 +6,11 @@ import path from 'path';
 import os from 'os';
 import { ensureBinaries } from './binaries';
 import { buildCookieArgs } from './cookies';
+import { downloadWithEngines, getYouTubeVideoId, isYouTubeUrl } from './engines';
 
 const execFileAsync = promisify(execFile);
 
 export const maxDuration = 300;
-
-function getYouTubeVideoId(urlStr: string): string | null {
-  try {
-    const parsed = new URL(urlStr);
-    if (parsed.hostname.includes('youtube.com')) {
-      return parsed.searchParams.get('v') || null;
-    }
-    if (parsed.hostname.includes('youtu.be')) {
-      return parsed.pathname.replace(/^\//, '').split('?')[0] || null;
-    }
-  } catch (e) {
-    const match = urlStr.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    if (match) return match[1];
-  }
-  return null;
-}
 
 export async function GET(req: Request) {
   try {
@@ -39,38 +24,29 @@ export async function GET(req: Request) {
 
     const videoId = getYouTubeVideoId(rawUrl);
     const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : rawUrl;
-    const isYouTube = !!videoId || rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be');
+    const isYouTube = isYouTubeUrl(rawUrl);
 
-    // Priority 1: Direct MP3 engine
-    if (isYouTube) {
+    // Priority 1: Multi-engine API system (for YouTube)
+    if (isYouTube && videoId) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const yts = require('@vreden/youtube_scraper');
-        const resData = await yts.ytmp3(target, '320');
-        if (resData && resData.status && resData.download?.url) {
-          const fetchRes = await fetch(resData.download.url);
-          if (fetchRes.ok) {
-            const arrayBuffer = await fetchRes.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            if (buffer.length > 1000) {
-              const safeTitle = encodeURIComponent(
-                title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio'
-              );
-              return new NextResponse(buffer as any, {
-                headers: {
-                  'Content-Type': 'audio/mpeg',
-                  'Content-Length': buffer.length.toString(),
-                  'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
-                },
-              });
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[ytdl/direct] Direct engine failed in GET fallback:', e);
+        const result = await downloadWithEngines(videoId);
+        const safeTitle = encodeURIComponent(
+          title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio'
+        );
+        return new NextResponse(result.buffer as any, {
+          headers: {
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': result.buffer.length.toString(),
+            'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
+          },
+        });
+      } catch (e: any) {
+        console.warn('[ytdl/direct] Multi-engine failed in GET:', e?.message);
+        // Fall through to yt-dlp
       }
     }
 
+    // Fallback: yt-dlp binary
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
     const tempId = `direct_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);

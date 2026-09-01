@@ -177,7 +177,22 @@ export function MusicDownloader() {
       case 'converting': return 'Convirtiendo a MP3 (320kbps)...';
       case 'completed': return 'Guardado en Descargas';
       case 'error': {
-        return task.error || 'Error en la descarga';
+        const err = task.error || 'Error en la descarga';
+        // Clean up common yt-dlp error messages for display
+        if (err.includes('Sign in to confirm') || err.includes('bot')) {
+          return 'Error temporal del servidor de YouTube. Reintenta en unos segundos.';
+        }
+        if (err.includes('not found') || err.includes('unavailable') || err.includes('404')) {
+          return 'Vídeo no encontrado o no disponible.';
+        }
+        if (err.includes('private') || err.includes('login_required')) {
+          return 'Este vídeo es privado o requiere inicio de sesión.';
+        }
+        if (err.includes('Todos los motores')) {
+          return 'Error al descargar. Reintenta en unos segundos.';
+        }
+        // Truncate very long error messages
+        return err.length > 120 ? err.substring(0, 117) + '...' : err;
       }
       default: return 'Analizando...';
     }

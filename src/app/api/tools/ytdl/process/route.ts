@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { tasks, broadcast, completedFileBuffers } from '../state';
 import { ensureBinaries } from '../binaries';
 import { buildCookieArgs } from '../cookies';
+import { downloadWithEngines, getYouTubeVideoId, isYouTubeUrl } from '../engines';
 import { spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
@@ -10,24 +11,6 @@ import fs from 'fs';
 
 // Critical: Vercel default is 10s. Downloads need up to 5min on Pro plan.
 export const maxDuration = 300;
-
-function getYouTubeVideoId(urlStr: string): string | null {
-  try {
-    const parsed = new URL(urlStr);
-    if (parsed.hostname.includes('youtube.com')) {
-      return parsed.searchParams.get('v') || null;
-    }
-    if (parsed.hostname.includes('youtu.be')) {
-      return parsed.pathname.replace(/^\//, '').split('?')[0] || null;
-    }
-  } catch (e) {
-    const match = urlStr.match(
-      /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
-    );
-    if (match) return match[1];
-  }
-  return null;
-}
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -74,148 +57,104 @@ async function processDownload(taskId: string) {
   if (!task) throw new Error('Task not found');
 
   try {
-    const { ytdlpPath, ffmpegPath } = await ensureBinaries();
-    const cookieArgs = await buildCookieArgs();
-
-    const downloadsDir = os.tmpdir();
-    const outputTemplate = path.join(downloadsDir, `${taskId}.%(ext)s`);
-
     const videoId = getYouTubeVideoId(task.url);
-    const isYouTube = !!videoId || task.url.includes('youtube.com') || task.url.includes('youtu.be');
+    const isYouTube = isYouTubeUrl(task.url);
+    const downloadsDir = os.tmpdir();
 
     // =========================================================================
-    // PRIORITY 1: High-Speed Direct MP3 Extraction Engine (@vreden/youtube_scraper)
-    // Bypasses datacenter bot blocks, Sabre challenges, and serverless IP bans.
-    // Fetches 320kbps MP3 stream directly in ~2-4 seconds.
+    // YOUTUBE: Use multi-engine API system (no yt-dlp binary needed)
+    // These engines use third-party conversion APIs that work from any IP.
     // =========================================================================
-    if (isYouTube) {
+    if (isYouTube && videoId) {
       try {
-        console.log(`[ytdl/process] Trying Priority 1 Direct MP3 engine for taskId=${taskId}...`);
+        console.log(`[ytdl/process] Starting multi-engine download for taskId=${taskId}, videoId=${videoId}`);
+        
         task.status = 'downloading';
-        task.progress = 25;
+        task.progress = 10;
         broadcast({ type: 'update', task });
 
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const yts = require('@vreden/youtube_scraper');
-        const target = videoId ? `https://www.youtube.com/watch?v=${videoId}` : task.url;
-        const resData = await yts.ytmp3(target, '320');
-
-        if (resData && resData.status && resData.download?.url) {
-          task.progress = 60;
-          broadcast({ type: 'update', task });
-
-          const downloadUrl = resData.download.url;
-          const fetchRes = await fetch(downloadUrl);
-          if (!fetchRes.ok) {
-            throw new Error(`HTTP ${fetchRes.status} al descargar stream`);
-          }
-
-          task.status = 'converting';
-          task.progress = 85;
-          broadcast({ type: 'update', task });
-
-          const arrayBuffer = await fetchRes.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-
-          if (buffer.length > 1000) {
-            const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
-            await fs.promises.writeFile(expectedMp3, buffer);
-
-            completedFileBuffers.set(taskId, { buffer, title: task.title });
-            task.downloadPath = expectedMp3;
-            task.status = 'completed';
-            task.progress = 100;
+        const result = await downloadWithEngines(videoId, (status, progress) => {
+          if (status === 'downloading' && progress > task.progress) {
+            task.progress = progress;
             broadcast({ type: 'update', task });
-
-            setTimeout(async () => {
-              try {
-                if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
-                completedFileBuffers.delete(taskId);
-              } catch (e) {}
-            }, 10 * 60 * 1000);
-
-            console.log(`[ytdl/process] Success via Direct MP3 engine for taskId=${taskId}, size=${buffer.length}`);
-            return;
           }
-        }
-      } catch (directErr: any) {
-        console.warn('[ytdl/process] Direct engine fallback to yt-dlp:', directErr?.message || directErr);
+        });
+
+        task.status = 'converting';
+        task.progress = 90;
+        broadcast({ type: 'update', task });
+
+        const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
+        await fs.promises.writeFile(expectedMp3, result.buffer);
+
+        completedFileBuffers.set(taskId, { buffer: result.buffer, title: task.title });
+        task.downloadPath = expectedMp3;
+        task.status = 'completed';
+        task.progress = 100;
+        broadcast({ type: 'update', task });
+
+        // Cleanup after 10 minutes
+        setTimeout(async () => {
+          try {
+            if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
+            completedFileBuffers.delete(taskId);
+          } catch (e) {}
+        }, 10 * 60 * 1000);
+
+        console.log(`[ytdl/process] Success via engine "${result.engine}" for taskId=${taskId}, size=${result.buffer.length}`);
+        return;
+      } catch (engineErr: any) {
+        console.warn('[ytdl/process] All multi-engine attempts failed:', engineErr?.message || engineErr);
+        // Fall through to yt-dlp as last resort
       }
     }
 
     // =========================================================================
-    // PRIORITY 2: Local / Serverless Binary yt-dlp Matrix Engine
+    // FALLBACK: yt-dlp binary (for non-YouTube URLs or as last resort)
     // =========================================================================
-    const youtubeMatrix: Array<{
-      clientArgs: string[];
-      useCookies: boolean;
-      label: string;
-    }> = [
-      // Attempt 1: Web + mweb player clients (Exact match for exported browser cookies)
-      {
-        label: 'web,mweb+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=web,mweb',
-        ],
-        useCookies: true,
-      },
-      // Attempt 2: Web player client
-      {
-        label: 'web+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=web',
-        ],
-        useCookies: true,
-      },
-      // Attempt 3: Mobile Web client
-      {
-        label: 'mweb+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=mweb',
-        ],
-        useCookies: true,
-      },
-      // Attempt 4: Default authenticated session
-      {
-        label: 'default+cookies',
-        clientArgs: [],
-        useCookies: true,
-      },
-      // Attempt 5: iOS client fallback
-      {
-        label: 'ios+cookies',
-        clientArgs: [
-          '--extractor-args',
-          'youtube:player_client=ios',
-        ],
-        useCookies: true,
-      },
-    ];
-
-    const nonYoutubeMatrix: Array<{
-      clientArgs: string[];
-      useCookies: boolean;
-      label: string;
-    }> = [
-      {
-        label: 'default+cookies',
-        clientArgs: [],
-        useCookies: true,
-      },
-      {
-        label: 'default',
-        clientArgs: [],
-        useCookies: false,
-      },
-    ];
-
-    const matrix = isYouTube ? youtubeMatrix : nonYoutubeMatrix;
+    const { ytdlpPath, ffmpegPath } = await ensureBinaries();
+    const cookieArgs = await buildCookieArgs();
+    const outputTemplate = path.join(downloadsDir, `${taskId}.%(ext)s`);
     const targetUrl = videoId
       ? `https://www.youtube.com/watch?v=${videoId}`
       : task.url;
+
+    const matrix: Array<{
+      clientArgs: string[];
+      useCookies: boolean;
+      label: string;
+    }> = isYouTube
+      ? [
+          {
+            label: 'web,mweb+cookies',
+            clientArgs: ['--extractor-args', 'youtube:player_client=web,mweb'],
+            useCookies: true,
+          },
+          {
+            label: 'web+cookies',
+            clientArgs: ['--extractor-args', 'youtube:player_client=web'],
+            useCookies: true,
+          },
+          {
+            label: 'mweb+cookies',
+            clientArgs: ['--extractor-args', 'youtube:player_client=mweb'],
+            useCookies: true,
+          },
+          {
+            label: 'default+cookies',
+            clientArgs: [],
+            useCookies: true,
+          },
+          {
+            label: 'ios+cookies',
+            clientArgs: ['--extractor-args', 'youtube:player_client=ios'],
+            useCookies: true,
+          },
+        ]
+      : [
+          { label: 'default+cookies', clientArgs: [], useCookies: true },
+          { label: 'default', clientArgs: [], useCookies: false },
+        ];
 
     const executeDownload = (
       attempt: (typeof matrix)[0]
@@ -290,7 +229,6 @@ async function processDownload(taskId: string) {
           if (code === 0) {
             resolve();
           } else {
-            // Extract the most meaningful error line
             const errorLines = stderrOut
               .split('\n')
               .filter((l) => l.includes('ERROR') || l.includes('error'));
@@ -307,7 +245,7 @@ async function processDownload(taskId: string) {
       });
     };
 
-    // Reset progress
+    // Reset progress for yt-dlp attempts
     task.progress = 0;
     task.status = 'downloading';
     broadcast({ type: 'update', task });
@@ -318,11 +256,11 @@ async function processDownload(taskId: string) {
     for (const attempt of matrix) {
       try {
         console.log(
-          `[ytdl/process] Trying client "${attempt.label}" for taskId=${taskId}`
+          `[ytdl/process] Trying yt-dlp client "${attempt.label}" for taskId=${taskId}`
         );
         await executeDownload(attempt);
         console.log(
-          `[ytdl/process] Success with client "${attempt.label}"`
+          `[ytdl/process] Success with yt-dlp client "${attempt.label}"`
         );
         success = true;
         break;
@@ -344,7 +282,7 @@ async function processDownload(taskId: string) {
     const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
     let foundFile: string | null = null;
 
-    // Small delay for filesystem flush (important on Linux/Vercel)
+    // Small delay for filesystem flush
     await new Promise((r) => setTimeout(r, 500));
 
     if (fs.existsSync(expectedMp3)) {
