@@ -32,23 +32,23 @@ const FAST_CDNS = [
   'cdn401.savetube.vip',
   'cdn405.savetube.vip',
   'cdn406.savetube.vip',
+  'cdn500.savetube.vip',
+  'cdn501.savetube.vip',
 ];
 
 /**
  * Engine 1: SaveTube Direct Extraction with Native Fetch & AES Decryption
- * Direct communication with SaveTube CDNs (bypassing any local YouTube scraping).
  */
 async function engineSaveTubeDirect(videoId: string, requestedQuality: string = '320'): Promise<Buffer> {
   const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-  // 1. Try to get active CDN from randomizer endpoint in 2s
   let primaryCdn = '';
   try {
     const randomRes = await fetch('https://media.savetube.vip/api/random-cdn', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
       },
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(2500),
     });
     if (randomRes.ok) {
       const data = await randomRes.json();
@@ -56,9 +56,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
         primaryCdn = data.cdn;
       }
     }
-  } catch (e) {
-    // Proceed directly to FAST_CDNS
-  }
+  } catch (e) {}
 
   const cdnsToTry = primaryCdn
     ? [primaryCdn, ...FAST_CDNS.filter((c) => c !== primaryCdn)]
@@ -68,7 +66,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
 
   for (const cdn of cdnsToTry) {
     try {
-      // Step A: Request encrypted video info (tight 3.5s timeout)
+      // Step A: Request encrypted video info (8s timeout for high concurrency)
       const infoRes = await fetch(`https://${cdn}/v2/info`, {
         method: 'POST',
         headers: {
@@ -77,7 +75,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
           'Referer': 'https://save-tube.com/',
         },
         body: JSON.stringify({ url: targetUrl }),
-        signal: AbortSignal.timeout(3500),
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!infoRes.ok) {
@@ -113,7 +111,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
               quality: q,
               key: info.key,
             }),
-            signal: AbortSignal.timeout(4000),
+            signal: AbortSignal.timeout(8000),
           });
 
           if (dlRes.ok) {
@@ -123,9 +121,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
               break;
             }
           }
-        } catch (e) {
-          // Try next quality
-        }
+        } catch (e) {}
       }
 
       if (!downloadUrl) {
@@ -137,7 +133,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
         },
-        signal: AbortSignal.timeout(35000),
+        signal: AbortSignal.timeout(45000),
       });
 
       if (!audioRes.ok) {
@@ -153,7 +149,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
 
       return buffer;
     } catch (err: any) {
-      console.warn(`[engines/savetube] CDN ${cdn} failed:`, err?.message || err);
+      console.warn(`[engines/savetube] CDN ${cdn} failed for ${videoId}:`, err?.message || err);
       lastError = err;
     }
   }
@@ -212,24 +208,25 @@ export function getYouTubeVideoId(urlStr: string): string | null {
 }
 
 /**
- * Searches YouTube search results HTML directly to find the first matching video ID
- * without depending on local yt-search bot-prone scrapers.
+ * Searches YouTube and returns multiple candidate video IDs in order of relevance.
  */
-export async function searchYouTubeFirstVideoId(query: string): Promise<string | null> {
+export async function searchYouTubeVideoIds(query: string, limit = 3): Promise<string[]> {
+  const ids: string[] = [];
+
   try {
     const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(6000),
     });
     if (res.ok) {
       const html = await res.text();
       const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map(m => m[1]);
-      const uniqueIds = Array.from(new Set(matches));
-      if (uniqueIds.length > 0) {
-        return uniqueIds[0];
+      for (const id of matches) {
+        if (!ids.includes(id)) ids.push(id);
+        if (ids.length >= limit) return ids;
       }
     }
   } catch (e) {}
@@ -239,11 +236,22 @@ export async function searchYouTubeFirstVideoId(query: string): Promise<string |
     const yts = require('@vreden/youtube_scraper');
     const sRes = await yts.search(query);
     const list = sRes.results || sRes.result || [];
-    const first = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
-    if (first) {
-      return first.videoId || (first.url ? getYouTubeVideoId(first.url) : null);
+    for (const r of list) {
+      const vid = r.videoId || (r.url ? getYouTubeVideoId(r.url) : null);
+      if (vid && !ids.includes(vid)) {
+        ids.push(vid);
+        if (ids.length >= limit) return ids;
+      }
     }
   } catch (e) {}
 
-  return null;
+  return ids;
+}
+
+/**
+ * Searches YouTube search results HTML directly to find the first matching video ID.
+ */
+export async function searchYouTubeFirstVideoId(query: string): Promise<string | null> {
+  const ids = await searchYouTubeVideoIds(query, 1);
+  return ids.length > 0 ? ids[0] : null;
 }

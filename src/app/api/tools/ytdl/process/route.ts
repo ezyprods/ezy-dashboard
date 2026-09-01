@@ -7,7 +7,8 @@ import {
   downloadWithEngines,
   getYouTubeVideoId,
   isYouTubeUrl,
-  searchYouTubeFirstVideoId,
+  isSpotifyUrl,
+  searchYouTubeVideoIds,
 } from '../engines';
 import { spawn } from 'child_process';
 import os from 'os';
@@ -62,74 +63,86 @@ async function processDownload(taskId: string) {
   if (!task) throw new Error('Task not found');
 
   try {
-    let videoId = getYouTubeVideoId(task.url);
-
-    // Spotify track resolution if not yet mapped to YouTube
-    if (!videoId && (task.url.includes('spotify.com') || task.url.includes('spotify.link'))) {
-      const matchedId = await searchYouTubeFirstVideoId(`${task.title} audio`);
-      if (matchedId) {
-        videoId = matchedId;
-        task.url = `https://www.youtube.com/watch?v=${matchedId}`;
-      }
-    }
-
-    // SoundCloud track resolution if not yet mapped to YouTube
-    if (!videoId && task.url.includes('soundcloud.com')) {
-      const matchedId = await searchYouTubeFirstVideoId(task.title);
-      if (matchedId) {
-        videoId = matchedId;
-        task.url = `https://www.youtube.com/watch?v=${matchedId}`;
-      }
-    }
-
-    const isYouTube = isYouTubeUrl(task.url) || !!videoId;
     const downloadsDir = os.tmpdir();
+    let videoIdsToTry: string[] = [];
+
+    const existingVideoId = getYouTubeVideoId(task.url);
+    if (existingVideoId) {
+      videoIdsToTry.push(existingVideoId);
+    }
+
+    // If Spotify or SoundCloud track, resolve candidate YouTube video IDs
+    if (videoIdsToTry.length === 0 && (isSpotifyUrl(task.url) || task.url.includes('soundcloud.com') || !task.url.startsWith('http'))) {
+      const query = `${task.title} audio`;
+      const candidates = await searchYouTubeVideoIds(query, 3);
+      videoIdsToTry.push(...candidates);
+    }
 
     // =========================================================================
-    // MULTI-ENGINE API SYSTEM (SaveTube direct CDN 320kbps)
+    // MULTI-ENGINE ATTEMPTS ACROSS CANDIDATE VIDEO IDS
     // =========================================================================
-    if (videoId) {
-      console.log(`[ytdl/process] Starting multi-engine download for taskId=${taskId}, videoId=${videoId}`);
-      
+    if (videoIdsToTry.length > 0) {
       task.status = 'downloading';
       task.progress = 15;
       broadcast({ type: 'update', task });
 
-      const result = await downloadWithEngines(videoId, (status, progress) => {
-        if (status === 'downloading' && progress > task.progress) {
-          task.progress = progress;
-          broadcast({ type: 'update', task });
-        }
-      });
+      let lastEngineErr: any = null;
 
-      task.status = 'converting';
-      task.progress = 90;
-      broadcast({ type: 'update', task });
-
-      const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
-      await fs.promises.writeFile(expectedMp3, result.buffer);
-
-      completedFileBuffers.set(taskId, { buffer: result.buffer, title: task.title });
-      task.downloadPath = expectedMp3;
-      task.status = 'completed';
-      task.progress = 100;
-      broadcast({ type: 'update', task });
-
-      // Clean up after 10 minutes
-      setTimeout(async () => {
+      for (let i = 0; i < videoIdsToTry.length; i++) {
+        const vid = videoIdsToTry[i];
         try {
-          if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
-          completedFileBuffers.delete(taskId);
-        } catch (e) {}
-      }, 10 * 60 * 1000);
+          console.log(`[ytdl/process] Attempting engine download for taskId=${taskId}, candidate [${i + 1}/${videoIdsToTry.length}] videoId=${vid}`);
+          
+          const result = await downloadWithEngines(vid, (status, progress) => {
+            if (status === 'downloading' && progress > task.progress) {
+              task.progress = progress;
+              broadcast({ type: 'update', task });
+            }
+          });
 
-      console.log(`[ytdl/process] Success via engine "${result.engine}" for taskId=${taskId}, size=${result.buffer.length}`);
-      return;
+          task.status = 'converting';
+          task.progress = 90;
+          broadcast({ type: 'update', task });
+
+          const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
+          await fs.promises.writeFile(expectedMp3, result.buffer);
+
+          completedFileBuffers.set(taskId, { buffer: result.buffer, title: task.title });
+          task.downloadPath = expectedMp3;
+          task.status = 'completed';
+          task.progress = 100;
+          broadcast({ type: 'update', task });
+
+          // Clean up after 10 minutes
+          setTimeout(async () => {
+            try {
+              if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
+              completedFileBuffers.delete(taskId);
+            } catch (e) {}
+          }, 10 * 60 * 1000);
+
+          console.log(`[ytdl/process] Success via engine "${result.engine}" for taskId=${taskId}, size=${result.buffer.length}`);
+          return;
+        } catch (err: any) {
+          console.warn(`[ytdl/process] Candidate videoId=${vid} failed:`, err?.message || err);
+          lastEngineErr = err;
+        }
+      }
+
+      // If this was a Spotify track or YouTube search and all candidates failed, throw clean error
+      if (isSpotifyUrl(task.url) || !task.url.startsWith('http')) {
+        throw new Error(lastEngineErr?.message || 'No se pudo descargar el audio tras intentar múltiples fuentes');
+      }
     }
 
     // =========================================================================
-    // FALLBACK: yt-dlp binary (for other direct media links)
+    // FALLBACK: yt-dlp binary (ONLY for direct media URLs or real direct streams)
+    // NEVER execute yt-dlp with Spotify URLs (avoids [DRM] error)
     // =========================================================================
+    if (isSpotifyUrl(task.url)) {
+      throw new Error('No se pudo encontrar una fuente de audio disponible para esta pista de Spotify');
+    }
+
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
     const cookieArgs = await buildCookieArgs();
     const outputTemplate = path.join(downloadsDir, `${taskId}.%(ext)s`);

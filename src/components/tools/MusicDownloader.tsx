@@ -206,30 +206,68 @@ export function MusicDownloader() {
   };
 
   const handleDownloadFullPlaylist = async (tracks: PlaylistTrackItem[], originalTaskId?: string) => {
-    // If there was an original analyzing task, remove it from list
     if (originalTaskId) {
       setTasks(prev => prev.filter(t => t.id !== originalTaskId));
     }
     setPlaylistPrompt(null);
 
-    // Queue all tracks with slight staggered delay to prevent network lockup
-    for (let i = 0; i < tracks.length; i++) {
-      const tr = tracks[i];
+    // Create task entries for all tracks so the user sees all items in the UI immediately
+    const preparedTracks = tracks.map((tr) => {
+      const taskId = Math.random().toString(36).substring(2, 15);
       const detectedPlatform = tr.url.includes('spotify')
         ? 'spotify'
         : tr.url.includes('soundcloud')
         ? 'soundcloud'
         : 'youtube';
 
-      setTimeout(() => {
-        processSingleTrackDownload({
-          url: tr.url,
-          resolvedUrl: tr.url,
-          title: tr.title,
-          thumbnail: tr.thumbnail,
-          platform: detectedPlatform,
-        });
-      }, i * 350);
+      return {
+        taskId,
+        url: tr.url,
+        resolvedUrl: tr.url,
+        title: tr.title,
+        thumbnail: tr.thumbnail,
+        platform: detectedPlatform,
+      };
+    });
+
+    const initialTasks: YtdlTask[] = preparedTracks.map((item) => ({
+      id: item.taskId,
+      clientId,
+      url: item.url,
+      resolvedUrl: item.resolvedUrl,
+      title: item.title,
+      thumbnail: item.thumbnail,
+      platform: item.platform,
+      status: 'downloading' as const,
+      progress: 5,
+      startTime: Date.now(),
+    }));
+
+    setTasks(prev => [...initialTasks, ...prev]);
+
+    // Concurrency worker queue (max 2 parallel downloads to maintain optimal CDN speed & avoid timeouts)
+    const CONCURRENCY = 2;
+    let nextIndex = 0;
+
+    const runWorker = async () => {
+      while (nextIndex < preparedTracks.length) {
+        const item = preparedTracks[nextIndex++];
+        try {
+          await processSingleTrackDownload({
+            url: item.url,
+            resolvedUrl: item.resolvedUrl,
+            title: item.title,
+            thumbnail: item.thumbnail,
+            platform: item.platform,
+            existingTaskId: item.taskId,
+          });
+        } catch (e) {}
+      }
+    };
+
+    const workers = [];
+    for (let w = 0; w < Math.min(CONCURRENCY, preparedTracks.length); w++) {
+      workers.push(runWorker());
     }
   };
 
