@@ -428,7 +428,7 @@ export function MusicDownloader() {
           <div className="w-12 h-12 sm:w-16 sm:h-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center mx-auto mb-4 sm:mb-6">
             <Play className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />
           </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-2 sm:mb-3">SoundBox Cloud</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-2 sm:mb-3">Mp3 Downloader</h2>
           <p className="text-sm sm:text-base text-text-secondary">Descarga canciones o listas completas de <strong className="text-text-primary">YouTube</strong>, <strong className="text-emerald-400">Spotify</strong> y <strong className="text-orange-400">SoundCloud</strong> a MP3 (320K) automáticamente.</p>
         </div>
 
