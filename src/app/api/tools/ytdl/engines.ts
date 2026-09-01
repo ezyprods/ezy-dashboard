@@ -1,190 +1,164 @@
+import { createDecipheriv } from 'crypto';
+
 /**
  * Multi-Engine YouTube MP3 Download System
  * 
- * Provides multiple independent download engines that each use different 
- * third-party APIs to convert YouTube videos to MP3. Each engine is self-contained
- * and can work from any IP (including Vercel datacenter IPs) because the actual 
- * YouTube interaction happens on the third-party server, not on our server.
- * 
- * The engines are tried in priority order. If one fails, the next is tried.
+ * Provides self-contained, high-performance download engines that convert 
+ * YouTube videos to 320kbps MP3 without triggering bot blocks on serverless
+ * datacenter IPs (like Vercel / AWS / GCP).
  */
 
-// ============================================================================
-// Engine 1: @vreden/youtube_scraper (SaveTube)
-// ============================================================================
-async function engineVreden(videoId: string): Promise<Buffer> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const yts = require('@vreden/youtube_scraper');
-  const target = `https://www.youtube.com/watch?v=${videoId}`;
-  const resData = await yts.ytmp3(target, '320');
+const AES_KEY_HEX = 'C5D58EF67A7584E4A29F6C35BBC4EB12';
 
-  if (!resData?.status || !resData?.download?.url) {
-    throw new Error('vreden: No download URL returned');
-  }
+function decodeAesPayload(encBase64: string): any {
+  const data = Buffer.from(encBase64, 'base64');
+  const iv = data.subarray(0, 16);
+  const content = data.subarray(16);
+  const key = Buffer.from(AES_KEY_HEX, 'hex');
 
-  const downloadUrl: string = resData.download.url;
-  const fetchRes = await fetch(downloadUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-    },
-  });
-
-  if (!fetchRes.ok) {
-    throw new Error(`vreden: HTTP ${fetchRes.status} downloading stream`);
-  }
-
-  const arrayBuffer = await fetchRes.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  if (buffer.length < 1000) {
-    throw new Error(`vreden: Buffer too small (${buffer.length} bytes)`);
-  }
-
-  return buffer;
+  const decipher = createDecipheriv('aes-128-cbc', key, iv);
+  const decrypted = Buffer.concat([decipher.update(content), decipher.final()]);
+  return JSON.parse(decrypted.toString('utf-8'));
 }
 
-// ============================================================================
-// Engine 2: cobalt.tools public API (open-source media downloader)
-// ============================================================================
-async function engineCobalt(videoId: string): Promise<Buffer> {
-  const COBALT_APIS = [
-    'https://api.cobalt.tools',
-    'https://cobalt-api.kwiatekmiki.com',
-    'https://cobalt.api.timelessnesses.me',
-  ];
+// Known active SaveTube CDNs
+const FALLBACK_CDNS = [
+  'cdn400.savetube.vip',
+  'cdn401.savetube.vip',
+  'cdn402.savetube.vip',
+  'cdn403.savetube.vip',
+  'cdn404.savetube.vip',
+  'cdn405.savetube.vip',
+  'cdn406.savetube.vip',
+];
+
+/**
+ * Engine 1: SaveTube Direct Extraction with Native Fetch & AES Decryption
+ * Direct communication with SaveTube CDNs (bypassing any local YouTube scraping).
+ */
+async function engineSaveTubeDirect(videoId: string, requestedQuality: string = '320'): Promise<Buffer> {
+  const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // 1. Get primary CDN from randomizer endpoint or fallback to known CDNs
+  let primaryCdn = '';
+  try {
+    const randomRes = await fetch('https://media.savetube.vip/api/random-cdn', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+      },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (randomRes.ok) {
+      const data = await randomRes.json();
+      if (data && data.cdn) {
+        primaryCdn = data.cdn;
+      }
+    }
+  } catch (e) {
+    // Silently proceed to fallback CDNs
+  }
+
+  const cdnsToTry = primaryCdn
+    ? [primaryCdn, ...FALLBACK_CDNS.filter((c) => c !== primaryCdn)]
+    : FALLBACK_CDNS;
 
   let lastError: Error | null = null;
 
-  for (const apiBase of COBALT_APIS) {
+  for (const cdn of cdnsToTry) {
     try {
-      const response = await fetch(`${apiBase}/`, {
+      // Step A: Request encrypted video info
+      const infoRes = await fetch(`https://${cdn}/v2/info`, {
         method: 'POST',
         headers: {
-          'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          'Referer': 'https://save-tube.com/',
         },
-        body: JSON.stringify({
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          downloadMode: 'audio',
-          audioFormat: 'mp3',
-          audioBitrate: '320',
-        }),
+        body: JSON.stringify({ url: targetUrl }),
+        signal: AbortSignal.timeout(8000),
       });
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(`cobalt(${apiBase}): HTTP ${response.status} - ${text.slice(0, 200)}`);
+      if (!infoRes.ok) {
+        throw new Error(`Info HTTP ${infoRes.status}`);
       }
 
-      const data = await response.json();
-
-      if (data.status === 'error') {
-        throw new Error(`cobalt(${apiBase}): ${data.error?.code || data.text || 'Unknown error'}`);
+      const infoJson = await infoRes.json();
+      if (!infoJson || !infoJson.data) {
+        throw new Error('No encrypted data in info response');
       }
 
-      // Cobalt returns a URL to download
-      const downloadUrl = data.url || data.audio;
+      const info = decodeAesPayload(infoJson.data);
+      if (!info || !info.key) {
+        throw new Error('Decrypted info missing security key');
+      }
+
+      // Step B: Request download URL for audio (try requested quality, then fallback)
+      const qualities = [requestedQuality, '320', '256', '128'];
+      const uniqueQualities = Array.from(new Set(qualities));
+
+      let downloadUrl = '';
+      for (const q of uniqueQualities) {
+        try {
+          const dlRes = await fetch(`https://${cdn}/download`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+              'Referer': 'https://save-tube.com/',
+            },
+            body: JSON.stringify({
+              downloadType: 'audio',
+              quality: q,
+              key: info.key,
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+
+          if (dlRes.ok) {
+            const dlJson = await dlRes.json();
+            if (dlJson.data && dlJson.data.downloadUrl) {
+              downloadUrl = dlJson.data.downloadUrl;
+              break;
+            }
+          }
+        } catch (e) {
+          // Try next quality
+        }
+      }
+
       if (!downloadUrl) {
-        throw new Error(`cobalt(${apiBase}): No download URL in response`);
+        throw new Error('Could not obtain download URL from CDN');
       }
 
-      const audioRes = await fetch(downloadUrl);
+      // Step C: Stream the MP3 file into buffer
+      const audioRes = await fetch(downloadUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(45000),
+      });
+
       if (!audioRes.ok) {
-        throw new Error(`cobalt(${apiBase}): HTTP ${audioRes.status} downloading audio`);
+        throw new Error(`Audio stream HTTP ${audioRes.status}`);
       }
 
       const arrayBuffer = await audioRes.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
       if (buffer.length < 1000) {
-        throw new Error(`cobalt(${apiBase}): Buffer too small (${buffer.length} bytes)`);
+        throw new Error(`Downloaded buffer too small (${buffer.length} bytes)`);
       }
 
       return buffer;
     } catch (err: any) {
+      console.warn(`[engines/savetube] CDN ${cdn} failed:`, err?.message || err);
       lastError = err;
-      console.warn(`[engines/cobalt] ${apiBase} failed:`, err?.message || err);
     }
   }
 
-  throw lastError || new Error('cobalt: All instances failed');
+  throw lastError || new Error('All SaveTube CDNs failed');
 }
 
-// ============================================================================
-// Engine 3: Direct YouTube audio extraction via fetch + ffmpeg conversion
-// Uses YouTube's internal API (via @vreden/youtube_scraper metadata) to get info,
-// then downloads via alternative CDN endpoints
-// ============================================================================
-async function engineDirectCdn(videoId: string): Promise<Buffer> {
-  // Try multiple alternative download services
-  const services = [
-    {
-      name: 'y2mate-style',
-      getUrl: async () => {
-        const apiUrl = `https://api.vevioz.com/api/button/mp3/${videoId}`;
-        const res = await fetch(apiUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const html = await res.text();
-        // Extract download link from HTML response
-        const match = html.match(/href="(https?:\/\/[^"]+\.mp3[^"]*)"/i) 
-                   || html.match(/href="(https?:\/\/[^"]+download[^"]*)"/i);
-        if (!match) throw new Error('No download link found');
-        return match[1];
-      },
-    },
-    {
-      name: 'loader-to',
-      getUrl: async () => {
-        const apiUrl = `https://ab.cococococ.com/ajax/download/post`;
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-          body: `url=https://www.youtube.com/watch?v=${videoId}&type=mp3&quality=320`,
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!data.url) throw new Error('No URL returned');
-        return data.url;
-      },
-    },
-  ];
-
-  let lastError: Error | null = null;
-
-  for (const service of services) {
-    try {
-      const downloadUrl = await service.getUrl();
-      const audioRes = await fetch(downloadUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
-      });
-      if (!audioRes.ok) throw new Error(`HTTP ${audioRes.status} downloading`);
-
-      const arrayBuffer = await audioRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      if (buffer.length < 1000) throw new Error(`Buffer too small (${buffer.length})`);
-      return buffer;
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`[engines/directCdn] ${service.name} failed:`, err?.message);
-    }
-  }
-
-  throw lastError || new Error('directCdn: All services failed');
-}
-
-// ============================================================================
-// Main orchestrator: tries each engine in order
-// ============================================================================
 export interface EngineResult {
   buffer: Buffer;
   engine: string;
@@ -200,9 +174,9 @@ export async function downloadWithEngines(
     name: string;
     fn: (videoId: string) => Promise<Buffer>;
   }> = [
-    { name: 'vreden', fn: engineVreden },
-    { name: 'cobalt', fn: engineCobalt },
-    { name: 'directCdn', fn: engineDirectCdn },
+    { name: 'savetube-direct-320', fn: (id) => engineSaveTubeDirect(id, '320') },
+    { name: 'savetube-direct-256', fn: (id) => engineSaveTubeDirect(id, '256') },
+    { name: 'savetube-direct-128', fn: (id) => engineSaveTubeDirect(id, '128') },
   ];
 
   const errors: string[] = [];
@@ -210,12 +184,12 @@ export async function downloadWithEngines(
   for (let i = 0; i < engines.length; i++) {
     const engine = engines[i];
     try {
-      console.log(`[engines] Trying engine "${engine.name}" (${i + 1}/${engines.length}) for videoId=${videoId}`);
-      onProgress?.('downloading', 10 + (i * 20));
+      console.log(`[engines] Executing "${engine.name}" for videoId=${videoId}`);
+      onProgress?.('downloading', 25 + (i * 20));
 
       const buffer = await engine.fn(videoId);
 
-      console.log(`[engines] Success with engine "${engine.name}", size=${buffer.length}`);
+      console.log(`[engines] Engine "${engine.name}" succeeded! Buffer size: ${buffer.length} bytes`);
       return { buffer, engine: engine.name };
     } catch (err: any) {
       const msg = (err?.message || String(err)).slice(0, 300);
@@ -226,14 +200,10 @@ export async function downloadWithEngines(
 
   throw new Error(
     `Todos los motores de descarga fallaron para este video.\n` +
-    errors.map((e, i) => `  ${i + 1}. ${e}`).join('\n')
+    errors.map((e, idx) => `  ${idx + 1}. ${e}`).join('\n')
   );
 }
 
-/**
- * Non-YouTube download: just use yt-dlp binary as before.
- * This is a passthrough that signals the caller should use the yt-dlp binary approach.
- */
 export function isYouTubeUrl(url: string): boolean {
   return (
     url.includes('youtube.com') ||

@@ -1,11 +1,27 @@
 import { NextResponse } from 'next/server';
-import { spawn } from 'child_process';
 import https from 'https';
 import { ensureYtDlp } from '../binaries';
 import { buildCookieArgs } from '../cookies';
+import { createDecipheriv } from 'crypto';
 
 export const maxDuration = 60;
 
+const AES_KEY_HEX = 'C5D58EF67A7584E4A29F6C35BBC4EB12';
+
+function decodeAesPayload(encBase64: string): any {
+  try {
+    const data = Buffer.from(encBase64, 'base64');
+    const iv = data.subarray(0, 16);
+    const content = data.subarray(16);
+    const key = Buffer.from(AES_KEY_HEX, 'hex');
+
+    const decipher = createDecipheriv('aes-128-cbc', key, iv);
+    const decrypted = Buffer.concat([decipher.update(content), decipher.final()]);
+    return JSON.parse(decrypted.toString('utf-8'));
+  } catch (e) {
+    return null;
+  }
+}
 
 const fetchUrl = (url: string, headers = {}): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -31,7 +47,7 @@ const fetchUrl = (url: string, headers = {}): Promise<string> => {
 
 function cleanTitle(metadata: any) {
   let title = metadata.title || 'Untitled';
-  let artist = metadata.uploader || '';
+  let artist = metadata.uploader || metadata.author || '';
 
   if (metadata.artist && metadata.track) {
       return `${metadata.artist} - ${metadata.track}`;
@@ -50,7 +66,6 @@ function cleanTitle(metadata: any) {
       /\[4K\]/gi, /\[HD\]/gi, /\[1080p\]/gi,
       /\| VEVO/gi, /\| Official/gi,
       /\(Music Video\)/gi, /\[Music Video\]/gi,
-      // Producción y Dirección
       /prod\.?\s+by\s+[^()\[\]\-]+/gi,
       /prod\.?\s+[^()\[\]\-]+/gi,
       /\(prod\.?\s+[^()\[\]]+\)/gi,
@@ -65,7 +80,6 @@ function cleanTitle(metadata: any) {
       clean = clean.replace(p, '');
   });
 
-  // Normalizar guiones
   clean = clean.replace(/–/g, '-');
   
   if (!clean.includes('-') && clean.includes(':')) {
@@ -76,11 +90,9 @@ function cleanTitle(metadata: any) {
       let parts = clean.split('-').map((p: string) => p.trim());
       clean = parts.filter((p: string) => p.length > 0).join(' - ');
   } else if (artist && !clean.toLowerCase().includes(artist.toLowerCase()) && !artist.toLowerCase().includes('topic')) {
-      // Evitar que añada canales autogenerados como "Artista - Topic"
       clean = `${artist} - ${clean}`;
   }
 
-  // Eliminar espacios múltiples y emojis sueltos raros al final (opcional, por ahora solo espacios)
   return clean.replace(/\s+/g, ' ').trim();
 }
 
@@ -142,60 +154,38 @@ async function getYouTubeOEmbed(videoId: string) {
   }
 }
 
-async function runYtDlp(ytdlpPath: string, args: string[], cookieArgs: string[] = []): Promise<any[]> {
-  const execute = (cmdArgs: string[]) => new Promise<any[]>((resolve, reject) => {
-    const proc = spawn(ytdlpPath, cmdArgs);
-    let stdout = '';
-    let stderr = '';
-    proc.stdout.on('data', d => stdout += d.toString());
-    proc.stderr.on('data', d => stderr += d.toString());
-    proc.on('close', code => {
-      if (code !== 0 && !stdout) return reject(new Error(stderr || `Error ${code}`));
-      
-      const lines = stdout.split('\n').filter(l => l.trim());
-      const results = [];
-      for (const line of lines) {
-        try { results.push(JSON.parse(line)); } catch (e) { }
-      }
-      
-      if (results.length === 0) reject(new Error(stderr || 'No results found'));
-      else resolve(results);
-    });
-    proc.on('error', reject);
-  });
-
-  // Client priority order for datacenter IPs (Vercel):
-  // mediaconnect bypasses bot detection without cookies
-  const clientConfigs = [
-    {
-      label: 'default+cookies',
-      extraArgs: ['--no-warnings', ...cookieArgs]
-    },
-    {
-      label: 'tv_embedded',
-      extraArgs: [
-        '--no-warnings',
-        ...cookieArgs,
-        '--extractor-args', 'youtube:player_client=tv_embedded',
-        '--user-agent', 'Mozilla/5.0 (SmartHub; SMART-TV; U; Linux/SmartTV) AppleWebKit/538.1+ (KHTML, like Gecko) TV Safari/538.1+'
-      ]
-    },
-    {
-      label: 'mediaconnect',
-      extraArgs: ['--no-warnings', ...cookieArgs, '--extractor-args', 'youtube:player_client=mediaconnect']
-    },
-  ];
-
-  let lastError: any = null;
-  for (const config of clientConfigs) {
-    try {
-      return await execute([...config.extraArgs, ...args]);
-    } catch (err: any) {
-      console.warn(`[ytdl/analyse] Client "${config.label}" failed:`, (err?.message || err).slice(0, 150));
-      lastError = err;
+async function getSaveTubeInfo(videoId: string) {
+  try {
+    const cdns = ['cdn403.savetube.vip', 'cdn400.savetube.vip', 'cdn405.savetube.vip'];
+    for (const cdn of cdns) {
+      try {
+        const res = await fetch(`https://${cdn}/v2/info`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://save-tube.com/',
+          },
+          body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` }),
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.data) {
+            const decoded = decodeAesPayload(json.data);
+            if (decoded && decoded.title) {
+              return {
+                title: decoded.title,
+                duration: decoded.duration || null,
+                thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+              };
+            }
+          }
+        }
+      } catch (e) {}
     }
-  }
-  throw lastError || new Error('All yt-dlp clients failed');
+  } catch (e) {}
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -203,13 +193,11 @@ export async function POST(req: Request) {
     const { url } = await req.json();
     if (!url) return NextResponse.json({ error: 'URL requerida' }, { status: 400 });
 
-    const ytdlpPath = await ensureYtDlp();
-    const cookieArgs = await buildCookieArgs();
-
     const videoId = getYouTubeVideoId(url);
     let targetUrl = url;
     let title, thumbnail, duration, platform;
 
+    // Case 1: Spotify URL
     if (url.includes('spotify.com')) {
       platform = 'spotify';
       const spotMeta = await getSpotifyMetadata(url);
@@ -218,17 +206,35 @@ export async function POST(req: Request) {
         ? `${spotMeta.artist.split(',')[0].trim()} ${spotMeta.track}` 
         : `${spotMeta.fullTitle.replace(/[-|,]/g, ' ')} audio`;
 
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch5:${query}`], cookieArgs);
-      const entry = results[0];
-      targetUrl = entry.webpage_url || entry.url;
-      title = spotMeta.fullTitle;
-      thumbnail = spotMeta.thumbnail || entry.thumbnail;
-      duration = entry.duration;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const yts = require('@vreden/youtube_scraper');
+        const sRes = await yts.search(query);
+        const list = sRes.results || sRes.result || [];
+        const firstVideo = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
+        if (firstVideo) {
+          const vUrl = firstVideo.url || `https://www.youtube.com/watch?v=${firstVideo.videoId}`;
+          return NextResponse.json({
+            title: spotMeta.fullTitle,
+            thumbnail: spotMeta.thumbnail || firstVideo.thumbnail || firstVideo.image,
+            duration: firstVideo.seconds || null,
+            platform: 'spotify',
+            resolvedUrl: vUrl,
+            isPlaylist: false
+          });
+        }
+      } catch (e) {}
 
+      title = spotMeta.fullTitle;
+      thumbnail = spotMeta.thumbnail;
+      targetUrl = url;
+
+    // Case 2: YouTube Video ID (even if URL contains &list= or other params)
     } else if (videoId) {
       platform = 'youtube';
-      const oembedMeta = await getYouTubeOEmbed(videoId);
       
+      // Step A: YouTube oEmbed
+      const oembedMeta = await getYouTubeOEmbed(videoId);
       if (oembedMeta) {
         return NextResponse.json({
           title: cleanTitle({ title: oembedMeta.title, uploader: oembedMeta.author }),
@@ -240,36 +246,30 @@ export async function POST(req: Request) {
         });
       }
 
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const yts = require('@vreden/youtube_scraper');
-        const meta = await yts.metadata(`https://www.youtube.com/watch?v=${videoId}`);
-        if (meta && meta.status && meta.title) {
-          const thumb = meta.thumbnails?.[meta.thumbnails.length - 1]?.url || meta.thumbnails?.[0]?.url;
-          return NextResponse.json({
-            title: cleanTitle({ title: meta.title, uploader: meta.channel_title }),
-            thumbnail: thumb,
-            duration: null,
-            platform: 'youtube',
-            resolvedUrl: `https://www.youtube.com/watch?v=${videoId}`,
-            isPlaylist: false
-          });
-        }
-      } catch (e) {}
-
-      let results: any[] = [];
-      try {
-        results = await runYtDlp(ytdlpPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`], cookieArgs);
-      } catch (err) {
-        results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${videoId}`], cookieArgs);
+      // Step B: SaveTube encrypted metadata
+      const saveMeta = await getSaveTubeInfo(videoId);
+      if (saveMeta) {
+        return NextResponse.json({
+          title: cleanTitle({ title: saveMeta.title }),
+          thumbnail: saveMeta.thumbnail,
+          duration: saveMeta.duration,
+          platform: 'youtube',
+          resolvedUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          isPlaylist: false
+        });
       }
 
-      const entry = results[0] || {};
-      targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      title = cleanTitle(entry);
-      thumbnail = entry.thumbnail;
-      duration = entry.duration;
+      // Step C: Fallback title
+      return NextResponse.json({
+        title: `YouTube Audio (${videoId})`,
+        thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+        duration: null,
+        platform: 'youtube',
+        resolvedUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        isPlaylist: false
+      });
 
+    // Case 3: Search Query (not a URL)
     } else if (!url.startsWith('http')) {
       platform = 'search';
 
@@ -277,45 +277,29 @@ export async function POST(req: Request) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const yts = require('@vreden/youtube_scraper');
         const sRes = await yts.search(url);
-        const firstVideo = sRes.result?.find((r: any) => r.type === 'video' && r.url);
+        const list = sRes.results || sRes.result || [];
+        const firstVideo = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
         if (firstVideo) {
+          const vUrl = firstVideo.url || `https://www.youtube.com/watch?v=${firstVideo.videoId}`;
           return NextResponse.json({
             title: cleanTitle({ title: firstVideo.title, uploader: firstVideo.author?.name || '' }),
             thumbnail: firstVideo.thumbnail || firstVideo.image,
             duration: firstVideo.seconds || null,
             platform: 'youtube',
-            resolvedUrl: firstVideo.url,
+            resolvedUrl: vUrl,
             isPlaylist: false
           });
         }
       } catch (e) {}
 
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', `ytsearch1:${url}`], cookieArgs);
-      const entry = results[0];
-      targetUrl = entry.webpage_url || entry.url;
-      title = cleanTitle(entry);
-      thumbnail = entry.thumbnail;
-      duration = entry.duration;
+      title = url;
+      targetUrl = url;
 
+    // Case 4: Other URLs (SoundCloud, direct media)
     } else {
-      platform = targetUrl.includes('soundcloud.com') ? 'soundcloud' : 'youtube';
-      const results = await runYtDlp(ytdlpPath, ['--dump-json', '--flat-playlist', targetUrl], cookieArgs);
-      
-      if (results.length > 1) {
-        return NextResponse.json({
-          isPlaylist: true,
-          count: results.length,
-          title: results[0].playlist_title || 'Lista de reproduccion',
-          thumbnail: results[0].thumbnail,
-          platform,
-          resolvedUrl: targetUrl
-        });
-      }
-
-      const metadata = results[0];
-      title = cleanTitle(metadata);
-      thumbnail = metadata.thumbnail;
-      duration = metadata.duration;
+      platform = targetUrl.includes('soundcloud.com') ? 'soundcloud' : 'other';
+      title = 'Audio';
+      targetUrl = url;
     }
 
     return NextResponse.json({ 
@@ -328,7 +312,7 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error('YTDLP Analyse Error:', error);
+    console.error('Analyse Error:', error);
     return NextResponse.json({ error: error.message || 'Error analizando' }, { status: 500 });
   }
 }

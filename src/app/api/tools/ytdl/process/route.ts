@@ -62,99 +62,64 @@ async function processDownload(taskId: string) {
     const downloadsDir = os.tmpdir();
 
     // =========================================================================
-    // YOUTUBE: Use multi-engine API system (no yt-dlp binary needed)
-    // These engines use third-party conversion APIs that work from any IP.
+    // YOUTUBE: Use direct multi-engine API system (no yt-dlp binary needed)
+    // Works reliably on any IP (including Vercel / AWS serverless instances).
     // =========================================================================
     if (isYouTube && videoId) {
-      try {
-        console.log(`[ytdl/process] Starting multi-engine download for taskId=${taskId}, videoId=${videoId}`);
-        
-        task.status = 'downloading';
-        task.progress = 10;
-        broadcast({ type: 'update', task });
+      console.log(`[ytdl/process] Starting multi-engine download for taskId=${taskId}, videoId=${videoId}`);
+      
+      task.status = 'downloading';
+      task.progress = 15;
+      broadcast({ type: 'update', task });
 
-        const result = await downloadWithEngines(videoId, (status, progress) => {
-          if (status === 'downloading' && progress > task.progress) {
-            task.progress = progress;
-            broadcast({ type: 'update', task });
-          }
-        });
+      const result = await downloadWithEngines(videoId, (status, progress) => {
+        if (status === 'downloading' && progress > task.progress) {
+          task.progress = progress;
+          broadcast({ type: 'update', task });
+        }
+      });
 
-        task.status = 'converting';
-        task.progress = 90;
-        broadcast({ type: 'update', task });
+      task.status = 'converting';
+      task.progress = 90;
+      broadcast({ type: 'update', task });
 
-        const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
-        await fs.promises.writeFile(expectedMp3, result.buffer);
+      const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
+      await fs.promises.writeFile(expectedMp3, result.buffer);
 
-        completedFileBuffers.set(taskId, { buffer: result.buffer, title: task.title });
-        task.downloadPath = expectedMp3;
-        task.status = 'completed';
-        task.progress = 100;
-        broadcast({ type: 'update', task });
+      completedFileBuffers.set(taskId, { buffer: result.buffer, title: task.title });
+      task.downloadPath = expectedMp3;
+      task.status = 'completed';
+      task.progress = 100;
+      broadcast({ type: 'update', task });
 
-        // Cleanup after 10 minutes
-        setTimeout(async () => {
-          try {
-            if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
-            completedFileBuffers.delete(taskId);
-          } catch (e) {}
-        }, 10 * 60 * 1000);
+      // Clean up after 10 minutes
+      setTimeout(async () => {
+        try {
+          if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
+          completedFileBuffers.delete(taskId);
+        } catch (e) {}
+      }, 10 * 60 * 1000);
 
-        console.log(`[ytdl/process] Success via engine "${result.engine}" for taskId=${taskId}, size=${result.buffer.length}`);
-        return;
-      } catch (engineErr: any) {
-        console.warn('[ytdl/process] All multi-engine attempts failed:', engineErr?.message || engineErr);
-        // Fall through to yt-dlp as last resort
-      }
+      console.log(`[ytdl/process] Success via engine "${result.engine}" for taskId=${taskId}, size=${result.buffer.length}`);
+      return;
     }
 
     // =========================================================================
-    // FALLBACK: yt-dlp binary (for non-YouTube URLs or as last resort)
+    // NON-YOUTUBE (SoundCloud, direct media URLs, etc.): yt-dlp binary
     // =========================================================================
     const { ytdlpPath, ffmpegPath } = await ensureBinaries();
     const cookieArgs = await buildCookieArgs();
     const outputTemplate = path.join(downloadsDir, `${taskId}.%(ext)s`);
-    const targetUrl = videoId
-      ? `https://www.youtube.com/watch?v=${videoId}`
-      : task.url;
+    const targetUrl = task.url;
 
     const matrix: Array<{
       clientArgs: string[];
       useCookies: boolean;
       label: string;
-    }> = isYouTube
-      ? [
-          {
-            label: 'web,mweb+cookies',
-            clientArgs: ['--extractor-args', 'youtube:player_client=web,mweb'],
-            useCookies: true,
-          },
-          {
-            label: 'web+cookies',
-            clientArgs: ['--extractor-args', 'youtube:player_client=web'],
-            useCookies: true,
-          },
-          {
-            label: 'mweb+cookies',
-            clientArgs: ['--extractor-args', 'youtube:player_client=mweb'],
-            useCookies: true,
-          },
-          {
-            label: 'default+cookies',
-            clientArgs: [],
-            useCookies: true,
-          },
-          {
-            label: 'ios+cookies',
-            clientArgs: ['--extractor-args', 'youtube:player_client=ios'],
-            useCookies: true,
-          },
-        ]
-      : [
-          { label: 'default+cookies', clientArgs: [], useCookies: true },
-          { label: 'default', clientArgs: [], useCookies: false },
-        ];
+    }> = [
+      { label: 'default+cookies', clientArgs: [], useCookies: true },
+      { label: 'default', clientArgs: [], useCookies: false },
+    ];
 
     const executeDownload = (
       attempt: (typeof matrix)[0]
@@ -245,7 +210,6 @@ async function processDownload(taskId: string) {
       });
     };
 
-    // Reset progress for yt-dlp attempts
     task.progress = 0;
     task.status = 'downloading';
     broadcast({ type: 'update', task });
@@ -282,7 +246,6 @@ async function processDownload(taskId: string) {
     const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
     let foundFile: string | null = null;
 
-    // Small delay for filesystem flush
     await new Promise((r) => setTimeout(r, 500));
 
     if (fs.existsSync(expectedMp3)) {
@@ -303,13 +266,6 @@ async function processDownload(taskId: string) {
     }
 
     if (!foundFile || !fs.existsSync(foundFile)) {
-      try {
-        const files = fs.readdirSync(downloadsDir);
-        const related = files.filter((f) => f.includes(taskId));
-        console.error(
-          `[ytdl/process] Expected MP3 not found. Related files in tmpdir: ${JSON.stringify(related)}`
-        );
-      } catch (e) {}
       throw new Error('No se encontró el archivo MP3 generado tras la descarga');
     }
 
@@ -321,10 +277,7 @@ async function processDownload(taskId: string) {
       throw new Error('El archivo generado tiene 0 bytes');
     }
 
-    // Cache buffer in memory (same serverless instance)
     completedFileBuffers.set(taskId, { buffer, title: task.title });
-
-    // Keep file on disk as fallback for /file route (cleaned after 10 min)
     task.downloadPath = foundFile;
     task.status = 'completed';
     task.progress = 100;
