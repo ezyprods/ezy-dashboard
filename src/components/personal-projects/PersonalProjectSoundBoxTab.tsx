@@ -48,7 +48,7 @@ export function PersonalProjectSoundBoxTab({ project }: PersonalProjectSoundBoxT
               : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated'
           }`}
         >
-          <Scissors className="w-4 h-4" />
+          <Layers className="w-4 h-4" />
           <span>Separador Stems</span>
         </button>
 

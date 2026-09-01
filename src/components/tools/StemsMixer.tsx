@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/Button';
 interface StemsMixerProps {
   taskId: string;
   filename: string;
+  stems?: {
+    vocals?: string;
+    drums?: string;
+    bass?: string;
+    other?: string;
+  };
 }
 
 const STEMS = [
@@ -16,7 +22,7 @@ const STEMS = [
   { id: 'other', name: 'Otros', icon: Music4, color: 'text-indigo-500', bg: 'bg-indigo-500', lightBg: 'bg-indigo-50' }
 ] as const;
 
-export function StemsMixer({ taskId, filename }: StemsMixerProps) {
+export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -31,12 +37,34 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
   const progressInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    // Cleanup previous audios
+    Object.values(audioRefs.current).forEach(audio => {
+      audio.pause();
+      audio.src = '';
+    });
+    audioRefs.current = {};
+
     STEMS.forEach(stem => {
-      const audio = new Audio(`/api/tools/stems/stream?taskId=${taskId}&stem=${stem.id}`);
+      const directUrl = stems?.[stem.id as keyof typeof stems];
+      const audioSrc = directUrl || `/api/tools/stems/stream?taskId=${taskId}&stem=${stem.id}`;
+      
+      const audio = new Audio(audioSrc);
       audio.crossOrigin = 'anonymous';
+      audio.preload = 'auto';
+
       audio.addEventListener('loadedmetadata', () => {
-        if (stem.id === 'vocals') setDuration(audio.duration);
+        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+          setDuration(prev => Math.max(prev, audio.duration));
+        }
       });
+
+      audio.addEventListener('ended', () => {
+        if (stem.id === 'vocals' || !audioRefs.current['vocals']) {
+          setPlaying(false);
+          setCurrentTime(0);
+        }
+      });
+
       audioRefs.current[stem.id] = audio;
     });
 
@@ -47,7 +75,7 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
       });
       if (progressInterval.current) clearInterval(progressInterval.current);
     };
-  }, [taskId]);
+  }, [taskId, stems]);
 
   useEffect(() => {
     const isAnySolo = solos.size > 0;
@@ -85,15 +113,26 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
     } else {
       const targetTime = currentTime;
       Object.values(audioRefs.current).forEach(audio => {
-        if (Math.abs(audio.currentTime - targetTime) > 0.1) {
+        if (Math.abs(audio.currentTime - targetTime) > 0.05) {
           audio.currentTime = targetTime;
         }
         audio.play().catch(() => {});
       });
       setPlaying(true);
+
+      if (progressInterval.current) clearInterval(progressInterval.current);
       progressInterval.current = setInterval(() => {
-        if (audioRefs.current['vocals']) {
-          setCurrentTime(audioRefs.current['vocals'].currentTime);
+        const masterAudio = audioRefs.current['vocals'] || Object.values(audioRefs.current)[0];
+        if (masterAudio) {
+          const masterTime = masterAudio.currentTime;
+          setCurrentTime(masterTime);
+          
+          // Autocorregir drift si alguna pista se desfasa > 0.08s
+          Object.values(audioRefs.current).forEach(aud => {
+            if (Math.abs(aud.currentTime - masterTime) > 0.08) {
+              aud.currentTime = masterTime;
+            }
+          });
         }
       }, 100);
     }
@@ -137,14 +176,26 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
   };
 
   const downloadStem = (stemId: string) => {
-    window.open(`/api/tools/stems/stream?taskId=${taskId}&stem=${stemId}&download=true`, '_blank');
+    const directUrl = stems?.[stemId as keyof typeof stems];
+    const downloadUrl = directUrl 
+      ? `/api/tools/stems/stream?url=${encodeURIComponent(directUrl)}&stem=${stemId}&filename=${encodeURIComponent(filename)}&download=true`
+      : `/api/tools/stems/stream?taskId=${taskId}&stem=${stemId}&download=true`;
+
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `${filename.replace(/\.[^/.]+$/, "")}_${stemId}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (document.body.contains(a)) document.body.removeChild(a);
+    }, 100);
   };
 
   const downloadAll = () => {
     STEMS.forEach((stem, index) => {
       setTimeout(() => {
         downloadStem(stem.id);
-      }, index * 400);
+      }, index * 250);
     });
   };
 
@@ -224,21 +275,29 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
                 {/* Botones Mute / Solo */}
                 <div className="flex items-center gap-1">
                   <button 
+                    type="button"
                     onClick={() => toggleMute(stem.id)}
+                    aria-label={`Silenciar ${stem.name}`}
+                    aria-pressed={isMuted}
+                    title={isMuted ? `Activar ${stem.name}` : `Silenciar ${stem.name}`}
                     className={`w-7 h-6 rounded text-[11px] font-semibold transition-colors flex items-center justify-center border ${
                       isMuted 
-                        ? 'bg-red-50 text-red-600 border-red-200' 
-                        : 'bg-transparent text-text-secondary border-transparent hover:bg-surface border-border/50'
+                        ? 'bg-red-50 text-red-600 border-red-200 shadow-xs' 
+                        : 'bg-transparent text-text-secondary border-border/40 hover:bg-surface-elevated'
                     }`}
                   >
                     M
                   </button>
                   <button 
+                    type="button"
                     onClick={() => toggleSolo(stem.id)}
+                    aria-label={`Solo ${stem.name}`}
+                    aria-pressed={isSolo}
+                    title={isSolo ? `Desactivar Solo ${stem.name}` : `Solo ${stem.name}`}
                     className={`w-7 h-6 rounded text-[11px] font-semibold transition-colors flex items-center justify-center border ${
                       isSolo 
-                        ? 'bg-amber-50 text-amber-600 border-amber-200' 
-                        : 'bg-transparent text-text-secondary border-transparent hover:bg-surface border-border/50'
+                        ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-xs' 
+                        : 'bg-transparent text-text-secondary border-border/40 hover:bg-surface-elevated'
                     }`}
                   >
                     S
@@ -247,34 +306,44 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
 
                 {/* Volumen (Slider) */}
                 <div className="flex-1 w-full flex items-center gap-2 px-2">
-                  {activeVol === 0 ? <VolumeX className="w-3.5 h-3.5 text-text-secondary/50 shrink-0" /> : <Volume2 className="w-3.5 h-3.5 text-text-secondary shrink-0" />}
+                  {activeVol === 0 ? (
+                    <VolumeX className="w-3.5 h-3.5 text-text-secondary/50 shrink-0" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                  )}
                   
                   <div className="relative flex-1 flex items-center h-6">
                     {/* Barra de fondo */}
-                    <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1 bg-surface-elevated border border-border/50 rounded-full overflow-hidden">
+                    <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-surface-elevated border border-border/50 rounded-full overflow-hidden">
                       {/* Barra de progreso */}
                       <div 
                         className={`h-full ${stem.bg} transition-all duration-75`}
                         style={{ width: `${volumes[stem.id] * 100}%`, opacity: isMuted ? 0.3 : 1 }}
                       />
                     </div>
-                    {/* Input real */}
+                    {/* Input real accesible */}
                     <input 
                       type="range"
                       value={volumes[stem.id]} 
+                      min={0}
                       max={1} 
                       step={0.01}
+                      aria-label={`Volumen de ${stem.name}`}
+                      aria-valuenow={Math.round(volumes[stem.id] * 100)}
                       onChange={(e) => handleVolume(stem.id, e)}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     />
-                    {/* Botón visual del slider (pulido) */}
+                    {/* Thumb visual centrado */}
                     <div 
-                      className={`absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow border border-border pointer-events-none transition-all duration-75`}
-                      style={{ left: `calc(${volumes[stem.id] * 100}% - 6px)`, opacity: isMuted ? 0.5 : 1 }}
-                    ></div>
+                      className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-sm border border-border/80 pointer-events-none transition-all duration-75"
+                      style={{ 
+                        left: `calc(${volumes[stem.id] * 100}% * 0.92 + 2px)`,
+                        opacity: isMuted ? 0.5 : 1 
+                      }}
+                    />
                   </div>
 
-                  <span className={`text-[11px] font-medium w-8 text-right ${activeVol > 0 ? 'text-text-primary' : 'text-text-secondary'}`}>
+                  <span className={`text-[11px] font-medium w-9 text-right ${activeVol > 0 ? 'text-text-primary' : 'text-text-secondary'}`}>
                     {Math.round(volumes[stem.id] * 100)}%
                   </span>
                 </div>
@@ -286,6 +355,7 @@ export function StemsMixer({ taskId, filename }: StemsMixerProps) {
                   size="icon"
                   className="w-7 h-7 text-text-secondary hover:text-text-primary shrink-0"
                   title={`Descargar ${stem.name}`}
+                  aria-label={`Descargar pista ${stem.name}`}
                 >
                   <Download className="w-3.5 h-3.5" />
                 </Button>

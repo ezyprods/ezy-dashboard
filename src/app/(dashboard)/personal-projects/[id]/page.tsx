@@ -232,6 +232,7 @@ export default function PersonalProjectDetailPage() {
               }`}
             >
               <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
               {'badge' in tab && typeof (tab as any).badge === 'number' && (tab as any).badge > 0 && (
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
                   isActive ? 'bg-accent text-white' : 'bg-surface-elevated text-text-secondary'

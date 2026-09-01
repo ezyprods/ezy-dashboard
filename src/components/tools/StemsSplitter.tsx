@@ -22,6 +22,7 @@ type ProcessStatus = 'idle' | 'processing' | 'completed' | 'error';
 
 interface Task {
   id: string;
+  predictionId?: string;
   filename: string;
   status: ProcessStatus;
   progress: number;
@@ -40,6 +41,8 @@ export function StemsSplitter() {
   const [setupStatus, setSetupStatus] = useState<SetupStatus>('checking');
   const [setupError, setSetupError] = useState('');
   const [engineType, setEngineType] = useState<'cloud' | 'local'>('cloud');
+  const [cloudAvailable, setCloudAvailable] = useState(false);
+  const [localAvailable, setLocalAvailable] = useState(false);
   
   // Replicate token state
   const [replicateToken, setReplicateToken] = useState<string>('');
@@ -54,6 +57,7 @@ export function StemsSplitter() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Cargar token guardado en localStorage si existe
@@ -66,6 +70,7 @@ export function StemsSplitter() {
 
     return () => {
       if (eventSourceRef.current) eventSourceRef.current.close();
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
   }, []);
 
@@ -82,6 +87,9 @@ export function StemsSplitter() {
       const res = await fetch('/api/tools/stems/install', { headers });
       const data = await res.json();
       
+      setCloudAvailable(Boolean(data.cloudAvailable));
+      setLocalAvailable(Boolean(data.localAvailable));
+
       if (data.status === 'ready') {
         setSetupStatus('ready');
         setEngineType(data.engine || 'cloud');
@@ -144,7 +152,7 @@ export function StemsSplitter() {
     try {
       const res = await fetch('/api/tools/stems/install', { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al instalar');
+      if (!res.ok) throw new Error(data.error || 'Error al instalar Demucs');
       
       await checkEngineStatus();
     } catch (e: any) {
@@ -158,11 +166,12 @@ export function StemsSplitter() {
     const selected = files[0];
     setFile(selected);
     setErrorMsg('');
-    setTask({ id: '', filename: selected.name, status: 'processing', progress: 0 });
+    setTask({ id: '', filename: selected.name, status: 'processing', progress: 5, engine: engineType });
 
     try {
       const formData = new FormData();
       formData.append('file', selected);
+      formData.append('engine', engineType);
       if (replicateToken) {
         formData.append('replicateToken', replicateToken);
       }
@@ -178,44 +187,90 @@ export function StemsSplitter() {
         body: formData
       });
 
+      const resData = await res.json();
+
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Error al iniciar el proceso');
+        if (res.status === 402 || resData.code === 'INSUFFICIENT_CREDIT') {
+          throw new Error('Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC o añadir saldo en Replicate.com.');
+        }
+        throw new Error(resData.error || 'Error al iniciar el proceso');
       }
 
-      const { taskId } = await res.json();
-      startPolling(taskId);
+      const { taskId, predictionId, engine } = resData;
+      setTask({ 
+        id: taskId, 
+        predictionId, 
+        filename: selected.name, 
+        status: 'processing', 
+        progress: 10,
+        engine: engine || engineType 
+      });
+
+      startTracking(taskId, predictionId);
     } catch (err: any) {
-      setErrorMsg(err.message);
+      setErrorMsg(err.message || 'Error al procesar el audio');
       setTask(null);
     }
   };
 
-  const startPolling = (taskId: string) => {
+  const startTracking = (taskId: string, predictionId?: string) => {
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
 
-    const es = new EventSource(`/api/tools/stems/progress?taskId=${taskId}`);
-    eventSourceRef.current = es;
+    const sseUrl = `/api/tools/stems/progress?taskId=${encodeURIComponent(taskId)}${predictionId ? `&predictionId=${encodeURIComponent(predictionId)}` : ''}`;
+    
+    try {
+      const es = new EventSource(sseUrl);
+      eventSourceRef.current = es;
 
-    es.onmessage = (event) => {
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'update' && data.task) {
+            setTask(data.task);
+            if (data.task.status === 'completed' || data.task.status === 'error') {
+              es.close();
+              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            }
+          }
+        } catch (e) {
+          // ignore heartbeat
+        }
+      };
+
+      es.onerror = () => {
+        es.close();
+      };
+    } catch (e) {
+      // SSE not supported or blocked
+    }
+
+    // Fallback de polling activo (cada 2.5s) para Vercel Serverless
+    pollIntervalRef.current = setInterval(async () => {
       try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'update' && data.task) {
-          setTask(data.task);
-          if (data.task.status === 'completed' || data.task.status === 'error') {
-            es.close();
+        const jsonUrl = `/api/tools/stems/progress?taskId=${encodeURIComponent(taskId)}${predictionId ? `&predictionId=${encodeURIComponent(predictionId)}` : ''}&format=json`;
+        const headers: Record<string, string> = { 'Accept': 'application/json' };
+        if (replicateToken) headers['x-replicate-token'] = replicateToken;
+
+        const res = await fetch(jsonUrl, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.task) {
+            setTask(data.task);
+            if (data.task.status === 'completed' || data.task.status === 'error') {
+              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+              if (eventSourceRef.current) eventSourceRef.current.close();
+            }
           }
         }
       } catch (e) {
-        // ignore keepalive
+        // ignore polling network glitch
       }
-    };
-
-    es.onerror = () => {
-      es.close();
-    };
+    }, 2500);
   };
 
   return (
@@ -505,7 +560,7 @@ export function StemsSplitter() {
                     </div>
                     
                     <div className="text-left w-full">
-                      <StemsMixer taskId={task.id} filename={task.filename} />
+                      <StemsMixer taskId={task.id} filename={task.filename} stems={task.stems} />
                     </div>
                   </div>
                 )}

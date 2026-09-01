@@ -8,41 +8,68 @@ export async function GET(req: NextRequest) {
   try {
     const clientToken = req.headers.get('x-replicate-token') || req.nextUrl.searchParams.get('token');
     const cloudToken = clientToken || process.env.REPLICATE_API_TOKEN;
+    const hasCloud = Boolean(cloudToken && cloudToken.trim().length > 5);
 
-    if (cloudToken && cloudToken.trim().length > 5) {
-      return NextResponse.json({ 
-        status: 'ready', 
-        engine: 'cloud', 
-        message: 'Motor de IA en la nube (GPU Replicate) conectado y listo.' 
-      });
-    }
+    let hasPython = false;
+    let hasLocalDemucs = false;
 
     // Check if python is available locally
     try {
       await execAsync('python --version');
-      
-      // Check if demucs is installed
+      hasPython = true;
       try {
         await execAsync('python -m demucs --help');
-        return NextResponse.json({ 
-          status: 'ready', 
-          engine: 'local', 
-          message: 'Demucs local está instalado y listo.' 
-        });
+        hasLocalDemucs = true;
       } catch {
-        return NextResponse.json({ 
-          status: 'no_demucs', 
-          message: 'Python está disponible pero falta instalar Demucs.',
-          hasCloudOption: true
-        });
+        hasLocalDemucs = false;
       }
     } catch {
+      hasPython = false;
+      hasLocalDemucs = false;
+    }
+
+    if (hasCloud) {
       return NextResponse.json({ 
-        status: 'no_engine', 
-        message: 'No se detectó Python local ni token de IA en la nube.',
+        status: 'ready', 
+        engine: 'cloud', 
+        cloudAvailable: true,
+        localAvailable: hasLocalDemucs,
+        hasPython,
+        message: 'Motor de IA en la nube (GPU Replicate) conectado y listo.' 
+      });
+    }
+
+    if (hasLocalDemucs) {
+      return NextResponse.json({ 
+        status: 'ready', 
+        engine: 'local', 
+        cloudAvailable: false,
+        localAvailable: true,
+        hasPython: true,
+        message: 'Demucs local está instalado y listo en tu ordenador.' 
+      });
+    }
+
+    if (hasPython) {
+      return NextResponse.json({ 
+        status: 'no_demucs', 
+        cloudAvailable: false,
+        localAvailable: false,
+        hasPython: true,
+        message: 'Python está instalado en tu PC pero falta instalar Demucs.',
         hasCloudOption: true
       });
     }
+
+    return NextResponse.json({ 
+      status: 'no_engine', 
+      cloudAvailable: false,
+      localAvailable: false,
+      hasPython: false,
+      message: 'No se detectó Demucs local ni token de IA en la nube.',
+      hasCloudOption: true
+    });
+
   } catch (error: any) {
     return NextResponse.json({ status: 'error', message: error.message });
   }
@@ -88,14 +115,19 @@ export async function POST(req: NextRequest) {
     }
 
     return new Promise<NextResponse>((resolve) => {
-      const installProc = spawn('pip', ['install', 'demucs']);
+      // Install demucs and soundfile via python -m pip
+      const installProc = spawn('python', ['-m', 'pip', 'install', 'demucs', 'soundfile']);
       
       let out = '';
       installProc.stdout.on('data', data => out += data.toString());
       installProc.stderr.on('data', data => out += data.toString());
 
-      installProc.on('close', (code) => {
+      installProc.on('close', async (code) => {
         if (code === 0) {
+          // On Windows, uninstall torchcodec if present to avoid DLL error
+          try {
+            await execAsync('python -m pip uninstall -y torchcodec');
+          } catch {}
           resolve(NextResponse.json({ success: true, message: 'Demucs instalado correctamente en local' }));
         } else {
           resolve(NextResponse.json({ error: 'Fallo al instalar Demucs', logs: out }, { status: 500 }));

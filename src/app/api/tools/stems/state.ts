@@ -6,6 +6,7 @@ export interface StemsTask {
   status: StemsTaskStatus;
   progress: number;
   engine?: 'cloud' | 'local';
+  predictionId?: string;
   outputDir?: string;
   stems?: {
     vocals?: string;

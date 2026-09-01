@@ -10,6 +10,47 @@ export async function GET(req: NextRequest) {
   try {
     const taskId = req.nextUrl.searchParams.get('taskId');
     const stem = req.nextUrl.searchParams.get('stem') as 'vocals' | 'drums' | 'bass' | 'other' | null;
+    const directUrl = req.nextUrl.searchParams.get('url');
+    const queryFilename = req.nextUrl.searchParams.get('filename');
+
+    const validStems = ['vocals', 'drums', 'bass', 'other'];
+    if (stem && !validStems.includes(stem)) {
+      return NextResponse.json({ error: 'Pista no válida' }, { status: 400 });
+    }
+
+    const isDownload = req.nextUrl.searchParams.get('download') === 'true';
+
+    // Helper para Content-Disposition seguro con RFC 5987 (Unicode / emojis / tildes)
+    const getSafeDisposition = (rawName: string, stemName: string) => {
+      const base = rawName.replace(/\.[^/.]+$/, "").trim() || 'stem';
+      const cleanAscii = base.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '') || 'audio';
+      const fullAscii = `${cleanAscii}_${stemName}.wav`;
+      const fullUtf8 = encodeURIComponent(`${base}_${stemName}.wav`);
+      return `attachment; filename="${fullAscii}"; filename*=UTF-8''${fullUtf8}`;
+    };
+
+    // CASO 1: URL directa proporcionada por el cliente (Cloud / Stateless)
+    if (directUrl && stem) {
+      if (!isDownload) {
+        return NextResponse.redirect(directUrl);
+      }
+
+      const remoteRes = await fetch(directUrl);
+      if (!remoteRes.ok) {
+        return NextResponse.redirect(directUrl);
+      }
+
+      const blob = await remoteRes.arrayBuffer();
+      const disposition = getSafeDisposition(queryFilename || 'stem', stem);
+
+      return new NextResponse(Buffer.from(blob), {
+        status: 200,
+        headers: {
+          'Content-Type': remoteRes.headers.get('content-type') || 'audio/wav',
+          'Content-Disposition': disposition
+        }
+      });
+    }
 
     if (!taskId || !stem) {
       return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
@@ -20,40 +61,34 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 });
     }
 
-    const validStems = ['vocals', 'drums', 'bass', 'other'];
-    if (!validStems.includes(stem)) {
-      return NextResponse.json({ error: 'Pista no válida' }, { status: 400 });
-    }
+    const safeName = task.filename || queryFilename || 'audio';
 
-    const isDownload = req.nextUrl.searchParams.get('download') === 'true';
-    const safeFilename = task.filename.replace(/\.[^/.]+$/, "");
-
-    // CASO 1: Procesamiento en la nube (Cloud URLs de Replicate)
+    // CASO 2: Procesamiento en la nube (Cloud URLs de Replicate en memoria)
     if (task.stems && task.stems[stem]) {
       const stemUrl = task.stems[stem]!;
 
       if (!isDownload) {
-        // Redirección directa para streaming rápido y sin recargar el servidor
         return NextResponse.redirect(stemUrl);
       }
 
-      // Descarga de archivo remoto con nombre formateado
       const remoteRes = await fetch(stemUrl);
       if (!remoteRes.ok) {
         return NextResponse.redirect(stemUrl);
       }
 
       const blob = await remoteRes.arrayBuffer();
+      const disposition = getSafeDisposition(safeName, stem);
+
       return new NextResponse(Buffer.from(blob), {
         status: 200,
         headers: {
           'Content-Type': remoteRes.headers.get('content-type') || 'audio/wav',
-          'Content-Disposition': `attachment; filename="${safeFilename}_${stem}.wav"`
+          'Content-Disposition': disposition
         }
       });
     }
 
-    // CASO 2: Procesamiento Local
+    // CASO 3: Procesamiento Local
     if (task.outputDir) {
       const filePath = path.join(task.outputDir, `${stem}.wav`);
 
@@ -70,7 +105,7 @@ export async function GET(req: NextRequest) {
       };
 
       if (isDownload) {
-        headers['Content-Disposition'] = `attachment; filename="${safeFilename}_${stem}.wav"`;
+        headers['Content-Disposition'] = getSafeDisposition(safeName, stem);
       }
 
       return new NextResponse(buffer, {
