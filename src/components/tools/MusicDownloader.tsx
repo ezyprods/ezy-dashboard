@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, Download, CheckCircle2, Play, Music, Globe, Search, RefreshCw } from 'lucide-react';
+import { Loader2, Download, CheckCircle2, Play, Music, Search, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface YtdlTask {
@@ -138,7 +138,7 @@ export function MusicDownloader() {
       if (!res.ok) throw new Error(data.error || 'Error al analizar el enlace');
 
       if (data.isPlaylist) {
-        throw new Error('Las listas de reproducción no están soportadas aún en la versión web.');
+        throw new Error('Las listas de reproducción completas no están soportadas aún en la versión web.');
       }
 
       const songTitle = data.title || inputUrl;
@@ -188,6 +188,36 @@ export function MusicDownloader() {
     }
   };
 
+  const getPlatformBadge = (platform?: string) => {
+    if (!platform) return null;
+    switch(platform.toLowerCase()) {
+      case 'spotify':
+        return (
+          <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold text-[11px] bg-emerald-500/10 px-2 py-0.5 rounded-md">
+            Spotify
+          </span>
+        );
+      case 'soundcloud':
+        return (
+          <span className="inline-flex items-center gap-1 text-orange-400 font-semibold text-[11px] bg-orange-500/10 px-2 py-0.5 rounded-md">
+            SoundCloud
+          </span>
+        );
+      case 'youtube':
+        return (
+          <span className="inline-flex items-center gap-1 text-red-400 font-semibold text-[11px] bg-red-500/10 px-2 py-0.5 rounded-md">
+            YouTube
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 text-text-secondary font-semibold text-[11px] bg-surface-elevated px-2 py-0.5 rounded-md capitalize">
+            {platform}
+          </span>
+        );
+    }
+  };
+
   const getStatusIcon = (task: YtdlTask) => {
     const targetUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
 
@@ -232,13 +262,13 @@ export function MusicDownloader() {
       case 'error': {
         const err = task.error || 'Error en la descarga';
         if (err.includes('Sign in to confirm') || err.includes('bot')) {
-          return 'Error temporal del servidor de YouTube. Reintenta en unos segundos.';
+          return 'Error temporal del servidor. Reintenta en unos segundos.';
         }
         if (err.includes('not found') || err.includes('unavailable') || err.includes('404')) {
-          return 'Vídeo no encontrado o no disponible.';
+          return 'Audio no encontrado o no disponible.';
         }
         if (err.includes('private') || err.includes('login_required')) {
-          return 'Este vídeo es privado o requiere inicio de sesión.';
+          return 'Este contenido es privado o requiere inicio de sesión.';
         }
         if (err.includes('Todos los motores')) {
           return 'Error al descargar. Reintenta en unos segundos.';
@@ -260,13 +290,13 @@ export function MusicDownloader() {
             <Play className="w-6 h-6 sm:w-8 sm:h-8 text-accent" />
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold text-text-primary mb-2 sm:mb-3">SoundBox Cloud</h2>
-          <p className="text-sm sm:text-base text-text-secondary">Descarga audios en segundo plano y conviértelos a MP3 (320K) automáticamente. Pega varios enlaces para descargar simultáneamente.</p>
+          <p className="text-sm sm:text-base text-text-secondary">Descarga audios de <strong className="text-text-primary">YouTube</strong>, <strong className="text-emerald-400">Spotify</strong> y <strong className="text-orange-400">SoundCloud</strong> en segundo plano y conviértelos a MP3 (320K) automáticamente.</p>
         </div>
 
         <div className="glass p-1.5 sm:p-2 rounded-2xl border border-border flex flex-col sm:flex-row items-stretch sm:items-center gap-2 focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/50 transition-all">
           <input 
             type="text" 
-            placeholder="Pega el enlace o busca por nombre..."
+            placeholder="Pega enlace de YouTube, Spotify, SoundCloud o busca..."
             value={url}
             onChange={e => {
               setUrl(e.target.value);
@@ -318,11 +348,7 @@ export function MusicDownloader() {
               <div className="flex-1 min-w-0 z-10">
                 <h4 className="font-bold text-sm sm:text-base text-text-primary line-clamp-1">{task.title}</h4>
                 <div className="flex items-center gap-2 mt-1 text-[11px] sm:text-xs font-medium">
-                  {task.platform && (
-                    <span className="flex items-center gap-1 text-text-secondary">
-                      <Globe className="w-3.5 h-3.5" /> <span className="capitalize">{task.platform}</span>
-                    </span>
-                  )}
+                  {getPlatformBadge(task.platform)}
                   {task.platform && <span className="text-text-secondary/50">•</span>}
                   <span className={`${task.status === 'error' ? 'text-danger' : (task.status === 'completed' ? 'text-emerald-500' : 'text-accent')}`}>
                     {getStatusText(task)}

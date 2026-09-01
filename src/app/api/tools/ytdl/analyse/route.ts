@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import https from 'https';
-import { ensureYtDlp } from '../binaries';
-import { buildCookieArgs } from '../cookies';
 import { createDecipheriv } from 'crypto';
 
 export const maxDuration = 60;
@@ -29,7 +27,7 @@ const fetchUrl = (url: string, headers = {}): Promise<string> => {
       if (depth > 5) return reject(new Error('Too many redirects'));
       const parsedUrl = new URL(targetUrl);
       https.get(targetUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', ...headers }
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36', ...headers }
       }, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           let redirect = res.headers.location;
@@ -97,30 +95,66 @@ function cleanTitle(metadata: any) {
 }
 
 async function getSpotifyMetadata(url: string) {
-  try {
-      const html = await fetchUrl(url);
-      const titleMatch = html.match(/<title>(.*?)<\/title>/);
-      if (titleMatch) {
-          const titleText = titleMatch[1];
-          const spMatch = titleText.match(/^(.+?)\s*[-–]\s*(?:song.*?by|canción.*?de|música y letra de)\s*(.+?)\s*\|/i);
-          if (spMatch) {
-              return { track: spMatch[1].trim(), artist: spMatch[2].trim(), fullTitle: `${spMatch[2].trim()} - ${spMatch[1].trim()}` };
-          }
-          const simpleMatch = titleText.match(/^(.+?)\s*\|/);
-          if (simpleMatch) {
-              return { track: simpleMatch[1].trim(), artist: '', fullTitle: simpleMatch[1].trim() };
-          }
-      }
-  } catch (e) { }
+  let title = '';
+  let artist = '';
+  let thumbnail = '';
 
+  // 1. Fetch Spotify oEmbed
   try {
-      const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
-      const data = await fetchUrl(oembedUrl);
-      const json = JSON.parse(data);
-      return { track: json.title, artist: '', fullTitle: json.title, thumbnail: json.thumbnail_url };
-  } catch (e) { }
+    const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+    const data = await fetchUrl(oembedUrl);
+    const json = JSON.parse(data);
+    if (json.title) title = json.title;
+    if (json.thumbnail_url) thumbnail = json.thumbnail_url;
+  } catch (e) {}
+
+  // 2. Fetch page title for complete artist & track info
+  try {
+    const html = await fetchUrl(url);
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+    if (titleMatch) {
+      const titleText = titleMatch[1];
+      const spMatch = titleText.match(/^(.+?)\s*[-–]\s*(?:song.*?by|canción.*?de|música y letra de)\s*(.+?)\s*\|/i);
+      if (spMatch) {
+        return {
+          track: spMatch[1].trim(),
+          artist: spMatch[2].trim(),
+          fullTitle: `${spMatch[2].trim()} - ${spMatch[1].trim()}`,
+          thumbnail: thumbnail || ''
+        };
+      }
+      const simpleMatch = titleText.match(/^(.+?)\s*\|/);
+      if (simpleMatch && !title) {
+        title = simpleMatch[1].trim();
+      }
+    }
+  } catch (e) {}
+
+  if (title) {
+    return { track: title, artist, fullTitle: artist ? `${artist} - ${title}` : title, thumbnail };
+  }
 
   throw new Error('No se pudo leer la información de Spotify');
+}
+
+async function getSoundCloudMetadata(url: string) {
+  try {
+    const oembedUrl = `https://soundcloud.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+    const data = await fetchUrl(oembedUrl);
+    const json = JSON.parse(data);
+    let title = (json.title || '').replace(/by.*$/i, '').trim();
+    const author = json.author_name || '';
+    if (author && !title.toLowerCase().includes(author.toLowerCase())) {
+      title = `${author} - ${title}`;
+    }
+    return {
+      title,
+      author,
+      thumbnail: json.thumbnail_url || ''
+    };
+  } catch (e) {
+    throw new Error('No se pudo leer la información de SoundCloud');
+  }
 }
 
 function getYouTubeVideoId(urlStr: string): string | null {
@@ -156,7 +190,7 @@ async function getYouTubeOEmbed(videoId: string) {
 
 async function getSaveTubeInfo(videoId: string) {
   try {
-    const cdns = ['cdn403.savetube.vip', 'cdn400.savetube.vip', 'cdn405.savetube.vip'];
+    const cdns = ['cdn403.savetube.vip', 'cdn400.savetube.vip', 'cdn401.savetube.vip'];
     for (const cdn of cdns) {
       try {
         const res = await fetch(`https://${cdn}/v2/info`, {
@@ -167,7 +201,7 @@ async function getSaveTubeInfo(videoId: string) {
             'Referer': 'https://save-tube.com/',
           },
           body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}` }),
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(3500),
         });
         if (res.ok) {
           const json = await res.json();
@@ -197,8 +231,10 @@ export async function POST(req: Request) {
     let targetUrl = url;
     let title, thumbnail, duration, platform;
 
-    // Case 1: Spotify URL
-    if (url.includes('spotify.com')) {
+    // =========================================================================
+    // 1. SPOTIFY TRACKS
+    // =========================================================================
+    if (url.includes('spotify.com') || url.includes('spotify.link')) {
       platform = 'spotify';
       const spotMeta = await getSpotifyMetadata(url);
       
@@ -225,15 +261,56 @@ export async function POST(req: Request) {
         }
       } catch (e) {}
 
-      title = spotMeta.fullTitle;
-      thumbnail = spotMeta.thumbnail;
-      targetUrl = url;
+      return NextResponse.json({
+        title: spotMeta.fullTitle,
+        thumbnail: spotMeta.thumbnail,
+        duration: null,
+        platform: 'spotify',
+        resolvedUrl: url,
+        isPlaylist: false
+      });
 
-    // Case 2: YouTube Video ID (even if URL contains &list= or other params)
+    // =========================================================================
+    // 2. SOUNDCLOUD TRACKS
+    // =========================================================================
+    } else if (url.includes('soundcloud.com')) {
+      platform = 'soundcloud';
+      const scMeta = await getSoundCloudMetadata(url);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const yts = require('@vreden/youtube_scraper');
+        const sRes = await yts.search(scMeta.title);
+        const list = sRes.results || sRes.result || [];
+        const firstVideo = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
+        if (firstVideo) {
+          const vUrl = firstVideo.url || `https://www.youtube.com/watch?v=${firstVideo.videoId}`;
+          return NextResponse.json({
+            title: scMeta.title,
+            thumbnail: scMeta.thumbnail || firstVideo.thumbnail || firstVideo.image,
+            duration: firstVideo.seconds || null,
+            platform: 'soundcloud',
+            resolvedUrl: vUrl,
+            isPlaylist: false
+          });
+        }
+      } catch (e) {}
+
+      return NextResponse.json({
+        title: scMeta.title,
+        thumbnail: scMeta.thumbnail,
+        duration: null,
+        platform: 'soundcloud',
+        resolvedUrl: url,
+        isPlaylist: false
+      });
+
+    // =========================================================================
+    // 3. YOUTUBE VIDEOS (Standard, Shorts, with Playlist params)
+    // =========================================================================
     } else if (videoId) {
       platform = 'youtube';
       
-      // Step A: YouTube oEmbed
       const oembedMeta = await getYouTubeOEmbed(videoId);
       if (oembedMeta) {
         return NextResponse.json({
@@ -246,7 +323,6 @@ export async function POST(req: Request) {
         });
       }
 
-      // Step B: SaveTube encrypted metadata
       const saveMeta = await getSaveTubeInfo(videoId);
       if (saveMeta) {
         return NextResponse.json({
@@ -259,7 +335,6 @@ export async function POST(req: Request) {
         });
       }
 
-      // Step C: Fallback title
       return NextResponse.json({
         title: `YouTube Audio (${videoId})`,
         thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
@@ -269,7 +344,9 @@ export async function POST(req: Request) {
         isPlaylist: false
       });
 
-    // Case 3: Search Query (not a URL)
+    // =========================================================================
+    // 4. SEARCH QUERY (Plain song name or artist)
+    // =========================================================================
     } else if (!url.startsWith('http')) {
       platform = 'search';
 
@@ -295,9 +372,11 @@ export async function POST(req: Request) {
       title = url;
       targetUrl = url;
 
-    // Case 4: Other URLs (SoundCloud, direct media)
+    // =========================================================================
+    // 5. OTHER DIRECT AUDIO URLS
+    // =========================================================================
     } else {
-      platform = targetUrl.includes('soundcloud.com') ? 'soundcloud' : 'other';
+      platform = 'other';
       title = 'Audio';
       targetUrl = url;
     }
