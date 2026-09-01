@@ -168,7 +168,7 @@ async function getSpotifyMetadata(url: string) {
     return { track: title, artist, fullTitle: artist ? `${artist} - ${title}` : title, thumbnail };
   }
 
-  throw new Error('No se pudo leer la información de Spotify');
+  throw new Error('Esta pista o lista de Spotify es privada o no se pudo acceder. Asegúrate de que sea pública.');
 }
 
 async function getSoundCloudMetadata(url: string) {
@@ -271,7 +271,7 @@ export async function POST(req: Request) {
     // 1. SPOTIFY PLAYLISTS & ALBUMS
     // =========================================================================
     if (isSpotifyPlaylistOrAlbum(trimmedUrl)) {
-      const spotifyPl = await fetchSpotifyPlaylist(trimmedUrl);
+      const { playlist: spotifyPl, error: spotifyErr } = await fetchSpotifyPlaylist(trimmedUrl);
       if (spotifyPl && spotifyPl.tracks.length > 0) {
         return NextResponse.json({
           isPlaylist: true,
@@ -282,6 +282,9 @@ export async function POST(req: Request) {
           tracks: spotifyPl.tracks,
           platform: 'spotify',
         });
+      }
+      if (spotifyErr) {
+        return NextResponse.json({ error: spotifyErr }, { status: 400 });
       }
     }
 
@@ -301,6 +304,9 @@ export async function POST(req: Request) {
           platform: 'soundcloud',
         });
       }
+      return NextResponse.json({
+        error: 'No se pudo acceder a esta lista de SoundCloud. Comprueba que sea pública o que el enlace sea válido.'
+      }, { status: 400 });
     }
 
     // =========================================================================
@@ -350,6 +356,9 @@ export async function POST(req: Request) {
           platform: 'youtube',
         });
       }
+      return NextResponse.json({
+        error: 'No se pudo acceder a esta lista de YouTube. Comprueba que sea pública.'
+      }, { status: 400 });
 
     // =========================================================================
     // 5. SOUNDCLOUD INDIVIDUAL TRACKS

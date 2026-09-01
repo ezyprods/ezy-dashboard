@@ -31,7 +31,10 @@ export function isSpotifyPlaylistOrAlbum(urlStr: string): boolean {
   );
 }
 
-export async function fetchSpotifyPlaylist(urlStr: string): Promise<SpotifyPlaylistInfo | null> {
+export async function fetchSpotifyPlaylist(urlStr: string): Promise<{
+  playlist?: SpotifyPlaylistInfo;
+  error?: string;
+}> {
   try {
     const parsed = new URL(urlStr);
     const pathParts = parsed.pathname.split('/').filter(Boolean);
@@ -39,7 +42,7 @@ export async function fetchSpotifyPlaylist(urlStr: string): Promise<SpotifyPlayl
     const type = typeIndex !== -1 ? pathParts[typeIndex] : 'playlist';
     const id = typeIndex !== -1 ? pathParts[typeIndex + 1] : pathParts[0];
 
-    if (!id) return null;
+    if (!id) return { error: 'ID de lista de Spotify no válido' };
 
     const embedUrl = `https://open.spotify.com/embed/${type}/${id}`;
     const res = await fetch(embedUrl, {
@@ -50,16 +53,35 @@ export async function fetchSpotifyPlaylist(urlStr: string): Promise<SpotifyPlayl
       signal: AbortSignal.timeout(8000),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (res.status === 404 || res.status === 403) {
+        return {
+          error:
+            'Esta lista de Spotify es privada o no existe. Para descargarla, ábrela en Spotify > pulsa (...) > "Hacer pública" o "Añadir a mi perfil".',
+        };
+      }
+      return { error: 'Error al conectar con Spotify' };
+    }
+
     const html = await res.text();
     const nextMatch = html.match(
       /<script id="__NEXT_DATA__" type="application\/json">([\s\S]+?)<\/script>/
     );
-    if (!nextMatch) return null;
+    if (!nextMatch) {
+      return {
+        error:
+          'Esta lista de Spotify es privada. Para descargarla, ábrela en Spotify > pulsa (...) > "Hacer pública".',
+      };
+    }
 
     const data = JSON.parse(nextMatch[1]);
     const entity = data.props?.pageProps?.state?.data?.entity;
-    if (!entity || !Array.isArray(entity.trackList)) return null;
+    if (!entity || !Array.isArray(entity.trackList) || entity.trackList.length === 0) {
+      return {
+        error:
+          'Esta lista de Spotify es privada o está vacía. Para descargarla, ábrela en Spotify > pulsa (...) > "Hacer pública".',
+      };
+    }
 
     const playlistTitle = entity.name || entity.title || 'Lista de Spotify';
     const thumbnail =
@@ -96,18 +118,18 @@ export async function fetchSpotifyPlaylist(urlStr: string): Promise<SpotifyPlayl
       }
     );
 
-    if (tracks.length === 0) return null;
-
     return {
-      id,
-      title: playlistTitle,
-      thumbnail,
-      trackCount: tracks.length,
-      tracks,
-      platform: 'spotify',
+      playlist: {
+        id,
+        title: playlistTitle,
+        thumbnail,
+        trackCount: tracks.length,
+        tracks,
+        platform: 'spotify',
+      },
     };
-  } catch (e) {
+  } catch (e: any) {
     console.error('[spotify_playlist] Failed to fetch playlist:', e);
-    return null;
+    return { error: e.message || 'Error al procesar la lista de Spotify' };
   }
 }

@@ -403,16 +403,19 @@ export function MusicDownloader() {
         if (err.includes('Sign in to confirm') || err.includes('bot')) {
           return 'Error temporal del servidor. Reintenta en unos segundos.';
         }
+        if (err.includes('Hacer pública') || err.includes('Añadir a mi perfil') || err.includes('Asegúrate de que sea pública')) {
+          return err;
+        }
         if (err.includes('not found') || err.includes('unavailable') || err.includes('404')) {
           return 'Audio no encontrado o no disponible.';
         }
-        if (err.includes('private') || err.includes('login_required')) {
-          return 'Este contenido es privado o requiere inicio de sesión.';
+        if (err.includes('login_required')) {
+          return 'Este contenido requiere inicio de sesión.';
         }
         if (err.includes('Todos los motores')) {
           return 'Error al descargar. Reintenta en unos segundos.';
         }
-        return err.length > 120 ? err.substring(0, 117) + '...' : err;
+        return err;
       }
       default: return 'Analizando...';
     }
