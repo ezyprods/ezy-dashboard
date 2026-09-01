@@ -6,10 +6,10 @@ import { buildCookieArgs } from '../cookies';
 import {
   downloadWithEngines,
   getYouTubeVideoId,
-  isYouTubeUrl,
   isSpotifyUrl,
   searchYouTubeVideoIds,
 } from '../engines';
+import { processAudioBuffer, AudioProcessOptions } from '../processor';
 import { spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
@@ -28,6 +28,10 @@ export async function POST(req: Request) {
     resolvedUrl,
     clientId,
     taskId: passedTaskId,
+    format = 'mp3',
+    quality = '320',
+    normalize = false,
+    trimSilence = false,
   } = body;
 
   const taskId = passedTaskId || uuidv4();
@@ -38,6 +42,8 @@ export async function POST(req: Request) {
     title: title || 'Audio',
     thumbnail,
     platform,
+    format,
+    quality,
     status: 'downloading' as const,
     progress: 0,
     startTime: Date.now(),
@@ -47,7 +53,7 @@ export async function POST(req: Request) {
   broadcast({ type: 'update', task });
 
   try {
-    await processDownload(taskId);
+    await processDownload(taskId, { format, quality, normalize, trimSilence });
     return NextResponse.json({ success: true, taskId });
   } catch (error: any) {
     console.error('[ytdl/process] Fatal error:', error?.message || error);
@@ -58,7 +64,7 @@ export async function POST(req: Request) {
   }
 }
 
-async function processDownload(taskId: string) {
+async function processDownload(taskId: string, options: AudioProcessOptions) {
   const task = tasks.get(taskId);
   if (!task) throw new Error('Task not found');
 
@@ -101,14 +107,24 @@ async function processDownload(taskId: string) {
           });
 
           task.status = 'converting';
-          task.progress = 90;
+          task.progress = 80;
           broadcast({ type: 'update', task });
 
-          const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
-          await fs.promises.writeFile(expectedMp3, result.buffer);
+          // Post-process buffer with requested format, bitrate, normalize & trimSilence
+          const processed = await processAudioBuffer(result.buffer, options);
 
-          completedFileBuffers.set(taskId, { buffer: result.buffer, title: task.title });
-          task.downloadPath = expectedMp3;
+          const finalExt = processed.format || 'mp3';
+          const expectedFile = path.join(downloadsDir, `${taskId}.${finalExt}`);
+          await fs.promises.writeFile(expectedFile, processed.buffer);
+
+          completedFileBuffers.set(taskId, {
+            buffer: processed.buffer,
+            title: task.title,
+            format: finalExt,
+            mimeType: processed.mimeType,
+          });
+
+          task.downloadPath = expectedFile;
           task.status = 'completed';
           task.progress = 100;
           broadcast({ type: 'update', task });
@@ -116,12 +132,12 @@ async function processDownload(taskId: string) {
           // Clean up after 10 minutes
           setTimeout(async () => {
             try {
-              if (fs.existsSync(expectedMp3)) await fs.promises.unlink(expectedMp3);
+              if (fs.existsSync(expectedFile)) await fs.promises.unlink(expectedFile);
               completedFileBuffers.delete(taskId);
             } catch (e) {}
           }, 10 * 60 * 1000);
 
-          console.log(`[ytdl/process] Success via engine "${result.engine}" for taskId=${taskId}, size=${result.buffer.length}`);
+          console.log(`[ytdl/process] Success for taskId=${taskId}, format=${finalExt}, size=${processed.buffer.length}`);
           return;
         } catch (err: any) {
           console.warn(`[ytdl/process] Candidate videoId=${vid} failed:`, err?.message || err);
@@ -129,15 +145,13 @@ async function processDownload(taskId: string) {
         }
       }
 
-      // If this was a Spotify track or YouTube search and all candidates failed, throw clean error
       if (isSpotifyUrl(task.url) || !task.url.startsWith('http')) {
         throw new Error(lastEngineErr?.message || 'No se pudo descargar el audio tras intentar múltiples fuentes');
       }
     }
 
     // =========================================================================
-    // FALLBACK: yt-dlp binary (ONLY for direct media URLs or real direct streams)
-    // NEVER execute yt-dlp with Spotify URLs (avoids [DRM] error)
+    // FALLBACK: yt-dlp binary (ONLY for direct media URLs)
     // =========================================================================
     if (isSpotifyUrl(task.url)) {
       throw new Error('No se pudo encontrar una fuente de audio disponible para esta pista de Spotify');
@@ -178,9 +192,9 @@ async function processDownload(taskId: string) {
         'ba/ba*/bestaudio/b/best',
         '--extract-audio',
         '--audio-format',
-        'mp3',
+        options.format || 'mp3',
         '--audio-quality',
-        '320K',
+        `${options.quality || '320'}K`,
         '--ffmpeg-location',
         ffmpegPath,
         '--output',
@@ -255,65 +269,42 @@ async function processDownload(taskId: string) {
 
     for (const attempt of matrix) {
       try {
-        console.log(
-          `[ytdl/process] Trying yt-dlp client "${attempt.label}" for taskId=${taskId}`
-        );
         await executeDownload(attempt);
-        console.log(
-          `[ytdl/process] Success with yt-dlp client "${attempt.label}"`
-        );
         success = true;
         break;
       } catch (err: any) {
-        const errMsg = (err?.message || String(err)).slice(0, 300);
-        console.warn(
-          `[ytdl/process] Client "${attempt.label}" failed: ${errMsg}`
-        );
         lastErr = err;
       }
     }
 
     if (!success) {
-      const errMsg = lastErr?.message || 'Todos los métodos de descarga fallaron';
-      throw new Error(errMsg);
+      throw new Error(lastErr?.message || 'Todos los métodos de descarga fallaron');
     }
 
     // Locate the generated audio file
-    const expectedMp3 = path.join(downloadsDir, `${taskId}.mp3`);
-    let foundFile: string | null = null;
+    const AUDIO_EXTS = ['.mp3', '.m4a', '.webm', '.opus', '.aac', '.ogg', '.wav', '.flac'];
+    const files = fs.readdirSync(downloadsDir);
+    const match = files.find(
+      (f) => f.startsWith(taskId) && AUDIO_EXTS.some((ext) => f.endsWith(ext))
+    );
 
-    await new Promise((r) => setTimeout(r, 500));
-
-    if (fs.existsSync(expectedMp3)) {
-      foundFile = expectedMp3;
-    } else {
-      try {
-        const AUDIO_EXTS = ['.mp3', '.m4a', '.webm', '.opus', '.aac', '.ogg'];
-        const files = fs.readdirSync(downloadsDir);
-        const match = files.find(
-          (f) => f.startsWith(taskId) && AUDIO_EXTS.some((ext) => f.endsWith(ext))
-        );
-        if (match) {
-          foundFile = path.join(downloadsDir, match);
-        }
-      } catch (e) {
-        console.error('[ytdl/process] Failed to scan tmpdir:', e);
-      }
+    if (!match) {
+      throw new Error('No se encontró el archivo de audio generado tras la descarga');
     }
 
-    if (!foundFile || !fs.existsSync(foundFile)) {
-      throw new Error('No se encontró el archivo MP3 generado tras la descarga');
-    }
+    const foundFile = path.join(downloadsDir, match);
+    const rawBuffer = await fs.promises.readFile(foundFile);
+    
+    // Apply post-processing if needed
+    const processed = await processAudioBuffer(rawBuffer, options);
 
-    const buffer = await fs.promises.readFile(foundFile);
-    if (buffer.length === 0) {
-      try {
-        await fs.promises.unlink(foundFile);
-      } catch (e) {}
-      throw new Error('El archivo generado tiene 0 bytes');
-    }
+    completedFileBuffers.set(taskId, {
+      buffer: processed.buffer,
+      title: task.title,
+      format: processed.format,
+      mimeType: processed.mimeType,
+    });
 
-    completedFileBuffers.set(taskId, { buffer, title: task.title });
     task.downloadPath = foundFile;
     task.status = 'completed';
     task.progress = 100;
@@ -321,9 +312,7 @@ async function processDownload(taskId: string) {
 
     setTimeout(async () => {
       try {
-        if (foundFile && fs.existsSync(foundFile)) {
-          await fs.promises.unlink(foundFile);
-        }
+        if (foundFile && fs.existsSync(foundFile)) await fs.promises.unlink(foundFile);
         completedFileBuffers.delete(taskId);
       } catch (e) {}
     }, 10 * 60 * 1000);
