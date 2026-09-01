@@ -17,12 +17,17 @@ const DB_STORE = 'auth';
 function openDB(): Promise<IDBDatabase | null> {
   if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null);
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 300);
     try {
       const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
+      req.onupgradeneeded = () => {
+        try { req.result.createObjectStore(DB_STORE); } catch {}
+      };
+      req.onsuccess = () => { clearTimeout(timer); resolve(req.result); };
+      req.onerror = () => { clearTimeout(timer); resolve(null); };
+      req.onblocked = () => { clearTimeout(timer); resolve(null); };
     } catch {
+      clearTimeout(timer);
       resolve(null);
     }
   });
@@ -32,12 +37,14 @@ async function idbGet(key: string): Promise<string | null> {
   const db = await openDB();
   if (!db) return null;
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 300);
     try {
       const tx = db.transaction(DB_STORE, 'readonly');
       const req = tx.objectStore(DB_STORE).get(key);
-      req.onsuccess = () => resolve(req.result ?? null);
-      req.onerror = () => resolve(null);
+      req.onsuccess = () => { clearTimeout(timer); resolve(req.result ?? null); };
+      req.onerror = () => { clearTimeout(timer); resolve(null); };
     } catch {
+      clearTimeout(timer);
       resolve(null);
     }
   });
@@ -47,12 +54,14 @@ async function idbSet(key: string, value: string): Promise<void> {
   const db = await openDB();
   if (!db) return;
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(), 300);
     try {
       const tx = db.transaction(DB_STORE, 'readwrite');
       tx.objectStore(DB_STORE).put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
+      tx.oncomplete = () => { clearTimeout(timer); resolve(); };
+      tx.onerror = () => { clearTimeout(timer); resolve(); };
     } catch {
+      clearTimeout(timer);
       resolve();
     }
   });
@@ -110,14 +119,16 @@ export async function clearAuth(): Promise<void> {
 
 // ── Leer de cualquiera de las 3 capas y devolver el timestamp ──
 async function readAuth(): Promise<string | null> {
-  // 1. IndexedDB (más fiable)
-  const idbVal = await idbGet(AUTH_KEY);
-  if (idbVal) return idbVal;
-  // 2. localStorage
+  // 1. localStorage (instantáneo)
   const lsVal = lsGet(AUTH_KEY);
   if (lsVal) return lsVal;
-  // 3. Cookie
-  return cookieGet(AUTH_KEY);
+  // 2. Cookie (instantáneo)
+  const cookieVal = cookieGet(AUTH_KEY);
+  if (cookieVal) return cookieVal;
+  // 3. IndexedDB (fallback persistente)
+  const idbVal = await idbGet(AUTH_KEY);
+  if (idbVal) return idbVal;
+  return null;
 }
 
 export function PasswordGuard({ children }: { children: React.ReactNode }) {

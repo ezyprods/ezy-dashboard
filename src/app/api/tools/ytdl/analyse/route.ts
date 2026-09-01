@@ -94,6 +94,41 @@ function cleanTitle(metadata: any) {
   return clean.replace(/\s+/g, ' ').trim();
 }
 
+async function searchYouTubeFirstVideoId(query: string): Promise<string | null> {
+  // Method 1: Direct YouTube search page HTML parse
+  try {
+    const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map(m => m[1]);
+      const uniqueIds = Array.from(new Set(matches));
+      if (uniqueIds.length > 0) {
+        return uniqueIds[0];
+      }
+    }
+  } catch (e) {}
+
+  // Method 2: yts fallback
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const yts = require('@vreden/youtube_scraper');
+    const sRes = await yts.search(query);
+    const list = sRes.results || sRes.result || [];
+    const first = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
+    if (first) {
+      return first.videoId || (first.url ? getYouTubeVideoId(first.url) : null);
+    }
+  } catch (e) {}
+
+  return null;
+}
+
 async function getSpotifyMetadata(url: string) {
   let title = '';
   let artist = '';
@@ -242,24 +277,17 @@ export async function POST(req: Request) {
         ? `${spotMeta.artist.split(',')[0].trim()} ${spotMeta.track}` 
         : `${spotMeta.fullTitle.replace(/[-|,]/g, ' ')} audio`;
 
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const yts = require('@vreden/youtube_scraper');
-        const sRes = await yts.search(query);
-        const list = sRes.results || sRes.result || [];
-        const firstVideo = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
-        if (firstVideo) {
-          const vUrl = firstVideo.url || `https://www.youtube.com/watch?v=${firstVideo.videoId}`;
-          return NextResponse.json({
-            title: spotMeta.fullTitle,
-            thumbnail: spotMeta.thumbnail || firstVideo.thumbnail || firstVideo.image,
-            duration: firstVideo.seconds || null,
-            platform: 'spotify',
-            resolvedUrl: vUrl,
-            isPlaylist: false
-          });
-        }
-      } catch (e) {}
+      const matchedVideoId = await searchYouTubeFirstVideoId(query);
+      if (matchedVideoId) {
+        return NextResponse.json({
+          title: spotMeta.fullTitle,
+          thumbnail: spotMeta.thumbnail || `https://i.ytimg.com/vi/${matchedVideoId}/hqdefault.jpg`,
+          duration: null,
+          platform: 'spotify',
+          resolvedUrl: `https://www.youtube.com/watch?v=${matchedVideoId}`,
+          isPlaylist: false
+        });
+      }
 
       return NextResponse.json({
         title: spotMeta.fullTitle,
@@ -277,24 +305,17 @@ export async function POST(req: Request) {
       platform = 'soundcloud';
       const scMeta = await getSoundCloudMetadata(url);
 
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const yts = require('@vreden/youtube_scraper');
-        const sRes = await yts.search(scMeta.title);
-        const list = sRes.results || sRes.result || [];
-        const firstVideo = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
-        if (firstVideo) {
-          const vUrl = firstVideo.url || `https://www.youtube.com/watch?v=${firstVideo.videoId}`;
-          return NextResponse.json({
-            title: scMeta.title,
-            thumbnail: scMeta.thumbnail || firstVideo.thumbnail || firstVideo.image,
-            duration: firstVideo.seconds || null,
-            platform: 'soundcloud',
-            resolvedUrl: vUrl,
-            isPlaylist: false
-          });
-        }
-      } catch (e) {}
+      const matchedVideoId = await searchYouTubeFirstVideoId(scMeta.title);
+      if (matchedVideoId) {
+        return NextResponse.json({
+          title: scMeta.title,
+          thumbnail: scMeta.thumbnail || `https://i.ytimg.com/vi/${matchedVideoId}/hqdefault.jpg`,
+          duration: null,
+          platform: 'soundcloud',
+          resolvedUrl: `https://www.youtube.com/watch?v=${matchedVideoId}`,
+          isPlaylist: false
+        });
+      }
 
       return NextResponse.json({
         title: scMeta.title,
@@ -350,24 +371,18 @@ export async function POST(req: Request) {
     } else if (!url.startsWith('http')) {
       platform = 'search';
 
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const yts = require('@vreden/youtube_scraper');
-        const sRes = await yts.search(url);
-        const list = sRes.results || sRes.result || [];
-        const firstVideo = list.find((r: any) => (r.type === 'video' || r.videoId) && (r.url || r.videoId));
-        if (firstVideo) {
-          const vUrl = firstVideo.url || `https://www.youtube.com/watch?v=${firstVideo.videoId}`;
-          return NextResponse.json({
-            title: cleanTitle({ title: firstVideo.title, uploader: firstVideo.author?.name || '' }),
-            thumbnail: firstVideo.thumbnail || firstVideo.image,
-            duration: firstVideo.seconds || null,
-            platform: 'youtube',
-            resolvedUrl: vUrl,
-            isPlaylist: false
-          });
-        }
-      } catch (e) {}
+      const matchedVideoId = await searchYouTubeFirstVideoId(url);
+      if (matchedVideoId) {
+        const oembedMeta = await getYouTubeOEmbed(matchedVideoId);
+        return NextResponse.json({
+          title: oembedMeta ? cleanTitle({ title: oembedMeta.title, uploader: oembedMeta.author }) : url,
+          thumbnail: oembedMeta?.thumbnail || `https://i.ytimg.com/vi/${matchedVideoId}/hqdefault.jpg`,
+          duration: null,
+          platform: 'youtube',
+          resolvedUrl: `https://www.youtube.com/watch?v=${matchedVideoId}`,
+          isPlaylist: false
+        });
+      }
 
       title = url;
       targetUrl = url;
