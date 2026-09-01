@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Loader2, Download, CheckCircle2, AlertCircle, Play, Music, Globe, Search, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Loader2, Download, CheckCircle2, Play, Music, Globe, Search, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface YtdlTask {
@@ -24,45 +24,70 @@ export function MusicDownloader() {
   const [url, setUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [tasks, setTasks] = useState<YtdlTask[]>([]);
+  const downloadedRef = useRef<Set<string>>(new Set());
 
+  // Listen to SSE events for cross-tab or server-driven updates
   useEffect(() => {
-    const eventSource = new EventSource('/api/tools/ytdl/events');
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'init') {
-          setTasks(data.tasks.sort((a: YtdlTask, b: YtdlTask) => b.startTime - a.startTime));
-        } else if (data.type === 'update') {
-          setTasks(prev => {
-            const index = prev.findIndex(t => t.id === data.task.id);
-            if (index === -1) return [data.task, ...prev];
-            const newTasks = [...prev];
-            newTasks[index] = data.task;
-            return newTasks;
-          });
-        }
-      } catch (e) {}
-    };
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/tools/ytdl/events');
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'init' && Array.isArray(data.tasks)) {
+            // MERGE server tasks with active client tasks (never wipe out in-flight client tasks)
+            setTasks(prev => {
+              const activeLocal = prev.filter(t => t.status === 'analysing' || t.status === 'downloading' || t.status === 'converting');
+              const serverTaskIds = new Set(data.tasks.map((t: YtdlTask) => t.id));
+              const merged = [...data.tasks];
+              for (const local of activeLocal) {
+                if (!serverTaskIds.has(local.id)) {
+                  merged.push(local);
+                }
+              }
+              return merged.sort((a: YtdlTask, b: YtdlTask) => b.startTime - a.startTime);
+            });
+          } else if (data.type === 'update' && data.task) {
+            setTasks(prev => {
+              const index = prev.findIndex(t => t.id === data.task.id);
+              if (index === -1) return [data.task, ...prev];
+              const newTasks = [...prev];
+              newTasks[index] = data.task;
+              return newTasks;
+            });
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
 
-    return () => eventSource.close();
+    return () => {
+      if (eventSource) eventSource.close();
+    };
   }, []);
 
-  // Auto-descargar cuando una tarea se completa legítimamente en el servidor
+  const triggerDownload = (taskId: string, targetUrl: string, title: string) => {
+    if (downloadedRef.current.has(taskId)) return;
+    downloadedRef.current.add(taskId);
+    setDownloadedTasks(prev => new Set(prev).add(taskId));
+
+    const downloadUrl = `/api/tools/ytdl/file?taskId=${taskId}&url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(title)}`;
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `${title}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Auto-download listener for tasks completed via SSE
   useEffect(() => {
     tasks.forEach(task => {
-      if (task.status === 'completed' && task.clientId === clientId && !downloadedTasks.has(task.id)) {
-        setDownloadedTasks(prev => new Set(prev).add(task.id));
-        const downloadUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}`;
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `${task.title}.mp3`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+      if (task.status === 'completed' && task.clientId === clientId && !downloadedRef.current.has(task.id)) {
+        triggerDownload(task.id, task.resolvedUrl || task.url, task.title);
       }
     });
-  }, [tasks, clientId, downloadedTasks]);
+  }, [tasks, clientId]);
 
   const handleSubmit = async (targetUrlOverride?: string) => {
     const inputUrl = (targetUrlOverride || url).trim();
@@ -80,14 +105,30 @@ export function MusicDownloader() {
       url: inputUrl,
       title: inputUrl.startsWith('http') ? 'Analizando enlace...' : inputUrl,
       status: 'analysing',
-      progress: 0,
+      progress: 5,
       startTime: Date.now()
     };
 
     setTasks(prev => [initialTask, ...prev]);
 
+    // Smooth simulated progress while waiting for backend response
+    let currentProgress = 15;
+    const progressInterval = setInterval(() => {
+      currentProgress = Math.min(currentProgress + 8, 88);
+      setTasks(prev => prev.map(t => {
+        if (t.id === taskId && (t.status === 'downloading' || t.status === 'analysing')) {
+          return {
+            ...t,
+            progress: Math.max(t.progress, currentProgress),
+            status: currentProgress > 65 ? 'converting' : 'downloading'
+          };
+        }
+        return t;
+      }));
+    }, 450);
+
     try {
-      // Step 1: Fast Analyse (~50ms via oEmbed)
+      // Step 1: Fast Analyse (~50ms)
       const res = await fetch('/api/tools/ytdl/analyse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,7 +152,7 @@ export function MusicDownloader() {
         platform: data.platform,
         resolvedUrl: songUrl,
         status: 'downloading',
-        progress: 10
+        progress: 25
       } : t));
 
       // Step 2: Process download in background
@@ -122,11 +163,23 @@ export function MusicDownloader() {
       });
 
       const processData = await processRes.json();
+      clearInterval(progressInterval);
+
       if (!processRes.ok) {
         throw new Error(processData.error || 'Error al procesar el archivo');
       }
 
+      // Step 3: Complete task immediately and trigger download
+      setTasks(prev => prev.map(t => t.id === taskId ? {
+        ...t,
+        status: 'completed',
+        progress: 100
+      } : t));
+
+      triggerDownload(taskId, songUrl, songTitle);
+
     } catch (err: any) {
+      clearInterval(progressInterval);
       setTasks(prev => prev.map(t => t.id === taskId ? {
         ...t,
         status: 'error',
@@ -178,7 +231,6 @@ export function MusicDownloader() {
       case 'completed': return 'Guardado en Descargas';
       case 'error': {
         const err = task.error || 'Error en la descarga';
-        // Clean up common yt-dlp error messages for display
         if (err.includes('Sign in to confirm') || err.includes('bot')) {
           return 'Error temporal del servidor de YouTube. Reintenta en unos segundos.';
         }
@@ -191,7 +243,6 @@ export function MusicDownloader() {
         if (err.includes('Todos los motores')) {
           return 'Error al descargar. Reintenta en unos segundos.';
         }
-        // Truncate very long error messages
         return err.length > 120 ? err.substring(0, 117) + '...' : err;
       }
       default: return 'Analizando...';

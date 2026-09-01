@@ -21,13 +21,11 @@ function decodeAesPayload(encBase64: string): any {
   return JSON.parse(decrypted.toString('utf-8'));
 }
 
-// Known active SaveTube CDNs
-const FALLBACK_CDNS = [
+// Ordered by response speed and reliability
+const FAST_CDNS = [
+  'cdn403.savetube.vip',
   'cdn400.savetube.vip',
   'cdn401.savetube.vip',
-  'cdn402.savetube.vip',
-  'cdn403.savetube.vip',
-  'cdn404.savetube.vip',
   'cdn405.savetube.vip',
   'cdn406.savetube.vip',
 ];
@@ -39,34 +37,34 @@ const FALLBACK_CDNS = [
 async function engineSaveTubeDirect(videoId: string, requestedQuality: string = '320'): Promise<Buffer> {
   const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-  // 1. Get primary CDN from randomizer endpoint or fallback to known CDNs
+  // 1. Try to get active CDN from randomizer endpoint in 2s
   let primaryCdn = '';
   try {
     const randomRes = await fetch('https://media.savetube.vip/api/random-cdn', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
       },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(2000),
     });
     if (randomRes.ok) {
       const data = await randomRes.json();
-      if (data && data.cdn) {
+      if (data && data.cdn && FAST_CDNS.includes(data.cdn)) {
         primaryCdn = data.cdn;
       }
     }
   } catch (e) {
-    // Silently proceed to fallback CDNs
+    // Proceed directly to FAST_CDNS
   }
 
   const cdnsToTry = primaryCdn
-    ? [primaryCdn, ...FALLBACK_CDNS.filter((c) => c !== primaryCdn)]
-    : FALLBACK_CDNS;
+    ? [primaryCdn, ...FAST_CDNS.filter((c) => c !== primaryCdn)]
+    : FAST_CDNS;
 
   let lastError: Error | null = null;
 
   for (const cdn of cdnsToTry) {
     try {
-      // Step A: Request encrypted video info
+      // Step A: Request encrypted video info (tight 3.5s timeout)
       const infoRes = await fetch(`https://${cdn}/v2/info`, {
         method: 'POST',
         headers: {
@@ -75,7 +73,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
           'Referer': 'https://save-tube.com/',
         },
         body: JSON.stringify({ url: targetUrl }),
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(3500),
       });
 
       if (!infoRes.ok) {
@@ -92,7 +90,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
         throw new Error('Decrypted info missing security key');
       }
 
-      // Step B: Request download URL for audio (try requested quality, then fallback)
+      // Step B: Request download URL for audio
       const qualities = [requestedQuality, '320', '256', '128'];
       const uniqueQualities = Array.from(new Set(qualities));
 
@@ -111,7 +109,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
               quality: q,
               key: info.key,
             }),
-            signal: AbortSignal.timeout(8000),
+            signal: AbortSignal.timeout(4000),
           });
 
           if (dlRes.ok) {
@@ -135,7 +133,7 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
         },
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(35000),
       });
 
       if (!audioRes.ok) {
@@ -170,38 +168,9 @@ export async function downloadWithEngines(
   videoId: string,
   onProgress?: ProgressCallback,
 ): Promise<EngineResult> {
-  const engines: Array<{
-    name: string;
-    fn: (videoId: string) => Promise<Buffer>;
-  }> = [
-    { name: 'savetube-direct-320', fn: (id) => engineSaveTubeDirect(id, '320') },
-    { name: 'savetube-direct-256', fn: (id) => engineSaveTubeDirect(id, '256') },
-    { name: 'savetube-direct-128', fn: (id) => engineSaveTubeDirect(id, '128') },
-  ];
-
-  const errors: string[] = [];
-
-  for (let i = 0; i < engines.length; i++) {
-    const engine = engines[i];
-    try {
-      console.log(`[engines] Executing "${engine.name}" for videoId=${videoId}`);
-      onProgress?.('downloading', 25 + (i * 20));
-
-      const buffer = await engine.fn(videoId);
-
-      console.log(`[engines] Engine "${engine.name}" succeeded! Buffer size: ${buffer.length} bytes`);
-      return { buffer, engine: engine.name };
-    } catch (err: any) {
-      const msg = (err?.message || String(err)).slice(0, 300);
-      console.warn(`[engines] Engine "${engine.name}" failed: ${msg}`);
-      errors.push(`${engine.name}: ${msg}`);
-    }
-  }
-
-  throw new Error(
-    `Todos los motores de descarga fallaron para este video.\n` +
-    errors.map((e, idx) => `  ${idx + 1}. ${e}`).join('\n')
-  );
+  onProgress?.('downloading', 35);
+  const buffer = await engineSaveTubeDirect(videoId, '320');
+  return { buffer, engine: 'savetube-direct' };
 }
 
 export function isYouTubeUrl(url: string): boolean {
