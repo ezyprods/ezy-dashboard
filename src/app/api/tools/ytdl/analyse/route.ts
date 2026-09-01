@@ -3,6 +3,7 @@ import https from 'https';
 import { createDecipheriv } from 'crypto';
 import { extractPlaylistId, fetchYouTubePlaylist, isRadioOrMix } from '../playlist';
 import { isSpotifyPlaylistOrAlbum, fetchSpotifyPlaylist } from '../spotify_playlist';
+import { isSoundCloudPlaylist, fetchSoundCloudPlaylist } from '../soundcloud_playlist';
 
 export const maxDuration = 60;
 
@@ -285,7 +286,25 @@ export async function POST(req: Request) {
     }
 
     // =========================================================================
-    // 2. SPOTIFY INDIVIDUAL TRACKS
+    // 2. SOUNDCLOUD PLAYLISTS & SETS
+    // =========================================================================
+    if (isSoundCloudPlaylist(trimmedUrl)) {
+      const scPlaylist = await fetchSoundCloudPlaylist(trimmedUrl);
+      if (scPlaylist && scPlaylist.tracks.length > 0) {
+        return NextResponse.json({
+          isPlaylist: true,
+          playlistId: scPlaylist.id,
+          title: scPlaylist.title,
+          thumbnail: scPlaylist.thumbnail,
+          trackCount: scPlaylist.trackCount,
+          tracks: scPlaylist.tracks,
+          platform: 'soundcloud',
+        });
+      }
+    }
+
+    // =========================================================================
+    // 3. SPOTIFY INDIVIDUAL TRACKS
     // =========================================================================
     if (trimmedUrl.includes('spotify.com') || trimmedUrl.includes('spotify.link')) {
       const spotMeta = await getSpotifyMetadata(trimmedUrl);
@@ -316,7 +335,7 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // 3. PURE YOUTUBE PLAYLIST URL (No videoId present)
+    // 4. PURE YOUTUBE PLAYLIST URL (No videoId present)
     // =========================================================================
     } else if (!videoId && playlistId && !isRadioOrMix(playlistId)) {
       const playlist = await fetchYouTubePlaylist(playlistId);
@@ -333,7 +352,7 @@ export async function POST(req: Request) {
       }
 
     // =========================================================================
-    // 4. SOUNDCLOUD TRACKS
+    // 5. SOUNDCLOUD INDIVIDUAL TRACKS
     // =========================================================================
     } else if (trimmedUrl.includes('soundcloud.com')) {
       const scMeta = await getSoundCloudMetadata(trimmedUrl);
@@ -360,7 +379,7 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // 5. YOUTUBE VIDEO (With or Without Playlist parameters)
+    // 6. YOUTUBE VIDEO (With or Without Playlist parameters)
     // =========================================================================
     } else if (videoId) {
       let videoTitle = `YouTube Audio (${videoId})`;
@@ -409,7 +428,7 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // 6. SEARCH QUERY (Plain song name or artist)
+    // 7. SEARCH QUERY (Plain song name or artist)
     // =========================================================================
     } else if (!trimmedUrl.startsWith('http')) {
       const matchedVideoId = await searchYouTubeFirstVideoId(trimmedUrl);
@@ -435,7 +454,7 @@ export async function POST(req: Request) {
       });
 
     // =========================================================================
-    // 7. OTHER DIRECT AUDIO URLS
+    // 8. OTHER DIRECT AUDIO URLS
     // =========================================================================
     } else {
       return NextResponse.json({ 

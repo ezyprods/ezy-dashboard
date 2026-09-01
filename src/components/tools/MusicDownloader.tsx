@@ -215,13 +215,19 @@ export function MusicDownloader() {
     // Queue all tracks with slight staggered delay to prevent network lockup
     for (let i = 0; i < tracks.length; i++) {
       const tr = tracks[i];
+      const detectedPlatform = tr.url.includes('spotify')
+        ? 'spotify'
+        : tr.url.includes('soundcloud')
+        ? 'soundcloud'
+        : 'youtube';
+
       setTimeout(() => {
         processSingleTrackDownload({
           url: tr.url,
           resolvedUrl: tr.url,
           title: tr.title,
           thumbnail: tr.thumbnail,
-          platform: 'youtube',
+          platform: detectedPlatform,
         });
       }, i * 350);
     }
