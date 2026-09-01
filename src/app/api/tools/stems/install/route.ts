@@ -28,25 +28,25 @@ export async function GET(req: NextRequest) {
       hasLocalDemucs = false;
     }
 
+    if (hasLocalDemucs) {
+      return NextResponse.json({ 
+        status: 'ready', 
+        engine: 'local', 
+        cloudAvailable: hasCloud,
+        localAvailable: true,
+        hasPython: true,
+        message: 'Demucs local está instalado y listo en tu PC (Gratis e Ilimitado).' 
+      });
+    }
+
     if (hasCloud) {
       return NextResponse.json({ 
         status: 'ready', 
         engine: 'cloud', 
         cloudAvailable: true,
-        localAvailable: hasLocalDemucs,
+        localAvailable: false,
         hasPython,
         message: 'Motor de IA en la nube (GPU Replicate) conectado y listo.' 
-      });
-    }
-
-    if (hasLocalDemucs) {
-      return NextResponse.json({ 
-        status: 'ready', 
-        engine: 'local', 
-        cloudAvailable: false,
-        localAvailable: true,
-        hasPython: true,
-        message: 'Demucs local está instalado y listo en tu ordenador.' 
       });
     }
 

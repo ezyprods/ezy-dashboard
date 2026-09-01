@@ -87,12 +87,19 @@ export function StemsSplitter() {
       const res = await fetch('/api/tools/stems/install', { headers });
       const data = await res.json();
       
-      setCloudAvailable(Boolean(data.cloudAvailable));
-      setLocalAvailable(Boolean(data.localAvailable));
+      const isCloudAvail = Boolean(data.cloudAvailable);
+      const isLocalAvail = Boolean(data.localAvailable);
+      setCloudAvailable(isCloudAvail);
+      setLocalAvailable(isLocalAvail);
 
       if (data.status === 'ready') {
         setSetupStatus('ready');
-        setEngineType(data.engine || 'cloud');
+        const savedEngine = typeof window !== 'undefined' ? localStorage.getItem('ezy_stems_engine') as 'local' | 'cloud' | null : null;
+        if (savedEngine && (savedEngine === 'local' ? isLocalAvail : isCloudAvail)) {
+          setEngineType(savedEngine);
+        } else {
+          setEngineType(data.engine || (isLocalAvail ? 'local' : 'cloud'));
+        }
       } else if (data.status === 'no_demucs') {
         setSetupStatus('no_demucs');
       } else {
@@ -161,17 +168,21 @@ export function StemsSplitter() {
     }
   };
 
-  const handleFileSelect = async (files: FileList | null) => {
-    if (!files || !files[0]) return;
-    const selected = files[0];
-    setFile(selected);
+  const processAudioFile = async (targetFile: File, targetEngine: 'cloud' | 'local' = engineType) => {
+    setFile(targetFile);
     setErrorMsg('');
-    setTask({ id: '', filename: selected.name, status: 'processing', progress: 5, engine: engineType });
+    setTask({ 
+      id: '', 
+      filename: targetFile.name, 
+      status: 'processing', 
+      progress: 5, 
+      engine: targetEngine 
+    });
 
     try {
       const formData = new FormData();
-      formData.append('file', selected);
-      formData.append('engine', engineType);
+      formData.append('file', targetFile);
+      formData.append('engine', targetEngine);
       if (replicateToken) {
         formData.append('replicateToken', replicateToken);
       }
@@ -190,27 +201,44 @@ export function StemsSplitter() {
       const resData = await res.json();
 
       if (!res.ok) {
+        let msg = resData.error || 'Error al iniciar el proceso';
         if (res.status === 402 || resData.code === 'INSUFFICIENT_CREDIT') {
-          throw new Error('Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC o añadir saldo en Replicate.com.');
+          msg = 'Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC (Gratis) o recargar saldo en Replicate.';
         }
-        throw new Error(resData.error || 'Error al iniciar el proceso');
+        throw new Error(msg);
       }
 
       const { taskId, predictionId, engine } = resData;
+      const finalEngine = engine || targetEngine;
+      setEngineType(finalEngine);
+
       setTask({ 
         id: taskId, 
         predictionId, 
-        filename: selected.name, 
+        filename: targetFile.name, 
         status: 'processing', 
         progress: 10,
-        engine: engine || engineType 
+        engine: finalEngine 
       });
 
       startTracking(taskId, predictionId);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error al procesar el audio');
-      setTask(null);
+      const errorText = err.message || 'Error al procesar el audio';
+      setErrorMsg(errorText);
+      setTask({
+        id: '',
+        filename: targetFile.name,
+        status: 'error',
+        progress: 0,
+        engine: targetEngine,
+        error: errorText
+      });
     }
+  };
+
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files || !files[0]) return;
+    processAudioFile(files[0], engineType);
   };
 
   const startTracking = (taskId: string, predictionId?: string) => {
@@ -489,25 +517,77 @@ export function StemsSplitter() {
         {setupStatus === 'ready' && (
           <div className="space-y-6">
             {!task || task.status === 'idle' ? (
-              <div 
-                className="border-2 border-dashed border-border/60 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all rounded-2xl p-8 sm:p-12 cursor-pointer flex flex-col items-center justify-center gap-4 text-center group"
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => { e.preventDefault(); handleFileSelect(e.dataTransfer.files); }}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={e => handleFileSelect(e.target.files)} />
-                <div className="w-16 h-16 bg-surface-elevated rounded-full flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
-                  <UploadCloud className="w-8 h-8 text-indigo-400" />
+              <div className="space-y-4">
+                {/* Selector de Motor IA */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-border/40">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-text-secondary">Motor:</span>
+                    <div className="flex items-center gap-1 p-1 bg-surface-elevated/70 border border-border/60 rounded-xl">
+                      {localAvailable && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEngineType('local');
+                            localStorage.setItem('ezy_stems_engine', 'local');
+                            setErrorMsg('');
+                          }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            engineType === 'local'
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'text-text-secondary hover:text-text-primary hover:bg-surface'
+                          }`}
+                        >
+                          <Cpu className="w-3.5 h-3.5" />
+                          ⚡ Motor Local PC (Gratis e Ilimitado)
+                        </button>
+                      )}
+
+                      {cloudAvailable && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEngineType('cloud');
+                            localStorage.setItem('ezy_stems_engine', 'cloud');
+                            setErrorMsg('');
+                          }}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                            engineType === 'cloud'
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'text-text-secondary hover:text-text-primary hover:bg-surface'
+                          }`}
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          ☁️ Cloud GPU (Replicate)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className="text-[11px] text-text-secondary">
+                    {engineType === 'local' ? '✨ Sin límites de saldo ni consumo de API' : '🚀 Procesamiento ultra rápido en GPU dedicada'}
+                  </span>
                 </div>
-                <div>
-                  <p className="text-text-primary font-medium text-lg">Arrastra y suelta tu canción aquí</p>
-                  <p className="text-sm text-text-secondary mt-1">
-                    La IA de Demucs la separará en 4 pistas limpias (Voz, Batería, Bajo, Instrumental)
-                  </p>
+
+                <div 
+                  className="border-2 border-dashed border-border/60 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all rounded-2xl p-8 sm:p-12 cursor-pointer flex flex-col items-center justify-center gap-4 text-center group"
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => { e.preventDefault(); handleFileSelect(e.dataTransfer.files); }}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input type="file" ref={fileInputRef} className="hidden" accept="audio/*" onChange={e => handleFileSelect(e.target.files)} />
+                  <div className="w-16 h-16 bg-surface-elevated rounded-full flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-8 h-8 text-indigo-400" />
+                  </div>
+                  <div>
+                    <p className="text-text-primary font-medium text-lg">Arrastra y suelta tu canción aquí</p>
+                    <p className="text-sm text-text-secondary mt-1">
+                      La IA de Demucs la separará en 4 pistas limpias (Voz, Batería, Bajo, Instrumental)
+                    </p>
+                  </div>
+                  <span className="text-xs text-indigo-400 font-medium bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                    Formatos soportados: MP3, WAV, FLAC, M4A, OGG
+                  </span>
                 </div>
-                <span className="text-xs text-indigo-400 font-medium bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-                  Formatos soportados: MP3, WAV, FLAC, M4A, OGG
-                </span>
               </div>
             ) : (
               <div className={`bg-surface-elevated rounded-2xl border border-border/50 text-center ${task.status === 'completed' ? 'p-1 sm:p-2' : 'p-8 space-y-6'}`}>
@@ -523,7 +603,7 @@ export function StemsSplitter() {
                               ? 'Finalizando y empaquetando pistas...' 
                               : engineType === 'cloud' 
                                 ? 'Procesando en GPU Cloud...' 
-                                : 'Separando pistas...'}
+                                : 'Separando pistas con Demucs Local...'}
                           </span>
                         </div>
                         <div className="text-right">
@@ -554,7 +634,7 @@ export function StemsSplitter() {
                         <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                         <span className="font-bold text-sm text-emerald-500">Separación Completada con Éxito</span>
                       </div>
-                      <Button onClick={() => setTask(null)} variant="outline" size="sm" className="h-8 text-xs">
+                      <Button onClick={() => { setTask(null); setErrorMsg(''); }} variant="outline" size="sm" className="h-8 text-xs">
                         Separar otra canción
                       </Button>
                     </div>
@@ -572,25 +652,69 @@ export function StemsSplitter() {
                     </div>
                     <p className="font-bold text-lg text-red-500">Error en el proceso</p>
                     <p className="text-sm text-text-secondary max-w-md mx-auto">{task.error}</p>
-                    <div className="flex items-center justify-center gap-3 pt-2">
-                      <Button onClick={() => setTask(null)} variant="outline">
-                        Intentar de nuevo
-                      </Button>
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                      {localAvailable && file && (
+                        <Button 
+                          onClick={() => {
+                            setEngineType('local');
+                            localStorage.setItem('ezy_stems_engine', 'local');
+                            processAudioFile(file, 'local');
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-1.5"
+                        >
+                          <Cpu className="w-4 h-4" />
+                          ⚡ Separar ahora con Demucs Local Gratis
+                        </Button>
+                      )}
+
                       {(task.error?.toLowerCase().includes('token') || task.error?.toLowerCase().includes('crédito') || task.error?.toLowerCase().includes('replicate') || task.error?.toLowerCase().includes('gpu')) && (
                         <Button 
                           onClick={() => { setTask(null); setShowTokenSettings(true); }} 
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                          variant="outline"
+                          className="text-xs"
                         >
                           Configurar Token IA
                         </Button>
                       )}
+
+                      <Button onClick={() => { setTask(null); setErrorMsg(''); }} variant="outline" className="text-xs">
+                        Intentar de nuevo
+                      </Button>
                     </div>
                   </div>
                 )}
               </div>
             )}
             
-            {errorMsg && <p className="text-sm text-danger text-center font-medium">{errorMsg}</p>}
+            {errorMsg && (!task || task.status === 'idle') && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-center space-y-3">
+                <p className="text-sm text-red-400 font-medium">{errorMsg}</p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {localAvailable && file && (
+                    <Button 
+                      onClick={() => {
+                        setEngineType('local');
+                        localStorage.setItem('ezy_stems_engine', 'local');
+                        processAudioFile(file, 'local');
+                      }}
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs flex items-center gap-1.5"
+                    >
+                      <Cpu className="w-3.5 h-3.5" />
+                      ⚡ Separar con Demucs Local Gratis
+                    </Button>
+                  )}
+                  <Button 
+                    onClick={() => setShowTokenSettings(true)} 
+                    size="sm" 
+                    variant="outline" 
+                    className="text-xs"
+                  >
+                    Conectar Token IA
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

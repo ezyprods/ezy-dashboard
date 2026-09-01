@@ -98,6 +98,25 @@ export async function GET(req: NextRequest) {
 
       const buffer = await readFile(filePath);
 
+      const range = req.headers.get('range');
+      if (range && !isDownload) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : buffer.length - 1;
+        const chunkSize = (end - start) + 1;
+        const sliced = buffer.subarray(start, end + 1);
+
+        return new NextResponse(sliced, {
+          status: 206,
+          headers: {
+            'Content-Range': `bytes ${start}-${end}/${buffer.length}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunkSize.toString(),
+            'Content-Type': 'audio/wav'
+          }
+        });
+      }
+
       const headers: Record<string, string> = {
         'Content-Type': 'audio/wav',
         'Content-Length': buffer.length.toString(),

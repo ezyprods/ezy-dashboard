@@ -55,23 +55,67 @@ export async function POST(req: NextRequest) {
       if (!createRes.ok) {
         const errorData = await createRes.json().catch(() => ({}));
         const status = createRes.status;
+
+        // Check if local Demucs is available as fallback
+        let hasLocalDemucs = false;
+        try {
+          const { execSync } = require('child_process');
+          execSync('python -m demucs --help', { stdio: 'ignore' });
+          hasLocalDemucs = true;
+        } catch {
+          hasLocalDemucs = false;
+        }
+
+        if (hasLocalDemucs) {
+          console.log('[Stems] Replicate error, automatically falling back to Local Demucs...');
+          stemsTasks.set(taskId, {
+            id: taskId,
+            filename: file.name,
+            status: 'processing',
+            progress: 5,
+            engine: 'local'
+          });
+
+          const tempDir = path.join(os.tmpdir(), 'ezy_audio_tools');
+          if (!existsSync(tempDir)) {
+            mkdirSync(tempDir, { recursive: true });
+          }
+
+          const safeExt = path.extname(file.name) || '.wav';
+          const inputPath = path.join(tempDir, `${taskId}_input${safeExt}`);
+          await writeFile(inputPath, buffer);
+          const outDir = path.join(tempDir, `Stems_${taskId}`);
+
+          processDemucsLocal(taskId, inputPath, outDir, baseName).catch(console.error);
+
+          return NextResponse.json({ 
+            success: true, 
+            taskId, 
+            engine: 'local',
+            fallback: true,
+            message: 'Procesando localmente con Demucs (Gratis e Ilimitado).'
+          });
+        }
         
         if (status === 402 || (errorData.detail && errorData.detail.toLowerCase().includes('insufficient credit'))) {
           return NextResponse.json({ 
             error: 'Tu cuenta de Replicate no tiene créditos suficientes para procesar en GPU. Puedes usar Demucs en tu PC o añadir créditos en Replicate.com.',
-            code: 'INSUFFICIENT_CREDIT'
+            code: 'INSUFFICIENT_CREDIT',
+            canFallbackLocal: false
           }, { status: 402 });
         }
 
         if (status === 401) {
           return NextResponse.json({ 
             error: 'Token de Replicate inválido o sin permisos.',
-            code: 'INVALID_TOKEN'
+            code: 'INVALID_TOKEN',
+            canFallbackLocal: false
           }, { status: 401 });
         }
 
         return NextResponse.json({ 
-          error: errorData.detail || errorData.error || 'Error al iniciar la separación en Replicate AI' 
+          error: errorData.detail || errorData.error || 'Error al iniciar la separación en Replicate AI',
+          canFallbackLocal: false
         }, { status: 500 });
       }
 
