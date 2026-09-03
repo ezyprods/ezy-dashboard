@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil, Copy, Link as LinkIcon, CheckCircle2, RotateCcw, BoxSelect, X } from 'lucide-react';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, User, ArrowLeft, Search, ChevronDown, Check, Pencil, Copy, Link as LinkIcon, CheckCircle2, RotateCcw, BoxSelect, X, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
@@ -299,51 +299,61 @@ function MatricesContent() {
     customAlert('Enlace directo a la matriz copiado al portapapeles');
   };
 
+  const getMatrixMenuItems = (matrix: any, isCompleted: boolean) => [
+    {
+      label: 'Abrir Matriz',
+      icon: 'Table2',
+      action: () => setActiveMatrix({
+        id: matrix.id,
+        name: matrix.name,
+        artistId: matrix.artistId,
+        artistName: matrix.artistName
+      }),
+    },
+    {
+      label: 'Duplicar Matriz',
+      icon: 'Copy',
+      action: () => handleDuplicateMatrix(matrix.artistId, matrix.id, matrix.name),
+    },
+    {
+      label: 'Copiar Enlace',
+      icon: 'Link',
+      action: () => handleCopyLink(matrix.artistId, matrix.id),
+    },
+    {
+      label: 'Renombrar',
+      icon: 'Pencil',
+      action: () => handleRenameMatrix(matrix.artistId, matrix.id, matrix.name),
+    },
+    {
+      label: isCompleted ? 'Marcar como Activa' : 'Marcar como Completada',
+      icon: isCompleted ? 'RotateCcw' : 'CheckCircle2',
+      className: isCompleted ? 'text-info hover:bg-info/10 hover:text-info' : 'text-success hover:bg-success/10 hover:text-success',
+      iconClassName: isCompleted ? 'text-info' : 'text-success',
+      action: () => handleToggleStatus(matrix.artistId, matrix.id, isCompleted),
+    },
+    { separator: true },
+    {
+      label: 'Eliminar',
+      icon: 'Trash2',
+      variant: 'danger',
+      className: 'text-error hover:bg-error/10 hover:text-error',
+      iconClassName: 'text-error',
+      action: () => handleDeleteMatrix(matrix.artistId, matrix.id),
+    }
+  ];
+
   const handleMatrixContextMenu = (e: React.MouseEvent, matrix: any, isCompleted: boolean) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    showMenu(e.clientX, e.clientY, [
-      {
-        label: 'Abrir Matriz',
-        icon: 'Table2',
-        action: () => setActiveMatrix({
-          id: matrix.id,
-          name: matrix.name,
-          artistId: matrix.artistId,
-          artistName: matrix.artistName
-        }),
-      },
-      {
-        label: 'Duplicar Matriz',
-        icon: 'Copy',
-        action: () => handleDuplicateMatrix(matrix.artistId, matrix.id, matrix.name),
-      },
-      {
-        label: 'Copiar Enlace',
-        icon: 'Link',
-        action: () => handleCopyLink(matrix.artistId, matrix.id),
-      },
-      {
-        label: 'Renombrar',
-        icon: 'Pencil',
-        action: () => handleRenameMatrix(matrix.artistId, matrix.id, matrix.name),
-      },
-      {
-        label: isCompleted ? 'Marcar como Activa' : 'Marcar como Completada',
-        icon: isCompleted ? 'RotateCcw' : 'CheckCircle2',
-        className: isCompleted ? 'text-info hover:bg-info/10 hover:text-info' : 'text-success hover:bg-success/10 hover:text-success',
-        iconClassName: isCompleted ? 'text-info' : 'text-success',
-        action: () => handleToggleStatus(matrix.artistId, matrix.id, isCompleted),
-      },
-      {
-        label: 'Eliminar',
-        icon: 'Trash2',
-        className: 'text-error hover:bg-error/10 hover:text-error',
-        iconClassName: 'text-error',
-        action: () => handleDeleteMatrix(matrix.artistId, matrix.id),
-      }
-    ]);
+    showMenu(e.clientX, e.clientY, getMatrixMenuItems(matrix, isCompleted));
+  };
+
+  const handleMatrixMenuButtonClick = (e: React.MouseEvent, matrix: any, isCompleted: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    showMenu(rect.left, rect.bottom + 5, getMatrixMenuItems(matrix, isCompleted));
   };
 
   if (isLoading && !activeMatrix) {
@@ -482,26 +492,36 @@ function MatricesContent() {
                 });
               }}
               onContextMenu={(e) => handleMatrixContextMenu(e, m, false)}
-              className="relative overflow-hidden glass rounded-[20px] p-5 border border-border hover:border-accent/50 transition-all duration-300 group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 cursor-context-menu"
+              className="relative overflow-hidden glass rounded-[20px] p-5 border border-border hover:border-accent/50 transition-all duration-300 group hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/5 cursor-pointer"
             >
               <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-transform duration-500 group-hover:scale-150" />
               <div className="relative z-10">
                 <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 border border-accent/10 flex items-center justify-center shrink-0 text-accent group-hover:scale-110 transition-transform duration-300 shadow-inner">
                       <Table2 className="w-5 h-5" />
                     </div>
                     <div className="min-w-0">
                       <h3 className="font-bold text-lg text-text-primary truncate">{m.name}</h3>
                       <div className="flex items-center gap-1.5 text-xs text-text-secondary mt-0.5">
-                        <User className="w-3.5 h-3.5" />
+                        <User className="w-3.5 h-3.5 shrink-0" />
                         <span className="truncate">Artista: <span className="font-medium text-text-primary hover:text-accent cursor-pointer transition-colors" onClick={(e) => { e.stopPropagation(); router.push(`/artists/${m.artistId}`); }} title="Ir al perfil del artista">{m.artistName || 'Desconocido'}</span></span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 bg-success/10 text-success border border-success/20 px-2 py-1 rounded-md text-[10px] font-bold tracking-wide uppercase shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                    Activa
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1 bg-success/10 text-success border border-success/20 px-2 py-1 rounded-md text-[10px] font-bold tracking-wide uppercase shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                      Activa
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => handleMatrixMenuButtonClick(e, m, false)}
+                      className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/90 border border-transparent hover:border-border transition-colors shadow-sm"
+                      title="Opciones de matriz"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
                 
@@ -554,13 +574,23 @@ function MatricesContent() {
                       });
                     }}
                     onContextMenu={(e) => handleMatrixContextMenu(e, m, true)}
-                    className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between min-h-[180px] opacity-70 hover:opacity-100 bg-surface/50 cursor-context-menu"
+                    className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between min-h-[180px] opacity-70 hover:opacity-100 bg-surface/50 cursor-pointer"
                   >
                     <div>
                       <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
                           <Check className="w-5 h-5 text-success shrink-0" />
                           <h4 className="font-bold text-base text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => handleMatrixMenuButtonClick(e, m, true)}
+                            className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated/90 border border-transparent hover:border-border transition-colors shadow-sm"
+                            title="Opciones de matriz"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                       

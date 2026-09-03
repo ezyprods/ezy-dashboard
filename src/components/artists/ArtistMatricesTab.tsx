@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, Music, Layers, CheckCircle2, Check } from 'lucide-react';
+import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, Music, Layers, CheckCircle2, Check, MoreVertical, Copy, Link as LinkIcon, Pencil, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
 
 export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; artistName?: string }) {
@@ -125,6 +126,131 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
     }
   };
 
+  const { showMenu } = useContextMenu();
+
+  const handleRenameMatrix = async (matrixId: string, currentName: string) => {
+    const newName = await customPrompt('Introduce el nuevo nombre para la matriz:', currentName, 'Renombrar Matriz');
+    if (!newName || newName === currentName) return;
+
+    // Optimistic Update
+    setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, name: newName } : m));
+
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (!res.ok) throw new Error('Error al renombrar la matriz');
+    } catch (e) {
+      customAlert('Error de conexión al renombrar la matriz');
+      fetchMatrices();
+    }
+  };
+
+  const handleDuplicateMatrix = async (matrixId: string, currentName: string) => {
+    const newName = await customPrompt('Nombre de la nueva matriz (plantilla):', `${currentName} (Copia)`, 'Duplicar Matriz');
+    if (!newName) return;
+
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, duplicateFromId: matrixId })
+      });
+      if (res.ok) {
+        await fetchMatrices();
+        customAlert('Matriz duplicada con éxito. Se ha copiado la estructura.');
+      } else {
+        customAlert('Error al duplicar la matriz');
+      }
+    } catch (e) {
+      customAlert('Error de red al duplicar la matriz');
+    }
+  };
+
+  const handleCopyLink = (matrixId: string) => {
+    const url = `${window.location.origin}/matrices?id=${matrixId}&artist=${artistId}`;
+    navigator.clipboard.writeText(url);
+    customAlert('Enlace directo a la matriz copiado al portapapeles');
+  };
+
+  const handleToggleStatus = async (matrixId: string, isCurrentlyCompleted: boolean) => {
+    const newStatus = isCurrentlyCompleted ? 'active' : 'completed';
+
+    // Optimistic Update
+    setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, forceStatus: newStatus } : m));
+
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceStatus: newStatus })
+      });
+      if (!res.ok) throw new Error('Error updating status');
+    } catch (e) {
+      customAlert('Error al cambiar el estado de la matriz');
+      fetchMatrices();
+    }
+  };
+
+  const getMatrixMenuItems = (matrix: any, isCompleted: boolean) => [
+    {
+      label: 'Abrir Matriz',
+      icon: 'Table2',
+      action: () => setActiveMatrixId(matrix.id),
+    },
+    {
+      label: 'Duplicar Matriz',
+      icon: 'Copy',
+      action: () => handleDuplicateMatrix(matrix.id, matrix.name),
+    },
+    {
+      label: 'Copiar Enlace',
+      icon: 'Link',
+      action: () => handleCopyLink(matrix.id),
+    },
+    {
+      label: 'Renombrar',
+      icon: 'Pencil',
+      action: () => handleRenameMatrix(matrix.id, matrix.name),
+    },
+    {
+      label: isCompleted ? 'Marcar como Activa' : 'Marcar como Completada',
+      icon: isCompleted ? 'RotateCcw' : 'CheckCircle2',
+      className: isCompleted ? 'text-info hover:bg-info/10 hover:text-info' : 'text-success hover:bg-success/10 hover:text-success',
+      iconClassName: isCompleted ? 'text-info' : 'text-success',
+      action: () => handleToggleStatus(matrix.id, isCompleted),
+    },
+    {
+      label: matrix.sharedInPortal ? 'Dejar de compartir en Portal' : 'Compartir en Portal',
+      icon: 'Share2',
+      action: () => togglePortalSharing(matrix.id, !matrix.sharedInPortal),
+    },
+    { separator: true },
+    {
+      label: 'Eliminar',
+      icon: 'Trash2',
+      variant: 'danger',
+      className: 'text-error hover:bg-error/10 hover:text-error',
+      iconClassName: 'text-error',
+      action: () => deleteMatrix(matrix.id),
+    }
+  ];
+
+  const handleMatrixContextMenu = (e: React.MouseEvent, matrix: any, isCompleted: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showMenu(e.clientX, e.clientY, getMatrixMenuItems(matrix, isCompleted));
+  };
+
+  const handleMatrixMenuButtonClick = (e: React.MouseEvent, matrix: any, isCompleted: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    showMenu(rect.left, rect.bottom + 5, getMatrixMenuItems(matrix, isCompleted));
+  };
+
   if (isLoading) {
     return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
   }
@@ -239,23 +365,22 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
               <div 
                 key={m.id} 
                 onClick={() => setActiveMatrixId(m.id)}
+                onContextMenu={(e) => handleMatrixContextMenu(e, m, false)}
                 className="glass rounded-xl p-4 md:p-5 border border-border hover:border-accent/50 transition-all group relative cursor-pointer hover:shadow-lg hover:shadow-accent/5 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex justify-between items-start mb-3 md:mb-4">
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 pr-2">
                       <Table2 className="w-5 h-5 text-accent shrink-0" />
                       <h4 className="font-bold text-lg text-text-primary truncate">{m.name}</h4>
                     </div>
                     <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteMatrix(m.id);
-                      }} 
-                      className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                      title="Eliminar Matriz"
+                      type="button"
+                      onClick={(e) => handleMatrixMenuButtonClick(e, m, false)} 
+                      className="p-1.5 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated/90 transition-colors shrink-0"
+                      title="Opciones de matriz"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <MoreVertical className="w-4 h-4" />
                     </button>
                   </div>
                   
@@ -339,23 +464,22 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
                   <div 
                     key={m.id} 
                     onClick={() => setActiveMatrixId(m.id)}
+                    onContextMenu={(e) => handleMatrixContextMenu(e, m, true)}
                     className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between opacity-80 hover:opacity-100 bg-surface/50 cursor-pointer hover:shadow-lg hover:shadow-success/5"
                   >
                     <div>
                       <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
                           <Table2 className="w-5 h-5 text-success shrink-0" />
                           <h4 className="font-bold text-lg text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
                         </div>
                         <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteMatrix(m.id);
-                          }} 
-                          className="p-1.5 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                          title="Eliminar Matriz"
+                          type="button"
+                          onClick={(e) => handleMatrixMenuButtonClick(e, m, true)} 
+                          className="p-1.5 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated/90 transition-colors shrink-0"
+                          title="Opciones de matriz"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <MoreVertical className="w-4 h-4" />
                         </button>
                       </div>
 

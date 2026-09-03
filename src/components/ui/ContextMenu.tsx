@@ -29,6 +29,10 @@ import {
   CheckSquare,
   AlignLeft,
   Paperclip,
+  Table2,
+  Pencil,
+  RotateCcw,
+  MoreVertical,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -61,6 +65,10 @@ const ICON_MAP: Record<string, LucideIcon> = {
   CheckSquare,
   AlignLeft,
   Paperclip,
+  Table2,
+  Pencil,
+  RotateCcw,
+  MoreVertical,
 };
 
 function MenuIcon({ name, className }: { name?: string; className?: string }) {
