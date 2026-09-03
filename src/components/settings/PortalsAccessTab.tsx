@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Globe, Loader2, Search, ExternalLink, Copy, Headphones, CheckSquare, Disc, MessageSquare, Wrench, Wallet } from 'lucide-react';
+import { Globe, Loader2, Search, ExternalLink, Copy, Headphones, CheckSquare, Disc, MessageSquare, Wrench, Wallet, Sliders, X } from 'lucide-react';
 import { customAlert } from '@/lib/dialog';
 import type { PortalConfig } from '@/types';
+import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
 import { Button } from '@/components/ui/Button';
 
 interface ArtistPortalData {
@@ -75,9 +76,23 @@ export function PortalsAccessTab() {
     updateArtistConfig(artist.artistId, { ...artist.config, modules: newModules });
   };
 
+  const [editingToolsArtist, setEditingToolsArtist] = useState<ArtistPortalData | null>(null);
+
   const toggleRoot = (artist: ArtistPortalData, property: keyof PortalConfig, currentVal: boolean) => {
     if (!artist.config) return;
     updateArtistConfig(artist.artistId, { ...artist.config, [property]: !currentVal });
+  };
+
+  const toggleToolsMaster = (artist: ArtistPortalData, currentVal: boolean) => {
+    if (!artist.config) return;
+    const enabling = !currentVal;
+    const updates: Partial<PortalConfig> = {
+      enableTools: enabling,
+      allowedTools: enabling
+        ? (artist.config.allowedTools && artist.config.allowedTools.length > 0 ? artist.config.allowedTools : PORTAL_TOOLS.map(t => t.id))
+        : artist.config.allowedTools
+    };
+    updateArtistConfig(artist.artistId, { ...artist.config, ...updates });
   };
 
   const handleCopyLink = async (artistId: string) => {
@@ -211,7 +226,24 @@ export function PortalsAccessTab() {
                         </div>
                       </td>
                       <td className="px-4 py-3 align-middle">
-                        <MatrixToggle isOn={hasTools} onClick={() => toggleRoot(artist, 'enableTools', hasTools)} />
+                        <div className="flex flex-col items-center gap-1">
+                          <MatrixToggle isOn={hasTools} onClick={() => toggleToolsMaster(artist, hasTools)} />
+                          {hasTools && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingToolsArtist(artist)}
+                              className="text-[10px] font-bold text-accent hover:underline flex items-center gap-0.5 cursor-pointer"
+                              title="Configurar herramientas habilitadas"
+                            >
+                              <span>
+                                {Array.isArray(artist.config?.allowedTools)
+                                  ? `${artist.config.allowedTools.length}/${PORTAL_TOOLS.length}`
+                                  : 'Todas'}
+                              </span>
+                              <Sliders className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 align-middle">
                         <MatrixToggle isOn={hasBounces} onClick={() => toggleModule(artist, 'bounces', hasBounces)} />
@@ -246,6 +278,132 @@ export function PortalsAccessTab() {
           </table>
         </div>
       </div>
+
+      {/* Modal de Configuración Granular de Herramientas */}
+      {editingToolsArtist && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-surface border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+                  <Wrench className="w-4 h-4 text-accent" />
+                  Herramientas del Portal
+                </h3>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  Artista: <strong className="text-text-primary">{editingToolsArtist.artistName}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingToolsArtist(null)}
+                className="p-1.5 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {(() => {
+              const currentAllowed = Array.isArray(editingToolsArtist.config?.allowedTools)
+                ? editingToolsArtist.config.allowedTools
+                : (editingToolsArtist.config?.enableTools ? PORTAL_TOOLS.map(t => t.id) : []);
+
+              return (
+                <>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs font-semibold text-text-secondary">
+                      {currentAllowed.length} de {PORTAL_TOOLS.length} activas
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allIds = PORTAL_TOOLS.map(t => t.id);
+                          const updatedConfig: PortalConfig = {
+                            ...editingToolsArtist.config,
+                            enableTools: true,
+                            allowedTools: allIds
+                          };
+                          updateArtistConfig(editingToolsArtist.artistId, updatedConfig);
+                          setEditingToolsArtist(prev => prev ? { ...prev, config: updatedConfig } : null);
+                        }}
+                        className="text-xs text-accent hover:underline font-medium cursor-pointer"
+                      >
+                        Todas
+                      </button>
+                      <span className="text-border">•</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedConfig: PortalConfig = {
+                            ...editingToolsArtist.config,
+                            allowedTools: []
+                          };
+                          updateArtistConfig(editingToolsArtist.artistId, updatedConfig);
+                          setEditingToolsArtist(prev => prev ? { ...prev, config: updatedConfig } : null);
+                        }}
+                        className="text-xs text-text-secondary hover:text-text-primary font-medium cursor-pointer"
+                      >
+                        Ninguna
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
+                    {PORTAL_TOOLS.map((tool) => {
+                      const isAllowed = currentAllowed.includes(tool.id);
+
+                      return (
+                        <div
+                          key={tool.id}
+                          onClick={() => {
+                            const updated = isAllowed
+                              ? currentAllowed.filter(id => id !== tool.id)
+                              : [...currentAllowed, tool.id];
+                            const updatedConfig: PortalConfig = {
+                              ...editingToolsArtist.config,
+                              enableTools: updated.length > 0 ? true : editingToolsArtist.config?.enableTools,
+                              allowedTools: updated
+                            };
+                            updateArtistConfig(editingToolsArtist.artistId, updatedConfig);
+                            setEditingToolsArtist(prev => prev ? { ...prev, config: updatedConfig } : null);
+                          }}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                            isAllowed
+                              ? 'bg-surface-elevated/70 border-accent/40'
+                              : 'bg-surface/40 border-border/50 hover:border-border'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="font-semibold text-xs text-text-primary truncate">{tool.name}</span>
+                            {tool.badge && (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-400 font-bold uppercase">
+                                {tool.badge}
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isAllowed}
+                            onChange={() => {}} // Handled by parent onClick
+                            className="w-4 h-4 rounded border-border text-accent focus:ring-accent accent-accent cursor-pointer shrink-0"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
+            <Button
+              onClick={() => setEditingToolsArtist(null)}
+              className="w-full py-2.5 font-bold rounded-xl"
+            >
+              Cerrar
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

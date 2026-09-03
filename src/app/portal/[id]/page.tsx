@@ -11,9 +11,25 @@ import {
 } from 'lucide-react';
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
+import { AudioConverter } from '@/components/tools/AudioConverter';
+import { AudioTrimmer } from '@/components/tools/AudioTrimmer';
+import { TagEditor } from '@/components/tools/TagEditor';
+import { BpmKeyDetector } from '@/components/tools/BpmKeyDetector';
+import { StemsSplitter } from '@/components/tools/StemsSplitter';
+import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { isBrowserCompatible } from '@/lib/utils';
+import { Scissors, Tags, Activity, Layers } from 'lucide-react';
+
+const PORTAL_TOOL_ICONS: Record<string, any> = {
+  Download,
+  RefreshCw,
+  Scissors,
+  Tags,
+  Activity,
+  Layers,
+};
 
 import { PortalReleasePlayer } from '@/components/releases/PortalReleasePlayer';
 import { customAlert } from '@/lib/dialog';
@@ -27,6 +43,18 @@ export default function PortalPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [activeReleaseId, setActiveReleaseId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'overview' | 'releases' | 'tools'>('overview');
+  const [activeToolId, setActiveToolId] = useState<PortalToolId>('downloader');
+
+  const configuredAllowedTools = data?.config?.allowedTools;
+  const allowedTools: PortalToolId[] = Array.isArray(configuredAllowedTools)
+    ? configuredAllowedTools
+    : (data?.config?.enableTools ? ['downloader', 'converter', 'trimmer', 'tags', 'detector', 'stems'] : []);
+
+  useEffect(() => {
+    if (allowedTools.length > 0 && !allowedTools.includes(activeToolId)) {
+      setActiveToolId(allowedTools[0]);
+    }
+  }, [allowedTools, activeToolId]);
 
   // Theme is now enforced by ThemeContext based on route
 
@@ -807,7 +835,7 @@ export default function PortalPage() {
             {[
               { key: 'overview', label: 'Overview', icon: TrendingUp },
               ...(data.releases?.length > 0 ? [{ key: 'releases', label: 'Previews', icon: ListMusic }] : []),
-              ...(data.config?.enableTools ? [{ key: 'tools', label: 'Herramientas', icon: Wrench }] : []),
+              ...(data.config?.enableTools && allowedTools.length > 0 ? [{ key: 'tools', label: 'Herramientas', icon: Wrench }] : []),
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -1019,8 +1047,62 @@ export default function PortalPage() {
 
         {/* ── TOOLS SECTION ── */}
         {activeSection === 'tools' && (
-          <div className="animate-fade-in mt-8 max-w-[1600px] w-[95%] mx-auto pb-20">
-            <MusicDownloader />
+          <div className="animate-fade-in mt-8 max-w-[1600px] w-[95%] mx-auto pb-20 space-y-8">
+            {allowedTools.length === 0 ? (
+              <div className="max-w-md mx-auto text-center py-16 px-6 glass rounded-2xl border border-border space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-surface-elevated flex items-center justify-center mx-auto text-text-secondary">
+                  <Wrench className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-text-primary">Herramientas no disponibles</h3>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  Actualmente no tienes herramientas asignadas en tu portal. Si necesitas acceso a herramientas de producción, contacta con tu productor.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Selector de Herramientas (si hay más de 1 herramienta habilitada) */}
+                {allowedTools.length > 1 && (
+                  <div className="flex items-center justify-center">
+                    <div className="glass p-1.5 rounded-2xl border border-border/80 flex items-center gap-1.5 overflow-x-auto max-w-full no-scrollbar shadow-lg">
+                      {PORTAL_TOOLS.filter(t => allowedTools.includes(t.id)).map((tool) => {
+                        const IconComp = PORTAL_TOOL_ICONS[tool.iconName] || Wrench;
+                        const isActive = activeToolId === tool.id;
+                        return (
+                          <button
+                            key={tool.id}
+                            type="button"
+                            onClick={() => setActiveToolId(tool.id)}
+                            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer shrink-0 ${
+                              isActive
+                                ? 'bg-accent text-white shadow-md shadow-accent/25 scale-[1.02]'
+                                : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60'
+                            }`}
+                          >
+                            <IconComp className="w-4 h-4" />
+                            <span>{tool.shortName || tool.name}</span>
+                            {tool.badge && (
+                              <span className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-extrabold ${isActive ? 'bg-white/20 text-white' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                                {tool.badge}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Renderizado de la Herramienta Activa */}
+                <div className="animate-fade-in">
+                  {activeToolId === 'downloader' && <MusicDownloader />}
+                  {activeToolId === 'converter' && <AudioConverter />}
+                  {activeToolId === 'trimmer' && <AudioTrimmer />}
+                  {activeToolId === 'tags' && <TagEditor />}
+                  {activeToolId === 'detector' && <BpmKeyDetector />}
+                  {activeToolId === 'stems' && <StemsSplitter />}
+                </div>
+              </>
+            )}
           </div>
         )}
 

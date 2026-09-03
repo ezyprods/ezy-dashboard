@@ -4,10 +4,20 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import {
   Loader2, Eye, EyeOff, ArrowUp, ArrowDown, Layout,
-  ExternalLink, Copy, CheckCircle2, Globe, Wrench
+  ExternalLink, Copy, CheckCircle2, Globe, Wrench,
+  Download, RefreshCw, Scissors, Tags, Activity, Layers
 } from 'lucide-react';
 import { customAlert } from '@/lib/dialog';
-import type { PortalConfig, PortalModule } from '@/types';
+import { PORTAL_TOOLS, type PortalConfig, type PortalModule, type PortalToolId } from '@/types/portal';
+
+const TOOL_ICON_COMPONENTS: Record<string, any> = {
+  Download,
+  RefreshCw,
+  Scissors,
+  Tags,
+  Activity,
+  Layers,
+};
 
 interface PortalTabProps {
   artistId: string;
@@ -18,6 +28,58 @@ export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  const currentAllowedTools: PortalToolId[] = config
+    ? (Array.isArray(config.allowedTools)
+        ? config.allowedTools
+        : (config.enableTools ? PORTAL_TOOLS.map(t => t.id) : []))
+    : [];
+
+  const handleToggleMasterTools = (enabled: boolean) => {
+    if (!config) return;
+    const newConfig: PortalConfig = {
+      ...config,
+      enableTools: enabled,
+      allowedTools: enabled
+        ? (config.allowedTools && config.allowedTools.length > 0 ? config.allowedTools : PORTAL_TOOLS.map(t => t.id))
+        : config.allowedTools
+    };
+    setConfig(newConfig);
+    saveConfig(newConfig);
+  };
+
+  const handleToggleTool = (toolId: PortalToolId) => {
+    if (!config) return;
+    const isCurrentlyAllowed = currentAllowedTools.includes(toolId);
+    let updatedTools: PortalToolId[];
+    if (isCurrentlyAllowed) {
+      updatedTools = currentAllowedTools.filter(id => id !== toolId);
+    } else {
+      updatedTools = [...currentAllowedTools, toolId];
+    }
+    const newConfig: PortalConfig = {
+      ...config,
+      enableTools: updatedTools.length > 0 ? true : config.enableTools,
+      allowedTools: updatedTools
+    };
+    setConfig(newConfig);
+    saveConfig(newConfig);
+  };
+
+  const handleSelectAllTools = () => {
+    if (!config) return;
+    const allIds = PORTAL_TOOLS.map(t => t.id);
+    const newConfig: PortalConfig = { ...config, enableTools: true, allowedTools: allIds };
+    setConfig(newConfig);
+    saveConfig(newConfig);
+  };
+
+  const handleDeselectAllTools = () => {
+    if (!config) return;
+    const newConfig: PortalConfig = { ...config, allowedTools: [] };
+    setConfig(newConfig);
+    saveConfig(newConfig);
+  };
 
   useEffect(() => {
     fetchConfig();
@@ -152,16 +214,16 @@ export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
         </div>
       </div>
 
-      {/* Tools Access Toggle */}
-      <div className="glass rounded-xl border border-border p-5">
+      {/* Tools Access Section */}
+      <div className="glass rounded-xl border border-border p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
               <Wrench className="w-4 h-4 text-accent" />
-              Acceso a Herramientas (SoundBox)
+              Acceso a Herramientas
             </h3>
             <p className="text-xs text-text-secondary mt-1">
-              Permite a este artista acceder a la pestaña de descarga y conversión de música desde su portal.
+              Permite a este artista utilizar las herramientas que selecciones directamente desde su portal.
             </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -169,15 +231,89 @@ export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
               type="checkbox" 
               className="sr-only peer"
               checked={config.enableTools || false}
-              onChange={(e) => {
-                const newConfig = { ...config, enableTools: e.target.checked };
-                setConfig(newConfig);
-                saveConfig(newConfig);
-              }}
+              onChange={(e) => handleToggleMasterTools(e.target.checked)}
             />
             <div className="w-11 h-6 bg-surface-elevated peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-secondary peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent border border-border/50"></div>
           </label>
         </div>
+
+        {config.enableTools && (
+          <div className="pt-3 border-t border-border/50 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-text-secondary">
+                Herramientas permitidas ({currentAllowedTools.length} de {PORTAL_TOOLS.length} activas)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllTools}
+                  className="text-xs text-accent hover:underline font-medium cursor-pointer"
+                >
+                  Seleccionar todas
+                </button>
+                <span className="text-border">•</span>
+                <button
+                  type="button"
+                  onClick={handleDeselectAllTools}
+                  className="text-xs text-text-secondary hover:text-text-primary font-medium cursor-pointer"
+                >
+                  Desmarcar todas
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {PORTAL_TOOLS.map((tool) => {
+                const isSelected = currentAllowedTools.includes(tool.id);
+                const IconComponent = TOOL_ICON_COMPONENTS[tool.iconName] || Wrench;
+
+                return (
+                  <div
+                    key={tool.id}
+                    onClick={() => handleToggleTool(tool.id)}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2.5 relative overflow-hidden group ${
+                      isSelected
+                        ? 'bg-surface-elevated/70 border-accent/40 shadow-sm'
+                        : 'bg-surface/40 border-border/60 hover:bg-surface-elevated/30 hover:border-border'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tool.bg} ${tool.color}`}>
+                          <IconComponent className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-xs text-text-primary truncate block">
+                              {tool.name}
+                            </span>
+                            {tool.badge && (
+                              <span className="text-[10px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-400 font-bold uppercase shrink-0">
+                                {tool.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-text-secondary line-clamp-1 mt-0.5">
+                            {tool.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 pt-0.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}} // Click handled by wrapper div
+                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent accent-accent cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modules */}
