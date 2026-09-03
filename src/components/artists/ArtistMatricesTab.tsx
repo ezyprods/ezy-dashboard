@@ -364,6 +364,7 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
             return (
               <div 
                 key={m.id} 
+                data-context="ignore"
                 onClick={() => setActiveMatrixId(m.id)}
                 onContextMenu={(e) => handleMatrixContextMenu(e, m, false)}
                 className="glass rounded-xl p-4 md:p-5 border border-border hover:border-accent/50 transition-all group relative cursor-pointer hover:shadow-lg hover:shadow-accent/5 flex flex-col justify-between"
@@ -463,6 +464,7 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
                 return (
                   <div 
                     key={m.id} 
+                    data-context="ignore"
                     onClick={() => setActiveMatrixId(m.id)}
                     onContextMenu={(e) => handleMatrixContextMenu(e, m, true)}
                     className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between opacity-80 hover:opacity-100 bg-surface/50 cursor-pointer hover:shadow-lg hover:shadow-success/5"

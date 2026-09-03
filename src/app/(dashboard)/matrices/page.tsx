@@ -483,6 +483,7 @@ function MatricesContent() {
           {filteredMatrices.map((m: any) => (
             <div 
               key={m.id} 
+              data-context="ignore"
               onClick={() => {
                 setActiveMatrix({
                   id: m.id,
@@ -565,6 +566,7 @@ function MatricesContent() {
                 filteredCompleted.map((m: any) => (
                   <div 
                     key={m.id} 
+                    data-context="ignore"
                     onClick={() => {
                       setActiveMatrix({
                         id: m.id,
