@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import { customAlert } from '@/lib/dialog';
 
 export function QuickMP3Downloader() {
+  const router = useRouter();
   const [url, setUrl] = useState('');
   const [status, setStatus] = useState<'idle' | 'extracting' | 'done' | 'error'>('idle');
 
@@ -16,7 +18,7 @@ export function QuickMP3Downloader() {
       const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(url.trim())}`;
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.target = '_blank';
+      a.download = '';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -34,16 +36,35 @@ export function QuickMP3Downloader() {
     }
   };
 
+  const handleIconClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) {
+      // Caso 1: Si no hay ningún enlace, abre el apartado de herramientas con el MP3 Downloader abierto
+      router.push('/tools/downloader');
+    } else {
+      // Caso 3: Si escribo un enlace y le doy al icono, que lo descargue pero abriendo el MP3 Downloader con el enlace puesto en la ventana de MP3 Downloader principal
+      router.push(`/tools/downloader?url=${encodeURIComponent(trimmedUrl)}&autostart=true`);
+    }
+  };
+
   return (
     <div className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-emerald-500/50 focus-within:border-emerald-500/50 group transition-all flex items-center gap-3 p-3 md:px-4 shadow-sm hover:shadow-md focus-within:shadow-md focus-within:bg-surface-elevated/50">
       <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none group-focus-within:scale-150 transition-transform duration-500" />
       
-      <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/20 text-emerald-500 flex items-center justify-center transition-transform shadow-inner relative z-10 shrink-0">
-        {status === 'idle' && <Download className="w-4 h-4" />}
+      <button
+        type="button"
+        onClick={handleIconClick}
+        title={!url.trim() ? "Abrir MP3 Downloader" : "Abrir y descargar en MP3 Downloader"}
+        className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/20 text-emerald-500 flex items-center justify-center transition-all shadow-inner relative z-10 shrink-0 hover:scale-110 hover:bg-emerald-500/25 hover:border-emerald-500/40 active:scale-95 cursor-pointer group/btn"
+      >
+        {status === 'idle' && <Download className="w-4 h-4 transition-transform group-hover/btn:translate-y-0.5" />}
         {status === 'extracting' && <Loader2 className="w-4 h-4 animate-spin" />}
         {status === 'done' && <CheckCircle2 className="w-4 h-4" />}
         {status === 'error' && <AlertCircle className="w-4 h-4 text-error" />}
-      </div>
+      </button>
       
       <div className="flex-1 min-w-0 relative z-10 flex flex-col justify-center h-full">
         <input 
@@ -56,7 +77,7 @@ export function QuickMP3Downloader() {
           disabled={status !== 'idle' && status !== 'error'}
         />
         <p className="text-[11px] text-text-secondary font-medium mt-0.5 leading-tight">
-          {status === 'idle' && "Presiona Enter para descargar MP3"}
+          {status === 'idle' && (url.trim() ? "Presiona Enter para descargar • Clic en icono para abrir" : "Presiona Enter para descargar MP3")}
           {status === 'extracting' && "Procesando audio..."}
           {status === 'done' && "¡Descarga iniciada!"}
           {status === 'error' && "Error al descargar"}

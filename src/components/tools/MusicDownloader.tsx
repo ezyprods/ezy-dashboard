@@ -485,6 +485,24 @@ export function MusicDownloader() {
     });
   };
 
+  // Handle auto-start or initial URL passed via query parameters (e.g. from Dashboard quick downloader)
+  const initialUrlHandledRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialUrlHandledRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const paramUrl = params.get('url') || params.get('link') || params.get('q');
+    const autoStart = params.get('autostart') === 'true' || params.get('download') === 'true';
+
+    if (paramUrl) {
+      initialUrlHandledRef.current = true;
+      setUrl(paramUrl);
+      if (autoStart) {
+        handleSubmit(paramUrl);
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   const getPlatformBadge = (platform?: string) => {
     if (!platform) return null;
     switch(platform.toLowerCase()) {
