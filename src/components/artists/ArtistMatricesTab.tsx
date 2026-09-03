@@ -6,7 +6,7 @@ import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, Music,
 import { Button } from '@/components/ui/Button';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
-import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
+import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
 
 
 export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; artistName?: string }) {
@@ -194,7 +194,7 @@ export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; 
     }
   };
 
-  const getMatrixMenuItems = (matrix: any, isCompleted: boolean) => [
+  const getMatrixMenuItems = (matrix: any, isCompleted: boolean): MenuItem[] => [
     {
       label: 'Abrir Matriz',
       icon: 'Table2',
