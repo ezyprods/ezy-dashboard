@@ -10,12 +10,29 @@ export function QuickMP3Downloader() {
   const [url, setUrl] = useState('');
   const [status, setStatus] = useState<'idle' | 'extracting' | 'done' | 'error'>('idle');
 
+  const isPlaylistUrl = (input: string) => {
+    const lower = input.toLowerCase();
+    return (
+      lower.includes('/playlist/') ||
+      lower.includes('/album/') ||
+      lower.includes('/sets/') ||
+      (lower.includes('youtube.com') && lower.includes('list=') && !lower.includes('watch?v='))
+    );
+  };
+
   const handleDownload = async () => {
-    if (!url.trim()) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+
+    if (isPlaylistUrl(trimmed)) {
+      router.push(`/tools/downloader?url=${encodeURIComponent(trimmed)}&autostart=true`);
+      return;
+    }
+
     setStatus('extracting');
 
     try {
-      const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(url.trim())}`;
+      const downloadUrl = `/api/tools/ytdl?url=${encodeURIComponent(trimmed)}`;
       const a = document.createElement('a');
       a.href = downloadUrl;
       a.download = '';

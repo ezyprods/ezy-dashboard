@@ -273,6 +273,13 @@ export async function POST(req: Request) {
     if (isSpotifyPlaylistOrAlbum(trimmedUrl)) {
       const { playlist: spotifyPl, error: spotifyErr } = await fetchSpotifyPlaylist(trimmedUrl);
       if (spotifyPl && spotifyPl.tracks.length > 0) {
+        const plData = {
+          id: spotifyPl.id,
+          title: spotifyPl.title,
+          thumbnail: spotifyPl.thumbnail,
+          trackCount: spotifyPl.trackCount,
+          tracks: spotifyPl.tracks,
+        };
         return NextResponse.json({
           isPlaylist: true,
           playlistId: spotifyPl.id,
@@ -281,11 +288,12 @@ export async function POST(req: Request) {
           trackCount: spotifyPl.trackCount,
           tracks: spotifyPl.tracks,
           platform: 'spotify',
+          playlist: plData,
         });
       }
-      if (spotifyErr) {
-        return NextResponse.json({ error: spotifyErr }, { status: 400 });
-      }
+      return NextResponse.json({
+        error: spotifyErr || 'No se pudieron obtener las canciones de esta lista de Spotify. Comprueba que sea pública.',
+      }, { status: 400 });
     }
 
     // =========================================================================
@@ -294,6 +302,13 @@ export async function POST(req: Request) {
     if (isSoundCloudPlaylist(trimmedUrl)) {
       const scPlaylist = await fetchSoundCloudPlaylist(trimmedUrl);
       if (scPlaylist && scPlaylist.tracks.length > 0) {
+        const plData = {
+          id: scPlaylist.id,
+          title: scPlaylist.title,
+          thumbnail: scPlaylist.thumbnail,
+          trackCount: scPlaylist.trackCount,
+          tracks: scPlaylist.tracks,
+        };
         return NextResponse.json({
           isPlaylist: true,
           playlistId: scPlaylist.id,
@@ -302,6 +317,7 @@ export async function POST(req: Request) {
           trackCount: scPlaylist.trackCount,
           tracks: scPlaylist.tracks,
           platform: 'soundcloud',
+          playlist: plData,
         });
       }
       return NextResponse.json({
@@ -346,6 +362,13 @@ export async function POST(req: Request) {
     } else if (!videoId && playlistId && !isRadioOrMix(playlistId)) {
       const playlist = await fetchYouTubePlaylist(playlistId);
       if (playlist && playlist.tracks.length > 0) {
+        const plData = {
+          id: playlist.id,
+          title: playlist.title,
+          thumbnail: playlist.thumbnail,
+          trackCount: playlist.trackCount,
+          tracks: playlist.tracks,
+        };
         return NextResponse.json({
           isPlaylist: true,
           playlistId: playlist.id,
@@ -354,6 +377,7 @@ export async function POST(req: Request) {
           trackCount: playlist.trackCount,
           tracks: playlist.tracks,
           platform: 'youtube',
+          playlist: plData,
         });
       }
       return NextResponse.json({
@@ -425,6 +449,13 @@ export async function POST(req: Request) {
         } catch (e) {}
       }
 
+      const singleVideo = {
+        title: videoTitle,
+        thumbnail: videoThumb,
+        resolvedUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        platform: 'youtube',
+      };
+
       return NextResponse.json({
         title: videoTitle,
         thumbnail: videoThumb,
@@ -434,6 +465,9 @@ export async function POST(req: Request) {
         isPlaylist: false,
         hasPlaylistContext: !!playlistInfo,
         playlistInfo,
+        isPlaylistWithVideo: !!playlistInfo,
+        playlist: playlistInfo,
+        singleVideo,
       });
 
     // =========================================================================

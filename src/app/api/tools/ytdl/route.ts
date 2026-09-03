@@ -33,6 +33,12 @@ export async function GET(req: Request) {
 
     // If Spotify link
     if (!videoId && isSpotifyUrl(rawUrl)) {
+      if (rawUrl.includes('/playlist/') || rawUrl.includes('/album/')) {
+        return NextResponse.json(
+          { error: 'Las listas de Spotify deben descargarse desde el Descargador completo.' },
+          { status: 400 }
+        );
+      }
       try {
         const spotOembed = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(rawUrl)}`).then(r => r.json());
         if (spotOembed.title) {
@@ -44,6 +50,12 @@ export async function GET(req: Request) {
 
     // If SoundCloud link
     if (!videoId && isSoundCloudUrl(rawUrl)) {
+      if (rawUrl.includes('/sets/')) {
+        return NextResponse.json(
+          { error: 'Las listas de SoundCloud deben descargarse desde el Descargador completo.' },
+          { status: 400 }
+        );
+      }
       try {
         const scOembed = await fetch(`https://soundcloud.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`).then(r => r.json());
         if (scOembed.title) {

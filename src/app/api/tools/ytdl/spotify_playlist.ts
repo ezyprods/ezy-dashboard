@@ -83,7 +83,8 @@ export async function fetchSpotifyPlaylist(urlStr: string): Promise<{
       };
     }
 
-    const playlistTitle = entity.name || entity.title || 'Lista de Spotify';
+    const rawTitle = entity.name || entity.title || 'Lista de Spotify';
+    const playlistTitle = rawTitle.replace(/^\/+|\/+$/g, '').trim() || rawTitle;
     const thumbnail =
       entity.visualIdentity?.image?.[0]?.url ||
       entity.coverArt?.sources?.[0]?.url ||

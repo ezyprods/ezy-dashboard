@@ -363,40 +363,64 @@ export function MusicDownloader() {
 
       const meta = await analyseRes.json();
 
-      // Case 1: Pure playlist
-      if (meta.isPlaylist && meta.playlist) {
+      // Case 1: Pure playlist (Spotify, YouTube, SoundCloud)
+      const isPurePlaylist = Boolean(
+        (meta.isPlaylist && meta.playlist) ||
+        (meta.isPlaylist && Array.isArray(meta.tracks) && meta.tracks.length > 0)
+      );
+
+      if (isPurePlaylist) {
+        const pl = meta.playlist || {
+          id: meta.playlistId || 'playlist',
+          title: meta.title || 'Lista de Reproducción',
+          trackCount: meta.trackCount || meta.tracks?.length || 0,
+          thumbnail: meta.thumbnail,
+          tracks: meta.tracks || [],
+        };
         setTasks(prev => prev.filter(t => t.id !== taskId));
         setPlaylistPrompt({
           type: 'pure_playlist',
           playlist: {
-            id: meta.playlist.id,
-            title: meta.playlist.title,
-            trackCount: meta.playlist.trackCount,
-            thumbnail: meta.playlist.thumbnail,
-            tracks: meta.playlist.tracks || [],
+            id: pl.id,
+            title: pl.title,
+            trackCount: pl.trackCount,
+            thumbnail: pl.thumbnail,
+            tracks: pl.tracks || [],
           },
           originalTaskId: taskId,
         });
         return;
       }
 
-      // Case 2: Video inside a playlist
-      if (meta.isPlaylistWithVideo && meta.playlist && meta.singleVideo) {
+      // Case 2: Video inside a playlist (YouTube video with list=)
+      const isVideoWithPlaylist = Boolean(
+        (meta.isPlaylistWithVideo && meta.playlist && meta.singleVideo) ||
+        (meta.hasPlaylistContext && meta.playlistInfo)
+      );
+
+      if (isVideoWithPlaylist) {
+        const pl = meta.playlist || meta.playlistInfo;
+        const sv = meta.singleVideo || {
+          title: meta.title,
+          thumbnail: meta.thumbnail,
+          resolvedUrl: meta.resolvedUrl,
+          platform: meta.platform || 'youtube',
+        };
         setTasks(prev => prev.filter(t => t.id !== taskId));
         setPlaylistPrompt({
           type: 'video_with_playlist',
           singleVideo: {
-            title: meta.singleVideo.title,
-            thumbnail: meta.singleVideo.thumbnail,
-            resolvedUrl: meta.singleVideo.resolvedUrl,
-            platform: meta.platform || 'youtube',
+            title: sv.title,
+            thumbnail: sv.thumbnail,
+            resolvedUrl: sv.resolvedUrl,
+            platform: sv.platform || 'youtube',
           },
           playlist: {
-            id: meta.playlist.id,
-            title: meta.playlist.title,
-            trackCount: meta.playlist.trackCount,
-            thumbnail: meta.playlist.thumbnail,
-            tracks: meta.playlist.tracks || [],
+            id: pl.id,
+            title: pl.title,
+            trackCount: pl.trackCount,
+            thumbnail: pl.thumbnail,
+            tracks: pl.tracks || [],
           },
           originalTaskId: taskId,
         });
