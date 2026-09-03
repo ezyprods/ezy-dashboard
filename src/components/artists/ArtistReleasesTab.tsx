@@ -6,6 +6,7 @@ import { Plus, Disc, Loader2, Play, Settings2, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Release } from '@/types';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { getCoverArtUrl } from '@/lib/utils';
 
 
 export function ArtistReleasesTab({ artistId }: { artistId: string }) {
@@ -86,7 +87,7 @@ export function ArtistReleasesTab({ artistId }: { artistId: string }) {
                 onClick={() => router.push(`/previews/${release.id}`)}
               >
                 {release.coverArtId ? (
-                  <img src={`/api/audio/${release.coverArtId}`} alt={release.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <img src={getCoverArtUrl(release.coverArtId, 400)} alt={release.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
                   <Disc className="w-12 h-12 text-text-secondary opacity-30" />
                 )}

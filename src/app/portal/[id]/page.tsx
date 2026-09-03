@@ -19,7 +19,7 @@ import { StemsSplitter } from '@/components/tools/StemsSplitter';
 import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useAudio } from '@/lib/contexts/AudioContext';
-import { isBrowserCompatible } from '@/lib/utils';
+import { isBrowserCompatible, getCoverArtUrl } from '@/lib/utils';
 import { Scissors, Tags, Activity, Layers } from 'lucide-react';
 
 const PORTAL_TOOL_ICONS: Record<string, any> = {
@@ -793,7 +793,7 @@ export default function PortalPage() {
             >
               <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
                 {r.coverArtId
-                  ? <img src={`/api/audio/${r.coverArtId}`} alt="" className="w-full h-full object-cover" />
+                  ? <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" />
                   : <Disc className="w-5 h-5 text-text-secondary/40" />
                 }
               </div>
@@ -995,7 +995,7 @@ export default function PortalPage() {
                     >
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#1a1a25] border border-border flex items-center justify-center shrink-0">
                         {r.coverArtId
-                          ? <img src={`/api/audio/${r.coverArtId}`} alt="" className="w-full h-full object-cover" />
+                          ? <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" />
                           : <Disc className="w-6 h-6 text-text-secondary/30" />
                         }
                       </div>

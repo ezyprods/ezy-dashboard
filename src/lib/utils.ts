@@ -18,6 +18,12 @@ export function isBrowserCompatible(mimeType?: string): boolean {
   );
 }
 
+// Returns direct Google thumbnail CDN URL for cover arts to bypass Vercel serverless bandwidth
+export function getCoverArtUrl(fileId?: string | null, size: number = 800): string {
+  if (!fileId) return '';
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
+}
+
 // Format file size to human-readable string
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';

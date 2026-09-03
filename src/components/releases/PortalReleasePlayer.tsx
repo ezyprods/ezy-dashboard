@@ -7,6 +7,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { PortalTrackPickerModal } from './PortalTrackPickerModal';
 import { customAlert } from '@/lib/dialog';
+import { getCoverArtUrl } from '@/lib/utils';
 
 // --- Sortable Track Item ---
 function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTrack, allowArtistEdit, onRemove }: any) {
@@ -271,7 +272,7 @@ export function PortalReleasePlayer({
         <div className="flex items-center gap-4 mb-4">
           <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shadow-lg shadow-accent/10 shrink-0 group">
             {release.coverArtId ? (
-              <img src={`/api/audio/${release.coverArtId}`} alt="Cover" className="w-full h-full object-cover" />
+              <img src={getCoverArtUrl(release.coverArtId, 300)} alt="Cover" className="w-full h-full object-cover" />
             ) : (
               <Disc className="w-8 h-8 text-accent/40" />
             )}

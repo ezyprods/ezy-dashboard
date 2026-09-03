@@ -162,6 +162,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       {/* Real, mounted audio element handles all events cleanly */}
       <audio
         ref={audioRef}
+        preload="none"
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
         onLoadedMetadata={(e) => {
           setDuration(e.currentTarget.duration);

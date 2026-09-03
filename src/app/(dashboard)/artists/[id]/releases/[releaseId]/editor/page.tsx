@@ -16,6 +16,7 @@ import type { Release, ReleaseTrack } from '@/types';
 import { TrackPickerModal } from '@/components/releases/TrackPickerModal';
 import { customAlert, customConfirm } from '@/lib/dialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { getCoverArtUrl } from '@/lib/utils';
 
 export default function ReleaseEditorPage() {
   const params = useParams();
@@ -428,7 +429,7 @@ export default function ReleaseEditorPage() {
         artist: artistName,
         album: release.title || 'Unknown Album',
         artwork: release.coverArtId ? [
-          { src: `/api/audio/${release.coverArtId}`, sizes: '512x512', type: 'image/jpeg' }
+          { src: getCoverArtUrl(release.coverArtId), sizes: '512x512', type: 'image/jpeg' }
         ] : []
       });
 
@@ -573,7 +574,7 @@ export default function ReleaseEditorPage() {
     );
   }
 
-  const coverUrl = release.coverArtId ? `/api/audio/${release.coverArtId}` : '';
+  const coverUrl = getCoverArtUrl(release.coverArtId);
 
   return (
     <div className="flex flex-col h-screen bg-[#121212] text-white overflow-hidden selection:bg-[#1db954]/30 font-sans">
@@ -684,7 +685,7 @@ export default function ReleaseEditorPage() {
                     }`}
                     title={`Versión ${idx + 1} - ${new Date(entry.uploadedAt).toLocaleDateString()}`}
                   >
-                    <img src={`/api/audio/${entry.fileId}`} className="w-full h-full object-cover" />
+                    <img src={getCoverArtUrl(entry.fileId, 200)} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>

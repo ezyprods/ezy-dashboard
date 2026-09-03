@@ -11,6 +11,7 @@ import {
 import type { Release } from '@/types';
 import { customConfirm, customPrompt } from '@/lib/dialog';
 import { toast } from 'sonner';
+import { getCoverArtUrl } from '@/lib/utils';
 
 export default function ArtistPreviewsPage() {
   const params = useParams();
@@ -194,7 +195,7 @@ export default function ArtistPreviewsPage() {
               >
                 {release.coverArtId ? (
                   <img
-                    src={`/api/audio/${release.coverArtId}`}
+                    src={getCoverArtUrl(release.coverArtId)}
                     alt={release.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />

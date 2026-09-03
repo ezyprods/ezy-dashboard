@@ -71,7 +71,7 @@ export function AudioPlayer({ fileId, fileName, artistName, onContextMenu }: Aud
         </div>
       </div>
       
-      <a href={`/api/audio/${fileId}`} target="_blank" rel="noopener noreferrer" className="text-xs text-text-secondary hover:text-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <a href={`/api/files/${fileId}?inline=true`} target="_blank" rel="noopener noreferrer" className="text-xs text-text-secondary hover:text-accent flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <ExternalLink className="w-3.5 h-3.5" />
       </a>
     </div>

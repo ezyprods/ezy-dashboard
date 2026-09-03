@@ -467,7 +467,7 @@ export function WaveformPlayer({
                   </button>
                 ) : (
                   <a
-                    href={`/api/audio/${activeId}`}
+                    href={`/api/files/${activeId}`}
                     download={activeName}
                     onClick={(e) => e.stopPropagation()}
                     className="p-2 md:p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface transition-all lg:opacity-0 lg:group-hover/audio:opacity-100"

@@ -107,12 +107,22 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // The audio redirect/streaming endpoint — browser cache
+        // The audio redirect/streaming endpoint — browser & edge CDN cache
         source: "/api/audio/:fileId",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=86400, stale-while-revalidate=604800",
+            value: "public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800",
+          },
+        ],
+      },
+      {
+        // Cache file redirect responses at the edge
+        source: "/api/files/:fileId",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800",
           },
         ],
       },

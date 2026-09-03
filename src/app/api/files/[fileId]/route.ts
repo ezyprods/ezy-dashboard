@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
+import { getDriveService } from '@/lib/drive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,7 +39,27 @@ export async function GET(
       return res;
     }
 
-    // 2. Stream binary/media file with Range support (RAR, ZIP, WAV, FLAC, PDF, etc.)
+    // 2. For file downloads (!inline): Redirect directly to Google Drive download link.
+    // This saves 100% of Fast Origin Transfer on Vercel (0 bytes transferred through Serverless Functions).
+    if (!inline) {
+      try {
+        const drive = getDriveService();
+        await drive.permissions.create({
+          fileId,
+          requestBody: { role: 'reader', type: 'anyone' },
+          supportsAllDrives: true,
+        });
+      } catch (e) {
+        // Safe to continue if permission already exists
+      }
+
+      const downloadUrl = meta.webContentLink || `https://drive.google.com/uc?export=download&id=${fileId}`;
+      const res = NextResponse.redirect(downloadUrl, { status: 307 });
+      res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      return res;
+    }
+
+    // 3. Stream binary/media file with Range support (fallback for inline audio/etc.)
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,

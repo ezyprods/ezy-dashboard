@@ -24,6 +24,16 @@ export async function GET(
       fetchHeaders['Range'] = range;
     }
 
+    // If browser request is for an image (e.g. <img> tag with Accept: image/* or ?type=image),
+    // redirect immediately to Google's thumbnail CDN — 0 backend bandwidth, 0 function duration!
+    const acceptHeader = request.headers.get('accept') || '';
+    if (acceptHeader.includes('image/') || request.nextUrl.searchParams.get('type') === 'image') {
+      const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+      const res = NextResponse.redirect(imgUrl, { status: 307 });
+      res.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800');
+      return res;
+    }
+
     const gDriveRes = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
       {
@@ -40,11 +50,11 @@ export async function GET(
 
     const contentType = gDriveRes.headers.get('content-type') || 'audio/mpeg';
 
-    // If requested file is an image (cover art), redirect directly to Google thumbnail CDN to save origin bandwidth
+    // If requested file is an image (cover art fallback), redirect directly to Google thumbnail CDN
     if (contentType.startsWith('image/')) {
       const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
       const res = NextResponse.redirect(imgUrl, { status: 307 });
-      res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      res.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800');
       return res;
     }
 
@@ -58,7 +68,7 @@ export async function GET(
     if (contentLength) responseHeaders.set('Content-Length', contentLength);
 
     // Cache audio chunks in the browser and edge to minimize repeated network bandwidth
-    responseHeaders.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    responseHeaders.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800');
 
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,

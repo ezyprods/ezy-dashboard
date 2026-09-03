@@ -60,10 +60,9 @@ export function useAudioPlayer({
       nextAudioRef.current.load();
     }
 
-    // Crear nuevo preload
+    // Crear nuevo preload con 'none' para evitar descargar megabytes en segundo plano sin consentimiento
     const preloadAudio = new Audio(nextTrackUrl);
-    // 'auto' permite iniciar el buffering en segundo plano (similar al shadow caching)
-    preloadAudio.preload = 'auto'; 
+    preloadAudio.preload = 'none'; 
     preloadAudio.volume = 0; // Muteado por si acaso
     
     nextAudioRef.current = preloadAudio;

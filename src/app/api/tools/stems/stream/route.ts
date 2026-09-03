@@ -31,25 +31,7 @@ export async function GET(req: NextRequest) {
 
     // CASO 1: URL directa proporcionada por el cliente (Cloud / Stateless)
     if (directUrl && stem) {
-      if (!isDownload) {
-        return NextResponse.redirect(directUrl);
-      }
-
-      const remoteRes = await fetch(directUrl);
-      if (!remoteRes.ok) {
-        return NextResponse.redirect(directUrl);
-      }
-
-      const blob = await remoteRes.arrayBuffer();
-      const disposition = getSafeDisposition(queryFilename || 'stem', stem);
-
-      return new NextResponse(Buffer.from(blob), {
-        status: 200,
-        headers: {
-          'Content-Type': remoteRes.headers.get('content-type') || 'audio/wav',
-          'Content-Disposition': disposition
-        }
-      });
+      return NextResponse.redirect(directUrl);
     }
 
     if (!taskId || !stem) {
@@ -65,27 +47,7 @@ export async function GET(req: NextRequest) {
 
     // CASO 2: Procesamiento en la nube (Cloud URLs de Replicate en memoria)
     if (task.stems && task.stems[stem]) {
-      const stemUrl = task.stems[stem]!;
-
-      if (!isDownload) {
-        return NextResponse.redirect(stemUrl);
-      }
-
-      const remoteRes = await fetch(stemUrl);
-      if (!remoteRes.ok) {
-        return NextResponse.redirect(stemUrl);
-      }
-
-      const blob = await remoteRes.arrayBuffer();
-      const disposition = getSafeDisposition(safeName, stem);
-
-      return new NextResponse(Buffer.from(blob), {
-        status: 200,
-        headers: {
-          'Content-Type': remoteRes.headers.get('content-type') || 'audio/wav',
-          'Content-Disposition': disposition
-        }
-      });
+      return NextResponse.redirect(task.stems[stem]!);
     }
 
     // CASO 3: Procesamiento Local

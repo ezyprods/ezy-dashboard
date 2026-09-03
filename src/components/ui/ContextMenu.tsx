@@ -131,7 +131,7 @@ export function GlobalContextMenu() {
       icon: 'Download',
       action: () => {
         const a = document.createElement('a');
-        a.href = `/api/audio/${fileId}`;
+        a.href = `/api/files/${fileId}`;
         a.click();
       },
     },

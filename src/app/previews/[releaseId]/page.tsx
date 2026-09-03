@@ -8,6 +8,7 @@ import {
   Shuffle, Repeat, Repeat1, Clock, ChevronDown, MoreHorizontal, Heart
 } from 'lucide-react';
 import { useAudioPlayer } from '@/hooks/useAudioPlayer';
+import { getCoverArtUrl } from '@/lib/utils';
 
 export default function PublicPreviewPage() {
   const params = useParams();
@@ -130,7 +131,7 @@ export default function PublicPreviewPage() {
         artist: artistName,
         album: release.title || 'Unknown Album',
         artwork: release.coverArtId ? [
-          { src: `/api/audio/${release.coverArtId}`, sizes: '512x512', type: 'image/jpeg' }
+          { src: getCoverArtUrl(release.coverArtId), sizes: '512x512', type: 'image/jpeg' }
         ] : []
       });
 
@@ -275,7 +276,7 @@ export default function PublicPreviewPage() {
     );
   }
 
-  const coverUrl = release.coverArtId ? `/api/audio/${release.coverArtId}` : '';
+  const coverUrl = getCoverArtUrl(release.coverArtId);
 
   return (
     <div className="flex flex-col h-screen bg-[#121212] text-white overflow-hidden selection:bg-[#1db954]/30 font-sans">
