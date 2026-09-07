@@ -16,10 +16,10 @@ interface StemsMixerProps {
 }
 
 const STEMS = [
-  { id: 'vocals', name: 'Vocales', icon: Mic2, color: 'text-indigo-500', bg: 'bg-indigo-500', lightBg: 'bg-indigo-50' },
-  { id: 'drums', name: 'Batería', icon: Disc3, color: 'text-indigo-500', bg: 'bg-indigo-500', lightBg: 'bg-indigo-50' },
-  { id: 'bass', name: 'Bajo', icon: Speaker, color: 'text-indigo-500', bg: 'bg-indigo-500', lightBg: 'bg-indigo-50' },
-  { id: 'other', name: 'Otros', icon: Music4, color: 'text-indigo-500', bg: 'bg-indigo-500', lightBg: 'bg-indigo-50' }
+  { id: 'vocals', name: 'Vocales', icon: Mic2, color: 'text-indigo-400', bg: 'bg-indigo-500', lightBg: 'bg-indigo-500/20' },
+  { id: 'drums', name: 'Batería', icon: Disc3, color: 'text-amber-400', bg: 'bg-amber-500', lightBg: 'bg-amber-500/20' },
+  { id: 'bass', name: 'Bajo', icon: Speaker, color: 'text-emerald-400', bg: 'bg-emerald-500', lightBg: 'bg-emerald-500/20' },
+  { id: 'other', name: 'Otros', icon: Music4, color: 'text-purple-400', bg: 'bg-purple-500', lightBg: 'bg-purple-500/20' }
 ] as const;
 
 export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
@@ -179,7 +179,7 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
     const directUrl = stems?.[stemId as keyof typeof stems];
     const downloadUrl = directUrl 
       ? `/api/tools/stems/stream?url=${encodeURIComponent(directUrl)}&stem=${stemId}&filename=${encodeURIComponent(filename)}&download=true`
-      : `/api/tools/stems/stream?taskId=${taskId}&stem=${stemId}&download=true`;
+      : `/api/tools/stems/stream?taskId=${taskId}&stem=${stemId}&filename=${encodeURIComponent(filename)}&download=true`;
 
     const a = document.createElement('a');
     a.href = downloadUrl;
@@ -251,7 +251,7 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
         </div>
 
         {/* Pistas */}
-        <div className="p-1.5 sm:p-2 bg-white grid gap-0.5">
+        <div className="p-2 sm:p-3 bg-surface-elevated/40 grid gap-1.5 border-t border-border/40">
           {STEMS.map(stem => {
             const Icon = stem.icon;
             const isMuted = mutes.has(stem.id);
@@ -260,30 +260,40 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
             const isPlaying = activeVol > 0 && playing;
             
             return (
-              <div key={stem.id} className={`flex flex-col sm:flex-row items-center gap-3 py-1.5 px-2 rounded-lg transition-colors ${isPlaying ? 'bg-indigo-50/30' : 'hover:bg-surface-elevated'}`}>
-                
+              <div 
+                key={stem.id} 
+                className={`flex flex-col sm:flex-row items-center gap-3 py-2 px-3 rounded-xl transition-all ${
+                  isPlaying 
+                    ? 'bg-surface-elevated border border-border/60 shadow-xs' 
+                    : 'bg-surface/50 hover:bg-surface-elevated/50 border border-transparent'
+                }`}
+              >
                 {/* Nombre e Icono */}
                 <div className="flex items-center gap-2.5 w-full sm:w-36">
-                  <div className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${isPlaying ? stem.lightBg + ' ' + stem.color : 'bg-surface border border-border/50 text-text-secondary'}`}>
-                    <Icon className="w-3.5 h-3.5" />
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                    isPlaying 
+                      ? `${stem.lightBg} ${stem.color}` 
+                      : 'bg-surface-elevated border border-border/50 text-text-secondary'
+                  }`}>
+                    <Icon className="w-4 h-4" />
                   </div>
-                  <span className={`font-medium text-sm ${activeVol > 0 ? 'text-text-primary' : 'text-text-secondary'}`}>
+                  <span className={`font-semibold text-xs sm:text-sm ${activeVol > 0 ? 'text-text-primary' : 'text-text-secondary/70'}`}>
                     {stem.name}
                   </span>
                 </div>
 
                 {/* Botones Mute / Solo */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button 
                     type="button"
                     onClick={() => toggleMute(stem.id)}
                     aria-label={`Silenciar ${stem.name}`}
                     aria-pressed={isMuted}
                     title={isMuted ? `Activar ${stem.name}` : `Silenciar ${stem.name}`}
-                    className={`w-7 h-6 rounded text-[11px] font-semibold transition-colors flex items-center justify-center border ${
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-all flex items-center justify-center border ${
                       isMuted 
-                        ? 'bg-red-50 text-red-600 border-red-200 shadow-xs' 
-                        : 'bg-transparent text-text-secondary border-border/40 hover:bg-surface-elevated'
+                        ? 'bg-red-500/20 text-red-400 border-red-500/40 shadow-xs' 
+                        : 'bg-surface/60 text-text-secondary border-border/60 hover:text-text-primary hover:bg-surface-elevated'
                     }`}
                   >
                     M
@@ -294,10 +304,10 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
                     aria-label={`Solo ${stem.name}`}
                     aria-pressed={isSolo}
                     title={isSolo ? `Desactivar Solo ${stem.name}` : `Solo ${stem.name}`}
-                    className={`w-7 h-6 rounded text-[11px] font-semibold transition-colors flex items-center justify-center border ${
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition-all flex items-center justify-center border ${
                       isSolo 
-                        ? 'bg-amber-50 text-amber-600 border-amber-200 shadow-xs' 
-                        : 'bg-transparent text-text-secondary border-border/40 hover:bg-surface-elevated'
+                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-xs' 
+                        : 'bg-surface/60 text-text-secondary border-border/60 hover:text-text-primary hover:bg-surface-elevated'
                     }`}
                   >
                     S
@@ -305,23 +315,14 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
                 </div>
 
                 {/* Volumen (Slider) */}
-                <div className="flex-1 w-full flex items-center gap-2 px-2">
+                <div className="flex-1 w-full flex items-center gap-3 px-1">
                   {activeVol === 0 ? (
-                    <VolumeX className="w-3.5 h-3.5 text-text-secondary/50 shrink-0" />
+                    <VolumeX className="w-4 h-4 text-text-secondary/40 shrink-0" />
                   ) : (
-                    <Volume2 className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                    <Volume2 className="w-4 h-4 text-text-secondary shrink-0" />
                   )}
                   
-                  <div className="relative flex-1 flex items-center h-6">
-                    {/* Barra de fondo */}
-                    <div className="absolute inset-0 top-1/2 -translate-y-1/2 h-1.5 bg-surface-elevated border border-border/50 rounded-full overflow-hidden">
-                      {/* Barra de progreso */}
-                      <div 
-                        className={`h-full ${stem.bg} transition-all duration-75`}
-                        style={{ width: `${volumes[stem.id] * 100}%`, opacity: isMuted ? 0.3 : 1 }}
-                      />
-                    </div>
-                    {/* Input real accesible */}
+                  <div className="flex-1 flex items-center">
                     <input 
                       type="range"
                       value={volumes[stem.id]} 
@@ -331,19 +332,11 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
                       aria-label={`Volumen de ${stem.name}`}
                       aria-valuenow={Math.round(volumes[stem.id] * 100)}
                       onChange={(e) => handleVolume(stem.id, e)}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    />
-                    {/* Thumb visual centrado */}
-                    <div 
-                      className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-sm border border-border/80 pointer-events-none transition-all duration-75"
-                      style={{ 
-                        left: `calc(${volumes[stem.id] * 100}% * 0.92 + 2px)`,
-                        opacity: isMuted ? 0.5 : 1 
-                      }}
+                      className="w-full h-1.5 bg-surface border border-border/50 rounded-full appearance-none cursor-pointer accent-indigo-500 transition-all [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:bg-indigo-400 [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110"
                     />
                   </div>
 
-                  <span className={`text-[11px] font-medium w-9 text-right ${activeVol > 0 ? 'text-text-primary' : 'text-text-secondary'}`}>
+                  <span className={`text-xs font-mono font-medium w-10 text-right ${activeVol > 0 ? 'text-text-primary' : 'text-text-secondary/50'}`}>
                     {Math.round(volumes[stem.id] * 100)}%
                   </span>
                 </div>
@@ -353,11 +346,11 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
                   onClick={() => downloadStem(stem.id)}
                   variant="ghost"
                   size="icon"
-                  className="w-7 h-7 text-text-secondary hover:text-text-primary shrink-0"
+                  className="w-8 h-8 text-text-secondary hover:text-text-primary hover:bg-surface-elevated rounded-xl shrink-0"
                   title={`Descargar ${stem.name}`}
                   aria-label={`Descargar pista ${stem.name}`}
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <Download className="w-4 h-4" />
                 </Button>
               </div>
             );

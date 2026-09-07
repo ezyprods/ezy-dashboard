@@ -169,8 +169,25 @@ export function StemsSplitter() {
   };
 
   const processAudioFile = async (targetFile: File, targetEngine: 'cloud' | 'local' = engineType) => {
+    if (task && task.status === 'processing') return;
+
     setFile(targetFile);
     setErrorMsg('');
+
+    // Validación de tamaño para Vercel Serverless (límite de 4.5MB en body)
+    if (targetEngine === 'cloud' && targetFile.size > 4.5 * 1024 * 1024) {
+      if (localAvailable) {
+        // En local, sugerir o cambiar a motor local automáticamente
+        setEngineType('local');
+        localStorage.setItem('ezy_stems_engine', 'local');
+        targetEngine = 'local';
+      } else {
+        const sizeMb = (targetFile.size / (1024 * 1024)).toFixed(1);
+        setErrorMsg(`El archivo (${sizeMb} MB) supera el límite de 4.5 MB para procesamiento Cloud en Vercel. Convierte el archivo a MP3 o usa el Motor Local en tu PC para procesar sin límites de tamaño.`);
+        return;
+      }
+    }
+
     setTask({ 
       id: '', 
       filename: targetFile.name, 
@@ -203,7 +220,9 @@ export function StemsSplitter() {
       if (!res.ok) {
         let msg = resData.error || 'Error al iniciar el proceso';
         if (res.status === 402 || resData.code === 'INSUFFICIENT_CREDIT') {
-          msg = 'Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC (Gratis) o recargar saldo en Replicate.';
+          msg = 'Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC (Gratis e Ilimitado) o recargar saldo en Replicate.';
+        } else if (res.status === 429 || resData.code === 'RATE_LIMITED') {
+          msg = 'Límite de velocidad de Replicate alcanzado. Espera unos segundos o añade un método de pago en Replicate.com para aumentar tu límite.';
         }
         throw new Error(msg);
       }
@@ -238,7 +257,23 @@ export function StemsSplitter() {
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files || !files[0]) return;
-    processAudioFile(files[0], engineType);
+    if (task && task.status === 'processing') return;
+
+    const selected = files[0];
+    const ext = selected.name.split('.').pop()?.toLowerCase();
+    const validExts = ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'aac', 'aiff', 'wma'];
+    
+    if (!selected.type.startsWith('audio/') && (!ext || !validExts.includes(ext))) {
+      setErrorMsg('Por favor selecciona un archivo de audio válido (MP3, WAV, FLAC, M4A u OGG).');
+      return;
+    }
+
+    if (selected.size === 0) {
+      setErrorMsg('El archivo seleccionado está vacío (0 bytes).');
+      return;
+    }
+
+    processAudioFile(selected, engineType);
   };
 
   const startTracking = (taskId: string, predictionId?: string) => {
@@ -652,6 +687,7 @@ export function StemsSplitter() {
                     </div>
                     <p className="font-bold text-lg text-red-500">Error en el proceso</p>
                     <p className="text-sm text-text-secondary max-w-md mx-auto">{task.error}</p>
+                    
                     <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                       {localAvailable && file && (
                         <Button 
@@ -660,27 +696,34 @@ export function StemsSplitter() {
                             localStorage.setItem('ezy_stems_engine', 'local');
                             processAudioFile(file, 'local');
                           }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-1.5"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md flex items-center gap-1.5 text-xs"
                         >
                           <Cpu className="w-4 h-4" />
                           ⚡ Separar ahora con Demucs Local Gratis
                         </Button>
                       )}
 
-                      {(task.error?.toLowerCase().includes('token') || task.error?.toLowerCase().includes('crédito') || task.error?.toLowerCase().includes('replicate') || task.error?.toLowerCase().includes('gpu')) && (
-                        <Button 
-                          onClick={() => { setTask(null); setShowTokenSettings(true); }} 
-                          variant="outline"
-                          className="text-xs"
-                        >
-                          Configurar Token IA
-                        </Button>
-                      )}
+                      <Button 
+                        onClick={() => { setTask(null); setShowTokenSettings(true); }} 
+                        variant="outline"
+                        className="text-xs flex items-center gap-1.5"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        Configurar Token IA
+                      </Button>
 
                       <Button onClick={() => { setTask(null); setErrorMsg(''); }} variant="outline" className="text-xs">
                         Intentar de nuevo
                       </Button>
                     </div>
+
+                    {/* Guía complementaria para usuario en Vercel */}
+                    {!localAvailable && (
+                      <div className="pt-3 text-[11px] text-text-secondary max-w-md mx-auto leading-relaxed border-t border-border/40">
+                        💡 <strong>¿Quieres separar pistas 100% gratis e ilimitado?</strong><br />
+                        Abre Ezy Dashboard en tu ordenador local (<span className="font-mono text-indigo-400">localhost:3000</span>). Allí Demucs Local procesa directamente en tu PC sin saldo ni límites.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -708,8 +751,9 @@ export function StemsSplitter() {
                     onClick={() => setShowTokenSettings(true)} 
                     size="sm" 
                     variant="outline" 
-                    className="text-xs"
+                    className="text-xs flex items-center gap-1.5"
                   >
+                    <Key className="w-3.5 h-3.5" />
                     Conectar Token IA
                   </Button>
                 </div>

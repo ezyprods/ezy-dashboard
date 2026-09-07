@@ -29,9 +29,30 @@ export async function GET(req: NextRequest) {
       return `attachment; filename="${fullAscii}"; filename*=UTF-8''${fullUtf8}`;
     };
 
-    // CASO 1: URL directa proporcionada por el cliente (Cloud / Stateless)
-    if (directUrl && stem) {
-      return NextResponse.redirect(directUrl);
+    const safeName = queryFilename || (taskId ? stemsTasks.get(taskId)?.filename : null) || 'audio';
+    const targetCloudUrl = directUrl || (taskId && stem ? stemsTasks.get(taskId)?.stems?.[stem] : null);
+
+    // CASO 1 & 2: Procesamiento Cloud (directUrl o task en memoria)
+    if (targetCloudUrl && stem) {
+      if (isDownload) {
+        try {
+          const remoteRes = await fetch(targetCloudUrl);
+          if (remoteRes.ok && remoteRes.body) {
+            const contentType = remoteRes.headers.get('content-type') || 'audio/wav';
+            const headers: Record<string, string> = {
+              'Content-Type': contentType,
+              'Content-Disposition': getSafeDisposition(safeName, stem),
+            };
+            const contentLength = remoteRes.headers.get('content-length');
+            if (contentLength) headers['Content-Length'] = contentLength;
+
+            return new NextResponse(remoteRes.body as any, { status: 200, headers });
+          }
+        } catch (fetchErr) {
+          console.error('[Stream] Error streaming remote cloud stem:', fetchErr);
+        }
+      }
+      return NextResponse.redirect(targetCloudUrl);
     }
 
     if (!taskId || !stem) {
@@ -41,13 +62,6 @@ export async function GET(req: NextRequest) {
     const task = stemsTasks.get(taskId);
     if (!task) {
       return NextResponse.json({ error: 'Tarea no encontrada' }, { status: 404 });
-    }
-
-    const safeName = task.filename || queryFilename || 'audio';
-
-    // CASO 2: Procesamiento en la nube (Cloud URLs de Replicate en memoria)
-    if (task.stems && task.stems[stem]) {
-      return NextResponse.redirect(task.stems[stem]!);
     }
 
     // CASO 3: Procesamiento Local

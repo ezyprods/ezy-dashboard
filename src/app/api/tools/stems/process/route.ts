@@ -15,13 +15,24 @@ export async function POST(req: NextRequest) {
     const token = clientToken || process.env.REPLICATE_API_TOKEN;
     const preferredEngine = formData.get('engine') as string | null;
 
-    if (!file) {
-      return NextResponse.json({ error: 'No se proporcionó archivo de audio' }, { status: 400 });
+    if (!file || file.size === 0) {
+      return NextResponse.json({ error: 'No se proporcionó un archivo de audio válido' }, { status: 400 });
+    }
+
+    const fileExt = path.extname(file.name).toLowerCase();
+    const validExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.ogg', '.aac', '.aiff', '.wma'];
+    const isAudioType = file.type.startsWith('audio/') || validExtensions.includes(fileExt);
+
+    if (!isAudioType && !validExtensions.includes(fileExt)) {
+      return NextResponse.json({ 
+        error: 'Formato de archivo no compatible. Selecciona un archivo de audio (MP3, WAV, FLAC, M4A u OGG).' 
+      }, { status: 400 });
     }
 
     const taskId = uuidv4();
     const parsedName = path.parse(file.name).name;
-    const baseName = (parsedName.replace(/[\\/:*?"<>|]/g, ' ').trim()) || 'audio';
+    // Sanitizar nombre para evitar inyección en rutas
+    const baseName = (parsedName.replace(/[\\/:*?"<>|]/g, '_').trim()) || 'audio';
     
     // Si se especifica motor local o no hay token de Replicate, usamos local
     const hasCloudToken = !!token && token.trim().length > 5;
@@ -29,6 +40,14 @@ export async function POST(req: NextRequest) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // En la nube (Vercel Serverless), advertir sobre límite de tamaño (4.5MB en función)
+    if (useCloud && buffer.length > 4.5 * 1024 * 1024) {
+      return NextResponse.json({ 
+        error: 'El archivo supera el límite de 4.5 MB para procesamiento Cloud GPU en Vercel. Por favor compártelo en formato MP3 o usa el Motor Local de tu PC (sin límites de tamaño).',
+        code: 'PAYLOAD_TOO_LARGE'
+      }, { status: 413 });
+    }
 
     if (useCloud) {
       // Iniciar predicción en Replicate (GPU)
@@ -56,11 +75,11 @@ export async function POST(req: NextRequest) {
         const errorData = await createRes.json().catch(() => ({}));
         const status = createRes.status;
 
-        // Check if local Demucs is available as fallback
+        // Check if local Demucs is available as fallback (fast python test)
         let hasLocalDemucs = false;
         try {
           const { execSync } = require('child_process');
-          execSync('python -m demucs --help', { stdio: 'ignore' });
+          execSync('python -c "import demucs"', { stdio: 'ignore', timeout: 3000 });
           hasLocalDemucs = true;
         } catch {
           hasLocalDemucs = false;
@@ -81,7 +100,7 @@ export async function POST(req: NextRequest) {
             mkdirSync(tempDir, { recursive: true });
           }
 
-          const safeExt = path.extname(file.name) || '.wav';
+          const safeExt = fileExt || '.wav';
           const inputPath = path.join(tempDir, `${taskId}_input${safeExt}`);
           await writeFile(inputPath, buffer);
           const outDir = path.join(tempDir, `Stems_${taskId}`);
@@ -99,15 +118,23 @@ export async function POST(req: NextRequest) {
         
         if (status === 402 || (errorData.detail && errorData.detail.toLowerCase().includes('insufficient credit'))) {
           return NextResponse.json({ 
-            error: 'Tu cuenta de Replicate no tiene créditos suficientes para procesar en GPU. Puedes usar Demucs en tu PC o añadir créditos en Replicate.com.',
+            error: 'Tu cuenta de Replicate no tiene créditos suficientes para procesar en GPU. Puedes usar Demucs en tu PC (Gratis) o recargar saldo en Replicate.',
             code: 'INSUFFICIENT_CREDIT',
             canFallbackLocal: false
           }, { status: 402 });
         }
 
+        if (status === 429 || (errorData.detail && errorData.detail.toLowerCase().includes('throttled'))) {
+          return NextResponse.json({ 
+            error: 'Límite de velocidad de Replicate alcanzado. Espera unos segundos o añade un método de pago en Replicate.com para aumentar tu límite.',
+            code: 'RATE_LIMITED',
+            canFallbackLocal: false
+          }, { status: 429 });
+        }
+
         if (status === 401) {
           return NextResponse.json({ 
-            error: 'Token de Replicate inválido o sin permisos.',
+            error: 'Token de Replicate inválido o expirado. Por favor configúralo de nuevo.',
             code: 'INVALID_TOKEN',
             canFallbackLocal: false
           }, { status: 401 });
@@ -116,7 +143,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ 
           error: errorData.detail || errorData.error || 'Error al iniciar la separación en Replicate AI',
           canFallbackLocal: false
-        }, { status: 500 });
+        }, { status: status || 500 });
       }
 
       const prediction = await createRes.json();

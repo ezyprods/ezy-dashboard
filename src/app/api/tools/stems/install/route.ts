@@ -4,28 +4,37 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+let localDemucsCache: { hasPython: boolean; hasLocalDemucs: boolean; timestamp: number } | null = null;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
 export async function GET(req: NextRequest) {
   try {
     const clientToken = req.headers.get('x-replicate-token') || req.nextUrl.searchParams.get('token');
     const cloudToken = clientToken || process.env.REPLICATE_API_TOKEN;
     const hasCloud = Boolean(cloudToken && cloudToken.trim().length > 5);
 
+    const now = Date.now();
     let hasPython = false;
     let hasLocalDemucs = false;
 
-    // Check if python is available locally
-    try {
-      await execAsync('python --version');
-      hasPython = true;
+    if (localDemucsCache && (now - localDemucsCache.timestamp < CACHE_TTL_MS)) {
+      hasPython = localDemucsCache.hasPython;
+      hasLocalDemucs = localDemucsCache.hasLocalDemucs;
+    } else {
       try {
-        await execAsync('python -m demucs --help');
-        hasLocalDemucs = true;
+        await execAsync('python --version');
+        hasPython = true;
+        try {
+          await execAsync('python -m demucs --help');
+          hasLocalDemucs = true;
+        } catch {
+          hasLocalDemucs = false;
+        }
       } catch {
+        hasPython = false;
         hasLocalDemucs = false;
       }
-    } catch {
-      hasPython = false;
-      hasLocalDemucs = false;
+      localDemucsCache = { hasPython, hasLocalDemucs, timestamp: now };
     }
 
     if (hasLocalDemucs) {
