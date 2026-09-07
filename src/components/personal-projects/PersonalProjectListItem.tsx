@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   Play, 
@@ -19,7 +19,8 @@ import {
   ChevronDown,
   ListMusic,
   RefreshCw,
-  UploadCloud
+  UploadCloud,
+  Download
 } from 'lucide-react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { 
@@ -72,10 +73,13 @@ export function PersonalProjectListItem({
   const [showPackMenu, setShowPackMenu] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<PackTrack | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   
   const menuRef = useRef<HTMLDivElement>(null);
   const packMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const categoryConfig = PERSONAL_PROJECT_CATEGORIES[project.category] || PERSONAL_PROJECT_CATEGORIES.beat;
   const statusConfig = PERSONAL_PROJECT_STATUS_CONFIG[project.status] || PERSONAL_PROJECT_STATUS_CONFIG.idea;
@@ -98,12 +102,55 @@ export function PersonalProjectListItem({
       if (packMenuRef.current && !packMenuRef.current.contains(e.target as Node)) {
         setShowPackMenu(false);
       }
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+      }
     };
-    if (showMenu || showPackMenu) {
+    if (showMenu || showPackMenu || contextMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showMenu, showPackMenu]);
+  }, [showMenu, showPackMenu, contextMenu]);
+
+  // Close context menu on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+    if (contextMenu) document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowMenu(false);
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleDownloadAudio = useCallback(async () => {
+    if (!activeFileId) return;
+    setIsDownloading(true);
+    setShowMenu(false);
+    setContextMenu(null);
+    try {
+      const res = await fetch(`/api/audio/${activeFileId}`);
+      if (!res.ok) throw new Error('Error al descargar el audio');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = activeFileName || `${project.title}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [activeFileId, activeFileName, project.title]);
 
   const handlePlay = (e: React.MouseEvent, trackToPlay?: PackTrack) => {
     e.preventDefault();
@@ -165,10 +212,12 @@ export function PersonalProjectListItem({
   };
 
   return (
+    <>
     <div 
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onContextMenu={handleContextMenu}
       className={cn(
         "group relative flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-border/60 hover:border-accent/40 bg-surface/60 hover:bg-surface transition-all duration-150 shadow-sm",
         isThisPlaying && "border-accent/50 bg-accent/5 shadow-[0_0_15px_rgba(108,92,231,0.08)]",
@@ -438,6 +487,19 @@ export function PersonalProjectListItem({
                 </a>
               )}
 
+              {/* Download Audio Option */}
+              {activeFileId && (
+                <button
+                  type="button"
+                  onClick={handleDownloadAudio}
+                  disabled={isDownloading}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors text-left"
+                >
+                  <Download className={cn("w-3.5 h-3.5", isDownloading && "animate-bounce")} />
+                  <span>{isDownloading ? 'Descargando...' : 'Descargar Audio'}</span>
+                </button>
+              )}
+
               {onDelete && (
                 <button
                   type="button"
@@ -456,5 +518,111 @@ export function PersonalProjectListItem({
         </div>
       </div>
     </div>
+
+      {/* Right-click Context Menu (fixed positioning, portal-like) */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-[9999] w-52 bg-surface-elevated border border-border rounded-xl shadow-2xl py-1 animate-in fade-in-50 zoom-in-95"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          {/* Header */}
+          <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-secondary border-b border-border/40 truncate">
+            {project.title}
+          </div>
+
+          <Link
+            href={`/personal-projects/${project.id}`}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface transition-colors"
+            onClick={() => setContextMenu(null)}
+          >
+            <CategoryIcon className="w-3.5 h-3.5 text-accent" />
+            <span>Abrir Proyecto</span>
+          </Link>
+
+          {onReplaceAudio && (
+            <button
+              type="button"
+              onClick={() => {
+                setContextMenu(null);
+                fileInputRef.current?.click();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-accent hover:bg-accent/10 transition-colors text-left"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-accent" />
+              <span>Sustituir Audio</span>
+            </button>
+          )}
+
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setContextMenu(null);
+                onEdit(project);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface transition-colors text-left"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-text-secondary" />
+              <span>Editar Metadatos</span>
+            </button>
+          )}
+
+          {onCloneToArtist && !project.linkedArtistId && (
+            <button
+              type="button"
+              onClick={() => {
+                setContextMenu(null);
+                onCloneToArtist(project);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface transition-colors text-left"
+            >
+              <Share2 className="w-3.5 h-3.5 text-accent" />
+              <span>Ceder a Artista</span>
+            </button>
+          )}
+
+          {project.driveUrl && (
+            <a
+              href={project.driveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-text-primary hover:bg-surface transition-colors"
+              onClick={() => setContextMenu(null)}
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-text-secondary" />
+              <span>Ver en Drive</span>
+            </a>
+          )}
+
+          {/* Download Audio Option */}
+          {activeFileId && (
+            <button
+              type="button"
+              onClick={handleDownloadAudio}
+              disabled={isDownloading}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors text-left"
+            >
+              <Download className={cn("w-3.5 h-3.5", isDownloading && "animate-bounce")} />
+              <span>{isDownloading ? 'Descargando...' : 'Descargar Audio'}</span>
+            </button>
+          )}
+
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => {
+                setContextMenu(null);
+                onDelete(project);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-danger hover:bg-danger/10 transition-colors text-left border-t border-border/40 mt-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Eliminar Proyecto</span>
+            </button>
+          )}
+        </div>
+      )}
+    </>
   );
 }
