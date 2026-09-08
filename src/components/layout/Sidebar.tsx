@@ -1,10 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid, Wrench, Music } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { 
+  LayoutDashboard, 
+  Users, 
+  CreditCard, 
+  MessageSquare, 
+  Settings, 
+  Calendar, 
+  ExternalLink, 
+  Grid, 
+  Wrench, 
+  Music,
+  ChevronLeft,
+  X
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
 
@@ -23,17 +36,68 @@ const secondaryNavItems = [
   { name: 'Configuración', href: '/settings', icon: Settings },
 ];
 
-export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
+}
+
+export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
   const { currentTrack } = useAudio();
   const pathname = usePathname();
-  const router = useRouter();
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
 
+  // Restore pinned preference if desired (default to false: collapsed rail mode)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('ezy_sidebar_pinned');
+      if (stored === 'true') {
+        setIsPinned(true);
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleTogglePin = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsPinned((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('ezy_sidebar_pinned', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  // Close mobile drawer and collapse temporary hover on route change
   useEffect(() => {
     if (isOpen && onClose) {
       onClose();
     }
+    setIsHovered(false);
   }, [pathname]);
+
+  // Click outside to collapse if temporarily hovered/opened
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
+        setIsHovered(false);
+      }
+    };
+    document.addEventListener('click', handleDocumentClick);
+    return () => document.removeEventListener('click', handleDocumentClick);
+  }, []);
+
+  // In mobile drawer mode (isOpen = true), sidebar is never collapsed.
+  // In tablet / desktop mode, sidebar is collapsed (68px rail) unless hovered or pinned.
+  const isCollapsed = isOpen ? false : (!isHovered && !isPinned);
+
+  useEffect(() => {
+    onCollapsedChange?.(isCollapsed);
+  }, [isCollapsed, onCollapsedChange]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.targetTouches[0].clientX);
@@ -58,106 +122,211 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
       <Link
         key={item.name}
         href={item.href}
+        onClick={() => {
+          if (isOpen && onClose) onClose();
+        }}
         className={cn(
-          "w-full flex items-center gap-3 px-4 py-3 md:py-2.5 rounded-lg text-base md:text-sm font-medium transition-all duration-200 group relative overflow-hidden text-left",
+          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group relative whitespace-nowrap text-left",
           isActive 
             ? "text-accent dark:text-accent-light bg-accent/10 font-bold" 
             : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
         )}
-        title={isInsideSubRoute ? `Volver a ${item.name}` : item.name}
+        title={isCollapsed ? item.name : (isInsideSubRoute ? `Volver a ${item.name}` : undefined)}
       >
         {isActive && (
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent rounded-r-full" />
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />
         )}
-        <Icon className={cn(
-          "w-5 h-5 transition-colors",
-          isActive ? "text-accent dark:text-accent-light" : "text-text-secondary group-hover:text-text-primary"
-        )} />
-        {item.name}
+        {/* Icon container: mathematically centered at x = 34px (nav px-3 [12px] + link px-3 [12px] + w-5/2 [10px] = 34px) */}
+        <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
+          <Icon className={cn(
+            "w-[18px] h-[18px] transition-transform duration-150 group-hover:scale-110",
+            isActive ? "text-accent dark:text-accent-light" : "text-text-secondary group-hover:text-text-primary"
+          )} />
+        </div>
+        <span
+          className={cn(
+            "whitespace-nowrap transition-all duration-200 flex-1 min-w-0 truncate",
+            isCollapsed ? "opacity-0 -translate-x-2 pointer-events-none" : "opacity-100 translate-x-0"
+          )}
+        >
+          {item.name}
+        </span>
       </Link>
     );
   };
 
   return (
     <>
+      {/* Mobile Drawer Backdrop */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-background/60 backdrop-blur-sm z-45 md:hidden animate-fade-in"
           onClick={onClose}
         />
       )}
+
       <aside 
+        ref={sidebarRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "bg-surface border-r border-border flex flex-col h-[100dvh] fixed md:sticky top-0 left-0 z-50 md:z-auto transition-transform duration-300 w-[85vw] max-w-[320px] md:w-64",
-          isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full md:translate-x-0 md:shadow-none",
+          "bg-surface border-r border-border flex flex-col h-[100dvh] fixed md:sticky top-0 left-0 z-50 md:z-40 overflow-hidden shrink-0",
+          "transition-[width,transform] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          isOpen 
+            ? "translate-x-0 w-[85vw] max-w-[320px] shadow-2xl" 
+            : "-translate-x-full md:translate-x-0 md:shadow-none",
+          isCollapsed ? "md:w-[68px]" : "md:w-64"
         )}
       >
-        <div className="h-28 flex flex-col items-center px-4 border-b border-border justify-center shrink-0">
-          <Link href="/dashboard" className="flex items-center w-full justify-center group relative -translate-x-2">
-            {/* Light Mode Logo */}
-            <Image
-              src="/logo-black-trimmed.png"
-              alt="EZY"
-              width={240}
-              height={96}
-              className="logo-light h-10 w-auto object-contain transition-transform group-hover:scale-105"
-              priority
-            />
-            {/* Dark Mode Logo (White) */}
-            <Image
-              src="/logo-trimmed.png"
-              alt="EZY"
-              width={240}
-              height={96}
-              className="logo-dark h-10 w-auto object-contain transition-transform group-hover:scale-105"
-              priority
-            />
-          </Link>
-        </div>
+        {/* Inner rigid container: fixed width w-64 ensures 0.00px horizontal jitter during width animation */}
+        <div className="w-64 flex flex-col h-full shrink-0">
+          {/* Header: Logo & Brand */}
+          <div className="h-16 flex items-center justify-between px-3 border-b border-border shrink-0">
+            <Link 
+              href="/dashboard" 
+              onClick={() => {
+                if (isOpen && onClose) onClose();
+              }}
+              className="flex items-center gap-3 rounded-xl p-1 group min-w-0 flex-1 hover:bg-surface-elevated/60 transition-colors"
+              title={isCollapsed ? "EZY Dashboard" : undefined}
+            >
+              {/* Logo Emblem: anchored at x = 34px (px-3 [12px] + p-1 [4px] + w-9/2 [18px] = 34px) */}
+              <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center relative">
+                <Image
+                  src="/logo-black-trimmed.png"
+                  alt="EZY"
+                  width={36}
+                  height={36}
+                  className="logo-light h-7 w-auto object-contain transition-transform duration-200 group-hover:scale-110"
+                  priority
+                />
+                <Image
+                  src="/logo-trimmed.png"
+                  alt="EZY"
+                  width={36}
+                  height={36}
+                  className="logo-dark h-7 w-auto object-contain transition-transform duration-200 group-hover:scale-110"
+                  priority
+                />
+              </div>
 
-        <nav className="flex-1 overflow-y-auto py-5 px-4 space-y-5">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-2 px-3">
-              Principal
-            </p>
-            <div className="space-y-1">
-              {mainNavItems.map(renderNavItem)}
-            </div>
-          </div>
+              {/* Brand text sliding in smoothly on expand */}
+              <div className={cn(
+                "flex flex-col whitespace-nowrap transition-all duration-200 min-w-0 select-none",
+                isCollapsed
+                  ? "opacity-0 -translate-x-2 pointer-events-none w-0 overflow-hidden"
+                  : "opacity-100 translate-x-0 w-auto"
+              )}>
+                <span className="font-black text-sm tracking-wider text-text-primary leading-tight">
+                  EZY PRODS
+                </span>
+                <span className="text-[10px] text-text-secondary font-medium tracking-normal leading-tight">
+                  Music Studio
+                </span>
+              </div>
+            </Link>
 
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-2 px-3">
-              Herramientas & Configuración
-            </p>
-            <div className="space-y-1">
-              {secondaryNavItems.map(renderNavItem)}
-            </div>
-          </div>
-        </nav>
+            {/* Desktop/Tablet Pin Toggle Button */}
+            <button
+              type="button"
+              onClick={handleTogglePin}
+              className={cn(
+                "hidden md:flex items-center justify-center p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-all duration-200 ml-auto shrink-0 cursor-pointer",
+                isCollapsed
+                  ? "opacity-0 pointer-events-none w-0 overflow-hidden p-0"
+                  : "opacity-100"
+              )}
+              title={isPinned ? "Desanclar barra lateral (modo rail automático)" : "Fijar barra lateral abierta"}
+              aria-label={isPinned ? "Desanclar barra lateral" : "Fijar barra lateral"}
+            >
+              <ChevronLeft className={cn("w-4 h-4 transition-transform duration-200", !isPinned && "rotate-180")} />
+            </button>
 
-        <div className={cn(
-          "p-4 border-t border-border mt-auto shrink-0 transition-[padding] duration-300",
-          currentTrack ? "pb-24 md:pb-28" : "pb-4"
-        )}>
-          <div className="glass rounded-xl p-4 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-text-secondary">Conectado a Google Drive</p>
-              <a 
-                href="https://drive.google.com/drive/folders/182uxxUjN7KJJDm1vAZ_AEyKvAwwcTPxY?usp=drive_link" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-text-secondary hover:text-accent transition-colors p-1 rounded hover:bg-surface-elevated"
-                title="Abrir Google Drive"
+            {/* Mobile Drawer Close Button */}
+            {isOpen && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="md:hidden p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors cursor-pointer shrink-0 ml-auto"
+                aria-label="Cerrar menú lateral"
               >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+
+          {/* Navigation Items */}
+          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-3 space-y-3 custom-scrollbar">
+            <div>
+              <p className={cn(
+                "text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 px-3 transition-all duration-200 whitespace-nowrap",
+                isCollapsed ? "opacity-0 h-0 overflow-hidden my-0" : "opacity-100 h-auto"
+              )}>
+                Principal
+              </p>
+              <div className="space-y-1">
+                {mainNavItems.map(renderNavItem)}
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-sm text-success font-medium">
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-              <span>Sincronizado</span>
+
+            <div className={cn(
+              "transition-all duration-200",
+              isCollapsed ? "my-2 mx-1 border-t border-border/40" : "my-2 mx-2 border-t border-border/60"
+            )} />
+
+            <div>
+              <p className={cn(
+                "text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 px-3 transition-all duration-200 whitespace-nowrap",
+                isCollapsed ? "opacity-0 h-0 overflow-hidden my-0" : "opacity-100 h-auto"
+              )}>
+                Herramientas & Configuración
+              </p>
+              <div className="space-y-1">
+                {secondaryNavItems.map(renderNavItem)}
+              </div>
             </div>
+          </nav>
+
+          {/* Footer: Google Drive Connection status & dynamic audio spacing */}
+          <div className={cn(
+            "p-3 border-t border-border mt-auto shrink-0 transition-[padding] duration-300",
+            currentTrack ? "pb-24 md:pb-28" : "pb-3"
+          )}>
+            {isCollapsed ? (
+              <div className="flex flex-col items-center justify-center w-11 h-11 mx-auto rounded-xl glass hover:bg-surface-elevated transition-colors group relative">
+                <a 
+                  href="https://drive.google.com/drive/folders/182uxxUjN7KJJDm1vAZ_AEyKvAwwcTPxY?usp=drive_link" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full h-full flex items-center justify-center text-text-secondary hover:text-accent relative"
+                  title="Google Drive (Sincronizado)"
+                >
+                  <ExternalLink className="w-4 h-4 transition-transform group-hover:scale-110" />
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-success animate-pulse" />
+                </a>
+              </div>
+            ) : (
+              <div className="glass rounded-xl p-3 flex flex-col gap-2 transition-all duration-200">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-text-secondary truncate">Google Drive</p>
+                  <a 
+                    href="https://drive.google.com/drive/folders/182uxxUjN7KJJDm1vAZ_AEyKvAwwcTPxY?usp=drive_link" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-text-secondary hover:text-accent transition-colors p-1 rounded hover:bg-surface-elevated"
+                    title="Abrir Google Drive"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-success font-medium">
+                  <div className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
+                  <span className="truncate">Sincronizado</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </aside>
