@@ -600,17 +600,17 @@ export default function CalendarPage() {
           className="xl:col-span-3 glass rounded-2xl border border-border flex flex-col overflow-hidden shadow-2xl"
         >
           {/* Calendar Nav */}
-          <div className="flex items-center justify-between p-4 border-b border-border bg-surface-elevated/50 z-30">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
-                <ChevronLeft className="w-5 h-5" />
+          <div className="flex items-center justify-between p-2.5 sm:p-4 border-b border-border bg-surface-elevated/50 z-30 gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+              <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="h-8 w-8 p-0 shrink-0">
+                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
               
               {/* Custom Selector Popover */}
               <div className="relative">
                 <button
                   onClick={() => setShowMonthYearSelector(!showMonthYearSelector)}
-                  className="text-xl font-bold text-text-primary capitalize w-48 text-center py-1.5 px-3 rounded-lg hover:bg-surface-elevated transition-colors flex items-center justify-center gap-1.5 group select-none cursor-pointer"
+                  className="text-sm sm:text-xl font-bold text-text-primary capitalize w-auto sm:w-48 text-center py-1.5 px-2 sm:px-3 rounded-lg hover:bg-surface-elevated transition-colors flex items-center justify-center gap-1 sm:gap-1.5 group select-none cursor-pointer truncate"
                 >
                   {format(currentMonth, 'MMMM yyyy', { locale: es })}
                   <span className="text-text-secondary group-hover:text-accent transition-colors text-xs">▼</span>
@@ -678,8 +678,8 @@ export default function CalendarPage() {
                 )}
               </div>
 
-              <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
-                <ChevronRight className="w-5 h-5" />
+              <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="h-8 w-8 p-0 shrink-0">
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
             </div>
             
@@ -691,9 +691,9 @@ export default function CalendarPage() {
                 setCurrentMonth(today);
                 setSelectedDate(today);
               }}
-              className="gap-2 text-accent font-semibold bg-accent/10 hover:bg-accent/20 border border-accent/20"
+              className="gap-1.5 sm:gap-2 text-accent font-semibold bg-accent/10 hover:bg-accent/20 border border-accent/20 shrink-0 px-2.5 sm:px-3 text-xs sm:text-sm"
             >
-              <CalendarDays className="w-4 h-4" /> Hoy
+              <CalendarDays className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" /> <span className="shrink-0">Hoy</span>
             </Button>
           </div>
 

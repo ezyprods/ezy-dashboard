@@ -17,7 +17,7 @@ export function MobileNavbar() {
   const pathname = usePathname();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface-elevated/95 backdrop-blur-xl border-t border-border pb-[env(safe-area-inset-bottom)] animate-slide-up shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface-elevated/95 backdrop-blur-xl border-t border-border pb-[env(safe-area-inset-bottom)] animate-slide-up shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
       <div className="flex items-center justify-around h-[68px] px-2">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);

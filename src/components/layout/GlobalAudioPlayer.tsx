@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { formatMusicalKey } from '@/lib/utils/audio';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2, Download, Share2, Scissors, User, ExternalLink } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2, Download, Share2, Scissors, User, ExternalLink, MoreVertical } from 'lucide-react';
 import { ShareModal } from '@/components/artists/ShareModal';
 import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
 
@@ -18,8 +18,11 @@ export function GlobalAudioPlayer() {
   const { currentTrack, isPlaying, duration, currentTime, togglePlay, seek, volume, setVolume, closePlayer, isLoading } = useAudio();
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isMiniDAWOpen, setIsMiniDAWOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (!currentTrack) return null;
+
+  const artistUrl = currentTrack.pathSegments?.find(seg => seg.url?.startsWith('/artists/'))?.url;
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = Number(e.target.value);
@@ -36,193 +39,287 @@ export function GlobalAudioPlayer() {
 
   return (
     <>
-      <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+68px)] md:bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-50 flex flex-col md:flex-row items-stretch md:items-center p-3 md:py-0 md:px-6 h-auto md:h-24 animate-slide-up shadow-2xl gap-2 md:gap-0">
-      
-      {/* Top half on mobile / Left column on desktop */}
-      <div className="flex items-center justify-between md:w-1/4 md:min-w-[200px] overflow-hidden gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 md:w-14 md:h-14 bg-surface rounded-md flex items-center justify-center overflow-hidden shrink-0 border border-border">
-            {currentTrack.coverArt ? (
-              <img src={currentTrack.coverArt} alt={currentTrack.name} className="w-full h-full object-cover" />
-            ) : (
-              <Music className="w-5 h-5 text-text-secondary" />
-            )}
+      <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+68px)] md:bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-35 md:z-50 animate-slide-up shadow-2xl">
+        
+        {/* ── Mobile Player (Single Row ~58px) ── */}
+        <div className="md:hidden flex flex-col w-full">
+          {/* Top scrubber bar */}
+          <div className="relative w-full h-1 bg-surface cursor-pointer group">
+            <div 
+              className="h-full bg-accent transition-all duration-100" 
+              style={{ width: `${duration ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0}%` }} 
+            />
+            <input
+              type="range"
+              min={0}
+              max={duration || 100}
+              value={currentTime}
+              onChange={handleSeek}
+              aria-label="Progreso del audio"
+              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+            />
           </div>
-          <div className="overflow-hidden">
-            <div className="flex items-center gap-2">
-              <p className="text-xs md:text-sm font-bold text-text-primary truncate" title={currentTrack.name}>{currentTrack.name}</p>
-              {(currentTrack.bpm || currentTrack.musicalKey) && (
-                <div className="flex items-center gap-1 shrink-0">
-                  {currentTrack.bpm && (
-                    <span className="text-[9px] font-mono px-1 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 whitespace-nowrap">
-                      {currentTrack.bpm} BPM
-                    </span>
-                  )}
-                  {currentTrack.musicalKey && (
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border text-violet-400 bg-violet-500/10 border-violet-500/20 whitespace-nowrap tracking-wide">
-                      {formatMusicalKey(currentTrack.musicalKey)}
+
+          <div className="flex items-center justify-between px-3 h-[58px] gap-2">
+            {/* Cover & Title */}
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="w-10 h-10 bg-surface rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-border">
+                {currentTrack.coverArt ? (
+                  <img src={currentTrack.coverArt} alt={currentTrack.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Music className="w-5 h-5 text-text-secondary" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-text-primary truncate" title={currentTrack.name}>
+                    {currentTrack.name}
+                  </p>
+                  {(currentTrack.bpm || currentTrack.musicalKey) && (
+                    <span className="text-[8px] font-mono px-1 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 whitespace-nowrap shrink-0">
+                      {currentTrack.bpm ? `${currentTrack.bpm} BPM` : formatMusicalKey(currentTrack.musicalKey!)}
                     </span>
                   )}
                 </div>
-              )}
+                <p className="text-[10px] text-text-secondary truncate">
+                  {currentTrack.artistName || (currentTrack.pathSegments && currentTrack.pathSegments.length > 0 ? currentTrack.pathSegments[currentTrack.pathSegments.length - 1]?.name : '')}
+                </p>
+              </div>
             </div>
-            {currentTrack.pathSegments && currentTrack.pathSegments.length > 0 ? (
-              <p className="text-[10px] md:text-xs text-text-secondary truncate flex items-center gap-1">
-                {currentTrack.pathSegments.map((seg, i) => (
-                  <React.Fragment key={i}>
-                    {seg.onClick ? (
-                      <button onClick={seg.onClick} className="hover:text-text-primary hover:underline transition-colors text-left truncate">{seg.name}</button>
-                    ) : seg.url ? (
-                      <a 
-                        href={seg.url} 
-                        className="hover:text-text-primary hover:underline transition-colors"
-                        target={seg.url.includes('drive.google.com') ? '_blank' : undefined}
-                        rel={seg.url.includes('drive.google.com') ? 'noopener noreferrer' : undefined}
+
+            {/* Quick Actions */}
+            <div className="flex items-center gap-1 shrink-0">
+              <button 
+                onClick={togglePlay}
+                disabled={isLoading}
+                aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+                className="w-9 h-9 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center disabled:opacity-70 shadow-md active:scale-95 transition-transform"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+              </button>
+
+              <div className="relative">
+                <button
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  aria-label="Más opciones"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+
+                {isMobileMenuOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    />
+                    <div className="absolute bottom-full right-0 mb-2 w-52 bg-surface-elevated border border-border rounded-2xl p-1.5 shadow-2xl z-50 animate-menu-in flex flex-col gap-0.5">
+                      {artistUrl && (
+                        <a
+                          href={artistUrl}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors"
+                        >
+                          <User className="w-4 h-4 text-accent" />
+                          <span>Perfil de Artista</span>
+                        </a>
+                      )}
+                      <a
+                        href={`https://drive.google.com/file/d/${currentTrack.id}/view`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors"
                       >
-                        {seg.name}
+                        <ExternalLink className="w-4 h-4 text-text-secondary" />
+                        <span>Abrir en Drive</span>
                       </a>
-                    ) : (
-                      <span>{seg.name}</span>
-                    )}
-                    {i < currentTrack.pathSegments!.length - 1 && <span>/</span>}
-                  </React.Fragment>
-                ))}
-              </p>
-            ) : currentTrack.artistName ? (
-              <p className="text-[10px] md:text-xs text-text-secondary truncate">{currentTrack.artistName}</p>
-            ) : null}
+                      <button
+                        onClick={() => {
+                          setIsMiniDAWOpen(true);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors text-left"
+                      >
+                        <Scissors className="w-4 h-4 text-accent-light" />
+                        <span>Mini-DAW</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsShareModalOpen(true);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors text-left"
+                      >
+                        <Share2 className="w-4 h-4 text-accent" />
+                        <span>Compartir</span>
+                      </button>
+                      <a
+                        href={`/api/files/${currentTrack.id}?download=true`}
+                        download={currentTrack.name}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors"
+                      >
+                        <Download className="w-4 h-4 text-text-secondary" />
+                        <span>Descargar</span>
+                      </a>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={closePlayer}
+                aria-label="Cerrar reproductor"
+                title="Cerrar reproductor"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-text-secondary hover:text-error hover:bg-surface transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
-        
-        {/* Mobile controls */}
-        <div className="flex flex-wrap items-center justify-end gap-1 md:hidden">
-          {(() => {
-            const artistUrl = currentTrack.pathSegments?.find(seg => seg.url?.startsWith('/artists/'))?.url;
-            if (artistUrl) {
-              return (
-                <a href={artistUrl} className="text-text-secondary hover:text-accent p-1.5" title="Abrir Perfil de Artista">
-                  <User className="w-3.5 h-3.5" />
-                </a>
-              );
-            }
-            return null;
-          })()}
-          <a href={`https://drive.google.com/file/d/${currentTrack.id}/view`} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-accent p-1.5" title="Abrir en Drive">
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-          <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light p-1.5" title="Abrir en Mini-DAW">
-            <Scissors className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => setIsShareModalOpen(true)} className="text-text-secondary hover:text-accent p-1.5" title="Compartir">
-            <Share2 className="w-3.5 h-3.5" />
-          </button>
-          <a href={`/api/files/${currentTrack.id}?download=true`} download={currentTrack.name} className="text-text-secondary hover:text-text-primary p-1.5 mr-1" title="Descargar">
-            <Download className="w-3.5 h-3.5" />
-          </a>
-          <button 
-            onClick={togglePlay}
-            disabled={isLoading}
-            className="w-11 h-11 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center disabled:opacity-70 touch-target shadow-md"
-          >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
-          </button>
-          <button onClick={closePlayer} className="text-text-secondary hover:text-error p-2 min-h-[44px] min-w-[44px] flex items-center justify-center">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
 
-      {/* Center: Progress & Skip Controls */}
-      <div className="flex-1 flex flex-col items-center justify-center max-w-2xl md:px-4">
-        {/* Skip controls: Desktop only */}
-        <div className="hidden md:flex items-center gap-6 mb-2">
-          <button className="text-text-secondary hover:text-text-primary transition-colors">
-            <SkipBack className="w-5 h-5" />
-          </button>
-          
-          <button 
-            onClick={togglePlay}
-            disabled={isLoading}
-            className="w-10 h-10 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-70 disabled:hover:scale-100"
-          >
-            {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
-          </button>
+        {/* ── Desktop Player (h-24) ── */}
+        <div className="hidden md:flex items-center justify-between px-6 h-24 w-full">
+          {/* Left Column: Track Info */}
+          <div className="flex items-center gap-3 w-1/4 min-w-[200px] overflow-hidden">
+            <div className="w-14 h-14 bg-surface rounded-md flex items-center justify-center overflow-hidden shrink-0 border border-border">
+              {currentTrack.coverArt ? (
+                <img src={currentTrack.coverArt} alt={currentTrack.name} className="w-full h-full object-cover" />
+              ) : (
+                <Music className="w-5 h-5 text-text-secondary" />
+              )}
+            </div>
+            <div className="overflow-hidden">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-text-primary truncate" title={currentTrack.name}>{currentTrack.name}</p>
+                {(currentTrack.bpm || currentTrack.musicalKey) && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {currentTrack.bpm && (
+                      <span className="text-[9px] font-mono px-1 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 whitespace-nowrap">
+                        {currentTrack.bpm} BPM
+                      </span>
+                    )}
+                    {currentTrack.musicalKey && (
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded border text-violet-400 bg-violet-500/10 border-violet-500/20 whitespace-nowrap tracking-wide">
+                        {formatMusicalKey(currentTrack.musicalKey)}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {currentTrack.pathSegments && currentTrack.pathSegments.length > 0 ? (
+                <p className="text-xs text-text-secondary truncate flex items-center gap-1">
+                  {currentTrack.pathSegments.map((seg, i) => (
+                    <React.Fragment key={i}>
+                      {seg.onClick ? (
+                        <button onClick={seg.onClick} className="hover:text-text-primary hover:underline transition-colors text-left truncate">{seg.name}</button>
+                      ) : seg.url ? (
+                        <a 
+                          href={seg.url} 
+                          className="hover:text-text-primary hover:underline transition-colors"
+                          target={seg.url.includes('drive.google.com') ? '_blank' : undefined}
+                          rel={seg.url.includes('drive.google.com') ? 'noopener noreferrer' : undefined}
+                        >
+                          {seg.name}
+                        </a>
+                      ) : (
+                        <span>{seg.name}</span>
+                      )}
+                      {i < currentTrack.pathSegments!.length - 1 && <span>/</span>}
+                    </React.Fragment>
+                  ))}
+                </p>
+              ) : currentTrack.artistName ? (
+                <p className="text-xs text-text-secondary truncate">{currentTrack.artistName}</p>
+              ) : null}
+            </div>
+          </div>
 
-          <button className="text-text-secondary hover:text-text-primary transition-colors">
-            <SkipForward className="w-5 h-5" />
-          </button>
-        </div>
+          {/* Center Column: Controls & Scrubber */}
+          <div className="flex-1 flex flex-col items-center justify-center max-w-2xl px-4">
+            <div className="flex items-center gap-6 mb-2">
+              <button className="text-text-secondary hover:text-text-primary transition-colors">
+                <SkipBack className="w-5 h-5" />
+              </button>
+              
+              <button 
+                onClick={togglePlay}
+                disabled={isLoading}
+                className="w-10 h-10 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-70 disabled:hover:scale-100"
+              >
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
+              </button>
 
-        {/* Progress slider: Width fits all screens */}
-        <div className="flex items-center gap-2 w-full">
-          <span className="text-[9px] font-medium text-text-secondary w-8 text-right font-mono">
-            {formatTime(currentTime)}
-          </span>
-          
-          <input
-            type="range"
-            min={0}
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-            className="flex-1 h-3 md:h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 md:[&::-webkit-slider-thumb]:w-2.5 md:[&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer accent-accent"
-          />
-          
-          <span className="text-[9px] font-medium text-text-secondary w-8 font-mono">
-            {formatTime(duration)}
-          </span>
-        </div>
-      </div>
+              <button className="text-text-secondary hover:text-text-primary transition-colors">
+                <SkipForward className="w-5 h-5" />
+              </button>
+            </div>
 
-      {/* Right side: volume and close (desktop only) */}
-      <div className="hidden md:flex w-1/4 min-w-[200px] items-center justify-end gap-4">
-        <div className="flex items-center gap-3 border-r border-border/50 pr-4">
-          {(() => {
-            const artistUrl = currentTrack.pathSegments?.find(seg => seg.url?.startsWith('/artists/'))?.url;
-            if (artistUrl) {
-              return (
+            <div className="flex items-center gap-2 w-full">
+              <span className="text-[9px] font-medium text-text-secondary w-8 text-right font-mono">
+                {formatTime(currentTime)}
+              </span>
+              
+              <input
+                type="range"
+                min={0}
+                max={duration || 100}
+                value={currentTime}
+                onChange={handleSeek}
+                className="flex-1 h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer accent-accent"
+              />
+              
+              <span className="text-[9px] font-medium text-text-secondary w-8 font-mono">
+                {formatTime(duration)}
+              </span>
+            </div>
+          </div>
+
+          {/* Right Column: Actions, Volume & Close */}
+          <div className="w-1/4 min-w-[200px] flex items-center justify-end gap-4">
+            <div className="flex items-center gap-3 border-r border-border/50 pr-4">
+              {artistUrl && (
                 <a href={artistUrl} className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir Perfil de Artista">
                   <User className="w-4 h-4" />
                 </a>
-              );
-            }
-            return null;
-          })()}
-          <a href={`https://drive.google.com/file/d/${currentTrack.id}/view`} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir en Drive">
-            <ExternalLink className="w-4 h-4" />
-          </a>
-          <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir en Mini-DAW">
-            <Scissors className="w-4 h-4" />
-          </button>
-          <button onClick={() => setIsShareModalOpen(true)} className="text-text-secondary hover:text-accent transition-colors" title="Compartir">
-            <Share2 className="w-4 h-4" />
-          </button>
-          <a href={`/api/files/${currentTrack.id}?download=true`} download={currentTrack.name} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar">
-            <Download className="w-4 h-4" />
-          </a>
+              )}
+              <a href={`https://drive.google.com/file/d/${currentTrack.id}/view`} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir en Drive">
+                <ExternalLink className="w-4 h-4" />
+              </a>
+              <button onClick={() => setIsMiniDAWOpen(true)} className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir en Mini-DAW">
+                <Scissors className="w-4 h-4" />
+              </button>
+              <button onClick={() => setIsShareModalOpen(true)} className="text-text-secondary hover:text-accent transition-colors" title="Compartir">
+                <Share2 className="w-4 h-4" />
+              </button>
+              <a href={`/api/files/${currentTrack.id}?download=true`} download={currentTrack.name} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar">
+                <Download className="w-4 h-4" />
+              </a>
+            </div>
+            
+            <div className="flex items-center gap-2 w-32 group">
+              <button onClick={toggleMute} className="text-text-secondary hover:text-text-primary">
+                {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={handleVolume}
+                className="w-full h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-0 group-hover:[&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer transition-all accent-text-secondary"
+              />
+            </div>
+            
+            <button onClick={closePlayer} className="text-text-secondary hover:text-error transition-colors p-2" title="Cerrar reproductor">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-        
-        <div className="flex items-center gap-2 w-32 group">
-          <button onClick={toggleMute} className="text-text-secondary hover:text-text-primary">
-            {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={volume}
-            onChange={handleVolume}
-            className="w-full h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-0 group-hover:[&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer transition-all accent-text-secondary"
-          />
-        </div>
-        
-        <button onClick={closePlayer} className="text-text-secondary hover:text-error transition-colors p-2" title="Cerrar reproductor">
-          <X className="w-5 h-5" />
-        </button>
       </div>
-
-    </div>
       
       {/* Modals */}
       {isShareModalOpen && (

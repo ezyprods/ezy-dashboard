@@ -48,7 +48,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6">
+    <div className="w-full max-w-5xl mx-auto py-8 px-4 sm:px-6 min-w-0 overflow-hidden">
       <div className="flex items-center gap-3 mb-6 md:mb-8">
         <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-gradient-to-br from-surface-elevated to-surface border border-border flex items-center justify-center shadow-lg shrink-0">
           <Settings className="w-5 h-5 md:w-6 md:h-6 text-accent" />
@@ -61,10 +61,10 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-8">
+      <div className="flex flex-col md:flex-row gap-8 w-full min-w-0 overflow-hidden">
         {/* Navigation Sidebar */}
-        <aside className="w-full md:w-64 shrink-0">
-          <nav className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide snap-x snap-mandatory md:snap-none relative">
+        <aside className="w-full md:w-64 shrink-0 min-w-0 overflow-hidden">
+          <nav className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide snap-x snap-mandatory md:snap-none relative w-full">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -101,7 +101,7 @@ export default function SettingsPage() {
         </aside>
 
         {/* Tab Content Area */}
-        <main className="flex-1 min-w-0">
+        <div role="region" aria-label="Contenido de configuración" className="flex-1 min-w-0 w-full overflow-hidden">
           <div className="bg-surface/80 backdrop-blur-2xl p-6 md:p-10 rounded-3xl border border-border/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative overflow-hidden transition-all duration-500 min-h-[500px]">
             {/* Ambient Background Glow */}
             <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-accent/10 rounded-full blur-[100px] pointer-events-none opacity-60" />
@@ -111,7 +111,7 @@ export default function SettingsPage() {
               {renderTab()}
             </div>
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

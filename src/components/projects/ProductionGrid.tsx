@@ -894,7 +894,7 @@ export function ProductionGridBoard({
         </div>
       )}
 
-      <div className="flex items-center gap-6 justify-center pt-2 text-xs text-text-secondary">
+      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 px-2 text-xs text-text-secondary">
         {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
           const Icon = cfg.icon;
           return <div key={key} className="flex items-center gap-1.5"><Icon className={`w-4 h-4 ${cfg.color}`} /><span>{cfg.label}</span></div>;

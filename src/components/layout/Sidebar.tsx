@@ -80,7 +80,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     <>
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40 md:hidden animate-fade-in"
+          className="fixed inset-0 bg-background/60 backdrop-blur-sm z-45 md:hidden animate-fade-in"
           onClick={onClose}
         />
       )}
