@@ -177,13 +177,28 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
 
   const downloadStem = (stemId: string) => {
     const directUrl = stems?.[stemId as keyof typeof stems];
+    const safeBaseName = filename.replace(/\.[^/.]+$/, "") || 'track';
+
+    // Si es un Blob URL generado localmente en el navegador (WebGPU)
+    if (directUrl && directUrl.startsWith('blob:')) {
+      const a = document.createElement('a');
+      a.href = directUrl;
+      a.download = `${safeBaseName}_${stemId}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) document.body.removeChild(a);
+      }, 100);
+      return;
+    }
+
     const downloadUrl = directUrl 
       ? `/api/tools/stems/stream?url=${encodeURIComponent(directUrl)}&stem=${stemId}&filename=${encodeURIComponent(filename)}&download=true`
       : `/api/tools/stems/stream?taskId=${taskId}&stem=${stemId}&filename=${encodeURIComponent(filename)}&download=true`;
 
     const a = document.createElement('a');
     a.href = downloadUrl;
-    a.download = `${filename.replace(/\.[^/.]+$/, "")}_${stemId}.wav`;
+    a.download = `${safeBaseName}_${stemId}.wav`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => {

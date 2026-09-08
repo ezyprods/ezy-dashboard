@@ -19,6 +19,7 @@ import { StemsMixer } from './StemsMixer';
 
 type SetupStatus = 'checking' | 'ready' | 'need_token_or_python' | 'no_demucs' | 'installing' | 'install_error';
 type ProcessStatus = 'idle' | 'processing' | 'completed' | 'error';
+type EngineType = 'browser' | 'cloud' | 'local';
 
 interface Task {
   id: string;
@@ -26,7 +27,7 @@ interface Task {
   filename: string;
   status: ProcessStatus;
   progress: number;
-  engine?: 'cloud' | 'local';
+  engine?: EngineType;
   outputDir?: string;
   stems?: {
     vocals?: string;
@@ -40,9 +41,10 @@ interface Task {
 export function StemsSplitter() {
   const [setupStatus, setSetupStatus] = useState<SetupStatus>('checking');
   const [setupError, setSetupError] = useState('');
-  const [engineType, setEngineType] = useState<'cloud' | 'local'>('cloud');
+  const [engineType, setEngineType] = useState<EngineType>('browser');
   const [cloudAvailable, setCloudAvailable] = useState(false);
   const [localAvailable, setLocalAvailable] = useState(false);
+  const [progressSubtext, setProgressSubtext] = useState('');
   
   // Replicate token state
   const [replicateToken, setReplicateToken] = useState<string>('');
@@ -92,23 +94,21 @@ export function StemsSplitter() {
       setCloudAvailable(isCloudAvail);
       setLocalAvailable(isLocalAvail);
 
-      if (data.status === 'ready') {
-        setSetupStatus('ready');
-        const savedEngine = typeof window !== 'undefined' ? localStorage.getItem('ezy_stems_engine') as 'local' | 'cloud' | null : null;
-        if (savedEngine && (savedEngine === 'local' ? isLocalAvail : isCloudAvail)) {
-          setEngineType(savedEngine);
-        } else {
-          setEngineType(data.engine || (isLocalAvail ? 'local' : 'cloud'));
-        }
-      } else if (data.status === 'no_demucs') {
-        setSetupStatus('no_demucs');
+      // El motor en navegador (WebGPU/WASM) SIEMPRE está listo en cualquier dispositivo
+      setSetupStatus('ready');
+
+      const savedEngine = typeof window !== 'undefined' ? localStorage.getItem('ezy_stems_engine') as EngineType | null : null;
+      if (savedEngine && ((savedEngine === 'local' && isLocalAvail) || (savedEngine === 'cloud' && isCloudAvail) || savedEngine === 'browser')) {
+        setEngineType(savedEngine);
+      } else if (isLocalAvail) {
+        setEngineType('local');
       } else {
-        setSetupStatus('need_token_or_python');
-        setSetupError(data.message || '');
+        setEngineType('browser');
       }
     } catch (e: any) {
-      setSetupStatus('install_error');
-      setSetupError(e.message || 'Error al verificar el motor de IA');
+      // Incluso ante fallo de red con el backend, el motor en navegador sigue listo
+      setSetupStatus('ready');
+      setEngineType('browser');
     }
   };
 
@@ -168,11 +168,12 @@ export function StemsSplitter() {
     }
   };
 
-  const processAudioFile = async (targetFile: File, targetEngine: 'cloud' | 'local' = engineType) => {
+  const processAudioFile = async (targetFile: File, targetEngine: EngineType = engineType) => {
     if (task && task.status === 'processing') return;
 
     setFile(targetFile);
     setErrorMsg('');
+    setProgressSubtext('');
 
     setTask({ 
       id: '', 
@@ -181,6 +182,49 @@ export function StemsSplitter() {
       progress: 5, 
       engine: targetEngine 
     });
+
+    // MODO A: Separación 100% en el Navegador con WebGPU/WASM (0€, sin tokens, ilimitado)
+    if (targetEngine === 'browser') {
+      try {
+        const { separateAudioInBrowser } = await import('@/lib/demucs-browser');
+        const result = await separateAudioInBrowser(targetFile, (info) => {
+          setTask(prev => prev ? { 
+            ...prev, 
+            progress: Math.max(prev.progress, info.progress),
+            error: undefined
+          } : null);
+          setProgressSubtext(info.logMessage || '');
+        });
+
+        setTask({ 
+          id: 'browser_' + Date.now(), 
+          filename: targetFile.name, 
+          status: 'completed', 
+          progress: 100, 
+          engine: 'browser',
+          stems: {
+            vocals: result.vocalsUrl,
+            drums: result.drumsUrl,
+            bass: result.bassUrl,
+            other: result.otherUrl
+          }
+        });
+        setProgressSubtext('');
+      } catch (err: any) {
+        console.error('[Stems Browser Engine] Error:', err);
+        const errorText = err.message || 'Error durante la separación en el navegador';
+        setErrorMsg(errorText);
+        setTask({
+          id: '',
+          filename: targetFile.name,
+          status: 'error',
+          progress: 0,
+          engine: 'browser',
+          error: errorText
+        });
+      }
+      return;
+    }
 
     try {
       let resData: any;
@@ -419,12 +463,14 @@ export function StemsSplitter() {
               Separador de Stems (Demucs IA)
               {setupStatus === 'ready' && (
                 <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                  engineType === 'cloud' 
-                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
-                    : 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20'
+                  engineType === 'browser'
+                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                    : engineType === 'cloud' 
+                      ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' 
+                      : 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20'
                 }`}>
-                  {engineType === 'cloud' ? <Zap className="w-3 h-3 fill-emerald-500" /> : <Cpu className="w-3 h-3" />}
-                  {engineType === 'cloud' ? 'Cloud GPU Activo' : 'Motor Local'}
+                  <Zap className="w-3 h-3 fill-current" />
+                  {engineType === 'browser' ? '🌐 WebGPU Gratis e Ilimitado' : engineType === 'cloud' ? '☁️ Cloud GPU Replicate' : '⚡ Motor Local PC'}
                 </span>
               )}
             </h2>
@@ -627,7 +673,24 @@ export function StemsSplitter() {
                 <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-border/40">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-text-secondary">Motor:</span>
-                    <div className="flex items-center gap-1 p-1 bg-surface-elevated/70 border border-border/60 rounded-xl">
+                    <div className="flex flex-wrap items-center gap-1 p-1 bg-surface-elevated/70 border border-border/60 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEngineType('browser');
+                          localStorage.setItem('ezy_stems_engine', 'browser');
+                          setErrorMsg('');
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          engineType === 'browser'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-text-secondary hover:text-text-primary hover:bg-surface'
+                        }`}
+                      >
+                        <Zap className="w-3.5 h-3.5 fill-current" />
+                        🌐 IA en Navegador (100% Gratis e Ilimitado)
+                      </button>
+
                       {localAvailable && (
                         <button
                           type="button"
@@ -638,12 +701,12 @@ export function StemsSplitter() {
                           }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             engineType === 'local'
-                              ? 'bg-emerald-600 text-white shadow-sm'
+                              ? 'bg-indigo-600 text-white shadow-sm'
                               : 'text-text-secondary hover:text-text-primary hover:bg-surface'
                           }`}
                         >
                           <Cpu className="w-3.5 h-3.5" />
-                          ⚡ Motor Local PC (Gratis e Ilimitado)
+                          ⚡ Demucs PC Local
                         </button>
                       )}
 
@@ -657,11 +720,11 @@ export function StemsSplitter() {
                           }}
                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             engineType === 'cloud'
-                              ? 'bg-indigo-600 text-white shadow-sm'
+                              ? 'bg-purple-600 text-white shadow-sm'
                               : 'text-text-secondary hover:text-text-primary hover:bg-surface'
                           }`}
                         >
-                          <Zap className="w-3.5 h-3.5" />
+                          <ExternalLink className="w-3.5 h-3.5" />
                           ☁️ Cloud GPU (Replicate)
                         </button>
                       )}
@@ -669,7 +732,11 @@ export function StemsSplitter() {
                   </div>
 
                   <span className="text-[11px] text-text-secondary">
-                    {engineType === 'local' ? '✨ Sin límites de saldo ni consumo de API' : '🚀 Procesamiento ultra rápido en GPU dedicada'}
+                    {engineType === 'browser'
+                      ? '✨ 100% Gratis e Ilimitado para ti y todos tus artistas (sin saldo ni servidores)'
+                      : engineType === 'local' 
+                        ? '✨ Sin límites de saldo ni consumo de API' 
+                        : '🚀 Procesamiento ultra rápido en GPU dedicada'}
                   </span>
                 </div>
 
@@ -706,11 +773,13 @@ export function StemsSplitter() {
                           <span className="text-xs font-semibold inline-block py-1 px-2.5 uppercase rounded-full text-indigo-500 bg-indigo-500/10 transition-all">
                             {task.progress >= 100 
                               ? 'Finalizando y empaquetando pistas...' 
-                              : engineType === 'cloud' && task.progress < 28 && file && file.size > 4 * 1024 * 1024
-                                ? 'Subiendo audio a la nube segura...'
-                                : engineType === 'cloud' 
-                                  ? 'Procesando en GPU Cloud...' 
-                                  : 'Separando pistas con Demucs Local...'}
+                              : engineType === 'browser'
+                                ? (progressSubtext.includes('Descargando') ? 'Descargando Modelo IA...' : 'Separando en tu Navegador (100% Gratis)...')
+                                : engineType === 'cloud' && task.progress < 28 && file && file.size > 4 * 1024 * 1024
+                                  ? 'Subiendo audio a la nube segura...'
+                                  : engineType === 'cloud' 
+                                    ? 'Procesando en GPU Cloud...' 
+                                    : 'Separando pistas con Demucs Local...'}
                           </span>
                         </div>
                         <div className="text-right">
@@ -729,9 +798,11 @@ export function StemsSplitter() {
                     <p className="text-xs text-text-secondary animate-pulse">
                       {task.progress >= 100 
                         ? 'Cargando mezclador interactivo...' 
-                        : engineType === 'cloud' && task.progress < 28 && file && file.size > 4 * 1024 * 1024
-                          ? 'Transfiriendo audio a la nube y preparando GPU dedicada...'
-                          : 'Separando frecuencias vocales, percusión, bajo y armonías...'}
+                        : progressSubtext
+                          ? progressSubtext
+                          : engineType === 'cloud' && task.progress < 28 && file && file.size > 4 * 1024 * 1024
+                            ? 'Transfiriendo audio a la nube y preparando GPU dedicada...'
+                            : 'Separando frecuencias vocales, percusión, bajo y armonías...'}
                     </p>
                   </div>
                 )}
