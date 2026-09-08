@@ -243,34 +243,15 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-3 space-y-3 custom-scrollbar">
-            <div>
-              <p className={cn(
-                "text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 px-3 transition-all duration-200 whitespace-nowrap",
-                isCollapsed ? "opacity-0 h-0 overflow-hidden my-0" : "opacity-100 h-auto"
-              )}>
-                Principal
-              </p>
-              <div className="space-y-1">
-                {mainNavItems.map(renderNavItem)}
-              </div>
+          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-3 space-y-2 custom-scrollbar">
+            <div className="space-y-1">
+              {mainNavItems.map(renderNavItem)}
             </div>
 
-            <div className={cn(
-              "transition-all duration-200",
-              isCollapsed ? "my-2 mx-1 border-t border-border/40" : "my-2 mx-2 border-t border-border/60"
-            )} />
+            <div className="my-2 border-t border-border/60" />
 
-            <div>
-              <p className={cn(
-                "text-[10px] font-bold uppercase tracking-widest text-text-secondary/70 mb-1.5 px-3 transition-all duration-200 whitespace-nowrap",
-                isCollapsed ? "opacity-0 h-0 overflow-hidden my-0" : "opacity-100 h-auto"
-              )}>
-                Herramientas & Configuración
-              </p>
-              <div className="space-y-1">
-                {secondaryNavItems.map(renderNavItem)}
-              </div>
+            <div className="space-y-1">
+              {secondaryNavItems.map(renderNavItem)}
             </div>
           </nav>
 
