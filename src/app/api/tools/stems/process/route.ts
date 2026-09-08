@@ -2,26 +2,56 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { writeFile, unlink } from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
 import { spawn } from 'child_process';
 import { stemsTasks, broadcastStems } from '../state';
+import { getDriveService } from '@/lib/drive';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    const clientToken = req.headers.get('x-replicate-token') || (formData.get('replicateToken') as string | null);
-    const token = clientToken || process.env.REPLICATE_API_TOKEN;
-    const preferredEngine = formData.get('engine') as string | null;
+    let driveFileId: string | null = null;
+    let file: File | null = null;
+    let filename = 'audio.mp3';
+    let fileType = 'audio/mpeg';
+    let preferredEngine: string | null = null;
+    let clientToken: string | null = null;
 
-    if (!file || file.size === 0) {
+    const contentType = req.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      driveFileId = body.driveFileId || null;
+      filename = body.filename || 'audio.mp3';
+      fileType = body.mimeType || 'audio/mpeg';
+      preferredEngine = body.engine || null;
+      clientToken = req.headers.get('x-replicate-token') || body.replicateToken || null;
+    } else {
+      const formData = await req.formData();
+      file = formData.get('file') as File | null;
+      driveFileId = (formData.get('driveFileId') as string) || null;
+      if (file) {
+        filename = file.name;
+        fileType = file.type || 'audio/mpeg';
+      } else if (formData.get('filename')) {
+        filename = formData.get('filename') as string;
+      }
+      preferredEngine = formData.get('engine') as string | null;
+      clientToken = req.headers.get('x-replicate-token') || (formData.get('replicateToken') as string | null);
+    }
+
+    const token = clientToken || process.env.REPLICATE_API_TOKEN;
+
+    if (!file && !driveFileId) {
       return NextResponse.json({ error: 'No se proporcionó un archivo de audio válido' }, { status: 400 });
     }
 
-    const fileExt = path.extname(file.name).toLowerCase();
+    const fileExt = path.extname(filename).toLowerCase();
     const validExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.ogg', '.aac', '.aiff', '.wma'];
-    const isAudioType = file.type.startsWith('audio/') || validExtensions.includes(fileExt);
+    const isAudioType = fileType.startsWith('audio/') || validExtensions.includes(fileExt);
 
     if (!isAudioType && !validExtensions.includes(fileExt)) {
       return NextResponse.json({ 
@@ -30,31 +60,108 @@ export async function POST(req: NextRequest) {
     }
 
     const taskId = uuidv4();
-    const parsedName = path.parse(file.name).name;
-    // Sanitizar nombre para evitar inyección en rutas
+    const parsedName = path.parse(filename).name;
     const baseName = (parsedName.replace(/[\\/:*?"<>|]/g, '_').trim()) || 'audio';
     
     // Si se especifica motor local o no hay token de Replicate, usamos local
     const hasCloudToken = !!token && token.trim().length > 5;
     const useCloud = preferredEngine === 'local' ? false : hasCloudToken;
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    // En la nube (Vercel Serverless), advertir sobre límite de tamaño (4.5MB en función)
-    if (useCloud && buffer.length > 4.5 * 1024 * 1024) {
-      return NextResponse.json({ 
-        error: 'El archivo supera el límite de 4.5 MB para procesamiento Cloud GPU en Vercel. Por favor compártelo en formato MP3 o usa el Motor Local de tu PC (sin límites de tamaño).',
-        code: 'PAYLOAD_TOO_LARGE'
-      }, { status: 413 });
-    }
-
     if (useCloud) {
-      // Iniciar predicción en Replicate (GPU)
-      const base64Data = buffer.toString('base64');
-      const mimeType = file.type || 'audio/mpeg';
-      const audioDataUri = `data:${mimeType};base64,${base64Data}`;
+      // PROCESAMIENTO EN LA NUBE (Zero-Disk en Vercel)
+      let audioInputUrl: string | undefined;
+      let replicateFileId: string | undefined;
 
+      if (driveFileId) {
+        // CASO A: Archivo transferido vía puente seguro Google Drive
+        try {
+          const drive = getDriveService();
+          const fileStream = await drive.files.get({
+            fileId: driveFileId,
+            alt: 'media',
+            supportsAllDrives: true
+          }, { responseType: 'stream' });
+
+          const chunks: Buffer[] = [];
+          for await (const chunk of (fileStream.data as any)) {
+            chunks.push(Buffer.from(chunk));
+          }
+          const audioBuffer = Buffer.concat(chunks);
+
+          // ¡BORRADO INMEDIATO DE GOOGLE DRIVE! Garantiza 0 bytes de espacio ocupado
+          drive.files.delete({ fileId: driveFileId, supportsAllDrives: true }).catch(err => {
+            console.error('[Stems] Error eliminando archivo temporal de Drive:', err);
+          });
+
+          // Subir buffer en RAM directamente a Replicate /v1/files (SIN tocar disco de Vercel)
+          const repFormData = new FormData();
+          repFormData.append('content', new Blob([audioBuffer], { type: fileType }), `${baseName}${fileExt || '.mp3'}`);
+
+          const uploadRes = await fetch('https://api.replicate.com/v1/files', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token!.trim()}` },
+            body: repFormData
+          });
+
+          if (!uploadRes.ok) {
+            const uploadErr = await uploadRes.json().catch(() => ({}));
+            throw new Error(uploadErr.detail || uploadErr.error || 'Error al transferir audio a Replicate GPU');
+          }
+
+          const fileData = await uploadRes.json();
+          audioInputUrl = fileData.urls?.get;
+          replicateFileId = fileData.id;
+
+        } catch (bridgeErr: any) {
+          console.error('[Stems] Error en puente zero-disk Drive -> Replicate:', bridgeErr);
+          // Si falló, intentar borrar de Drive por seguridad
+          if (driveFileId) {
+            getDriveService().files.delete({ fileId: driveFileId, supportsAllDrives: true }).catch(() => {});
+          }
+          return NextResponse.json({ 
+            error: bridgeErr.message || 'Error al preparar audio para procesamiento en la nube',
+            code: 'BRIDGE_ERROR'
+          }, { status: 500 });
+        }
+
+      } else if (file) {
+        // CASO B: Archivo pequeño (< 4MB) enviado directamente en el cuerpo
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+
+        // Subir a Replicate /v1/files en RAM
+        try {
+          const repFormData = new FormData();
+          repFormData.append('content', new Blob([buffer], { type: file.type || 'audio/mpeg' }), file.name);
+
+          const uploadRes = await fetch('https://api.replicate.com/v1/files', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token!.trim()}` },
+            body: repFormData
+          });
+
+          if (uploadRes.ok) {
+            const fileData = await uploadRes.json();
+            audioInputUrl = fileData.urls?.get;
+            replicateFileId = fileData.id;
+          } else {
+            // Fallback a data URI para archivos pequeños
+            const base64Data = buffer.toString('base64');
+            const mimeType = file.type || 'audio/mpeg';
+            audioInputUrl = `data:${mimeType};base64,${base64Data}`;
+          }
+        } catch {
+          const base64Data = buffer.toString('base64');
+          const mimeType = file.type || 'audio/mpeg';
+          audioInputUrl = `data:${mimeType};base64,${base64Data}`;
+        }
+      }
+
+      if (!audioInputUrl) {
+        return NextResponse.json({ error: 'No se pudo preparar el audio para la IA' }, { status: 500 });
+      }
+
+      // Iniciar predicción en Replicate (GPU)
       const createRes = await fetch('https://api.replicate.com/v1/predictions', {
         method: 'POST',
         headers: {
@@ -62,10 +169,9 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          // cjwbw/demucs official active version
           version: '25a173108cff36ef9f80f854c162d01df9e6528be175794b81158fa03836d953',
           input: {
-            audio: audioDataUri,
+            audio: audioInputUrl,
             model_name: 'htdemucs'
           }
         })
@@ -75,25 +181,38 @@ export async function POST(req: NextRequest) {
         const errorData = await createRes.json().catch(() => ({}));
         const status = createRes.status;
 
-        // Check if local Demucs is available as fallback (fast python test)
-        let hasLocalDemucs = false;
-        try {
-          const { execSync } = require('child_process');
-          execSync('python -c "import demucs"', { stdio: 'ignore', timeout: 3000 });
-          hasLocalDemucs = true;
-        } catch {
-          hasLocalDemucs = false;
+        // Limpiar archivo en Replicate si fue creado
+        if (replicateFileId) {
+          fetch(`https://api.replicate.com/v1/files/${replicateFileId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token!.trim()}` }
+          }).catch(() => {});
         }
 
-        if (hasLocalDemucs) {
+        // Si estamos en entorno local, comprobar si hay Python para fallback
+        const isVercel = Boolean(process.env.VERCEL);
+        let hasLocalDemucs = false;
+        if (!isVercel && file) {
+          try {
+            const { execSync } = require('child_process');
+            execSync('python -c "import demucs"', { stdio: 'ignore', timeout: 3000 });
+            hasLocalDemucs = true;
+          } catch {
+            hasLocalDemucs = false;
+          }
+        }
+
+        if (hasLocalDemucs && file) {
           console.log('[Stems] Replicate error, automatically falling back to Local Demucs...');
           stemsTasks.set(taskId, {
             id: taskId,
-            filename: file.name,
+            filename,
             status: 'processing',
             progress: 5,
             engine: 'local'
           });
+
+          cleanupOldLocalStems().catch(console.error);
 
           const tempDir = path.join(os.tmpdir(), 'ezy_audio_tools');
           if (!existsSync(tempDir)) {
@@ -102,7 +221,8 @@ export async function POST(req: NextRequest) {
 
           const safeExt = fileExt || '.wav';
           const inputPath = path.join(tempDir, `${taskId}_input${safeExt}`);
-          await writeFile(inputPath, buffer);
+          const bytes = await file.arrayBuffer();
+          await writeFile(inputPath, Buffer.from(bytes));
           const outDir = path.join(tempDir, `Stems_${taskId}`);
 
           processDemucsLocal(taskId, inputPath, outDir, baseName).catch(console.error);
@@ -152,14 +272,14 @@ export async function POST(req: NextRequest) {
       stemsTasks.set(taskId, {
         id: taskId,
         predictionId,
-        filename: file.name,
+        filename,
         status: 'processing',
         progress: 10,
         engine: 'cloud'
       });
 
-      // Polling en background (para entornos con soporte de fondo)
-      processCloudReplicate(taskId, predictionId, token!.trim()).catch(console.error);
+      // Polling en background (y limpieza del archivo temporal en Replicate al terminar)
+      processCloudReplicate(taskId, predictionId, token!.trim(), replicateFileId).catch(console.error);
 
       return NextResponse.json({ 
         success: true, 
@@ -169,10 +289,17 @@ export async function POST(req: NextRequest) {
       });
 
     } else {
-      // Iniciar procesamiento local en PC
+      // PROCESAMIENTO LOCAL EN PC (Gratis)
+      if (!file) {
+        return NextResponse.json({ error: 'Se requiere el archivo de audio para procesamiento local' }, { status: 400 });
+      }
+
+      // Limpieza preventiva de tareas antiguas para no saturar el disco del usuario
+      cleanupOldLocalStems().catch(console.error);
+
       stemsTasks.set(taskId, {
         id: taskId,
-        filename: file.name,
+        filename,
         status: 'pending',
         progress: 0,
         engine: 'local'
@@ -183,9 +310,10 @@ export async function POST(req: NextRequest) {
         mkdirSync(tempDir, { recursive: true });
       }
 
-      const safeExt = path.extname(file.name) || '.wav';
+      const safeExt = path.extname(filename) || '.wav';
       const inputPath = path.join(tempDir, `${taskId}_input${safeExt}`);
-      await writeFile(inputPath, buffer);
+      const bytes = await file.arrayBuffer();
+      await writeFile(inputPath, Buffer.from(bytes));
       const outDir = path.join(tempDir, `Stems_${taskId}`);
 
       processDemucsLocal(taskId, inputPath, outDir, baseName).catch(console.error);
@@ -198,11 +326,40 @@ export async function POST(req: NextRequest) {
     }
 
   } catch (e: any) {
+    console.error('[Stems Process] Fatal error:', e);
     return NextResponse.json({ error: e.message || 'Error interno del servidor' }, { status: 500 });
   }
 }
 
-async function processCloudReplicate(taskId: string, predictionId: string, token: string) {
+/**
+ * Limpieza automática de carpetas temporales locales de más de 30 minutos
+ * Garantiza que el disco del ordenador nunca se llene con stems antiguos.
+ */
+async function cleanupOldLocalStems() {
+  try {
+    const tempDir = path.join(os.tmpdir(), 'ezy_audio_tools');
+    if (!existsSync(tempDir)) return;
+    const items = await fs.promises.readdir(tempDir, { withFileTypes: true });
+    const now = Date.now();
+    const maxAge = 30 * 60 * 1000; // 30 minutos
+
+    for (const item of items) {
+      const itemPath = path.join(tempDir, item.name);
+      const stat = await fs.promises.stat(itemPath).catch(() => null);
+      if (stat && (now - stat.mtimeMs > maxAge)) {
+        if (item.isDirectory()) {
+          await fs.promises.rm(itemPath, { recursive: true, force: true }).catch(() => {});
+        } else {
+          await fs.promises.unlink(itemPath).catch(() => {});
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Stems] Cleanup error:', e);
+  }
+}
+
+async function processCloudReplicate(taskId: string, predictionId: string, token: string, replicateFileId?: string) {
   const task = stemsTasks.get(taskId);
   if (!task) return;
 
@@ -244,8 +401,23 @@ async function processCloudReplicate(taskId: string, predictionId: string, token
         };
 
         broadcastStems(taskId, { type: 'update', task });
+
+        // Limpiar archivo temporal en Replicate tras el éxito
+        if (replicateFileId) {
+          fetch(`https://api.replicate.com/v1/files/${replicateFileId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).catch(() => {});
+        }
+
       } else if (pollData.status === 'failed' || pollData.status === 'canceled') {
         isFinished = true;
+        if (replicateFileId) {
+          fetch(`https://api.replicate.com/v1/files/${replicateFileId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          }).catch(() => {});
+        }
         throw new Error(pollData.error || 'La separación en la nube fue cancelada o falló');
       }
     }
@@ -266,7 +438,6 @@ async function processDemucsLocal(taskId: string, inputPath: string, outDir: str
   broadcastStems(taskId, { type: 'update', task });
 
   try {
-    // python -m demucs.separate -n htdemucs "inputPath" -o "outDir"
     const args = ['-m', 'demucs.separate', '-n', 'htdemucs', inputPath, '-o', outDir];
     const demucsProc = spawn('python', args);
 
@@ -310,12 +481,11 @@ async function processDemucsLocal(taskId: string, inputPath: string, outDir: str
       demucsProc.on('error', reject);
     });
 
-    // Clean temp
+    // Clean input temp file immediately
     await unlink(inputPath).catch(() => {});
 
     task.status = 'completed';
     task.progress = 100;
-    // Demucs output structure: outDir / htdemucs / inputBasename / vocals.wav
     const inputBasename = path.parse(inputPath).name;
     const finalDir = path.join(outDir, 'htdemucs', inputBasename);
     task.outputDir = finalDir; 

@@ -174,20 +174,6 @@ export function StemsSplitter() {
     setFile(targetFile);
     setErrorMsg('');
 
-    // Validación de tamaño para Vercel Serverless (límite de 4.5MB en body)
-    if (targetEngine === 'cloud' && targetFile.size > 4.5 * 1024 * 1024) {
-      if (localAvailable) {
-        // En local, sugerir o cambiar a motor local automáticamente
-        setEngineType('local');
-        localStorage.setItem('ezy_stems_engine', 'local');
-        targetEngine = 'local';
-      } else {
-        const sizeMb = (targetFile.size / (1024 * 1024)).toFixed(1);
-        setErrorMsg(`El archivo (${sizeMb} MB) supera el límite de 4.5 MB para procesamiento Cloud en Vercel. Convierte el archivo a MP3 o usa el Motor Local en tu PC para procesar sin límites de tamaño.`);
-        return;
-      }
-    }
-
     setTask({ 
       id: '', 
       filename: targetFile.name, 
@@ -197,34 +183,118 @@ export function StemsSplitter() {
     });
 
     try {
-      const formData = new FormData();
-      formData.append('file', targetFile);
-      formData.append('engine', targetEngine);
-      if (replicateToken) {
-        formData.append('replicateToken', replicateToken);
-      }
+      let resData: any;
 
-      const headers: Record<string, string> = {};
-      if (replicateToken) {
-        headers['x-replicate-token'] = replicateToken;
-      }
+      // Si el archivo supera 4 MB en modo Cloud, usar puente seguro zero-disk
+      if (targetEngine === 'cloud' && targetFile.size > 4 * 1024 * 1024) {
+        // 1. Obtener sesión de subida temporal directa (resumable)
+        const sessionRes = await fetch('/api/tools/stems/upload-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: targetFile.name,
+            mimeType: targetFile.type || 'audio/mpeg'
+          })
+        });
 
-      const res = await fetch('/api/tools/stems/process', {
-        method: 'POST',
-        headers,
-        body: formData
-      });
-
-      const resData = await res.json();
-
-      if (!res.ok) {
-        let msg = resData.error || 'Error al iniciar el proceso';
-        if (res.status === 402 || resData.code === 'INSUFFICIENT_CREDIT') {
-          msg = 'Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC (Gratis e Ilimitado) o recargar saldo en Replicate.';
-        } else if (res.status === 429 || resData.code === 'RATE_LIMITED') {
-          msg = 'Límite de velocidad de Replicate alcanzado. Espera unos segundos o añade un método de pago en Replicate.com para aumentar tu límite.';
+        if (!sessionRes.ok) {
+          const errData = await sessionRes.json().catch(() => ({}));
+          throw new Error(errData.error || 'Error al preparar la subida segura del audio');
         }
-        throw new Error(msg);
+
+        const { uploadUrl } = await sessionRes.json();
+
+        // 2. Subir directamente a almacenamiento temporal con progreso (5% a 25%)
+        const driveFileId = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('PUT', uploadUrl);
+          xhr.setRequestHeader('Content-Type', targetFile.type || 'application/octet-stream');
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && e.total > 0) {
+              const uploadProg = Math.min(25, 5 + Math.round((e.loaded / e.total) * 20));
+              setTask(prev => prev ? { ...prev, progress: uploadProg } : null);
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const data = JSON.parse(xhr.responseText);
+                resolve(data.id);
+              } catch {
+                reject(new Error('Respuesta inválida al procesar la subida'));
+              }
+            } else {
+              reject(new Error(`Error al transferir el audio (${xhr.status})`));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error('Error de conexión al transferir el audio'));
+          xhr.send(targetFile);
+        });
+
+        // 3. Invocar procesador con el ID temporal (se transferirá a Replicate y se borrará de inmediato)
+        setTask(prev => prev ? { ...prev, progress: 28 } : null);
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (replicateToken) {
+          headers['x-replicate-token'] = replicateToken;
+        }
+
+        const res = await fetch('/api/tools/stems/process', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            driveFileId,
+            filename: targetFile.name,
+            mimeType: targetFile.type || 'audio/mpeg',
+            engine: 'cloud',
+            replicateToken: replicateToken || undefined
+          })
+        });
+
+        resData = await res.json();
+        if (!res.ok) {
+          let msg = resData.error || 'Error al iniciar el proceso';
+          if (res.status === 402 || resData.code === 'INSUFFICIENT_CREDIT') {
+            msg = 'Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC (Gratis e Ilimitado) o recargar saldo en Replicate.';
+          } else if (res.status === 429 || resData.code === 'RATE_LIMITED') {
+            msg = 'Límite de velocidad de Replicate alcanzado. Espera unos segundos o añade un método de pago en Replicate.com para aumentar tu límite.';
+          }
+          throw new Error(msg);
+        }
+
+      } else {
+        // Archivos <= 4MB o modo local: subida directa vía FormData
+        const formData = new FormData();
+        formData.append('file', targetFile);
+        formData.append('engine', targetEngine);
+        if (replicateToken) {
+          formData.append('replicateToken', replicateToken);
+        }
+
+        const headers: Record<string, string> = {};
+        if (replicateToken) {
+          headers['x-replicate-token'] = replicateToken;
+        }
+
+        const res = await fetch('/api/tools/stems/process', {
+          method: 'POST',
+          headers,
+          body: formData
+        });
+
+        resData = await res.json();
+
+        if (!res.ok) {
+          let msg = resData.error || 'Error al iniciar el proceso';
+          if (res.status === 402 || resData.code === 'INSUFFICIENT_CREDIT') {
+            msg = 'Tu cuenta de Replicate no tiene créditos suficientes para GPU. Puedes usar Demucs en tu PC (Gratis e Ilimitado) o recargar saldo en Replicate.';
+          } else if (res.status === 429 || resData.code === 'RATE_LIMITED') {
+            msg = 'Límite de velocidad de Replicate alcanzado. Espera unos segundos o añade un método de pago en Replicate.com para aumentar tu límite.';
+          }
+          throw new Error(msg);
+        }
       }
 
       const { taskId, predictionId, engine } = resData;
@@ -236,7 +306,7 @@ export function StemsSplitter() {
         predictionId, 
         filename: targetFile.name, 
         status: 'processing', 
-        progress: 10,
+        progress: Math.max(resData.progress || 10, 30), 
         engine: finalEngine 
       });
 
@@ -636,9 +706,11 @@ export function StemsSplitter() {
                           <span className="text-xs font-semibold inline-block py-1 px-2.5 uppercase rounded-full text-indigo-500 bg-indigo-500/10 transition-all">
                             {task.progress >= 100 
                               ? 'Finalizando y empaquetando pistas...' 
-                              : engineType === 'cloud' 
-                                ? 'Procesando en GPU Cloud...' 
-                                : 'Separando pistas con Demucs Local...'}
+                              : engineType === 'cloud' && task.progress < 28 && file && file.size > 4 * 1024 * 1024
+                                ? 'Subiendo audio a la nube segura...'
+                                : engineType === 'cloud' 
+                                  ? 'Procesando en GPU Cloud...' 
+                                  : 'Separando pistas con Demucs Local...'}
                           </span>
                         </div>
                         <div className="text-right">
@@ -657,7 +729,9 @@ export function StemsSplitter() {
                     <p className="text-xs text-text-secondary animate-pulse">
                       {task.progress >= 100 
                         ? 'Cargando mezclador interactivo...' 
-                        : 'Separando frecuencias vocales, percusión, bajo y armonías...'}
+                        : engineType === 'cloud' && task.progress < 28 && file && file.size > 4 * 1024 * 1024
+                          ? 'Transfiriendo audio a la nube y preparando GPU dedicada...'
+                          : 'Separando frecuencias vocales, percusión, bajo y armonías...'}
                     </p>
                   </div>
                 )}
