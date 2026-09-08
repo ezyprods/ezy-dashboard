@@ -57,25 +57,25 @@ const TOOLS = [
 
 export function ToolsHub() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 animate-in fade-in zoom-in-95 duration-300">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4 lg:gap-6 animate-in fade-in zoom-in-95 duration-300">
         {TOOLS.map(tool => (
           <Link
             key={tool.id}
             href={`/tools/${tool.id}`}
-            className="group relative flex flex-col items-start p-6 rounded-[24px] border border-border/60 bg-surface/50 backdrop-blur-xl hover:bg-surface-elevated hover:border-accent/50 transition-all duration-300 text-left overflow-hidden h-full"
+            className="group relative flex flex-col items-start p-3.5 sm:p-5 lg:p-6 rounded-2xl sm:rounded-[24px] border border-border/60 bg-surface/50 backdrop-blur-xl hover:bg-surface-elevated hover:border-accent/50 transition-all duration-300 text-left overflow-hidden h-full"
           >
             <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             
-            <div className={cn("p-3 rounded-2xl mb-4 transition-transform duration-300 group-hover:scale-110", tool.bg, tool.color)}>
-              <tool.icon className="w-6 h-6" />
+            <div className={cn("p-2 sm:p-3 rounded-xl sm:rounded-2xl mb-2.5 sm:mb-4 transition-transform duration-300 group-hover:scale-110 shrink-0", tool.bg, tool.color)}>
+              <tool.icon className="w-4 h-4 sm:w-6 sm:h-6" />
             </div>
             
-            <h3 className="text-lg font-bold text-text-primary mb-2 group-hover:text-accent transition-colors">
+            <h3 className="text-xs sm:text-base lg:text-lg font-bold text-text-primary mb-1 sm:mb-2 group-hover:text-accent transition-colors line-clamp-1">
               {tool.name}
             </h3>
             
-            <p className="text-sm text-text-secondary leading-relaxed">
+            <p className="text-[11px] sm:text-xs lg:text-sm text-text-secondary leading-snug sm:leading-relaxed line-clamp-2">
               {tool.description}
             </p>
           </Link>

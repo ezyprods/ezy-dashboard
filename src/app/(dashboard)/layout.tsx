@@ -20,18 +20,23 @@ export default function DashboardLayout({
 }) {
   const { currentTrack } = useAudio();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStart(e.targetTouches[0].clientX);
+    const touch = e.targetTouches[0];
+    setTouchStart({ x: touch.clientX, y: touch.clientY });
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStart === null) return;
-    const touchEnd = e.changedTouches[0].clientX;
-    const isSwipeRight = touchEnd - touchStart > 50;
-    // Only open if the swipe started near the left edge (e.g. within 40px)
-    if (isSwipeRight && touchStart < 40) {
+    if (!touchStart) return;
+    const touch = e.changedTouches[0];
+    const deltaX = touch.clientX - touchStart.x;
+    const deltaY = touch.clientY - touchStart.y;
+    
+    // Predominantly horizontal swipe right with at least 45px displacement
+    const isSwipeRight = deltaX > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
+    // Open if the swipe starts anywhere in the left portion of the screen (within 150px)
+    if (isSwipeRight && touchStart.x < 150) {
       setIsSidebarOpen(true);
     }
     setTouchStart(null);
@@ -43,7 +48,8 @@ export default function DashboardLayout({
         <AppDataProvider>
           <GlobalDragDropProvider>
             <div 
-              className="flex h-[100dvh] overflow-hidden bg-background"
+              className="flex h-[100dvh] overflow-hidden bg-background overscroll-x-none"
+              style={{ overscrollBehaviorX: 'none' }}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
             >

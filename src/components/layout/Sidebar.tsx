@@ -175,24 +175,24 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
           "bg-surface border-r border-border flex flex-col h-[100dvh] fixed md:sticky top-0 left-0 z-50 md:z-40 overflow-hidden shrink-0",
           "transition-[width,transform] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]",
           isOpen 
-            ? "translate-x-0 w-[85vw] max-w-[320px] shadow-2xl" 
+            ? "translate-x-0 w-64 max-w-[calc(100vw-3rem)] shadow-2xl" 
             : "-translate-x-full md:translate-x-0 md:shadow-none",
           isCollapsed ? "md:w-[68px]" : "md:w-64"
         )}
       >
         {/* Inner rigid container: fixed width w-64 ensures 0.00px horizontal jitter during width animation */}
         <div className="w-64 flex flex-col h-full shrink-0">
-          {/* Header: Logo & Brand */}
+          {/* Header: Logo Only */}
           <div className="h-16 flex items-center justify-between px-3 border-b border-border shrink-0">
             <Link 
               href="/dashboard" 
               onClick={() => {
                 if (isOpen && onClose) onClose();
               }}
-              className="flex items-center gap-3 rounded-xl p-1 group min-w-0 flex-1 hover:bg-surface-elevated/60 transition-colors"
-              title={isCollapsed ? "EZY Dashboard" : undefined}
+              className="flex items-center rounded-xl p-1 group shrink-0 hover:bg-surface-elevated/60 transition-colors"
+              title="EZY Dashboard"
             >
-              {/* Logo Emblem: anchored at x = 34px (px-3 [12px] + p-1 [4px] + w-9/2 [18px] = 34px) */}
+              {/* Logo Emblem */}
               <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center relative">
                 <Image
                   src="/logo-black-trimmed.png"
@@ -210,21 +210,6 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
                   className="logo-dark h-7 w-auto object-contain transition-transform duration-200 group-hover:scale-110"
                   priority
                 />
-              </div>
-
-              {/* Brand text sliding in smoothly on expand */}
-              <div className={cn(
-                "flex flex-col whitespace-nowrap transition-all duration-200 min-w-0 select-none",
-                isCollapsed
-                  ? "opacity-0 -translate-x-2 pointer-events-none w-0 overflow-hidden"
-                  : "opacity-100 translate-x-0 w-auto"
-              )}>
-                <span className="font-black text-sm tracking-wider text-text-primary leading-tight">
-                  EZY PRODS
-                </span>
-                <span className="text-[10px] text-text-secondary font-medium tracking-normal leading-tight">
-                  Music Studio
-                </span>
               </div>
             </Link>
 

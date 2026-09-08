@@ -72,6 +72,7 @@ html {
   scroll-behavior: smooth;
   color-scheme: dark;
   overflow: hidden;
+  overscroll-behavior-x: none;
 }
 
 html.light {
@@ -85,6 +86,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   touch-action: manipulation;
+  overscroll-behavior-x: none;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
