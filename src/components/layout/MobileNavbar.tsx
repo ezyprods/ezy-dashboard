@@ -18,7 +18,7 @@ export function MobileNavbar() {
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-surface-elevated/95 backdrop-blur-xl border-t border-border pb-[env(safe-area-inset-bottom)] animate-slide-up shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
-      <div className="flex items-center justify-around h-[68px] px-2">
+      <div className="flex items-center justify-around h-[64px] px-1 py-1">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           const Icon = item.icon;
@@ -28,19 +28,19 @@ export function MobileNavbar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center w-full h-full gap-1 transition-all active:scale-90",
+                "flex flex-col items-center justify-center w-full h-full gap-0.5 transition-all active:scale-95 select-none",
                 isActive ? "text-accent" : "text-text-secondary"
               )}
             >
               <div className={cn(
-                "p-1.5 rounded-2xl transition-all duration-300",
-                isActive ? "bg-accent/15 scale-110" : "bg-transparent scale-100"
+                "p-1 rounded-xl transition-all duration-200",
+                isActive ? "bg-accent/15 scale-105 text-accent" : "bg-transparent text-text-secondary"
               )}>
-                <Icon className={cn("w-6 h-6", isActive && "fill-accent/20")} strokeWidth={isActive ? 2.5 : 2} />
+                <Icon className={cn("w-5 h-5", isActive && "fill-accent/20")} strokeWidth={isActive ? 2.5 : 2} />
               </div>
               <span className={cn(
-                "text-[10px] tracking-wide transition-all duration-300",
-                isActive ? "font-bold opacity-100" : "font-medium opacity-80"
+                "text-[10.5px] tracking-tight leading-tight transition-all duration-200 text-center truncate max-w-full px-0.5",
+                isActive ? "font-bold text-accent opacity-100" : "font-medium text-text-secondary opacity-80"
               )}>
                 {item.name}
               </span>

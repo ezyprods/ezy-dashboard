@@ -40,7 +40,7 @@ export function GlobalAudioPlayer() {
 
   return (
     <>
-      <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+68px)] md:bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-35 md:z-50 animate-slide-up shadow-2xl">
+      <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+64px)] md:bottom-0 left-0 right-0 bg-surface-elevated/95 backdrop-blur-xl border-t border-border z-35 md:z-50 animate-slide-up shadow-2xl">
         
         {/* ── Mobile Player (Single Row ~58px) ── */}
         <div className="md:hidden flex flex-col w-full">

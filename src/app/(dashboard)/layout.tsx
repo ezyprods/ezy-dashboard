@@ -53,8 +53,8 @@ export default function DashboardLayout({
                 <main className={cn(
                   "flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-6 scroll-smooth transition-[padding] duration-300",
                   currentTrack 
-                    ? "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))] md:pb-28" 
-                    : "pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6"
+                    ? "pb-[calc(8.5rem+env(safe-area-inset-bottom,0px))] md:pb-32" 
+                    : "pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-16"
                 )}>
                   {children}
                 </main>
