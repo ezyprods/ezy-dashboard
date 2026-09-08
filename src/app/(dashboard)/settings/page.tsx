@@ -61,10 +61,10 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-8 w-full min-w-0 overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 w-full min-w-0 overflow-hidden">
         {/* Navigation Sidebar */}
-        <aside className="w-full md:w-64 shrink-0 min-w-0 overflow-hidden">
-          <nav className="flex md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide snap-x snap-mandatory md:snap-none relative w-full">
+        <aside className="w-full lg:w-64 shrink-0 min-w-0 overflow-hidden">
+          <nav className="flex lg:flex-col gap-2 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide snap-x snap-mandatory lg:snap-none relative w-full">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -74,7 +74,7 @@ export default function SettingsPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as TabType)}
                   className={cn(
-                    "relative flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 text-sm font-semibold whitespace-nowrap group snap-start min-h-[48px] shrink-0 md:shrink md:w-full overflow-hidden",
+                    "relative flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 text-sm font-semibold whitespace-nowrap group snap-start min-h-[48px] shrink-0 lg:shrink lg:w-full overflow-hidden",
                     isActive
                       ? "text-accent bg-accent/5 shadow-sm ring-1 ring-accent/20"
                       : "text-text-secondary hover:bg-surface-elevated/50 hover:text-text-primary"
@@ -82,7 +82,7 @@ export default function SettingsPage() {
                 >
                   {/* Active Indicator Line */}
                   {isActive && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent shadow-[0_0_8px_rgba(var(--accent),0.6)]" />
+                    <div className="absolute left-0 right-0 bottom-0 h-1 bg-accent shadow-[0_0_8px_rgba(var(--accent),0.6)] lg:top-0 lg:right-auto lg:bottom-0 lg:w-1" />
                   )}
                   {/* Subtle hover/active glow */}
                   {isActive && (
@@ -102,7 +102,7 @@ export default function SettingsPage() {
 
         {/* Tab Content Area */}
         <div role="region" aria-label="Contenido de configuración" className="flex-1 min-w-0 w-full overflow-hidden">
-          <div className="bg-surface/80 backdrop-blur-2xl p-6 md:p-10 rounded-3xl border border-border/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative overflow-hidden transition-all duration-500 min-h-[500px]">
+          <div className="bg-surface/80 backdrop-blur-2xl p-5 sm:p-6 lg:p-10 rounded-3xl border border-border/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] relative overflow-hidden transition-all duration-500 min-h-[500px]">
             {/* Ambient Background Glow */}
             <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-accent/10 rounded-full blur-[100px] pointer-events-none opacity-60" />
             <div className="absolute bottom-[-20%] left-[-10%] w-[300px] h-[300px] bg-purple-500/10 rounded-full blur-[80px] pointer-events-none opacity-40" />

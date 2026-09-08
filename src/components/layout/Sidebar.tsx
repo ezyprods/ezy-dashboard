@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Users, CreditCard, MessageSquare, Settings, Calendar, ExternalLink, Grid, Wrench, Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAudio } from '@/lib/contexts/AudioContext';
 
 const mainNavItems = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -23,6 +24,7 @@ const secondaryNavItems = [
 ];
 
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
+  const { currentTrack } = useAudio();
   const pathname = usePathname();
   const router = useRouter();
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -135,7 +137,10 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           </div>
         </nav>
 
-        <div className="p-4 border-t border-border mt-auto shrink-0">
+        <div className={cn(
+          "p-4 border-t border-border mt-auto shrink-0 transition-[padding] duration-300",
+          currentTrack ? "pb-24 md:pb-28" : "pb-4"
+        )}>
           <div className="glass rounded-xl p-4 flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <p className="text-xs text-text-secondary">Conectado a Google Drive</p>

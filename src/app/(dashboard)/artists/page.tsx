@@ -184,7 +184,7 @@ export default function ArtistsPage() {
       ) : (
         <div className={
           viewMode === 'grid' 
-            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4" 
+            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4" 
             : "space-y-3"
         }>
           {sortedAndFilteredArtists.map((artist) => (

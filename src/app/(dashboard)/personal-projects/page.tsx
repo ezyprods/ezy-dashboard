@@ -371,7 +371,7 @@ export default function PersonalProjectsPage() {
   return (
     <div className="flex-1 w-full max-w-[1650px] mx-auto space-y-5 animate-in fade-in duration-300">
       {/* Top Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight flex items-center gap-3">
             <span className="p-2 rounded-2xl bg-accent/15 text-accent border border-accent/20">
@@ -670,34 +670,34 @@ export default function PersonalProjectsPage() {
                   <button
                     type="button"
                     onClick={() => setSortBy(sortBy === 'title_asc' ? 'title_desc' : 'title_asc')}
-                    className="flex items-center gap-1 hover:text-text-primary transition-colors text-left"
+                    className="flex items-center gap-1 hover:text-text-primary transition-colors text-left truncate"
                   >
-                    <span>Título del Proyecto</span>
-                    {sortBy === 'title_asc' && <ArrowUp className="w-3 h-3 text-accent" />}
-                    {sortBy === 'title_desc' && <ArrowDown className="w-3 h-3 text-accent" />}
+                    <span className="truncate">Título del Proyecto</span>
+                    {sortBy === 'title_asc' && <ArrowUp className="w-3 h-3 text-accent shrink-0" />}
+                    {sortBy === 'title_desc' && <ArrowDown className="w-3 h-3 text-accent shrink-0" />}
                   </button>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="hidden sm:inline w-24">Categoría</span>
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                  <span className="hidden lg:inline w-24">Categoría</span>
                   <button
                     type="button"
                     onClick={() => setSortBy(sortBy === 'bpm_desc' ? 'bpm_asc' : 'bpm_desc')}
-                    className="flex items-center gap-1 hover:text-text-primary transition-colors w-24"
+                    className="flex items-center gap-1 hover:text-text-primary transition-colors w-20 sm:w-24"
                   >
                     <span>BPM / Key</span>
-                    {sortBy === 'bpm_desc' && <ArrowDown className="w-3 h-3 text-accent" />}
-                    {sortBy === 'bpm_asc' && <ArrowUp className="w-3 h-3 text-accent" />}
+                    {sortBy === 'bpm_desc' && <ArrowDown className="w-3 h-3 text-accent shrink-0" />}
+                    {sortBy === 'bpm_asc' && <ArrowUp className="w-3 h-3 text-accent shrink-0" />}
                   </button>
-                  <span className="hidden sm:inline w-28">Estado</span>
+                  <span className="hidden lg:inline w-28">Estado</span>
                   <button
                     type="button"
                     onClick={() => setSortBy(sortBy === 'recent' ? 'oldest' : 'recent')}
-                    className="hidden md:flex items-center justify-end gap-1 hover:text-text-primary transition-colors w-20 text-right"
+                    className="hidden xl:flex items-center justify-end gap-1 hover:text-text-primary transition-colors w-20 text-right"
                   >
                     <span>Fecha</span>
-                    {sortBy === 'recent' && <ArrowDown className="w-3 h-3 text-accent" />}
-                    {sortBy === 'oldest' && <ArrowUp className="w-3 h-3 text-accent" />}
+                    {sortBy === 'recent' && <ArrowDown className="w-3 h-3 text-accent shrink-0" />}
+                    {sortBy === 'oldest' && <ArrowUp className="w-3 h-3 text-accent shrink-0" />}
                   </button>
                   <span className="w-6 text-right">···</span>
                 </div>

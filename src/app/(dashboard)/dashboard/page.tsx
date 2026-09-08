@@ -54,7 +54,7 @@ export default function DashboardPage() {
               {alertMsg}
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-2 shrink-0">
+          <div className="hidden lg:flex items-center gap-2 shrink-0">
             <div className="flex flex-col items-center px-3 py-1.5 bg-surface-elevated rounded-xl border border-border/60 shadow-sm">
               <span className="text-base font-black text-text-primary leading-none">{activeProjectsCount}</span>
               <span className="text-[9px] text-text-secondary uppercase font-bold tracking-widest mt-0.5">Proyectos</span>

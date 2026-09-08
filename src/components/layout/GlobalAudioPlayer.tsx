@@ -19,6 +19,7 @@ export function GlobalAudioPlayer() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isMiniDAWOpen, setIsMiniDAWOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isTabletMenuOpen, setIsTabletMenuOpen] = useState(false);
 
   if (!currentTrack) return null;
 
@@ -180,22 +181,22 @@ export function GlobalAudioPlayer() {
           </div>
         </div>
 
-        {/* ── Desktop Player (h-24) ── */}
-        <div className="hidden md:flex items-center justify-between px-6 h-24 w-full">
+        {/* ── Desktop & Tablet Player (h-20 md:h-22 lg:h-24) ── */}
+        <div className="hidden md:flex items-center justify-between px-4 lg:px-6 h-20 lg:h-24 w-full">
           {/* Left Column: Track Info */}
-          <div className="flex items-center gap-3 w-1/4 min-w-[200px] overflow-hidden">
-            <div className="w-14 h-14 bg-surface rounded-md flex items-center justify-center overflow-hidden shrink-0 border border-border">
+          <div className="flex items-center gap-2.5 lg:gap-3 w-auto max-w-[160px] lg:max-w-[240px] xl:w-1/4 shrink-0 overflow-hidden">
+            <div className="w-11 h-11 lg:w-14 lg:h-14 bg-surface rounded-md flex items-center justify-center overflow-hidden shrink-0 border border-border">
               {currentTrack.coverArt ? (
                 <img src={currentTrack.coverArt} alt={currentTrack.name} className="w-full h-full object-cover" />
               ) : (
                 <Music className="w-5 h-5 text-text-secondary" />
               )}
             </div>
-            <div className="overflow-hidden">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-bold text-text-primary truncate" title={currentTrack.name}>{currentTrack.name}</p>
+            <div className="overflow-hidden min-w-0">
+              <div className="flex items-center gap-1.5 lg:gap-2">
+                <p className="text-xs lg:text-sm font-bold text-text-primary truncate" title={currentTrack.name}>{currentTrack.name}</p>
                 {(currentTrack.bpm || currentTrack.musicalKey) && (
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="hidden lg:flex items-center gap-1 shrink-0">
                     {currentTrack.bpm && (
                       <span className="text-[9px] font-mono px-1 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 whitespace-nowrap">
                         {currentTrack.bpm} BPM
@@ -210,7 +211,7 @@ export function GlobalAudioPlayer() {
                 )}
               </div>
               {currentTrack.pathSegments && currentTrack.pathSegments.length > 0 ? (
-                <p className="text-xs text-text-secondary truncate flex items-center gap-1">
+                <p className="text-[11px] lg:text-xs text-text-secondary truncate flex items-center gap-1">
                   {currentTrack.pathSegments.map((seg, i) => (
                     <React.Fragment key={i}>
                       {seg.onClick ? (
@@ -232,33 +233,33 @@ export function GlobalAudioPlayer() {
                   ))}
                 </p>
               ) : currentTrack.artistName ? (
-                <p className="text-xs text-text-secondary truncate">{currentTrack.artistName}</p>
+                <p className="text-[11px] lg:text-xs text-text-secondary truncate">{currentTrack.artistName}</p>
               ) : null}
             </div>
           </div>
 
           {/* Center Column: Controls & Scrubber */}
-          <div className="flex-1 flex flex-col items-center justify-center max-w-2xl px-4">
-            <div className="flex items-center gap-6 mb-2">
+          <div className="flex-1 min-w-0 flex flex-col items-center justify-center max-w-2xl px-2 sm:px-4">
+            <div className="flex items-center gap-4 lg:gap-6 mb-1.5 lg:mb-2">
               <button className="text-text-secondary hover:text-text-primary transition-colors">
-                <SkipBack className="w-5 h-5" />
+                <SkipBack className="w-4 h-4 lg:w-5 lg:h-5" />
               </button>
               
               <button 
                 onClick={togglePlay}
                 disabled={isLoading}
-                className="w-10 h-10 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-70 disabled:hover:scale-100"
+                className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-text-primary text-surface-elevated flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-70 disabled:hover:scale-100"
               >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
+                {isLoading ? <Loader2 className="w-4 h-4 lg:w-5 lg:h-5 animate-spin text-surface-elevated" /> : isPlaying ? <Pause className="w-4 h-4 lg:w-5 lg:h-5 fill-current" /> : <Play className="w-4 h-4 lg:w-5 lg:h-5 fill-current ml-0.5 lg:ml-1" />}
               </button>
 
               <button className="text-text-secondary hover:text-text-primary transition-colors">
-                <SkipForward className="w-5 h-5" />
+                <SkipForward className="w-4 h-4 lg:w-5 lg:h-5" />
               </button>
             </div>
 
-            <div className="flex items-center gap-2 w-full">
-              <span className="text-[9px] font-medium text-text-secondary w-8 text-right font-mono">
+            <div className="flex items-center gap-2 w-full min-w-0">
+              <span className="text-[9px] font-medium text-text-secondary w-7 lg:w-8 text-right font-mono shrink-0">
                 {formatTime(currentTime)}
               </span>
               
@@ -268,18 +269,19 @@ export function GlobalAudioPlayer() {
                 max={duration || 100}
                 value={currentTime}
                 onChange={handleSeek}
-                className="flex-1 h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer accent-accent"
+                className="flex-1 min-w-[50px] h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer accent-accent"
               />
               
-              <span className="text-[9px] font-medium text-text-secondary w-8 font-mono">
+              <span className="text-[9px] font-medium text-text-secondary w-7 lg:w-8 font-mono shrink-0">
                 {formatTime(duration)}
               </span>
             </div>
           </div>
 
           {/* Right Column: Actions, Volume & Close */}
-          <div className="w-1/4 min-w-[200px] flex items-center justify-end gap-4">
-            <div className="flex items-center gap-3 border-r border-border/50 pr-4">
+          <div className="w-auto shrink-0 flex items-center justify-end gap-2 lg:gap-4">
+            {/* Inline Action Icons on Large Screens (xl:flex) */}
+            <div className="hidden xl:flex items-center gap-3 border-r border-border/50 pr-4">
               {artistUrl && (
                 <a href={artistUrl} className="text-text-secondary hover:text-accent-light transition-colors" title="Abrir Perfil de Artista">
                   <User className="w-4 h-4" />
@@ -298,9 +300,82 @@ export function GlobalAudioPlayer() {
                 <Download className="w-4 h-4" />
               </a>
             </div>
+
+            {/* Tablet Menu Dropdown Button (hidden on mobile and xl) */}
+            <div className="relative hidden md:block xl:hidden">
+              <button
+                onClick={() => setIsTabletMenuOpen(!isTabletMenuOpen)}
+                aria-label="Más opciones del audio"
+                title="Más opciones"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-surface transition-colors"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              {isTabletMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
+                    onClick={() => setIsTabletMenuOpen(false)}
+                  />
+                  <div className="absolute bottom-full right-0 mb-2 w-52 bg-surface-elevated border border-border rounded-2xl p-1.5 shadow-2xl z-50 animate-menu-in flex flex-col gap-0.5">
+                    {artistUrl && (
+                      <a
+                        href={artistUrl}
+                        onClick={() => setIsTabletMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors"
+                      >
+                        <User className="w-4 h-4 text-accent" />
+                        <span>Perfil de Artista</span>
+                      </a>
+                    )}
+                    <a
+                      href={`https://drive.google.com/file/d/${currentTrack.id}/view`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsTabletMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors"
+                    >
+                      <ExternalLink className="w-4 h-4 text-text-secondary" />
+                      <span>Abrir en Drive</span>
+                    </a>
+                    <button
+                      onClick={() => {
+                        setIsMiniDAWOpen(true);
+                        setIsTabletMenuOpen(false);
+                      }}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors text-left"
+                    >
+                      <Scissors className="w-4 h-4 text-accent-light" />
+                      <span>Mini-DAW</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsShareModalOpen(true);
+                        setIsTabletMenuOpen(false);
+                      }}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors text-left"
+                    >
+                      <Share2 className="w-4 h-4 text-accent" />
+                      <span>Compartir</span>
+                    </button>
+                    <a
+                      href={`/api/files/${currentTrack.id}?download=true`}
+                      download={currentTrack.name}
+                      onClick={() => setIsTabletMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface rounded-xl transition-colors"
+                    >
+                      <Download className="w-4 h-4 text-text-secondary" />
+                      <span>Descargar</span>
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
             
-            <div className="flex items-center gap-2 w-32 group">
-              <button onClick={toggleMute} className="text-text-secondary hover:text-text-primary">
+            {/* Volume Control */}
+            <div className="flex items-center gap-1.5 lg:gap-2 w-16 sm:w-20 lg:w-28 group shrink-0">
+              <button onClick={toggleMute} className="text-text-secondary hover:text-text-primary shrink-0" title={volume === 0 ? "Reactivar sonido" : "Silenciar"}>
                 {volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
               <input
@@ -310,11 +385,12 @@ export function GlobalAudioPlayer() {
                 step={0.01}
                 value={volume}
                 onChange={handleVolume}
-                className="w-full h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-0 group-hover:[&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer transition-all accent-text-secondary"
+                aria-label="Control de volumen"
+                className="w-full min-w-[36px] h-1 bg-surface rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-0 group-hover:[&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-text-primary [&::-webkit-slider-thumb]:rounded-full cursor-pointer transition-all accent-text-secondary"
               />
             </div>
             
-            <button onClick={closePlayer} className="text-text-secondary hover:text-error transition-colors p-2" title="Cerrar reproductor">
+            <button onClick={closePlayer} className="text-text-secondary hover:text-error transition-colors p-1.5 lg:p-2 shrink-0" title="Cerrar reproductor">
               <X className="w-5 h-5" />
             </button>
           </div>
