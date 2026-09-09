@@ -10,8 +10,8 @@ export async function POST(request: Request) {
 
     if (!process.env.RESEND_API_KEY) {
       return NextResponse.json(
-        { error: 'RESEND_API_KEY no está configurada' },
-        { status: 500 }
+        { error: 'El servicio de correo (RESEND_API_KEY) no está configurado en el servidor.', missingConfig: true },
+        { status: 503 }
       );
     }
 
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     const { data, error } = await resend.emails.send({
-      from: 'EZY Studio <hello@ezystudio.app>', // Update this to a verified domain if possible
+      from: process.env.RESEND_FROM_EMAIL || 'EZY Studio <hello@ezystudio.app>',
       to: [artistEmail],
       subject: `Actualización: ${projectName}`,
       react: ProjectUpdateEmail({
@@ -36,13 +36,14 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      return NextResponse.json({ error }, { status: 400 });
+      const errorDetail = (error as any)?.message || JSON.stringify(error);
+      return NextResponse.json({ error: `Error de envío: ${errorDetail}` }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
     return NextResponse.json(
-      { error: 'Error al enviar email', details: error.message },
+      { error: 'Error al procesar envío de email', details: error.message },
       { status: 500 }
     );
   }

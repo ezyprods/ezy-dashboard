@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ExternalLink as ExternalLinkIcon, User, Table2, Clock, Plus, Sparkles, Copy, Check } from 'lucide-react';
+import { Loader2, Music, Image as ImageIcon, File as FileIcon, UploadCloud, X, AlertTriangle, CheckCircle2, Activity, XCircle, ExternalLink as ExternalLinkIcon, User, Table2, Clock, Plus, Sparkles, Copy, Check, MessageSquare, Send } from 'lucide-react';
 import { detectAudioFeatures, parseAudioFilename, formatProducerFilename, getShortKey, formatMusicalKey } from '@/lib/utils/audio';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -54,6 +54,14 @@ interface SmartUploadModalProps {
   preselectedTargetType?: 'artist' | 'personal';
   preselectedPersonalProjectId?: string;
   onSuccess?: () => void; // Called when all uploads complete successfully
+}
+
+export interface ArtistNotificationStatus {
+  emailStatus?: 'idle' | 'sending' | 'sent' | 'error';
+  emailError?: string;
+  waUrl?: string;
+  artistName?: string;
+  phone?: string;
 }
 
 const EXPIRATION_OPTIONS = [
@@ -142,11 +150,13 @@ export function SmartUploadModal({
   preselectedPersonalProjectId,
   onSuccess
 }: SmartUploadModalProps) {
-  const { activeArtists: artists, isLoading: isArtistsLoading } = useArtists();
+  const { activeArtists: artists, isLoading: isArtistsLoading, updateArtist } = useArtists();
   const { projects: personalProjects, createProject: createPersonalProject } = usePersonalProjects();
   const router = useRouter();
   const [items, setItems] = useState<SmartUploadFile[]>([]);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const notifiedItemsRef = useRef<Set<string>>(new Set());
+  const [notificationStatuses, setNotificationStatuses] = useState<Record<string, ArtistNotificationStatus>>({});
 
   // Inline mini-form state for creating personal project inside upload modal
   const [inlineNewProjectForId, setInlineNewProjectForId] = useState<string | null>(null);
@@ -241,6 +251,8 @@ export function SmartUploadModal({
     if (!isOpen) {
       setItems([]);
       abortControllersRef.current.clear();
+      notifiedItemsRef.current.clear();
+      setNotificationStatuses({});
       return;
     }
 
@@ -724,43 +736,116 @@ export function SmartUploadModal({
     let timeout: NodeJS.Timeout | null = null;
     if (allDone) {
       const successfullyUploadedItems = items.filter(i => i.uploadStatus === 'done' && i.notifyArtist);
-      const artistsToNotify = Array.from(new Set(successfullyUploadedItems.map(i => i.artistId)));
+      const unnotifiedItems = successfullyUploadedItems.filter(i => !notifiedItemsRef.current.has(i.id));
 
-      artistsToNotify.forEach(artistId => {
-        const artist = artists.find(a => a.id === artistId);
-        if (!artist) return;
-        
-        const artistItems = successfullyUploadedItems.filter(i => i.artistId === artistId);
-        const shouldEmail = artistItems.some(i => i.notifyEmail);
-        const shouldWhatsApp = artistItems.some(i => i.notifyWhatsApp);
+      if (unnotifiedItems.length > 0) {
+        unnotifiedItems.forEach(i => notifiedItemsRef.current.add(i.id));
+        const artistsToNotify = Array.from(new Set(unnotifiedItems.map(i => i.artistId)));
 
-        if (!shouldEmail && !shouldWhatsApp) return;
+        artistsToNotify.forEach(async (artistId) => {
+          const artist = artists.find(a => a.id === artistId);
+          if (!artist) return;
+          
+          const artistItems = successfullyUploadedItems.filter(i => i.artistId === artistId);
+          const shouldEmail = artistItems.some(i => i.notifyEmail);
+          const shouldWhatsApp = artistItems.some(i => i.notifyWhatsApp);
 
-        const fileNames = Array.from(new Set(artistItems.map(i => i.customName.replace(/\.[^.]+$/, ''))));
-        const joinedTitles = fileNames.join(', ');
-        const portalUrl = `${window.location.origin}/portal/${artist.id}`;
+          if (!shouldEmail && !shouldWhatsApp) return;
 
-        if (shouldEmail && artist.email) {
-          fetch('/api/communications/email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              artistEmail: artist.email,
-              artistName: artist.name,
-              projectName: 'Nuevos archivos subidos',
-              message: `He subido nuevas versiones a tu portal: ${joinedTitles}. Revísalas cuando puedas.`,
-              portalUrl
-            })
-          }).catch(console.error);
-        }
+          const fileNames = Array.from(new Set(artistItems.map(i => i.customName.replace(/\.[^.]+$/, ''))));
+          const joinedTitles = fileNames.join(', ');
+          const portalUrl = `${window.location.origin}/portal/${artist.id}`;
 
-        if (shouldWhatsApp && artist.phone) {
-          const text = `Hola ${artist.name},\n\nHe subido nuevos archivos a tu portal: ${joinedTitles}\n\nPuedes escucharlos directamente en tu portal privado:\n${portalUrl}`;
-          window.open(getWhatsAppUrl(artist.phone, text), '_blank');
-        }
-      });
+          let waUrl = '';
+          if (shouldWhatsApp && artist.phone) {
+            const text = `Hola ${artist.name},\n\nHe subido nuevos archivos a tu portal: ${joinedTitles}\n\nPuedes escucharlos directamente en tu portal privado:\n${portalUrl}`;
+            waUrl = getWhatsAppUrl(artist.phone, text);
+            try {
+              window.open(waUrl, '_blank');
+            } catch {}
+          }
 
-      if (!isHovered) {
+          if (shouldEmail && artist.email) {
+            setNotificationStatuses(prev => ({
+              ...prev,
+              [artistId]: {
+                ...prev[artistId],
+                emailStatus: 'sending',
+                artistName: artist.name,
+                phone: artist.phone,
+                waUrl: waUrl || prev[artistId]?.waUrl
+              }
+            }));
+
+            try {
+              const res = await fetch('/api/communications/email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  artistEmail: artist.email,
+                  artistName: artist.name,
+                  projectName: joinedTitles || 'Nuevos archivos subidos',
+                  message: `He subido nuevas versiones a tu portal: ${joinedTitles}. Revísalas cuando puedas.`,
+                  portalUrl
+                })
+              });
+
+              const data = await res.json().catch(() => ({}));
+              if (res.ok && data.success) {
+                setNotificationStatuses(prev => ({
+                  ...prev,
+                  [artistId]: {
+                    ...prev[artistId],
+                    emailStatus: 'sent',
+                    artistName: artist.name,
+                    phone: artist.phone,
+                    waUrl: waUrl || prev[artistId]?.waUrl
+                  }
+                }));
+              } else {
+                setNotificationStatuses(prev => ({
+                  ...prev,
+                  [artistId]: {
+                    ...prev[artistId],
+                    emailStatus: 'error',
+                    emailError: data.error || 'No se pudo enviar el correo',
+                    artistName: artist.name,
+                    phone: artist.phone,
+                    waUrl: waUrl || prev[artistId]?.waUrl
+                  }
+                }));
+              }
+            } catch (err: any) {
+              setNotificationStatuses(prev => ({
+                ...prev,
+                [artistId]: {
+                  ...prev[artistId],
+                  emailStatus: 'error',
+                  emailError: err.message || 'Error de conexión',
+                  artistName: artist.name,
+                  phone: artist.phone,
+                  waUrl: waUrl || prev[artistId]?.waUrl
+                }
+              }));
+            }
+          } else if (shouldWhatsApp && waUrl) {
+            setNotificationStatuses(prev => ({
+              ...prev,
+              [artistId]: {
+                ...prev[artistId],
+                artistName: artist.name,
+                phone: artist.phone,
+                waUrl
+              }
+            }));
+          }
+        });
+      }
+
+      const hasUploadErrors = items.some(i => i.uploadStatus === 'error');
+      const hasEmailErrors = Object.values(notificationStatuses).some(s => s.emailStatus === 'error');
+
+      if (!isHovered && !hasUploadErrors && !hasEmailErrors) {
         timeout = setTimeout(() => {
           onClose();
         }, 15000);
@@ -775,14 +860,20 @@ export function SmartUploadModal({
         abortControllersRef.current.forEach(ctrl => ctrl.abort());
       }
     };
-  }, [allDone, isHovered, onClose, onSuccess, items, artists]);
+  }, [allDone, isHovered, onClose, onSuccess, items, artists, notificationStatuses]);
 
   if (!isOpen || initialFiles.length === 0) return null;
   
   const artistsReceivingEmails = Array.from(new Set(
-    items.filter(i => i.notifyArtist)
+    items.filter(i => i.notifyArtist && i.notifyEmail)
          .map(i => artists.find(a => a.id === i.artistId))
          .filter(a => a && a.email)
+  ));
+
+  const artistsReceivingWhatsApp = Array.from(new Set(
+    items.filter(i => i.notifyArtist && i.notifyWhatsApp)
+         .map(i => artists.find(a => a.id === i.artistId))
+         .filter(a => a && a.phone)
   ));
 
   const modal = (
@@ -934,6 +1025,90 @@ export function SmartUploadModal({
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span className="text-sm font-semibold">Subida completada</span>
                   </div>
+
+                  {/* Notification delivery feedback */}
+                  {item.notifyArtist && (() => {
+                    const notif = notificationStatuses[item.artistId];
+                    const artist = artists.find(a => a.id === item.artistId);
+                    return (
+                      <div className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-surface-elevated/70 border border-border/60 text-xs mt-1 animate-fade-in">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-text-secondary">
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-accent" />
+                            Notificación al Artista
+                          </span>
+                          <span className="text-text-primary font-medium">{artist?.name}</span>
+                        </div>
+
+                        {/* Email Status */}
+                        {item.notifyEmail && (
+                          <div className="mt-0.5">
+                            {notif?.emailStatus === 'sending' ? (
+                              <div className="flex items-center gap-1.5 text-accent bg-accent/10 px-2 py-1 rounded-md border border-accent/20">
+                                <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                                <span>Enviando email a {artist?.email || 'artista'}...</span>
+                              </div>
+                            ) : notif?.emailStatus === 'sent' ? (
+                              <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
+                                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                <span>Email enviado correctamente a {artist?.email}</span>
+                              </div>
+                            ) : notif?.emailStatus === 'error' ? (
+                              <div className="flex flex-col gap-1 text-red-400 bg-red-500/10 p-2 rounded-md border border-red-500/20">
+                                <div className="flex items-center gap-1.5 font-semibold">
+                                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                                  <span>No se pudo enviar el email</span>
+                                </div>
+                                <p className="text-[10px] text-text-secondary leading-tight">
+                                  {notif?.emailError || 'Error al conectar con el servicio de correo.'}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const text = `Hola ${artist?.name},\n\nHe subido nuevas versiones a tu portal.\nPuedes verlas aquí: ${window.location.origin}/portal/${artist?.id}`;
+                                    navigator.clipboard.writeText(text);
+                                    customAlert('Mensaje copiado al portapapeles para enviarlo manualmente.');
+                                  }}
+                                  className="mt-1 self-start flex items-center gap-1 text-[10px] text-text-primary bg-surface hover:bg-surface-elevated px-2 py-0.5 rounded border border-border/60 transition-colors"
+                                >
+                                  <Copy className="w-2.5 h-2.5" /> Copiar mensaje manual
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+
+                        {/* WhatsApp Button */}
+                        {item.notifyWhatsApp && (
+                          <div className="mt-0.5">
+                            {notif?.waUrl ? (
+                              <a
+                                href={notif.waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white font-semibold text-xs shadow-sm transition-colors text-center"
+                              >
+                                <span>💬</span>
+                                <span>Abrir WhatsApp con {artist?.name || 'el artista'}</span>
+                              </a>
+                            ) : artist?.phone ? (
+                              <a
+                                href={getWhatsAppUrl(artist.phone, `Hola ${artist.name},\n\nHe subido nuevas versiones a tu portal: ${item.customName.replace(/\.[^.]+$/, '')}\n\nPuedes escucharlas aquí:\n${window.location.origin}/portal/${artist.id}`)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-2.5 rounded-lg bg-green-600 hover:bg-green-500 text-white font-semibold text-xs shadow-sm transition-colors text-center"
+                              >
+                                <span>💬</span>
+                                <span>Enviar aviso por WhatsApp</span>
+                              </a>
+                            ) : (
+                              <span className="text-[11px] text-amber-400">Sin teléfono configurado para WhatsApp</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Scheduled deletion share link — most prominent element */}
                   {item.scheduleDelete && item.shareLink && (
@@ -1423,7 +1598,15 @@ export function SmartUploadModal({
                             type="checkbox"
                             id={`notify-${item.id}`}
                             checked={!!item.notifyArtist}
-                            onChange={e => updateItem(item.id, { notifyArtist: e.target.checked, notifyEmail: false, notifyWhatsApp: false })}
+                            onChange={e => {
+                              const isChecked = e.target.checked;
+                              const currentArtist = artists.find(a => a.id === item.artistId);
+                              updateItem(item.id, {
+                                notifyArtist: isChecked,
+                                notifyEmail: isChecked ? (currentArtist?.email ? true : !currentArtist?.phone) : false,
+                                notifyWhatsApp: isChecked ? (currentArtist?.phone ? true : false) : false
+                              });
+                            }}
                             className="w-4 h-4 rounded border-border/60 text-accent focus:ring-accent bg-surface-elevated"
                           />
                           <label htmlFor={`notify-${item.id}`} className="text-sm font-medium text-text-primary cursor-pointer hover:text-accent transition-colors">
@@ -1452,17 +1635,24 @@ export function SmartUploadModal({
                                     <span 
                                       className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
                                       onClick={async () => {
-                                        const newEmail = await customPrompt('El artista no tiene email. Introduce uno nuevo:', '', 'Añadir Email');
+                                        const newEmail = await customPrompt(`Introduce el email para ${currentArtist.name}:`, '', 'Añadir Email');
                                         if (newEmail && newEmail.trim()) {
+                                          const trimmed = newEmail.trim();
+                                          if (!trimmed.includes('@') || !trimmed.includes('.')) {
+                                            customAlert('Por favor introduce un email válido (ej: nombre@dominio.com)');
+                                            return;
+                                          }
                                           try {
-                                            await fetch(`/api/artists/${item.artistId}`, {
-                                              method: 'PUT',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ email: newEmail.trim() })
-                                            });
-                                            customAlert('Email guardado correctamente. Recarga la lista o sube otro archivo para que se actualice globalmente, pero para esta sesión ya está guardado en base de datos.');
-                                            currentArtist.email = newEmail.trim(); 
-                                          } catch {}
+                                            const res = await updateArtist(item.artistId, { email: trimmed });
+                                            if (res.success) {
+                                              customAlert('Email guardado correctamente.');
+                                              updateItem(item.id, { notifyEmail: true });
+                                            } else {
+                                              throw new Error(res.error || 'Error al guardar');
+                                            }
+                                          } catch (err: any) {
+                                            customAlert('Error al guardar email: ' + (err?.message || 'Error desconocido'));
+                                          }
                                         }
                                       }}
                                     >
@@ -1492,18 +1682,20 @@ export function SmartUploadModal({
                                     <span 
                                       className="text-xs text-red-400 bg-red-400/10 px-2 py-0.5 rounded cursor-pointer hover:bg-red-400/20"
                                       onClick={async () => {
-                                        const newPhone = await customPrompt('El artista no tiene teléfono. Introduce uno nuevo:', '+34 ', 'Añadir Teléfono');
+                                        const newPhone = await customPrompt(`Introduce el teléfono para ${currentArtist.name}:`, '+34 ', 'Añadir Teléfono');
                                         if (newPhone && newPhone.trim()) {
                                           try {
                                             const finalPhone = formatPhoneNumber(newPhone.trim());
-                                            await fetch(`/api/artists/${item.artistId}`, {
-                                              method: 'PUT',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ phone: finalPhone })
-                                            });
-                                            customAlert('Teléfono guardado correctamente.');
-                                            currentArtist.phone = finalPhone; 
-                                          } catch {}
+                                            const res = await updateArtist(item.artistId, { phone: finalPhone });
+                                            if (res.success) {
+                                              customAlert('Teléfono guardado correctamente.');
+                                              updateItem(item.id, { notifyWhatsApp: true });
+                                            } else {
+                                              throw new Error(res.error || 'Error al guardar');
+                                            }
+                                          } catch (err: any) {
+                                            customAlert('Error al guardar teléfono: ' + (err?.message || 'Error desconocido'));
+                                          }
                                         }
                                       }}
                                     >
@@ -1582,9 +1774,19 @@ export function SmartUploadModal({
         {/* Footer */}
         {isConfiguring && (
           <div className="px-5 py-4 border-t border-border shrink-0 flex flex-col gap-3 bg-surface/80 ">
-            {artistsReceivingEmails.length > 0 && (
-              <div className="text-xs text-text-secondary w-full bg-accent/10 px-3 py-2 rounded-lg border border-accent/20 truncate">
-                <span className="mr-1">📧</span> Notificando: {artistsReceivingEmails.map(a => a?.name).join(', ')}
+            {(artistsReceivingEmails.length > 0 || artistsReceivingWhatsApp.length > 0) && (
+              <div className="text-xs text-text-secondary w-full bg-accent/10 px-3 py-2 rounded-lg border border-accent/20 flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-text-primary">Notificando:</span>
+                {artistsReceivingEmails.length > 0 && (
+                  <span className="flex items-center gap-1 bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">
+                    <span>📧 Email:</span> {artistsReceivingEmails.map(a => a?.name).join(', ')}
+                  </span>
+                )}
+                {artistsReceivingWhatsApp.length > 0 && (
+                  <span className="flex items-center gap-1 bg-green-500/10 text-green-400 px-2 py-0.5 rounded border border-green-500/20">
+                    <span>💬 WhatsApp:</span> {artistsReceivingWhatsApp.map(a => a?.name).join(', ')}
+                  </span>
+                )}
               </div>
             )}
 

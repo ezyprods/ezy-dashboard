@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/Label';
-import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Clock } from 'lucide-react';
+import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X, Clock, Mail, MessageSquare, Sparkles, Copy, Check, AlertTriangle } from 'lucide-react';
 
 import type { Artist } from '@/types';
 import { findBestMatch, getNormalizedBaseName } from '@/lib/utils';
@@ -41,6 +41,16 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
   const [scheduleDelete, setScheduleDelete] = useState(false);
   const [expiresInMs, setExpiresInMs] = useState<number>(24 * 60 * 60 * 1000);
 
+  // Notification states
+  const [notifyArtist, setNotifyArtist] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState(false);
+  const [notifyWhatsApp, setNotifyWhatsApp] = useState(false);
+  const [copiedManualMsg, setCopiedManualMsg] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<{
+    emailStatus?: 'idle' | 'sending' | 'sent' | 'error';
+    emailError?: string;
+  }>({});
+
   const [uploadState, setUploadState] = useState<UploadState>({
     status: 'idle',
     progress: 0,
@@ -64,12 +74,30 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
     }
   }, [isOpen, selectedArtistId, sortedArtists]);
 
+  const selectedArtist = artists.find((a) => a.id === selectedArtistId);
+
+  const handleNotifyToggle = (checked: boolean) => {
+    setNotifyArtist(checked);
+    if (checked && selectedArtist) {
+      setNotifyEmail(Boolean(selectedArtist.email?.trim()));
+      setNotifyWhatsApp(Boolean(selectedArtist.phone?.trim()));
+    } else {
+      setNotifyEmail(false);
+      setNotifyWhatsApp(false);
+    }
+  };
+
   const reset = () => {
     setStep(1);
     setSelectedArtistId('');
     setSelectedFolder('');
     setScheduleDelete(false);
     setExpiresInMs(24 * 60 * 60 * 1000);
+    setNotifyArtist(false);
+    setNotifyEmail(false);
+    setNotifyWhatsApp(false);
+    setCopiedManualMsg(false);
+    setNotificationStatus({});
     setSelectedFiles([]);
     setUploadState({ status: 'idle', progress: 0, message: '' });
     abortControllersRef.current.forEach(c => c.abort());
@@ -233,6 +261,38 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
 
       window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
 
+      // If user enabled notification to artist
+      if (notifyArtist && selectedArtist) {
+        if (notifyEmail && selectedArtist.email?.trim()) {
+          const fileNames = selectedFiles.map(f => f.file.name).join(', ');
+          const portalUrl = typeof window !== 'undefined'
+            ? `${window.location.origin}/portal/${selectedArtist.portalToken || selectedArtist.id}`
+            : '';
+          try {
+            setNotificationStatus(prev => ({ ...prev, emailStatus: 'sending' }));
+            const emailRes = await fetch('/api/communications/email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                artistEmail: selectedArtist.email.trim(),
+                artistName: selectedArtist.name,
+                projectName: selectedFolder || 'Nuevos Archivos',
+                message: `He subido nuevos archivos a tu carpeta ${selectedFolder}: ${fileNames}. Revísalas cuando puedas.`,
+                portalUrl,
+              }),
+            });
+            if (emailRes.ok) {
+              setNotificationStatus(prev => ({ ...prev, emailStatus: 'sent' }));
+            } else {
+              const errData = await emailRes.json().catch(() => ({}));
+              setNotificationStatus(prev => ({ ...prev, emailStatus: 'error', emailError: errData.error || 'Fallo al enviar email' }));
+            }
+          } catch (e: any) {
+            setNotificationStatus(prev => ({ ...prev, emailStatus: 'error', emailError: e.message }));
+          }
+        }
+      }
+
       setUploadState({
         status: 'success',
         progress: 100,
@@ -245,10 +305,7 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
         message: err.message || 'Error desconocido al subir archivos.',
       });
     }
-  }, [selectedArtistId, selectedFolder, selectedFiles, scheduleDelete, expiresInMs]);
-
-
-  const selectedArtist = artists.find((a) => a.id === selectedArtistId);
+  }, [selectedArtistId, selectedArtist, selectedFolder, selectedFiles, scheduleDelete, expiresInMs, notifyArtist, notifyEmail, notifyWhatsApp]);
 
   const stepTitles = {
     1: 'Subida Rápida — Selecciona Artista',
@@ -373,6 +430,85 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
             <div className="flex flex-col items-center gap-3 py-6 text-center">
               <CheckCircle2 className="w-12 h-12 text-success" />
               <p className="text-text-primary font-medium">{uploadState.message}</p>
+
+              {/* Notification Feedback Card */}
+              {notifyArtist && selectedArtist && (
+                <div className="w-full text-left p-3 rounded-xl bg-surface-elevated/70 border border-border/60 text-xs space-y-2.5 mt-2 animate-fade-in">
+                  <div className="flex items-center justify-between font-semibold text-text-secondary border-b border-border/40 pb-1.5">
+                    <span className="flex items-center gap-1.5 text-accent">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Notificación a {selectedArtist.name}
+                    </span>
+                  </div>
+
+                  {notifyEmail && (
+                    <div>
+                      {notificationStatus.emailStatus === 'sending' ? (
+                        <div className="flex items-center gap-1.5 text-accent bg-accent/10 px-2 py-1.5 rounded-lg border border-accent/20">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                          <span>Enviando email de aviso a {selectedArtist.email}...</span>
+                        </div>
+                      ) : notificationStatus.emailStatus === 'sent' ? (
+                        <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2 py-1.5 rounded-lg border border-emerald-500/20">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Email enviado correctamente a {selectedArtist.email}</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-1 text-amber-400 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 text-xs">
+                          <div className="flex items-center gap-1 font-semibold">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                            <span>Aviso de Email: servicio no configurado o fallido</span>
+                          </div>
+                          <span className="text-[10px] text-text-secondary">
+                            {notificationStatus.emailError || 'Configura RESEND_API_KEY en variables de entorno para envíos automáticos.'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {notifyWhatsApp && selectedArtist.phone && (() => {
+                    const cleanPhone = selectedArtist.phone.replace(/[^0-9]/g, '');
+                    const fileNames = selectedFiles.map(f => f.file.name).join(', ');
+                    const portalUrl = typeof window !== 'undefined'
+                      ? `${window.location.origin}/portal/${selectedArtist.portalToken || selectedArtist.id}`
+                      : '';
+                    const message = `Hola ${selectedArtist.name},\n\nHe subido nuevos archivos a tu carpeta ${selectedFolder}: ${fileNames}\n\nPuedes escucharlos directamente en tu portal privado:\n${portalUrl}`;
+                    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+
+                    return (
+                      <div className="pt-2 border-t border-border/40 space-y-2">
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-black font-bold text-xs shadow-md shadow-[#25D366]/20 transition-all text-center"
+                        >
+                          <MessageSquare className="w-4 h-4 shrink-0" />
+                          <span>Abrir WhatsApp con {selectedArtist.name}</span>
+                        </a>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(message);
+                            setCopiedManualMsg(true);
+                            setTimeout(() => setCopiedManualMsg(false), 2500);
+                          }}
+                          className="flex items-center justify-center gap-1 text-[11px] text-text-secondary hover:text-text-primary w-full py-1 transition-colors"
+                        >
+                          {copiedManualMsg ? (
+                            <><Check className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400 font-medium">¡Mensaje copiado al portapapeles!</span></>
+                          ) : (
+                            <><Copy className="w-3 h-3" /><span>Copiar mensaje de WhatsApp al portapapeles</span></>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               <div className="flex gap-3 mt-2">
                 <Button variant="ghost" onClick={handleClose}>Cerrar</Button>
                 <Button onClick={reset}>Subir más archivos</Button>
@@ -484,6 +620,64 @@ export function QuickUploadModal({ isOpen, onClose, artists }: QuickUploadModalP
                             {opt.label}
                           </button>
                         ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Notification options */}
+              {selectedFiles.length > 0 && selectedArtist && (
+                <div className="p-3 bg-surface rounded-xl border border-border/60 space-y-2 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-text-primary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={notifyArtist}
+                        onChange={(e) => handleNotifyToggle(e.target.checked)}
+                        className="w-4 h-4 rounded text-accent focus:ring-accent bg-surface-elevated cursor-pointer"
+                      />
+                      <Sparkles className="w-3.5 h-3.5 text-accent" />
+                      Notificar a {selectedArtist.name} tras la subida
+                    </label>
+                    {notifyArtist && (
+                      <span className="text-[10px] font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-full border border-accent/20">
+                        Activo
+                      </span>
+                    )}
+                  </div>
+
+                  {notifyArtist && (
+                    <div className="pt-2 border-t border-border/40 space-y-2">
+                      <p className="text-[11px] text-text-secondary">Canales de notificación:</p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          notifyEmail ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-medium' : 'bg-surface-elevated border-border/60 text-text-secondary'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={notifyEmail}
+                            onChange={(e) => setNotifyEmail(e.target.checked)}
+                            disabled={!selectedArtist.email}
+                            className="w-3.5 h-3.5 rounded text-blue-500"
+                          />
+                          <Mail className="w-3 h-3" />
+                          <span>Email {selectedArtist.email ? `(${selectedArtist.email})` : '(Sin email)'}</span>
+                        </label>
+
+                        <label className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          notifyWhatsApp ? 'bg-green-500/10 border-green-500/30 text-green-400 font-medium' : 'bg-surface-elevated border-border/60 text-text-secondary'
+                        }`}>
+                          <input
+                            type="checkbox"
+                            checked={notifyWhatsApp}
+                            onChange={(e) => setNotifyWhatsApp(e.target.checked)}
+                            disabled={!selectedArtist.phone}
+                            className="w-3.5 h-3.5 rounded text-green-500"
+                          />
+                          <MessageSquare className="w-3 h-3" />
+                          <span>WhatsApp {selectedArtist.phone ? `(${selectedArtist.phone})` : '(Sin teléfono)'}</span>
+                        </label>
                       </div>
                     </div>
                   )}
