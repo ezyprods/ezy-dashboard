@@ -6,7 +6,6 @@ export * from './communication';
 export * from './portal';
 export * from './campaign';
 export * from './personalProject';
-export * from './instagram';
 
 export interface CoverHistoryEntry {
   fileId: string;
