@@ -16,7 +16,8 @@ import {
   Wrench, 
   Music,
   ChevronLeft,
-  X
+  X,
+  Camera
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAudio } from '@/lib/contexts/AudioContext';
@@ -26,6 +27,7 @@ const mainNavItems = [
   { name: 'Artistas', href: '/artists', icon: Users },
   { name: 'Proyectos Personales', href: '/personal-projects', icon: Music },
   { name: 'Matrices', href: '/matrices', icon: Grid },
+  { name: 'Instagram Studio', href: '/instagram', icon: Camera },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
   { name: 'Pagos', href: '/payments', icon: CreditCard },
 ];
