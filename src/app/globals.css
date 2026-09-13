@@ -25,6 +25,8 @@
   --animate-fade-in: fade-in 0.2s ease-in-out;
   --animate-skeleton: skeleton 1.5s infinite;
   --animate-menu-in: menu-in 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-up: slide-up 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-scale-in: scale-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ===== DARK MODE (default) ===== */
@@ -73,6 +75,11 @@ html {
   color-scheme: dark;
   overflow: hidden;
   overscroll-behavior-x: none;
+  /* iOS: no inflar el texto al girar a horizontal */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* iOS: quitar el destello gris al tocar enlaces y botones */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html.light {
@@ -86,8 +93,61 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   touch-action: manipulation;
-  overscroll-behavior-x: none;
+  overscroll-behavior: none;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ===== TOUCH DEVICES (iPhone / iPad / Android) ===== */
+@media (pointer: coarse) {
+  /* Mantener pulsado un botón, enlace o tarjeta no debe seleccionar texto ni abrir el
+     menú nativo de iOS (vista previa del enlace): ahí abrimos nuestro propio menú contextual. */
+  button,
+  a,
+  [role="button"],
+  [data-context],
+  [data-longpress],
+  .cursor-pointer,
+  .cursor-grab {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Acciones que en escritorio aparecen al pasar el ratón: en táctil no existe hover,
+     así que se muestran siempre. */
+  .touch-reveal {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+  .touch-hide {
+    display: none !important;
+  }
+}
+
+/* iOS Safari: los inputs de fecha/hora nativos se centran y pierden altura */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 2.25rem;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value,
+input[type="datetime-local"]::-webkit-date-and-time-value,
+input[type="month"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+/* iOS Safari añade estilos propios (sombra interior, esquinas) a los campos de búsqueda */
+input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
 }
 
 ::selection {
@@ -159,18 +219,27 @@ html.light .logo-dark {
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   }
 
-  .card-hover:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 30px var(--card-shadow);
-    border-color: rgba(108, 92, 231, 0.3);
+  /* Only real hover: on touch screens :hover "sticks" after a tap and leaves the card lifted */
+  @media (hover: hover) {
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--card-shadow);
+      border-color: rgba(108, 92, 231, 0.3);
+    }
   }
 
   /* Smooth scroll container — adds will-change only during scroll */
   .smooth-scroll-container {
     overflow-y: auto;
-    overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     scroll-behavior: auto; /* JS handles smoothness */
+  }
+  /* On desktop the inner panels trap the wheel; on phones the page must keep scrolling
+     when a nested list reaches its end, otherwise the finger gets "stuck" inside it. */
+  @media (min-width: 1024px) {
+    .smooth-scroll-container {
+      overscroll-behavior: contain;
+    }
   }
 
   /* Custom scrollbar for smooth-scroll containers */
@@ -211,6 +280,16 @@ html.light .logo-dark {
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
   }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
 
   /* Touch-friendly minimum target size */
   .touch-target {
@@ -240,6 +319,39 @@ html.light .logo-dark {
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0.6;
+    transform: translateY(100%) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateZ(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateZ(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @keyframes skeleton {

@@ -137,15 +137,17 @@ export default function ArtistsPage() {
             <option value="name-desc">Nombre (Z-A)</option>
           </select>
           <div className="flex items-center bg-surface-elevated rounded-lg p-1 ml-1 shrink-0">
-            <button 
+            <button
               onClick={() => setViewMode('grid')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-surface shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+              aria-label="Vista de cuadrícula"
+              className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-md transition-colors ${viewMode === 'grid' ? 'bg-surface shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-surface shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+              aria-label="Vista de lista"
+              className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-md transition-colors ${viewMode === 'list' ? 'bg-surface shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
             >
               <ListIcon className="w-4 h-4" />
             </button>
@@ -254,16 +256,20 @@ export default function ArtistsPage() {
 
               {/* Hover Actions (Grid only) */}
               {viewMode === 'grid' && (
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-20">
-                  <button 
+                // On touch devices there is no hover to reveal these, so they stay visible there;
+                // on desktop they still only appear when the card is hovered.
+                <div className="absolute top-2 right-2 opacity-100 pointer-events-auto sm:opacity-0 sm:pointer-events-none sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto transition-opacity flex gap-1 z-20">
+                  <button
                     onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/portal/${artist.id}`); customAlert('Enlace de portal copiado'); }}
-                    className="p-1.5 bg-surface-elevated/90 backdrop-blur-sm hover:bg-accent hover:text-white rounded-md text-text-secondary transition-colors shadow-sm"
+                    className="min-h-[36px] min-w-[36px] flex items-center justify-center bg-surface-elevated/90 backdrop-blur-sm hover:bg-accent hover:text-white active:bg-accent active:text-white rounded-md text-text-secondary transition-colors shadow-sm"
                     title="Copiar Portal"
+                    aria-label="Copiar enlace del portal"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
-                  <div 
-                    className="cursor-pointer"
+                  <button
+                    className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md hover:bg-surface-elevated active:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors bg-surface-elevated/90 backdrop-blur-sm border border-transparent hover:border-border shadow-sm"
+                    aria-label="Más opciones"
                     onClick={(e) => {
                       e.stopPropagation();
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -280,10 +286,8 @@ export default function ArtistsPage() {
                       ]);
                     }}
                   >
-                    <button className="p-1.5 rounded-md hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors bg-surface-elevated/90 backdrop-blur-sm border border-transparent hover:border-border shadow-sm">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
+                    <MoreVertical className="w-4 h-4" />
+                  </button>
                 </div>
               )}
             </div>

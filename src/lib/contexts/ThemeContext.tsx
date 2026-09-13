@@ -13,6 +13,15 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+// Keep the browser chrome (Safari status/toolbar tint, Android address bar) in sync with the
+// theme the user picked in the app, not only with the OS preference.
+function syncThemeColorMeta(resolved: 'dark' | 'light') {
+  const color = resolved === 'dark' ? '#0a0a0f' : '#f5f5f9';
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.setAttribute('content', color);
+  });
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [resolvedTheme, setResolvedTheme] = useState<'dark' | 'light'>('dark');
@@ -46,6 +55,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.add('light');
       root.style.colorScheme = 'light';
       setResolvedTheme('light');
+      syncThemeColorMeta('light');
       return;
     }
 
@@ -63,6 +73,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Fallback for custom logic if needed
     root.style.colorScheme = currentTheme;
     setResolvedTheme(currentTheme);
+    syncThemeColorMeta(currentTheme);
 
   }, [theme, isPortal]);
 
@@ -78,6 +89,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       root.classList.add(newSystemTheme);
       root.style.colorScheme = newSystemTheme;
       setResolvedTheme(newSystemTheme);
+      syncThemeColorMeta(newSystemTheme);
     };
 
     mediaQuery.addEventListener('change', handleChange);

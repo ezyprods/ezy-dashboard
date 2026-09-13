@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation';
 // ─── Global Timer Popover ───────────────────────────────────────────────────
 
 const TIMER_KEY = 'ezy_global_timer_start';
+// Seconds accumulated while stopped, so closing the popover doesn't lose a paused session
+const TIMER_PAUSED_KEY = 'ezy_global_timer_paused';
 
 function formatHMS(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -33,8 +35,11 @@ function GlobalTimerPopover({ onClose }: { onClose: () => void }) {
         const elapsed = Math.floor((Date.now() - startTs) / 1000);
         setElapsedSeconds(elapsed);
         setIsRunning(true);
+        return;
       }
     }
+    const paused = Number(localStorage.getItem(TIMER_PAUSED_KEY));
+    if (paused > 0) setElapsedSeconds(paused);
   }, []);
 
   // Tick
@@ -57,12 +62,17 @@ function GlobalTimerPopover({ onClose }: { onClose: () => void }) {
   const handleStart = () => {
     const startTs = Date.now() - elapsedSeconds * 1000;
     localStorage.setItem(TIMER_KEY, String(startTs));
+    localStorage.removeItem(TIMER_PAUSED_KEY);
     setIsRunning(true);
   };
 
   const handleStop = () => {
+    const stored = Number(localStorage.getItem(TIMER_KEY));
+    const elapsed = stored ? Math.floor((Date.now() - stored) / 1000) : elapsedSeconds;
+    setElapsedSeconds(elapsed);
     setIsRunning(false);
     localStorage.removeItem(TIMER_KEY);
+    localStorage.setItem(TIMER_PAUSED_KEY, String(elapsed));
   };
 
   const handleReset = () => {
@@ -70,6 +80,7 @@ function GlobalTimerPopover({ onClose }: { onClose: () => void }) {
     setElapsedSeconds(0);
     setLabel('');
     localStorage.removeItem(TIMER_KEY);
+    localStorage.removeItem(TIMER_PAUSED_KEY);
   };
 
   return (
@@ -147,18 +158,17 @@ function GlobalTimerPopover({ onClose }: { onClose: () => void }) {
 // ─── Plus Quick Actions Popover ──────────────────────────────────────────────
 
 function QuickActionsPopover({ onClose }: { onClose: () => void }) {
-  const router = useRouter();
-
+  // Handled by <GlobalActionModals /> in the dashboard layout
   const actions = [
     {
       label: 'Nuevo Artista',
       icon: '🎤',
-      onClick: () => { router.push('/artists'); onClose(); },
+      onClick: () => { window.dispatchEvent(new CustomEvent('ezy:new-artist')); onClose(); },
     },
     {
       label: 'Subir archivo',
       icon: '📁',
-      onClick: () => { router.push('/artists'); onClose(); },
+      onClick: () => { window.dispatchEvent(new CustomEvent('ezy:quick-upload')); onClose(); },
     },
   ];
 
@@ -218,11 +228,15 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   return (
     <header
       ref={topbarRef}
-      className="h-16 border-b border-border bg-surface/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between px-4 md:px-6"
+      className={
+        // In iPhone standalone mode (home-screen app) the status bar overlaps the page: pad it
+        "h-[calc(4rem+env(safe-area-inset-top,0px))] pt-safe md:h-16 md:pt-0 border-b border-border bg-surface/80 backdrop-blur-md sticky top-0 z-30 flex items-center justify-between " +
+        "pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] md:px-6 shrink-0"
+      }
     >
-      <div className="flex items-center flex-1">
+      <div className="flex items-center flex-1 min-w-0">
         {/* Mobile menu button */}
-        <Button variant="ghost" size="icon" className="md:hidden mr-2 min-h-[44px] min-w-[44px]" onClick={onMenuClick}>
+        <Button variant="ghost" size="icon" className="md:hidden mr-0.5 min-h-[44px] min-w-[44px] shrink-0" onClick={onMenuClick} aria-label="Abrir menú">
           <Menu className="w-6 h-6" />
         </Button>
 

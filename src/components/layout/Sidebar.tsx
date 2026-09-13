@@ -45,7 +45,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
   const { currentTrack } = useAudio();
   const pathname = usePathname();
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
@@ -99,18 +99,32 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
     onCollapsedChange?.(isCollapsed);
   }, [isCollapsed, onCollapsedChange]);
 
+  // Mobile drawer: close with Escape (external keyboards)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.targetTouches[0].clientX);
+    const touch = e.targetTouches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX === null) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const isSwipeLeft = touchStartX - touchEndX > 50;
-    if (isSwipeLeft && onClose) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const touch = e.changedTouches[0];
+    const deltaX = start.x - touch.clientX;
+    const deltaY = touch.clientY - start.y;
+    // Only a clearly horizontal swipe to the left closes it, so scrolling the nav list doesn't
+    if (deltaX > 50 && deltaX > Math.abs(deltaY) * 1.5 && onClose) {
       onClose();
     }
-    setTouchStartX(null);
   };
 
   const renderNavItem = (item: { name: string; href: string; icon: any }) => {
@@ -126,7 +140,7 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
           if (isOpen && onClose) onClose();
         }}
         className={cn(
-          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 group relative whitespace-nowrap text-left",
+          "w-full flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-lg text-[15px] md:text-sm font-medium transition-colors duration-150 group relative whitespace-nowrap text-left active:bg-surface-elevated",
           isActive 
             ? "text-accent dark:text-accent-light bg-accent/10 font-bold" 
             : "text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
@@ -159,9 +173,10 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
     <>
       {/* Mobile Drawer Backdrop */}
       {isOpen && (
-        <div 
-          className="fixed inset-0 bg-background/60 backdrop-blur-sm z-45 md:hidden animate-fade-in"
+        <div
+          className="fixed inset-0 bg-background/60 backdrop-blur-sm z-45 md:hidden animate-fade-in touch-none"
           onClick={onClose}
+          aria-hidden="true"
         />
       )}
 
@@ -174,16 +189,18 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
         className={cn(
           "bg-surface border-r border-border flex flex-col h-[100dvh] fixed md:sticky top-0 left-0 z-50 md:z-40 overflow-hidden shrink-0",
           "transition-[width,transform] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]",
-          isOpen 
-            ? "translate-x-0 w-64 max-w-[calc(100vw-3rem)] shadow-2xl" 
+          "w-[min(18rem,calc(100vw-3rem))]",
+          isOpen
+            ? "translate-x-0 shadow-2xl"
             : "-translate-x-full md:translate-x-0 md:shadow-none",
           isCollapsed ? "md:w-[68px]" : "md:w-64"
         )}
+        aria-label="Navegación principal"
       >
         {/* Inner rigid container: fixed width w-64 ensures 0.00px horizontal jitter during width animation */}
-        <div className="w-64 flex flex-col h-full shrink-0">
-          {/* Header: Logo Only */}
-          <div className="h-16 flex items-center justify-between px-3 border-b border-border shrink-0">
+        <div className="w-full md:w-64 flex flex-col h-full shrink-0 pl-safe md:pl-0">
+          {/* Header: Logo Only (on iPhone standalone mode it sits below the status bar) */}
+          <div className="h-[calc(4rem+env(safe-area-inset-top,0px))] pt-safe md:h-16 md:pt-0 flex items-center justify-between px-3 border-b border-border shrink-0">
             <Link 
               href="/dashboard" 
               onClick={() => {
@@ -234,7 +251,7 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="md:hidden p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-elevated transition-colors cursor-pointer shrink-0 ml-auto"
+                className="md:hidden w-11 h-11 flex items-center justify-center rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface-elevated active:bg-surface-elevated transition-colors cursor-pointer shrink-0 ml-auto"
                 aria-label="Cerrar menú lateral"
               >
                 <X className="w-5 h-5" />
@@ -243,7 +260,7 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
           </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-3 space-y-2 custom-scrollbar">
+          <nav className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3 px-3 space-y-2 custom-scrollbar">
             <div className="space-y-1">
               {mainNavItems.map(renderNavItem)}
             </div>
@@ -258,7 +275,10 @@ export function Sidebar({ isOpen, onClose, onCollapsedChange }: SidebarProps) {
           {/* Footer: Google Drive Connection status & dynamic audio spacing */}
           <div className={cn(
             "p-3 border-t border-border mt-auto shrink-0 transition-[padding] duration-300",
-            currentTrack ? "pb-24 md:pb-28" : "pb-3"
+            // The mobile drawer covers the tab bar/mini player, so only the home indicator needs room
+            isOpen
+              ? "pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]"
+              : currentTrack ? "pb-24 md:pb-28" : "pb-3"
           )}>
             {isCollapsed ? (
               <div className="flex flex-col items-center justify-center w-11 h-11 mx-auto rounded-xl glass hover:bg-surface-elevated transition-colors group relative">

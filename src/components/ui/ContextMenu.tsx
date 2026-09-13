@@ -33,9 +33,20 @@ import {
   Pencil,
   RotateCcw,
   MoreVertical,
+  Scissors,
+  Undo,
+  KanbanSquare,
+  AlertCircle,
+  FolderOpen,
+  FolderInput,
+  Music,
+  CreditCard,
+  MessageSquare,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
+import { useAudio } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
 
 // Map of icon name strings → Lucide icon components
@@ -69,7 +80,118 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Pencil,
   RotateCcw,
   MoreVertical,
+  Scissors,
+  Undo,
+  KanbanSquare,
+  AlertCircle,
+  FolderOpen,
+  FolderInput,
+  Music,
+  CreditCard,
+  MessageSquare,
+  Settings,
+  LinkIcon: Link,
 };
+
+const LONG_PRESS_MS = 480;
+const LONG_PRESS_MOVE_TOLERANCE = 10;
+
+/** Marks contextmenu events we synthesize from a long-press (see useIOSLongPressContextMenu). */
+type SyntheticContextMenuEvent = MouseEvent & { __ezyLongPress?: boolean };
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
+}
+
+function isIOSDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * iOS Safari never fires `contextmenu` on long-press (Android Chrome does), so every
+ * right-click menu in the app was unreachable on iPhone. This turns a still ~0.5s press into a
+ * `contextmenu` event on the pressed element, which the existing onContextMenu handlers pick up.
+ * The click that iOS fires when the finger lifts is swallowed so the item isn't also opened.
+ */
+function useIOSLongPressContextMenu() {
+  useEffect(() => {
+    if (!isIOSDevice()) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let start: { x: number; y: number } | null = null;
+    let suppressClickUntil = 0;
+
+    const cancel = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      start = null;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      cancel();
+      if (e.touches.length !== 1 || isEditableTarget(e.target)) return;
+      const touch = e.touches[0];
+      const target = e.target as Element;
+      start = { x: touch.clientX, y: touch.clientY };
+      timer = setTimeout(() => {
+        timer = null;
+        if (!start) return;
+        const evt = new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: start.x,
+          clientY: start.y,
+          screenX: touch.screenX,
+          screenY: touch.screenY,
+          button: 2,
+        }) as SyntheticContextMenuEvent;
+        evt.__ezyLongPress = true;
+        target.dispatchEvent(evt);
+        if (evt.defaultPrevented) {
+          // A menu opened: drop the text selection iOS may have started and eat the upcoming tap
+          window.getSelection()?.removeAllRanges();
+          suppressClickUntil = Date.now() + 800;
+        }
+        start = null;
+      }, LONG_PRESS_MS);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!start) return;
+      const touch = e.touches[0];
+      if (Math.abs(touch.clientX - start.x) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(touch.clientY - start.y) > LONG_PRESS_MOVE_TOLERANCE) {
+        cancel();
+      }
+    };
+
+    const onClickCapture = (e: MouseEvent) => {
+      if (Date.now() < suppressClickUntil) {
+        e.preventDefault();
+        e.stopPropagation();
+        suppressClickUntil = 0;
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('touchend', cancel, { passive: true });
+    document.addEventListener('touchcancel', cancel, { passive: true });
+    document.addEventListener('scroll', cancel, { passive: true, capture: true });
+    document.addEventListener('click', onClickCapture, { capture: true });
+    return () => {
+      cancel();
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', cancel);
+      document.removeEventListener('touchcancel', cancel);
+      document.removeEventListener('scroll', cancel, { capture: true });
+      document.removeEventListener('click', onClickCapture, { capture: true });
+    };
+  }, []);
+}
 
 function MenuIcon({ name, className }: { name?: string; className?: string }) {
   if (!name) return null;
@@ -80,8 +202,11 @@ function MenuIcon({ name, className }: { name?: string; className?: string }) {
 
 export function GlobalContextMenu() {
   const { menuState, hideMenu, showMenu } = useContextMenu();
+  const { playTrack } = useAudio();
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useIOSLongPressContextMenu();
 
   // Build default actions
   const getDefaultItems = useCallback((): MenuItem[] => [
@@ -124,7 +249,7 @@ export function GlobalContextMenu() {
     {
       label: 'Reproducir',
       icon: 'Play',
-      action: () => window.dispatchEvent(new CustomEvent('ezy:play-file', { detail: { fileId } })),
+      action: () => playTrack({ id: fileId, name: 'Audio', url: `/api/audio/${fileId}` }),
     },
     {
       label: 'Descargar',
@@ -143,22 +268,26 @@ export function GlobalContextMenu() {
         navigator.clipboard.writeText(url).catch(() => {});
       },
     },
-  ], []);
+  ], [playTrack]);
 
   // Global contextmenu listener
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+
+      // Keep the browser's own menu for text fields (paste) and when text is selected (copy)
+      if (isEditableTarget(target) || window.getSelection()?.toString()) {
+        return;
+      }
+
       const contextEl = target.closest('[data-context]') as HTMLElement | null;
       const context = contextEl?.dataset.context;
-      
+
       // If a local component wants to handle its own context menu, it should use data-context="ignore"
       if (context === 'ignore' || context?.startsWith('calendar-')) {
         return;
       }
 
-      e.preventDefault();
-      
       const artistId = contextEl?.dataset.artistId;
       const fileId = contextEl?.dataset.fileId;
 
@@ -169,8 +298,15 @@ export function GlobalContextMenu() {
       } else if (context === 'audio' && fileId) {
         items = getAudioItems(fileId);
       } else {
+        // A component already opened its own menu for this element
+        if (e.defaultPrevented) return;
+        // A long-press on iPhone over an element without its own menu shouldn't pop the
+        // generic "Nuevo Artista / Ir a..." sheet — that's a desktop right-click nicety.
+        if ((e as SyntheticContextMenuEvent).__ezyLongPress) return;
         items = getDefaultItems();
       }
+
+      e.preventDefault();
 
       // Determine viewport-safe position
       const menuW = 200;
@@ -229,8 +365,13 @@ export function GlobalContextMenu() {
     };
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') hideMenu(); };
 
-    document.addEventListener('mousedown', handlePointerDown as any);
-    document.addEventListener('touchstart', handlePointerDown as any);
+    // On phones the sheet's own backdrop closes it on tap. Closing on touchstart instead would
+    // remove the overlay before the tap ends, and the tap would then "fall through" and activate
+    // whatever is underneath.
+    if (!isMobile) {
+      document.addEventListener('mousedown', handlePointerDown as any);
+      document.addEventListener('touchstart', handlePointerDown as any);
+    }
     document.addEventListener('scroll', handleScroll, { capture: true });
     document.addEventListener('keydown', handleKeyDown);
 
@@ -252,13 +393,14 @@ export function GlobalContextMenu() {
       >
         <div
           ref={menuRef}
-          className="w-full bg-surface-elevated/95 backdrop-blur-2xl border-t border-border rounded-t-3xl p-4 pb-8 shadow-2xl animate-in slide-in-from-bottom-6 duration-200 z-[9999]"
+          className="w-full max-h-[calc(100dvh-env(safe-area-inset-top,0px)-1rem)] flex flex-col bg-surface-elevated/95 backdrop-blur-2xl border-t border-border rounded-t-3xl px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] shadow-2xl animate-slide-up z-[9999]"
           onClick={(e) => e.stopPropagation()}
+          role="menu"
         >
           {/* Drag Pill */}
-          <div className="w-12 h-1.5 bg-border/80 rounded-full mx-auto mb-4" />
-          
-          <div className="space-y-1">
+          <div className="w-10 h-1.5 bg-border rounded-full mx-auto mb-3 shrink-0" />
+
+          <div className="space-y-0.5 overflow-y-auto overscroll-contain min-h-0">
             {menuState.items.map((item, i) => {
               if (item.separator) {
                 return <div key={`sep-${i}`} className="my-2 border-t border-border/40" />;
@@ -270,16 +412,17 @@ export function GlobalContextMenu() {
                     if (item.action) item.action();
                     hideMenu();
                   }}
+                  role="menuitem"
                   className={cn(
-                    'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-100 text-left active:bg-surface-elevated/80',
+                    'w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors duration-100 text-left active:bg-surface',
                     item.variant === 'danger'
                       ? 'text-error hover:bg-error/10'
                       : 'text-text-primary hover:bg-accent/10 hover:text-accent-light',
                     item.className
                   )}
                 >
-                  <MenuIcon name={item.icon} className={cn('w-4 h-4', item.iconClassName)} />
-                  {item.label}
+                  <MenuIcon name={item.icon} className={cn('w-[18px] h-[18px]', item.iconClassName)} />
+                  <span className="truncate">{item.label}</span>
                 </button>
               );
             })}
@@ -287,7 +430,7 @@ export function GlobalContextMenu() {
 
           <button
             onClick={hideMenu}
-            className="w-full mt-4 py-3 text-center text-xs font-semibold text-text-secondary bg-surface rounded-xl border border-border/60 active:bg-surface-elevated"
+            className="w-full mt-3 min-h-[48px] shrink-0 text-center text-[15px] font-semibold text-text-primary bg-surface rounded-xl border border-border/60 active:bg-background"
           >
             Cancelar
           </button>

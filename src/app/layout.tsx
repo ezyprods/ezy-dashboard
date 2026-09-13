@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { AudioProvider } from "@/lib/contexts/AudioContext";
 import { ContextMenuProvider } from "@/lib/contexts/ContextMenuContext";
 import { GlobalAudioPlayer } from "@/components/layout/GlobalAudioPlayer";
@@ -10,6 +10,34 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Ezy",
   description: "Plataforma de gestión de producción musical para productores independientes.",
+  applicationName: "Ezy",
+  // iOS: "Añadir a pantalla de inicio" abre la app a pantalla completa, sin la barra de Safari
+  appleWebApp: {
+    capable: true,
+    title: "Ezy",
+    statusBarStyle: "black-translucent",
+  },
+  // iOS convierte en enlaces de llamada cualquier número largo (importes, BPM, fechas...)
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+    date: false,
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Evita el zoom automático de iOS Safari al enfocar inputs con texto < 16px.
+  // iOS sigue permitiendo el pellizco para hacer zoom manual (ignora este límite para el gesto).
+  maximumScale: 1,
+  // Necesario para que env(safe-area-inset-*) funcione (notch, Dynamic Island, home indicator)
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0f" },
+    { media: "(prefers-color-scheme: light)", color: "#f5f5f9" },
+  ],
 };
 
 export default function RootLayout({
@@ -46,7 +74,16 @@ export default function RootLayout({
               {children}
               <GlobalAudioPlayer />
               <DialogProvider />
-              <Toaster theme="dark" position="top-center" className="!font-sans" />
+              <Toaster
+                theme="dark"
+                position="top-center"
+                className="!font-sans"
+                mobileOffset={{
+                  top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+                  left: "calc(env(safe-area-inset-left, 0px) + 12px)",
+                  right: "calc(env(safe-area-inset-right, 0px) + 12px)",
+                }}
+              />
             </AudioProvider>
           </ContextMenuProvider>
         </ThemeProvider>
