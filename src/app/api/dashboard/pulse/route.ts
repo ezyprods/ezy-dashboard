@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { findAndReadJsonFile, listFolders, cleanupExpiredFiles } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 
@@ -20,7 +20,7 @@ export async function GET() {
     ]);
     
     // Trigger non-blocking background cleanup of expired files
-    cleanupExpiredFiles().catch(err => console.warn('Background cleanupExpiredFiles non-critical error:', err));
+    after(() => cleanupExpiredFiles().catch(err => console.warn('Background cleanupExpiredFiles non-critical error:', err)));
 
     const folders = (foldersRaw || []).filter(f => !isSystemOrSpecialFolder(f.name));
     const artistsDb = artistsDbResult || [];

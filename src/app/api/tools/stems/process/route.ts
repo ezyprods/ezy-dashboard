@@ -367,9 +367,13 @@ async function processCloudReplicate(taskId: string, predictionId: string, token
     let isFinished = false;
     let pollCount = 0;
 
+    const MAX_POLLS = 480; // ~20 minutes
     while (!isFinished) {
       await new Promise(resolve => setTimeout(resolve, 2500));
       pollCount++;
+      if (pollCount > MAX_POLLS) {
+        throw new Error('La separación en la nube está tardando demasiado. Inténtalo de nuevo más tarde.');
+      }
 
       const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
         headers: {

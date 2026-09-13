@@ -6,7 +6,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ even
   try {
     const { eventId } = await params;
     const body = await request.json();
-    const { summary, description, startDateTime, endDateTime } = body;
+    const { summary, description, startDateTime, endDateTime, startDate, endDate } = body;
 
     if (!eventId) {
       return NextResponse.json({ error: 'eventId is required' }, { status: 400 });
@@ -28,8 +28,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ even
         ...existingEvent.data,
         summary: summary !== undefined ? summary : existingEvent.data.summary,
         description: description !== undefined ? description : existingEvent.data.description,
-        start: startDateTime ? { dateTime: startDateTime, timeZone: 'Europe/Madrid' } : existingEvent.data.start,
-        end: endDateTime ? { dateTime: endDateTime, timeZone: 'Europe/Madrid' } : existingEvent.data.end,
+        start: startDateTime
+          ? { dateTime: startDateTime, timeZone: 'Europe/Madrid' }
+          : startDate ? { date: startDate } : existingEvent.data.start,
+        end: endDateTime
+          ? { dateTime: endDateTime, timeZone: 'Europe/Madrid' }
+          : endDate ? { date: endDate } : existingEvent.data.end,
       },
     });
 

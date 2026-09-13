@@ -1,116 +1,8 @@
-import { NextResponse } from 'next/server';
-import { findAndReadJsonFile, saveJsonFile, getCalendarAuthClient } from '@/lib/drive';
-import { google } from 'googleapis';
+import { NextResponse, after } from 'next/server';
+import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
+import { syncProductionGridToGoogleCalendar } from '@/lib/calendarSync';
 
-async function syncProductionGridToGoogleCalendar(
-  artistId: string,
-  projectName: string,
-  newGrid: any,
-  oldGrid: any
-) {
-  try {
-    const auth = getCalendarAuthClient();
-    const calendar = google.calendar({ version: 'v3', auth });
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
-
-    const newCellsMap = new Map<string, { cell: any; rowName: string; colName: string }>();
-    if (newGrid && Array.isArray(newGrid.rows) && Array.isArray(newGrid.columns)) {
-      for (const row of newGrid.rows) {
-        for (const col of newGrid.columns) {
-          const cell = row.cells?.[col.id];
-          if (cell) {
-            newCellsMap.set(`${row.id}-${col.id}`, { cell, rowName: row.name, colName: col.name });
-          }
-        }
-      }
-    }
-
-    const oldCellsMap = new Map<string, any>();
-    if (oldGrid && Array.isArray(oldGrid.rows) && Array.isArray(oldGrid.columns)) {
-      for (const row of oldGrid.rows) {
-        for (const col of oldGrid.columns) {
-          const cell = row.cells?.[col.id];
-          if (cell) {
-            oldCellsMap.set(`${row.id}-${col.id}`, cell);
-          }
-        }
-      }
-    }
-
-    for (const [key, { cell, rowName, colName }] of newCellsMap.entries()) {
-      const oldCell = oldCellsMap.get(key);
-      const isChanged = !oldCell || 
-        oldCell.dueDate !== cell.dueDate || 
-        oldCell.status !== cell.status || 
-        oldCell.notes !== cell.notes ||
-        oldCell.fileName !== cell.fileName;
-
-      const summary = `[${projectName}] ${rowName} - ${colName}`;
-      const description = `Fase: ${colName}\nProyecto: ${projectName}\nCanción/Fila: ${rowName}\nEstado: ${
-        cell.status === 'done' ? '✅ Hecho' : cell.status === 'review' ? '👀 Revisión' : cell.status === 'in_progress' ? '⚡ En progreso' : '⭕ Pendiente'
-      }\nNotas: ${cell.notes || 'Ninguna'}${cell.fileName ? `\nArchivo Vinculado: ${cell.fileName}` : ''}`;
-
-      if (cell.dueDate) {
-        if (cell.eventId) {
-          if (isChanged) {
-            try {
-              const startDateTime = `${cell.dueDate}T10:00:00`;
-              const endDateTime = `${cell.dueDate}T11:00:00`;
-              await calendar.events.patch({
-                calendarId,
-                eventId: cell.eventId,
-                requestBody: {
-                  summary,
-                  description,
-                  start: { dateTime: startDateTime, timeZone: 'Europe/Madrid' },
-                  end: { dateTime: endDateTime, timeZone: 'Europe/Madrid' },
-                }
-              });
-            } catch (err: any) {
-              if (err.code === 404 || err.message?.includes('Not Found')) {
-                delete cell.eventId;
-              }
-            }
-          }
-        } else {
-          try {
-            const startDateTime = `${cell.dueDate}T10:00:00`;
-            const endDateTime = `${cell.dueDate}T11:00:00`;
-            const response = await calendar.events.insert({
-              calendarId,
-              requestBody: {
-                summary,
-                description,
-                start: { dateTime: startDateTime, timeZone: 'Europe/Madrid' },
-                end: { dateTime: endDateTime, timeZone: 'Europe/Madrid' },
-              }
-            });
-            if (response.data.id) {
-              cell.eventId = response.data.id;
-            }
-          } catch (err: any) {}
-        }
-      } else {
-        if (cell.eventId) {
-          try {
-            await calendar.events.delete({ calendarId, eventId: cell.eventId });
-          } catch (err: any) {}
-          delete cell.eventId;
-        }
-      }
-    }
-
-    for (const [key, oldCell] of oldCellsMap.entries()) {
-      if (!newCellsMap.has(key) && oldCell.eventId) {
-        try {
-          await calendar.events.delete({ calendarId, eventId: oldCell.eventId });
-        } catch (err: any) {}
-      }
-    }
-  } catch (err: any) {
-    console.error('Calendar matrix sync error:', err.message);
-  }
-}
+export const dynamic = 'force-dynamic';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string; matrixId: string }> }) {
   try {
@@ -119,9 +11,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const body = await request.json();
 
     const data = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
-    const matrixIndex = data.matrices?.findIndex((m: any) => m.id === matrixId);
-    
-    if (matrixIndex === -1 || matrixIndex === undefined) {
+    const matrixIndex = Array.isArray(data.matrices) ? data.matrices.findIndex((m: any) => m.id === matrixId) : -1;
+
+    if (matrixIndex === -1) {
       return NextResponse.json({ error: 'Matrix not found' }, { status: 404 });
     }
 
@@ -129,16 +21,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const updatedMatrix = {
       ...data.matrices[matrixIndex],
       ...body,
+      id: matrixId, // Never allow the id to be overwritten
       productionGrid: body.productionGrid || oldGrid
     };
-    
+
     if (body.forceStatus !== undefined) {
       updatedMatrix.forceStatus = body.forceStatus;
     }
 
     if (body.productionGrid) {
-      let projectName = updatedMatrix.name || 'Matriz';
-      await syncProductionGridToGoogleCalendar(id, projectName, body.productionGrid, oldGrid);
+      const projectName = updatedMatrix.name || 'Matriz';
+      await syncProductionGridToGoogleCalendar(projectName, body.productionGrid, oldGrid);
     }
 
     data.matrices[matrixIndex] = updatedMatrix;
@@ -155,8 +48,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const resolvedParams = await params;
     const { id, matrixId } = resolvedParams;
     const data = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
-    data.matrices = data.matrices.filter((m: any) => m.id !== matrixId);
+    const matrices: any[] = Array.isArray(data.matrices) ? data.matrices : [];
+    const removed = matrices.find((m: any) => m.id === matrixId);
+    data.matrices = matrices.filter((m: any) => m.id !== matrixId);
     await saveJsonFile('matrices.json', data, id);
+
+    // Remove (after responding) the Google Calendar events created for this matrix's due dates
+    if (removed?.productionGrid) {
+      after(() => syncProductionGridToGoogleCalendar(removed.name || 'Matriz', { rows: [], columns: [] }, removed.productionGrid));
+    }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: 'Failed to delete matrix', details: error.message }, { status: 500 });

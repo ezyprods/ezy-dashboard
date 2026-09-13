@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { listFolders, findAndReadJsonFile, createFolder, saveJsonFile } from '@/lib/drive';
-import { PROJECT_FOLDER_STRUCTURE } from '@/lib/constants';
+import { PROJECT_FOLDER_STRUCTURE, isSystemOrSpecialFolder } from '@/lib/constants';
 import type { Project, CreateProjectInput } from '@/types';
 
 // Obtener todos los proyectos de un artista
@@ -18,8 +18,13 @@ export async function GET(request: Request) {
     const folders = await listFolders(artistId);
     
     // 2. Filtrar subcarpetas estándar (como 'Images')
-    const excludeFolders = ['Images', 'images'];
-    const projectFolders = folders.filter(f => !excludeFolders.includes(f.name || ''));
+    // Carpetas del sistema del artista que no son proyectos (mismo criterio que el portal)
+    const excludeFolders = new Set([
+      'Images', 'images', 'Releases', 'releases',
+      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones',
+      'Bounces', 'bounces', 'Documents', 'documents', 'Contracts', 'contracts', 'Stems', 'stems'
+    ]);
+    const projectFolders = folders.filter(f => !excludeFolders.has(f.name || '') && !isSystemOrSpecialFolder(f.name));
 
     // 3. Leer project_config.json en paralelo para carga rápida y ágil
     const projectPromises = projectFolders.map(async (folder) => {
@@ -69,6 +74,7 @@ export async function POST(request: Request) {
   try {
     const body: CreateProjectInput = await request.json();
     
+    body.title = typeof body.title === 'string' ? body.title.trim() : '';
     if (!body.artistId || !body.title || !body.type) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }

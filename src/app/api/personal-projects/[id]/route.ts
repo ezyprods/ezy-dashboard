@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { 
   findAndReadJsonFile, 
   saveJsonFile, 
@@ -56,26 +56,34 @@ export async function GET(
         driveUrl: b.webViewLink,
       }));
 
-      const needsSync = !config.latestBounceFileId || 
-        config.latestBounceFileId !== bounces[0].id ||
-        !config.packTracks || 
-        config.packTracks.length !== packTracks.length;
+      // Keep the bounce the user marked as main while it still exists; only fall back
+      // to the first audio when there is none or it was deleted.
+      const currentMain = bounces.find((b: any) => b.id === config.latestBounceFileId);
+      const mainBounce = currentMain || bounces[0];
+      const sameTracks = Array.isArray(config.packTracks) &&
+        config.packTracks.length === packTracks.length &&
+        packTracks.every(t => config.packTracks!.some(pt => pt.fileId === t.fileId));
+
+      const needsSync = !currentMain || !sameTracks || config.latestBounceName !== mainBounce.name;
 
       if (needsSync) {
         updatedProjectConfig = {
           ...updatedProjectConfig,
-          latestBounceFileId: bounces[0].id,
-          latestBounceName: bounces[0].name,
+          latestBounceFileId: mainBounce.id,
+          latestBounceName: mainBounce.name,
           packTracks,
           updatedAt: new Date().toISOString(),
         };
 
-        // Guardar de fondo sin bloquear
-        saveJsonFile('personal_project_config.json', updatedProjectConfig, id).catch(() => {});
-        getPersonalProjectsDb().then(({ projects, rootFolderId }) => {
-          const updatedList = projects.map(p => (p.id === id ? updatedProjectConfig : p));
-          return savePersonalProjectsDb(updatedList, rootFolderId);
-        }).catch(() => {});
+        // Guardar después de responder (en serverless un "fire & forget" puede cortarse)
+        const toSave = updatedProjectConfig;
+        after(async () => {
+          await saveJsonFile('personal_project_config.json', toSave, id).catch(() => {});
+          try {
+            const { projects, rootFolderId } = await getPersonalProjectsDb();
+            await savePersonalProjectsDb(projects.map(p => (p.id === id ? toSave : p)), rootFolderId);
+          } catch {}
+        });
       } else {
         updatedProjectConfig.packTracks = config.packTracks || packTracks;
       }
@@ -114,9 +122,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Proyecto personal no encontrado' }, { status: 404 });
     }
 
+    const { driveUrl: _driveUrl, ...safeBody } = body || {};
     const updatedConfig: PersonalProject = {
       ...config,
-      ...body,
+      ...safeBody,
+      driveUrl: config.driveUrl,
       id,
       driveFolderId: id,
       updatedAt: new Date().toISOString(),

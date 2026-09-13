@@ -1,20 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
-import path from 'path';
-import os from 'os';
 import { writeFile, unlink } from 'fs/promises';
-import { existsSync, mkdirSync } from 'fs';
 // @ts-ignore
 import MusicTempo from 'music-tempo';
 // @ts-ignore
 import Meyda from 'meyda';
+import { resolveFfmpegPath, uniqueTempPath } from '@/lib/serverFiles';
 
-let ffmpegPath: string;
-try {
-  ffmpegPath = require('ffmpeg-static') || 'ffmpeg';
-} catch (e) {
-  ffmpegPath = 'ffmpeg';
-}
+export const maxDuration = 120;
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
@@ -78,16 +71,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se proporcionó archivo' }, { status: 400 });
     }
 
-    const tempDir = path.join(os.tmpdir(), 'ezy_audio_tools');
-    if (!existsSync(tempDir)) {
-      mkdirSync(tempDir, { recursive: true });
-    }
-
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    
-    const inputPath = path.join(tempDir, file.name);
+
+    const inputPath = uniqueTempPath(file.name, '_detect');
     await writeFile(inputPath, buffer);
+    const ffmpegPath = await resolveFfmpegPath();
 
     return new Promise<NextResponse>((resolve) => {
       const args = ['-i', inputPath, '-t', '60', '-ac', '1', '-ar', '22050', '-f', 'f32le', '-c:a', 'pcm_f32le', 'pipe:1'];

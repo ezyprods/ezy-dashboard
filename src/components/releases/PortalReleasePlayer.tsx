@@ -111,6 +111,22 @@ export function PortalReleasePlayer({
   const tracks = release?.tracks || [];
   const currentTrack = tracks[currentTrackIndex];
 
+  // Reset playback when switching to another release
+  useEffect(() => {
+    setCurrentTrackIndex(0);
+    setIsPlaying(false);
+    setProgress(0);
+    setCurrentTime(0);
+    setDuration(0);
+  }, [release?.id]);
+
+  // Keep the index inside the tracklist when tracks are removed
+  useEffect(() => {
+    if (tracks.length > 0 && currentTrackIndex > tracks.length - 1) {
+      setCurrentTrackIndex(tracks.length - 1);
+    }
+  }, [tracks.length, currentTrackIndex]);
+
   useEffect(() => {
     if (!audioRef.current) return;
     if (isPlaying) {
@@ -223,16 +239,15 @@ export function PortalReleasePlayer({
     setIsUploadingCover(true);
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('artistId', artistId || '');
-    formData.append('type', 'cover');
+    formData.append('token', portalToken || '');
 
     try {
-      const res = await fetch('/api/upload', {
+      const res = await fetch(`/api/portal/${artistId}/releases/${release.id}`, {
         method: 'POST',
         body: formData
       });
-      if (!res.ok) throw new Error('Error al subir la imagen');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.fileId) throw new Error(data.error || 'Error al subir la imagen');
       
       const newHistoryEntry = { fileId: data.fileId, uploadedAt: new Date().toISOString() };
       const newHistory = [...(release.coverHistory || []), newHistoryEntry];
@@ -246,6 +261,7 @@ export function PortalReleasePlayer({
       customAlert(err.message || 'Error al subir la portada');
     } finally {
       setIsUploadingCover(false);
+      e.target.value = '';
     }
   };
 

@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     // Search files in Drive using fullText search
     const driveSearchPromise = drive.files.list({
-      q: `name contains '${q.replace(/'/g, "\\'")}' and trashed=false and mimeType != 'application/vnd.google-apps.folder'`,
+      q: `name contains '${q.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' and trashed=false and mimeType != 'application/vnd.google-apps.folder'`,
       fields: 'files(id, name, mimeType, size, modifiedTime, webViewLink, appProperties)',
       orderBy: 'modifiedTime desc',
       includeItemsFromAllDrives: true,

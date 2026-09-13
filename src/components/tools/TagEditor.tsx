@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { UploadCloud, Tags, Image as ImageIcon, Save, CheckCircle2, Loader2, Music } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { downloadResponseAsFile } from '@/lib/clientDownload';
 
 export function TagEditor() {
   const [file, setFile] = useState<File | null>(null);
@@ -83,8 +84,12 @@ export function TagEditor() {
         body: formData
       });
 
-      if (!res.ok) throw new Error('Error al guardar etiquetas');
-      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Error al guardar etiquetas');
+      }
+
+      await downloadResponseAsFile(res, `${file.name.replace(/\.[^/.]+$/, '')}_(Tagged).mp3`);
       setStatus('completed');
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -155,7 +160,7 @@ export function TagEditor() {
                 <p className="font-medium text-text-primary text-sm truncate bg-surface-elevated px-3 py-1.5 rounded-lg border border-border/50">
                   {file.name}
                 </p>
-                <Button variant="ghost" size="sm" onClick={() => setFile(null)}>Cambiar archivo</Button>
+                <Button variant="ghost" size="sm" onClick={() => { setFile(null); setCoverUrl(null); setCoverFile(null); setStatus('idle'); setErrorMsg(''); if (fileInputRef.current) fileInputRef.current.value = ''; }}>Cambiar archivo</Button>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -216,7 +221,7 @@ export function TagEditor() {
                   {errorMsg && <p className="text-sm text-danger">{errorMsg}</p>}
                   {status === 'completed' && (
                     <div className="flex items-center gap-2 text-emerald-500 font-medium text-sm">
-                      <CheckCircle2 className="w-4 h-4" /> Guardado en Descargas
+                      <CheckCircle2 className="w-4 h-4" /> Archivo descargado
                     </div>
                   )}
                 </div>

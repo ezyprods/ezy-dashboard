@@ -34,85 +34,76 @@ export async function GET(request: Request) {
       'releases'
     ];
 
-    if (recursive) {
-      const allItems: any[] = [];
-      
-      async function traverse(folderId: string) {
-        const query = `'${folderId}' in parents and trashed=false`;
-        const response = await drive.files.list({
-          q: query,
-          fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties)',
+    const FIELDS = 'nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties)';
+
+    // Lists every child of a folder, following pagination (folders with >1000 items were truncated)
+    const listChildren = async (folderId: string) => {
+      const all: any[] = [];
+      let pageToken: string | undefined = undefined;
+      do {
+        const response: any = await drive.files.list({
+          q: `'${folderId}' in parents and trashed=false`,
+          fields: FIELDS,
           orderBy: 'folder, name',
           includeItemsFromAllDrives: true,
           supportsAllDrives: true,
           pageSize: 1000,
+          pageToken,
         });
-        const files = response.data.files || [];
-        
-        for (const file of files) {
-          const name = file.name || '';
-          if (SYSTEM_FILES.includes(name) || SYSTEM_FOLDERS.includes(name)) {
-            continue;
-          }
+        all.push(...(response.data.files || []));
+        pageToken = response.data.nextPageToken || undefined;
+      } while (pageToken);
+      return all;
+    };
 
-          // Check expiration
-          const expiresAt = file.appProperties?.expiresAt ? parseInt(file.appProperties.expiresAt, 10) : null;
-          if (expiresAt && expiresAt < Date.now()) {
-            // Delete asynchronously and skip adding to results
-            drive.files.delete({ fileId: file.id!, supportsAllDrives: true }).catch(console.error);
-            continue;
-          }
-          
-          allItems.push({ 
-            ...file, 
-            parentFolderId: folderId,
-            expiresAt,
-            bpm: file.appProperties?.bpm || null,
-            key: file.appProperties?.key || null
-          });
-          
-          if (file.mimeType === 'application/vnd.google-apps.folder' && file.id) {
-            await traverse(file.id);
+    const now = Date.now();
+    const processItems = (files: any[], folderId: string) => {
+      const result: any[] = [];
+      for (const file of files) {
+        const name = file.name || '';
+        if (SYSTEM_FILES.includes(name) || SYSTEM_FOLDERS.includes(name)) continue;
+
+        // Expired temporary files are deleted in the background and hidden
+        const expiresAt = file.appProperties?.expiresAt ? parseInt(file.appProperties.expiresAt, 10) : null;
+        if (expiresAt && expiresAt < now) {
+          drive.files.delete({ fileId: file.id!, supportsAllDrives: true }).catch(console.error);
+          continue;
+        }
+
+        result.push({
+          ...file,
+          parentFolderId: folderId,
+          expiresAt,
+          bpm: file.appProperties?.bpm || null,
+          key: file.appProperties?.key || null
+        });
+      }
+      return result;
+    };
+
+    if (recursive) {
+      const allItems: any[] = [];
+
+      // Breadth-first traversal, each level fetched in parallel (much faster than one-by-one)
+      let level: string[] = [parentId];
+      let depth = 0;
+      while (level.length > 0 && depth < 12) {
+        const results = await Promise.all(level.map(async (folderId) => processItems(await listChildren(folderId), folderId)));
+        const nextLevel: string[] = [];
+        for (const items of results) {
+          for (const item of items) {
+            allItems.push(item);
+            if (item.mimeType === 'application/vnd.google-apps.folder' && item.id) nextLevel.push(item.id);
           }
         }
+        level = nextLevel;
+        depth++;
       }
-      
-      await traverse(parentId);
+
       return NextResponse.json({ items: allItems });
     }
 
-    const query = `'${parentId}' in parents and trashed=false`;
-    const response = await drive.files.list({
-      q: query,
-      fields: 'files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties)',
-      orderBy: 'folder, name',
-      includeItemsFromAllDrives: true,
-      supportsAllDrives: true,
-      pageSize: 1000,
-    });
-    const items = response.data.files || [];
-    
-    const validItems: any[] = [];
-    
-    for (const f of items) {
-      const name = f.name || '';
-      if (SYSTEM_FILES.includes(name) || SYSTEM_FOLDERS.includes(name)) {
-        continue;
-      }
-
-      const expiresAt = f.appProperties?.expiresAt ? parseInt(f.appProperties.expiresAt, 10) : null;
-      if (expiresAt && expiresAt < Date.now()) {
-        drive.files.delete({ fileId: f.id!, supportsAllDrives: true }).catch(console.error);
-        continue;
-      }
-
-      validItems.push({
-        ...f,
-        expiresAt,
-        bpm: f.appProperties?.bpm || null,
-        key: f.appProperties?.key || null
-      });
-    }
+    const validItems = processItems(await listChildren(parentId), parentId).map(({ parentFolderId, ...rest }) => rest);
 
     return NextResponse.json({ items: validItems });
   } catch (error: any) {

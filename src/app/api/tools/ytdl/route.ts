@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { ensureBinaries } from './binaries';
+import { contentDisposition } from '@/lib/serverFiles';
 import { buildCookieArgs } from './cookies';
 import {
   downloadWithEngines,
@@ -16,6 +17,8 @@ import {
 } from './engines';
 
 const execFileAsync = promisify(execFile);
+
+const cleanTitle = (t: string) => t.replace(/[\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
 
 export const maxDuration = 300;
 
@@ -70,14 +73,11 @@ export async function GET(req: Request) {
     if (videoId) {
       try {
         const result = await downloadWithEngines(videoId);
-        const safeTitle = encodeURIComponent(
-          title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio'
-        );
         return new NextResponse(result.buffer as any, {
           headers: {
             'Content-Type': 'audio/mpeg',
             'Content-Length': result.buffer.length.toString(),
-            'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
+            'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
           },
         });
       } catch (e: any) {
@@ -139,15 +139,11 @@ export async function GET(req: Request) {
     const buffer = await fs.promises.readFile(foundFile);
     try { await fs.promises.unlink(foundFile); } catch (e) {}
 
-    const safeTitle = encodeURIComponent(
-      title.replace(/[^\w\s\-()]/gi, '').trim() || 'audio'
-    );
-
     return new NextResponse(buffer as any, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Content-Length': buffer.length.toString(),
-        'Content-Disposition': `attachment; filename="${safeTitle}.mp3"; filename*=UTF-8''${safeTitle}.mp3`,
+        'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
       },
     });
   } catch (error: any) {

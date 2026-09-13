@@ -17,6 +17,7 @@ import { CustomSortModal } from '@/components/projects/CustomSortModal';
 import { STATUS_CONFIG } from '@/lib/constants';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { isBrowserCompatible } from '@/lib/utils';
+import { uploadFileToDrive, findSimilarFileInFolder } from '@/lib/driveUpload';
 
 
 export default function ProjectDetailPage() {
@@ -65,7 +66,7 @@ export default function ProjectDetailPage() {
   };
 
   const handleDeleteFolder = async (folderId: string) => {
-    if (!await customConfirm('¿Estás seguro de que quieres eliminar esta carpeta y todo su contenido en Google Drive de forma permanente?')) return;
+    if (!await customConfirm('¿Estás seguro de que quieres eliminar esta carpeta y todo su contenido? Se moverá a la papelera de Google Drive.')) return;
     try {
       const res = await fetch(`/api/files?id=${folderId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar la carpeta');
@@ -77,7 +78,7 @@ export default function ProjectDetailPage() {
   };
 
   const handleDeleteFile = async (fileId: string) => {
-    if (!await customConfirm('¿Estás seguro de que quieres eliminar este archivo de Google Drive de forma permanente?')) return;
+    if (!await customConfirm('¿Estás seguro de que quieres eliminar este archivo? Se moverá a la papelera de Google Drive.')) return;
     try {
       const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar el archivo');
@@ -89,8 +90,9 @@ export default function ProjectDetailPage() {
   };
 
   const handleRenameFile = async (fileId: string, currentName: string) => {
-    const ext = currentName.substring(currentName.lastIndexOf('.'));
-    const base = currentName.replace(/\.[^/.]+$/, '');
+    const dotIndex = currentName.lastIndexOf('.');
+    const ext = dotIndex > 0 ? currentName.substring(dotIndex) : '';
+    const base = dotIndex > 0 ? currentName.substring(0, dotIndex) : currentName;
     const newName = await customPrompt('Introduce el nuevo nombre del archivo:', base);
     if (!newName || newName.trim() === '' || newName === base) return;
     try {
@@ -140,11 +142,17 @@ export default function ProjectDetailPage() {
   };
 
   useEffect(() => {
+    // New project → reset the view so the previous project is never shown meanwhile
+    setData(null);
+    setLinkedMatrix(null);
+    setIsLoading(true);
     fetchProject();
   }, [projectId]);
 
   const fetchProject = async () => {
-    setIsLoading(true);
+    // Only show the full-page loader on the first load (refreshes keep the page visible)
+    if (!data) setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/projects/${projectId}`);
       if (!res.ok) throw new Error('Error cargando el proyecto');
@@ -178,40 +186,27 @@ export default function ProjectDetailPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Allow selecting the same file again later
+    e.target.value = '';
     setUploadingTo(folderId);
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('parentId', folderId);
 
     try {
-      let res = await fetch('/api/files', {
-        method: 'POST',
-        body: formData,
-      });
+      // Direct upload to Google Drive (no size limit), keeping the "similar file" check
+      const similar = await findSimilarFileInFolder(folderId, file.name);
+      let overwriteId: string | undefined;
 
-      if (res.status === 409) {
-        const json = await res.json();
-        const replace = await customConfirm(`Se encontró un archivo similar: "${json.similarFile.name}".\n\nPresiona 'Aceptar' para REEMPLAZARLO.\nPresiona 'Cancelar' para decidir si quieres subirlo como archivo NUEVO.`);
-        
+      if (similar) {
+        const replace = await customConfirm(`Se encontró un archivo similar: "${similar.name}".\n\nPresiona 'Aceptar' para REEMPLAZARLO.\nPresiona 'Cancelar' para decidir si quieres subirlo como archivo NUEVO.`);
         if (replace) {
-          formData.append('overwrite', 'true');
-          formData.append('targetFileId', json.similarFile.id);
-          res = await fetch('/api/files', { method: 'POST', body: formData });
+          overwriteId = similar.id;
         } else {
           const uploadAsNew = await customConfirm(`¿Deseas subir "${file.name}" como un archivo nuevo independiente?`);
-          if (uploadAsNew) {
-            formData.append('skipSimilarity', 'true');
-            res = await fetch('/api/files', { method: 'POST', body: formData });
-          } else {
-            return;
-          }
+          if (!uploadAsNew) return;
         }
       }
 
-      if (!res.ok) {
-         const errJson = await res.json().catch(() => null);
-         throw new Error(errJson?.error || 'Error al subir el archivo');
-      }
+      await uploadFileToDrive(file, folderId, { fileId: overwriteId, name: file.name });
+      window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
       await fetchProject(); // Recargar archivos
       customAlert('Archivo subido con éxito');
     } catch (err: any) {

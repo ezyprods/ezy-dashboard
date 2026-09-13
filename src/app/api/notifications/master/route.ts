@@ -10,7 +10,10 @@ export async function POST(request: Request) {
     const { artistEmail, artistName, songName, isUpdate, downloadLink } = body;
 
     if (!process.env.RESEND_API_KEY) {
-      console.warn('RESEND_API_KEY no está configurada, ignorando envío real de email.');
+      return NextResponse.json(
+        { error: 'El servicio de correo (RESEND_API_KEY) no está configurado en el servidor.', missingConfig: true },
+        { status: 503 }
+      );
     }
 
     if (!artistEmail) {
@@ -21,7 +24,7 @@ export async function POST(request: Request) {
     }
 
     const { data, error } = await resend.emails.send({
-      from: 'EZY Studio <hello@ezystudio.app>',
+      from: process.env.RESEND_FROM_EMAIL || 'EZY Studio <hello@ezystudio.app>',
       to: [artistEmail],
       subject: isUpdate ? `Actualización: ${songName}` : `Master Listo: ${songName}`,
       react: MasterReadyEmail({
@@ -34,7 +37,7 @@ export async function POST(request: Request) {
     });
 
     if (error) {
-      return NextResponse.json({ error }, { status: 400 });
+      return NextResponse.json({ error: (error as any)?.message || 'Error de envío' }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, data });

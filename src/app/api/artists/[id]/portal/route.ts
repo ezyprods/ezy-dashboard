@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import type { PortalConfig } from '@/types';
+import { randomBytes } from 'crypto';
+
+export const dynamic = 'force-dynamic';
 
 const DEFAULT_MODULES = [
   { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas Mezclas / Audios' },
@@ -16,7 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!config) {
       config = {
         artistId: id,
-        token: Math.random().toString(36).substring(2, 15),
+        token: randomBytes(16).toString('hex'),
         producerName: 'Productor',
         showFeedback: true,
         createdAt: new Date().toISOString(),
@@ -59,7 +62,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     
-    const updatedConfig = { ...config, ...body };
+    // The artist id and portal token can never be changed from the client
+    const updatedConfig = { ...config, ...body, artistId: config.artistId || id, token: config.token };
     await saveJsonFile('portal_config.json', updatedConfig, id);
     
     return NextResponse.json({ config: updatedConfig });

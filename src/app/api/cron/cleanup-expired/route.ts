@@ -9,12 +9,12 @@ export async function GET(request: Request) {
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
     
-    // Optional bearer token check if CRON_SECRET is set in Vercel
+    // When CRON_SECRET is configured, Vercel Cron sends it as a Bearer token: enforce it
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       const url = new URL(request.url);
       const queryKey = url.searchParams.get('key');
       if (queryKey !== cronSecret) {
-        // Still allow internal calls or Vercel cron calls
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
     }
 

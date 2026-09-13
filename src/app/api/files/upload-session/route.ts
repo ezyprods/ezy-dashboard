@@ -5,10 +5,8 @@ export async function POST(request: Request) {
   try {
     const { name, mimeType, parentId, fileId, appProperties } = await request.json();
 
-    if (!name || !parentId) {
-      if (!fileId) {
-        return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
-      }
+    if (!fileId && (!name || !parentId)) {
+      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
     const auth = getDriveAuthClient();
@@ -18,20 +16,23 @@ export async function POST(request: Request) {
       throw new Error('Failed to get access token for Google Drive');
     }
 
+    // Ask Google to return the useful metadata once the upload finishes
+    const fields = encodeURIComponent('id,name,mimeType,size,webViewLink,webContentLink');
     let fetchUrl = '';
     let method = '';
-    
+
     if (fileId) {
-       // OVERWRITE EXISTING FILE
-       fetchUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=resumable&supportsAllDrives=true`;
+       // OVERWRITE EXISTING FILE (keeps the same id)
+       fetchUrl = `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=resumable&supportsAllDrives=true&fields=${fields}`;
        method = 'PATCH';
     } else {
        // NEW FILE
-       fetchUrl = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true';
+       fetchUrl = `https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=${fields}`;
        method = 'POST';
     }
 
-    const bodyData: any = fileId ? {} : { name, parents: [parentId] };
+    // When overwriting, the new name (if provided) replaces the old one
+    const bodyData: any = fileId ? (name ? { name } : {}) : { name, parents: [parentId] };
     
     // Si pasamos appProperties (como BPM, Key, etc), los guardamos
     if (appProperties && Object.keys(appProperties).length > 0) {

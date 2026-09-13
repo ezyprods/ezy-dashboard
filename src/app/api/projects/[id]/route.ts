@@ -14,17 +14,24 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // 2. Extraer carpetas y matriz vinculada en paralelo
     const drive = getDriveService();
-    const [foldersData, matrices] = await Promise.all([
+    const [foldersData, matricesData] = await Promise.all([
       fetchFoldersRecursively(drive, id),
-      config.artistId ? findAndReadJsonFile<any[]>('matrices.json', config.artistId) : Promise.resolve(null)
+      config.artistId
+        ? findAndReadJsonFile<any>('matrices.json', config.artistId).catch(() => null)
+        : Promise.resolve(null)
     ]);
 
     const { folders: foldersWithFiles, files: rootFiles } = foldersData;
     const activeFolders = foldersWithFiles.filter(f => f.files.length > 0);
 
-    const linkedMatrix = Array.isArray(matrices) 
-      ? matrices.find(m => m.projectId === id || m.projectId === config.id || (config.driveFolderId && m.projectId === config.driveFolderId)) 
-      : null;
+    // matrices.json is stored as { matrices: [...] } (legacy files may be a plain array)
+    const matrices: any[] = Array.isArray(matricesData)
+      ? matricesData
+      : (Array.isArray(matricesData?.matrices) ? matricesData.matrices : []);
+
+    const linkedMatrix = matrices.find(m =>
+      m.projectId === id || m.projectId === config.id || (config.driveFolderId && m.projectId === config.driveFolderId)
+    ) || null;
 
     return NextResponse.json({ 
       project: { ...config, driveFolderId: id },

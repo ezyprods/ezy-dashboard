@@ -28,18 +28,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // List all folders inside 'Releases'
     const releaseFolders = await listFolders(releasesFolderId);
     
+    // Read every release config in parallel (keeps the folder order)
+    const configs = await Promise.all(
+      releaseFolders.map(folder =>
+        findAndReadJsonFile<Release>('release_config.json', folder.id!).catch(() => null)
+      )
+    );
     const releases: Release[] = [];
-    
-    for (const folder of releaseFolders) {
-      const config = await findAndReadJsonFile<Release>('release_config.json', folder.id!);
+    configs.forEach((config, i) => {
       if (config) {
-        releases.push({
-          ...config,
-          id: folder.id!,
-        });
+        releases.push({ ...config, id: releaseFolders[i].id!, tracks: config.tracks || [] });
       }
-    }
-    
+    });
+
     return NextResponse.json({ releases });
   } catch (error: any) {
     console.error('API /api/artists/[id]/releases GET error:', error);
@@ -50,7 +51,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { title } = await request.json();
+    const body = await request.json();
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) {
+      return NextResponse.json({ error: 'El título es obligatorio' }, { status: 400 });
+    }
     const drive = getDriveService();
     
     // Find Releases folder

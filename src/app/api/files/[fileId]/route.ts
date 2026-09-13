@@ -77,6 +77,7 @@ export async function GET(
       console.error(`Google Drive API error for file ${fileId}: ${gDriveRes.status} ${gDriveRes.statusText}`);
       return new NextResponse(`Google Drive API error: ${gDriveRes.statusText}`, {
         status: gDriveRes.status,
+        headers: { 'Cache-Control': 'no-store' },
       });
     }
 
@@ -93,7 +94,8 @@ export async function GET(
     const disposition = inline ? 'inline' : 'attachment';
     const safeName = meta.name ? encodeURIComponent(meta.name) : 'archivo';
     responseHeaders.set('Content-Disposition', `${disposition}; filename*=UTF-8''${safeName}`);
-    responseHeaders.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    // Content can be overwritten in place (same fileId), so keep this short and private
+    responseHeaders.set('Cache-Control', 'private, max-age=300');
 
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,

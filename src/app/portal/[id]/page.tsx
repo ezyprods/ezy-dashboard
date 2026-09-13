@@ -69,14 +69,17 @@ export default function PortalPage() {
       });
       if (!res.ok) throw new Error('Portal no encontrado');
       const json = await res.json();
-      // Debug: log all files received
-      console.log('[Portal] Projects received:', json.projects?.map((p: any) => ({ id: p.id, title: p.title, fileCount: p.bounces?.length || 0, files: p.bounces?.map((f: any) => f.name) })));
       setData(json);
+      // Keep the current selection on refresh when it still exists
       if (json.projects && json.projects.length > 0) {
-        setSelectedProjectId(json.projects[0].id);
+        setSelectedProjectId(prev =>
+          prev && json.projects.some((p: any) => p.id === prev) ? prev : json.projects[0].id
+        );
       }
       if (json.releases && json.releases.length > 0) {
-        setActiveReleaseId(json.releases[0].id);
+        setActiveReleaseId(prev =>
+          prev && json.releases.some((r: any) => r.id === prev) ? prev : json.releases[0].id
+        );
       }
       // Update browser tab title
       if (json.artist?.name) {
@@ -334,15 +337,17 @@ export default function PortalPage() {
                   </>
                 )}
 
-                <a
-                  href={file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
-                  title="Abrir en Google Drive"
-                >
-                  <ExternalLink className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                </a>
+                {!paywallLocked && (
+                  <a
+                    href={file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
+                    title="Abrir en Google Drive"
+                  >
+                    <ExternalLink className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </a>
+                )}
               </div>
             </div>
 
@@ -564,7 +569,7 @@ export default function PortalPage() {
                                 {row.linkedFile && (
                                   <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1.5 py-0.5 rounded border border-border/50">
                                     {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
-                                      <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile.id, name: row.name || row.linkedFile.name, url: `/api/audio/${row.linkedFile.id}`, artistName: data?.artistConfig?.artistName || 'Artista' }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
+                                      <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile.id, name: row.name || row.linkedFile.name, url: `/api/audio/${row.linkedFile.id}`, artistName: data?.artist?.name || 'Artista' }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
                                         <Play className="w-3.5 h-3.5" />
                                       </button>
                                     )}
@@ -601,7 +606,7 @@ export default function PortalPage() {
                                                 id: cell.fileId,
                                                 name: cell.fileName?.replace(/\.[^/.]+$/, '') || 'Audio',
                                                 url: `/api/audio/${cell.fileId}`,
-                                                artistName: data?.artistConfig?.artistName || 'Artista'
+                                                artistName: data?.artist?.name || 'Artista'
                                               });
                                             }}
                                             className="text-accent hover:text-accent-light shrink-0"

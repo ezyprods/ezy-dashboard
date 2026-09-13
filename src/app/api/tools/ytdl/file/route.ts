@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { tasks, completedFileBuffers } from '../state';
+import { contentDisposition } from '@/lib/serverFiles';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -56,13 +57,12 @@ export async function GET(req: Request) {
       const fileExt = cached.format || task?.format || paramFormat || 'mp3';
       const mimeType = cached.mimeType || MIME_TYPES[fileExt] || 'audio/mpeg';
       const cleanSafeTitle = (cached.title || title).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
-      const encodedTitle = encodeURIComponent(cleanSafeTitle);
 
       return new NextResponse(cached.buffer as any, {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': cached.buffer.length.toString(),
-          'Content-Disposition': `attachment; filename="${cleanSafeTitle}.${fileExt}"; filename*=UTF-8''${encodedTitle}.${fileExt}`,
+          'Content-Disposition': contentDisposition(`${cleanSafeTitle}.${fileExt}`),
           'Cache-Control': 'public, max-age=3600',
         },
       });
@@ -74,7 +74,6 @@ export async function GET(req: Request) {
       const fileExt = path.extname(diskPath).replace(/^\./, '') || paramFormat || 'mp3';
       const mimeType = MIME_TYPES[fileExt] || 'audio/mpeg';
       const cleanSafeTitle = title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
-      const encodedTitle = encodeURIComponent(cleanSafeTitle);
       const buffer = await fs.promises.readFile(diskPath);
 
       if (buffer.length > 0) {
@@ -82,7 +81,7 @@ export async function GET(req: Request) {
           headers: {
             'Content-Type': mimeType,
             'Content-Length': buffer.length.toString(),
-            'Content-Disposition': `attachment; filename="${cleanSafeTitle}.${fileExt}"; filename*=UTF-8''${encodedTitle}.${fileExt}`,
+            'Content-Disposition': contentDisposition(`${cleanSafeTitle}.${fileExt}`),
             'Cache-Control': 'public, max-age=3600',
           },
         });
@@ -127,13 +126,12 @@ export async function GET(req: Request) {
       try {
         const result = await downloadWithEngines(videoId);
         const cleanSafeTitle = title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
-        const encodedTitle = encodeURIComponent(cleanSafeTitle);
 
         return new NextResponse(result.buffer as any, {
           headers: {
             'Content-Type': 'audio/mpeg',
             'Content-Length': result.buffer.length.toString(),
-            'Content-Disposition': `attachment; filename="${cleanSafeTitle}.mp3"; filename*=UTF-8''${encodedTitle}.mp3`,
+            'Content-Disposition': contentDisposition(`${cleanSafeTitle}.mp3`),
           },
         });
       } catch (e: any) {
@@ -190,14 +188,13 @@ export async function GET(req: Request) {
     try { await fs.promises.unlink(foundFile); } catch (e) {}
 
     const cleanSafeTitle = title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
-    const encodedTitle = encodeURIComponent(cleanSafeTitle);
     const mimeType = MIME_TYPES[paramFormat] || 'audio/mpeg';
 
     return new NextResponse(buffer as any, {
       headers: {
         'Content-Type': mimeType,
         'Content-Length': buffer.length.toString(),
-        'Content-Disposition': `attachment; filename="${cleanSafeTitle}.${paramFormat}"; filename*=UTF-8''${encodedTitle}.${paramFormat}`,
+        'Content-Disposition': contentDisposition(`${cleanSafeTitle}.${paramFormat}`),
       },
     });
 

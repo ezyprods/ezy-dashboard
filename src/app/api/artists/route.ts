@@ -24,10 +24,11 @@ export async function GET() {
     const validArtists: Artist[] = folders.map((folder) => {
       const syncedData = artistsDb.find(a => a.id === folder.id);
       
-      const lastProjectName = (syncedData as any)?.activeProject || 
-        (syncedData?.pulseStats?.activeProjects && syncedData.pulseStats.activeProjects.length > 0 
-          ? syncedData.pulseStats.activeProjects[0] 
-          : 'Sin proyectos');
+      // activeProjects entries may be objects ({ id, title, type }) → always expose a string
+      const firstActive: any = syncedData?.pulseStats?.activeProjects?.[0];
+      const storedActive: any = (syncedData as any)?.activeProject;
+      const toName = (v: any) => (typeof v === 'string' ? v : v?.title || v?.name || '');
+      const lastProjectName = toName(storedActive) || toName(firstActive) || 'Sin proyectos';
 
       const artistBase = syncedData ? { ...syncedData, driveFolderId: folder.id! } : {
         id: folder.id!,
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
   try {
     const body: CreateArtistInput = await request.json();
     
+    body.name = typeof body.name === 'string' ? body.name.trim() : '';
     if (!body.name) {
       return NextResponse.json({ error: 'Artist name is required' }, { status: 400 });
     }

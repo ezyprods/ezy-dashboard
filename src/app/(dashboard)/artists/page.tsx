@@ -31,10 +31,13 @@ export default function ArtistsPage() {
   const [editingArtist, setEditingArtist] = useState<any | null>(null);
 
   const handleDeleteArtist = async (artistId: string, artistName: string) => {
-    if (!await customConfirm(`¿Estás seguro de que quieres eliminar a ${artistName}? Esto borrará su configuración.`)) return;
+    if (!await customConfirm(`¿Estás seguro de que quieres eliminar a ${artistName}? Su carpeta se moverá a la papelera de Google Drive (podrás recuperarla desde allí).`)) return;
     try {
       const res = await fetch(`/api/artists/${artistId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error al eliminar el artista');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Error al eliminar el artista');
+      }
       deleteArtistFromState?.(artistId);
       customAlert('Artista eliminado correctamente');
     } catch (e: any) {

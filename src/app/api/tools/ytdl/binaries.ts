@@ -25,6 +25,13 @@ function downloadFile(url: string, dest: string): Promise<string> {
         file.close();
         resolve(dest);
       });
+      file.on('error', (err) => {
+        fs.unlink(dest, () => reject(err));
+      });
+      res.on('error', (err) => {
+        file.destroy();
+        fs.unlink(dest, () => reject(err));
+      });
     }).on('error', reject);
   });
 }
@@ -104,6 +111,11 @@ export async function ensureBinaries(): Promise<{ ytdlpPath: string; ffmpegPath:
     cachedFfmpegPath = ffmpegPath;
     return { ytdlpPath, ffmpegPath };
   })();
+
+  // A failed download (network glitch) must not poison every later call of this instance
+  binaryInitPromise.catch(() => {
+    binaryInitPromise = null;
+  });
 
   return binaryInitPromise;
 }

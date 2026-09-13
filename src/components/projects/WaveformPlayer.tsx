@@ -234,7 +234,8 @@ export function WaveformPlayer({
       return;
     }
 
-    const currentExt = activeName.substring(activeName.lastIndexOf('.'));
+    const dotIndex = activeName.lastIndexOf('.');
+    const currentExt = dotIndex > 0 ? activeName.substring(dotIndex) : '';
     const newName = editNameValue.trim();
 
     setIsUpdating(true);
@@ -285,7 +286,7 @@ export function WaveformPlayer({
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!await customConfirm(`¿Estás seguro de que quieres eliminar el archivo "${activeName}" de forma permanente?`)) return;
+    if (!await customConfirm(`¿Estás seguro de que quieres eliminar el archivo "${activeName}"? Se moverá a la papelera de Google Drive.`)) return;
     setIsUpdating(true);
     try {
       const res = await fetch(`/api/files?id=${activeId}`, { method: 'DELETE' });
@@ -486,16 +487,18 @@ export function WaveformPlayer({
                     <Trash2 className="w-4 h-4 md:w-3.5 md:h-3.5" />
                   </button>
                 )}
-                <a
-                  href={`https://drive.google.com/file/d/${activeId}/view`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
-                  title="Abrir en nueva pestaña"
-                >
-                  <ExternalLink className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                </a>
+                {!paywallLocked && (
+                  <a
+                    href={`https://drive.google.com/file/d/${activeId}/view`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
+                    title="Abrir en nueva pestaña"
+                  >
+                    <ExternalLink className="w-4 h-4 md:w-3.5 md:h-3.5" />
+                  </a>
+                )}
               </>
             )}
           </div>

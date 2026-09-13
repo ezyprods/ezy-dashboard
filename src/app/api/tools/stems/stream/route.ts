@@ -30,6 +30,21 @@ export async function GET(req: NextRequest) {
     };
 
     const safeName = queryFilename || (taskId ? stemsTasks.get(taskId)?.filename : null) || 'audio';
+
+    // Only Replicate delivery URLs may be proxied (prevents using this endpoint as an open proxy)
+    const isAllowedCloudUrl = (u: string | null | undefined) => {
+      if (!u) return false;
+      try {
+        const { protocol, hostname } = new URL(u);
+        return protocol === 'https:' && (hostname === 'replicate.delivery' || hostname.endsWith('.replicate.delivery') || hostname.endsWith('.replicate.com'));
+      } catch {
+        return false;
+      }
+    };
+    if (directUrl && !isAllowedCloudUrl(directUrl)) {
+      return NextResponse.json({ error: 'URL no permitida' }, { status: 400 });
+    }
+
     const targetCloudUrl = directUrl || (taskId && stem ? stemsTasks.get(taskId)?.stems?.[stem] : null);
 
     // CASO 1 & 2: Procesamiento Cloud (directUrl o task en memoria)
@@ -77,8 +92,19 @@ export async function GET(req: NextRequest) {
       const range = req.headers.get('range');
       if (range && !isDownload) {
         const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : buffer.length - 1;
+        const size = buffer.length;
+        let start = parseInt(parts[0], 10);
+        let end = parts[1] ? parseInt(parts[1], 10) : size - 1;
+        if (isNaN(start)) {
+          // Suffix range: "bytes=-500" → last 500 bytes
+          const suffix = parseInt(parts[1], 10) || 0;
+          start = Math.max(0, size - suffix);
+          end = size - 1;
+        }
+        end = Math.min(isNaN(end) ? size - 1 : end, size - 1);
+        if (start > end || start >= size) {
+          return new NextResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+        }
         const chunkSize = (end - start) + 1;
         const sliced = buffer.subarray(start, end + 1);
 

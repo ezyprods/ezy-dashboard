@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import type { GridCell, FlexTaskStatus, ColumnType } from '@/types';
 import { useAudio } from '@/lib/contexts/AudioContext';
-import { customAlert } from '@/lib/dialog';
+import { customAlert, customConfirm } from '@/lib/dialog';
+import { uploadFileToDrive, findSimilarFileInFolder } from '@/lib/driveUpload';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
 export const STATUS_CONFIG: Record<FlexTaskStatus, { label: string; icon: typeof Circle; color: string; bgColor: string }> = {
@@ -41,9 +42,9 @@ function MiniWaveform({ fileId, isPlaying }: { fileId: string; isPlaying: boolea
         <div
           key={i}
           className={`w-1 rounded-full bg-current transition-all duration-150 ${isPlaying ? 'animate-pulse' : ''}`}
-          style={{ 
+          style={{
             height: isPlaying ? `${Math.max(30, Math.random() * 100)}%` : '30%',
-            animationDelay: `${i * 0.1}s` 
+            animationDelay: `${i * 0.1}s`
           }}
         />
       ))}
@@ -52,13 +53,13 @@ function MiniWaveform({ fileId, isPlaying }: { fileId: string; isPlaying: boolea
 }
 
 // --- Specialized Cells ---
-function StatusCellUI({ 
-  status, 
-  onStatusChange, 
-  isSelected, 
-  onToggleSelect 
-}: { 
-  status: FlexTaskStatus; 
+function StatusCellUI({
+  status,
+  onStatusChange,
+  isSelected,
+  onToggleSelect
+}: {
+  status: FlexTaskStatus;
   onStatusChange: (s: FlexTaskStatus) => void;
   isSelected?: boolean;
   onToggleSelect?: (e: React.MouseEvent | React.PointerEvent) => void;
@@ -71,7 +72,7 @@ function StatusCellUI({
   const startPos = useRef({ x: 0, y: 0 });
   const hasMoved = useRef(false);
   const startTime = useRef(0);
-  
+
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.todo;
   const Icon = cfg.icon;
 
@@ -79,7 +80,7 @@ function StatusCellUI({
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    
+
     if (e.ctrlKey || e.metaKey || e.shiftKey) {
       if (onToggleSelect) onToggleSelect(e);
       return;
@@ -229,7 +230,7 @@ function StatusCellUI({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     showMenu(e.clientX, e.clientY, [
       {
         label: 'Pendiente',
@@ -263,22 +264,22 @@ function StatusCellUI({
   };
 
   return (
-    <div 
-      ref={containerRef} 
-      className={`relative flex items-center justify-center w-full cursor-context-menu rounded transition-all ${isSelected ? 'ring-2 ring-accent ring-offset-1 ring-offset-surface scale-[0.98]' : ''}`} 
+    <div
+      ref={containerRef}
+      className={`relative flex items-center justify-center w-full cursor-context-menu rounded transition-all ${isSelected ? 'ring-2 ring-accent ring-offset-1 ring-offset-surface scale-[0.98]' : ''}`}
       data-context="ignore"
-      style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }} 
-      onPointerDown={handlePointerDown} 
+      style={{ userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none', touchAction: showRadial ? 'none' : 'pan-x pan-y' }}
+      onPointerDown={handlePointerDown}
       onPointerMove={handleLocalPointerMove}
-      onPointerLeave={handlePointerLeave} 
+      onPointerLeave={handlePointerLeave}
       onPointerCancel={handlePointerCancel}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
     >
-      <button 
-        className={`w-full py-1 sm:py-2 flex justify-center items-center rounded transition-colors ${cfg.bgColor} hover:brightness-110`} 
-        title={cfg.label} 
-        type="button" 
+      <button
+        className={`w-full py-1 sm:py-2 flex justify-center items-center rounded transition-colors ${cfg.bgColor} hover:brightness-110`}
+        title={cfg.label}
+        type="button"
         style={{ pointerEvents: 'none' }}
       >
         <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${cfg.color}`} />
@@ -286,21 +287,21 @@ function StatusCellUI({
 
       {showRadial && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[999] pointer-events-none flex items-center justify-center">
-          <div 
-            className="absolute w-3 h-3 bg-accent rounded-full animate-ping" 
+          <div
+            className="absolute w-3 h-3 bg-accent rounded-full animate-ping"
             style={{ left: center.x - 6, top: center.y - 6 }}
           />
           {radialItems.map(({ s, x, y }) => {
             const scfg = STATUS_CONFIG[s];
             const isHov = hovered === s;
             return (
-              <div 
-                key={s} 
+              <div
+                key={s}
                 className={`absolute flex items-center justify-center rounded-full border-2 transition-all duration-100 ${
-                  isHov 
-                    ? 'w-12 h-12 border-accent shadow-lg shadow-accent/40 bg-surface-elevated scale-110' 
+                  isHov
+                    ? 'w-12 h-12 border-accent shadow-lg shadow-accent/40 bg-surface-elevated scale-110'
                     : 'w-10 h-10 border-border bg-surface shadow-md'
-                }`} 
+                }`}
                 style={{ left: center.x + x - (isHov ? 24 : 20), top: center.y + y - (isHov ? 24 : 20) }}
               >
                 <scfg.icon className={`w-5 h-5 ${scfg.color}`} />
@@ -316,7 +317,7 @@ function StatusCellUI({
 
 function FileCellUI({ fileId, fileName, artistName, isUploading, onPlay, isPlaying, onUploadClick }: any) {
   const isAudioFile = fileName?.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i);
-  
+
   if (isUploading) {
     return (
       <div className="flex flex-col items-center justify-center py-2 bg-surface/50 rounded border border-border border-dashed opacity-50">
@@ -328,8 +329,8 @@ function FileCellUI({ fileId, fileName, artistName, isUploading, onPlay, isPlayi
 
   if (fileId) {
     return (
-      <div 
-        onClick={isAudioFile ? onPlay : onUploadClick} 
+      <div
+        onClick={isAudioFile ? onPlay : onUploadClick}
         className={`flex items-center justify-between p-1 sm:p-1.5 rounded border transition-all cursor-pointer ${isPlaying ? 'bg-success/10 border-success/30 text-success' : 'bg-surface-elevated border-border text-text-primary hover:border-accent/50'}`}
         title={fileName}
       >
@@ -355,7 +356,7 @@ function ChecklistCellUI({ checklist = [], onOpenManager }: any) {
   const done = checklist.filter((c:any) => c.done).length;
   const hasFiles = checklist.some((c:any) => c.fileId);
   const progress = total === 0 ? 0 : Math.round((done / total) * 100);
-  
+
   return (
     <div onClick={onOpenManager} className="cursor-pointer group flex flex-col gap-1 w-full p-1 sm:p-1.5 rounded bg-surface border border-border hover:border-accent/50 transition-colors">
       <div className="flex justify-between items-center text-[10px] font-bold text-text-secondary group-hover:text-text-primary">
@@ -373,12 +374,42 @@ function ChecklistCellUI({ checklist = [], onOpenManager }: any) {
 }
 
 function TextCellUI({ textValue, onUpdate }: any) {
+  // Local state: the matrix is saved on blur / Enter / after a short pause,
+  // instead of on every keystroke (each save syncs Google Drive + Calendar).
+  const [value, setValue] = useState<string>(textValue || '');
+  const lastCommitted = useRef<string>(textValue || '');
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const incoming = textValue || '';
+    if (incoming !== lastCommitted.current) {
+      lastCommitted.current = incoming;
+      setValue(incoming);
+    }
+  }, [textValue]);
+
+  const commit = (v: string) => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (v === lastCommitted.current) return;
+    lastCommitted.current = v;
+    onUpdate({ textValue: v });
+  };
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
   return (
-    <Input 
-      value={textValue || ''} 
-      onChange={e => onUpdate({ textValue: e.target.value })} 
-      placeholder="Notas / Letra..." 
-      className="h-8 text-xs bg-surface border-border text-center placeholder:text-center" 
+    <Input
+      value={value}
+      onChange={e => {
+        const v = e.target.value;
+        setValue(v);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => commit(v), 1200);
+      }}
+      onBlur={() => commit(value)}
+      onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+      placeholder="Notas / Letra..."
+      className="h-8 text-xs bg-surface border-border text-center placeholder:text-center"
     />
   );
 }
@@ -390,13 +421,14 @@ function DateCellUI({ dueDate, status, onUpdate }: any) {
       value={dueDate || ''}
       onChange={val => onUpdate({ dueDate: val || undefined })}
       className={isOverdue ? 'border-error/50 text-error' : 'border-border'}
+      clearable
     />
   );
 }
 
 // --- Main Cell Component ---
 
-export function CellComponent({ 
+export function CellComponent({
   rowId, colId, colType, cellData, artistName, files, onUpdate, uploadTargetId, artistId, projectId, projects, rowName,
   isSelected, onToggleSelect
 }: {
@@ -426,7 +458,7 @@ export function CellComponent({
     };
 
     return (
-      <td 
+      <td
         className={`p-1 sm:p-3 border-b border-r border-border min-w-[70px] sm:min-w-[130px] cursor-context-menu ${isSelected ? 'bg-accent/10' : ''}`}
         onContextMenu={handleStatusContextMenu}
         onClick={(e) => (e.ctrlKey || e.metaKey || e.shiftKey) && onToggleSelect?.(e)}
@@ -460,54 +492,36 @@ export function CellComponent({
   };
 
   const uploadFile = async (file: File) => {
+    const previousStatus = cellData.status || 'todo';
     setIsUploading(true);
     handleUpdate({ status: 'in_progress' });
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('parentId', uploadTargetId);
     try {
-      const res = await fetch('/api/files', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Error al subir');
-      const json = await res.json();
-      handleUpdate({ fileId: json.file.id, fileName: json.file.name, status: 'done' });
-    } catch (err) { customAlert('Error subiendo archivo'); } 
-    finally { setIsUploading(false); }
+      // Direct upload to Drive (no 4.5 MB serverless limit for WAV files)
+      const uploaded = await uploadFileToDrive(file, uploadTargetId);
+      handleUpdate({ fileId: uploaded.id, fileName: uploaded.name, status: 'done' });
+      window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
+    } catch (err) {
+      handleUpdate({ status: previousStatus });
+      customAlert('Error subiendo archivo');
+    } finally { setIsUploading(false); }
   };
 
-  const uploadFileForChecklistItem = async (file: File, idx: number, overwrite = false, targetFileId?: string, skipSimilarity = false) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('parentId', uploadTargetId);
-    if (overwrite && targetFileId) {
-      formData.append('overwrite', 'true');
-      formData.append('targetFileId', targetFileId);
-    }
-    if (skipSimilarity) {
-      formData.append('skipSimilarity', 'true');
-    }
-
+  const uploadFileForChecklistItem = async (file: File, idx: number) => {
     try {
-      const res = await fetch('/api/files', { method: 'POST', body: formData });
-      if (res.status === 409) {
-        const conflictData = await res.json();
-        const choice = window.confirm(
-          `Se ha detectado un archivo similar: "${conflictData.similarFile.name}".\n\n¿Quieres sobrescribir este archivo existente (creando una nueva versión)?\n\nPresiona [Aceptar] para sobrescribir o [Cancelar] para guardarlo por separado.`
+      const similar = await findSimilarFileInFolder(uploadTargetId, file.name);
+      let overwriteId: string | undefined;
+      if (similar) {
+        const overwrite = await customConfirm(
+          `Se ha detectado un archivo similar: "${similar.name}".\n\n¿Quieres sobrescribir este archivo existente (creando una nueva versión)?\n\nPulsa [Confirmar] para sobrescribir o [Cancelar] para guardarlo por separado.`
         );
-        if (choice) {
-          await uploadFileForChecklistItem(file, idx, true, conflictData.similarFile.id);
-        } else {
-          await uploadFileForChecklistItem(file, idx, false, undefined, true);
-        }
-        return;
+        if (overwrite) overwriteId = similar.id;
       }
 
-      if (!res.ok) throw new Error('Error al subir');
-      const json = await res.json();
-      
-      const newC = [...(cellData.checklist || [])];
-      newC[idx].fileId = json.file.id;
-      newC[idx].fileName = json.file.name;
+      const uploaded = await uploadFileToDrive(file, uploadTargetId, { fileId: overwriteId, name: file.name });
+
+      const newC = (cellData.checklist || []).map((c, i) => i === idx ? { ...c, fileId: uploaded.id, fileName: uploaded.name } : c);
       handleUpdate({ checklist: newC });
+      window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
       customAlert('Archivo adjuntado correctamente');
     } catch (err) {
       customAlert('Error subiendo archivo');
@@ -521,7 +535,7 @@ export function CellComponent({
   };
 
   return (
-    <td 
+    <td
       className={`p-1 sm:p-2 border-b border-r border-border text-center relative group/cell min-w-[90px] sm:min-w-[160px] max-w-[240px] align-middle transition-colors ${isSelected ? 'bg-accent/10' : ''}`}
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
       onDrop={handleNativeDrop}
@@ -530,10 +544,10 @@ export function CellComponent({
     >
       <div className="w-full relative">
         {colType === 'file' && (
-          <FileCellUI 
+          <FileCellUI
             fileId={cellData.fileId} fileName={cellData.fileName} isUploading={isUploading}
             onPlay={handlePlayClick} isPlaying={isCurrentAudioPlaying}
-            onUploadClick={() => document.getElementById(`file-${rowId}-${colId}`)?.click()} 
+            onUploadClick={() => document.getElementById(`file-${rowId}-${colId}`)?.click()}
           />
         )}
         {colType === 'checklist' && <ChecklistCellUI checklist={cellData.checklist} onOpenManager={() => setIsChecklistOpen(true)} />}
@@ -541,42 +555,42 @@ export function CellComponent({
         {colType === 'date' && <DateCellUI dueDate={cellData.dueDate} status={cellData.status} onUpdate={handleUpdate} />}
       </div>
 
-      <input type="file" id={`file-${rowId}-${colId}`} className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f) uploadFile(f); }} />
+      <input type="file" id={`file-${rowId}-${colId}`} className="hidden" onChange={e => { const f = e.target.files?.[0]; if(f) uploadFile(f); e.target.value = ''; }} />
 
       {isChecklistOpen && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4" onClick={() => setIsChecklistOpen(false)}>
           <div className="glass rounded-xl border border-border bg-surface w-full max-w-lg p-6 shadow-2xl relative animate-fade-in text-left" onClick={e => e.stopPropagation()}>
             <button onClick={() => setIsChecklistOpen(false)} className="absolute top-4 right-4 text-text-secondary hover:text-text-primary p-1"><X className="w-5 h-5" /></button>
             <h4 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2"><CheckSquare className="w-5 h-5 text-accent"/> Checklist de Fase</h4>
-            
+
             <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
               {(cellData.checklist || []).map((item, i) => (
                 <div key={item.id} className="flex flex-col gap-2 bg-surface-elevated p-3 rounded-lg border border-border/80 hover:border-accent/20 transition-colors">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <input type="checkbox" checked={item.done} onChange={e => {
-                        const newC = [...(cellData.checklist||[])];
-                        newC[i].done = e.target.checked;
+                        const checked = e.target.checked;
+                        const newC = (cellData.checklist||[]).map((c, j) => j === i ? { ...c, done: checked } : c);
                         handleUpdate({ checklist: newC });
                       }} className="w-4 h-4 accent-accent shrink-0 rounded cursor-pointer" />
-                      
+
                       <Input value={item.text} onChange={e => {
-                        const newC = [...(cellData.checklist||[])];
-                        newC[i].text = e.target.value;
+                        const text = e.target.value;
+                        const newC = (cellData.checklist||[]).map((c, j) => j === i ? { ...c, text } : c);
                         handleUpdate({ checklist: newC });
                       }} className="h-8 text-sm bg-transparent border-none focus-visible:ring-0 p-0 text-text-primary placeholder:text-text-secondary/50 flex-1 min-w-0" />
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-2 pl-6 sm:pl-0 shrink-0">
                       <div className="flex items-center gap-1">
-                        <input 
-                          type="date" 
-                          value={item.dueDate || ''} 
+                        <input
+                          type="date"
+                          value={item.dueDate || ''}
                           onChange={e => {
-                            const newC = [...(cellData.checklist||[])];
-                            newC[i].dueDate = e.target.value || undefined;
+                            const dueDate = e.target.value || undefined;
+                            const newC = (cellData.checklist||[]).map((c, j) => j === i ? { ...c, dueDate } : c);
                             handleUpdate({ checklist: newC });
-                          }} 
+                          }}
                           className="bg-surface text-[10px] text-text-secondary border border-border/50 rounded px-1.5 py-0.5 outline-none max-w-[110px] cursor-pointer"
                         />
                       </div>
@@ -593,15 +607,15 @@ export function CellComponent({
                       <div className="flex items-center justify-between w-full bg-surface/40 px-2 py-1 rounded border border-border/50">
                         <div className="flex items-center gap-1.5 overflow-hidden">
                           <Paperclip className="w-3 h-3 text-text-secondary shrink-0" />
-                          <a 
-                            href={`https://drive.google.com/file/d/${item.fileId}/view`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
+                          <a
+                            href={`https://drive.google.com/file/d/${item.fileId}/view`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-accent hover:underline truncate max-w-[180px]"
                           >
                             {item.fileName}
                           </a>
-                          
+
                           {item.fileName?.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i) && (
                             <Button
                                 variant="ghost"
@@ -634,12 +648,14 @@ export function CellComponent({
                             </Button>
                           )}
                         </div>
-                        
-                        <button 
+
+                        <button
                           onClick={() => {
-                            const newC = [...(cellData.checklist || [])];
-                            delete newC[i].fileId;
-                            delete newC[i].fileName;
+                            const newC = (cellData.checklist || []).map((c, j) => {
+                              if (j !== i) return c;
+                              const { fileId: _f, fileName: _n, ...rest } = c;
+                              return rest;
+                            });
                             handleUpdate({ checklist: newC });
                           }}
                           className="text-text-secondary hover:text-error text-[10px]"
@@ -650,19 +666,20 @@ export function CellComponent({
                     ) : (
                       <div className="flex items-center gap-2 w-full">
                         <span className="text-[10px] text-text-secondary">Adjuntar:</span>
-                        
+
                         <label className="text-[10px] text-accent hover:underline cursor-pointer flex items-center gap-0.5">
                           <UploadCloud className="w-3 h-3" /> Subir local
-                          <input 
-                            type="file" 
-                            className="hidden" 
+                          <input
+                            type="file"
+                            className="hidden"
                             onChange={e => {
                               const f = e.target.files?.[0];
                               if (f) uploadFileForChecklistItem(f, i);
+                              e.target.value = '';
                             }}
                           />
                         </label>
-                        
+
                         {files && files.length > 0 && (
                           <div className="relative">
                             <select
@@ -670,9 +687,7 @@ export function CellComponent({
                                 if (e.target.value) {
                                   const selectedFile = files.find(f => f.id === e.target.value);
                                   if (selectedFile) {
-                                    const newC = [...(cellData.checklist || [])];
-                                    newC[i].fileId = selectedFile.id;
-                                    newC[i].fileName = selectedFile.name;
+                                    const newC = (cellData.checklist || []).map((c, j) => j === i ? { ...c, fileId: selectedFile.id, fileName: selectedFile.name } : c);
                                     handleUpdate({ checklist: newC });
                                   }
                                   e.target.value = '';
@@ -716,6 +731,15 @@ export const MemoizedCellComponent = React.memo(CellComponent, (prev, next) => {
     prev.colId === next.colId &&
     prev.rowId === next.rowId &&
     prev.colType === next.colType &&
-    prev.rowName === next.rowName
+    prev.rowName === next.rowName &&
+    prev.cellData.fileName === next.cellData.fileName &&
+    prev.cellData.notes === next.cellData.notes &&
+    prev.uploadTargetId === next.uploadTargetId &&
+    prev.projectId === next.projectId &&
+    prev.artistName === next.artistName &&
+    prev.files === next.files &&
+    prev.projects === next.projects &&
+    prev.onUpdate === next.onUpdate &&
+    prev.onToggleSelect === next.onToggleSelect
   );
 });
