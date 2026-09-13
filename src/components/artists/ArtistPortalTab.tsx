@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import {
   Loader2, Eye, EyeOff, ArrowUp, ArrowDown, Layout,
@@ -22,6 +22,47 @@ const TOOL_ICON_COMPONENTS: Record<string, any> = {
 interface PortalTabProps {
   artistId: string;
   artistName?: string;
+}
+
+// Local state that only commits (and saves to Drive via updateModule) on
+// blur/Enter/a short pause, instead of firing a PUT request on every keystroke.
+function ModuleTitleInput({ title, placeholder, onCommit }: { title: string; placeholder: string; onCommit: (title: string) => void }) {
+  const [value, setValue] = useState(title);
+  const lastCommitted = useRef(title);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (title !== lastCommitted.current) {
+      lastCommitted.current = title;
+      setValue(title);
+    }
+  }, [title]);
+
+  const commit = (v: string) => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (v === lastCommitted.current) return;
+    lastCommitted.current = v;
+    onCommit(v);
+  };
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={e => {
+        const v = e.target.value;
+        setValue(v);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => commit(v), 900);
+      }}
+      onBlur={() => commit(value)}
+      onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
+      placeholder={placeholder}
+      className="bg-transparent text-sm font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/50 rounded px-1 -ml-1 w-full max-w-xs transition-colors"
+    />
+  );
 }
 
 export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
@@ -366,12 +407,10 @@ export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-accent uppercase tracking-wider">{mod.type}</span>
                   </div>
-                  <input
-                    type="text"
-                    value={mod.title || ''}
-                    onChange={e => updateModule(mod.id, { title: e.target.value })}
+                  <ModuleTitleInput
+                    title={mod.title || ''}
                     placeholder={info.label}
-                    className="bg-transparent text-sm font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/50 rounded px-1 -ml-1 w-full max-w-xs transition-colors"
+                    onCommit={(title) => updateModule(mod.id, { title })}
                   />
                   <p className="text-[10px] text-text-secondary mt-0.5">{info.description}</p>
                   

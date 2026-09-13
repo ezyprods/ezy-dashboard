@@ -1,25 +1,34 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Project, CreateProjectInput } from '@/types';
 
 export function useProjects(artistId?: string) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tracks which artistId this hook was last asked to load, so an
+  // out-of-order response (e.g. switching between artist pages quickly)
+  // can't overwrite the list with another artist's projects.
+  const requestedArtistIdRef = useRef<string | undefined>(artistId);
 
   const fetchProjects = useCallback(async () => {
-    if (!artistId) return;
-    
+    requestedArtistIdRef.current = artistId;
+    if (!artistId) {
+      setProjects([]);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/projects?artistId=${artistId}`);
       if (!res.ok) throw new Error('Failed to fetch projects');
       const data = await res.json();
+      if (requestedArtistIdRef.current !== artistId) return; // stale: artistId changed meanwhile
       setProjects(data.projects || []);
     } catch (err: any) {
-      setError(err.message);
+      if (requestedArtistIdRef.current === artistId) setError(err.message);
     } finally {
-      setIsLoading(false);
+      if (requestedArtistIdRef.current === artistId) setIsLoading(false);
     }
   }, [artistId]);
 

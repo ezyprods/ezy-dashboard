@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Campaign, CampaignColor, Project } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Loader2, Plus, Target, Trash2, Folder, MoreVertical, Music, Disc3, X, Check, ChevronRight } from 'lucide-react';
@@ -50,20 +50,29 @@ export function ArtistCampaignsTab({ artistId, projects, onOpenMatrix }: ArtistC
 
   const { showMenu } = useContextMenu();
 
+  // Guards against an out-of-order response landing after the artist tab
+  // already switched to another artist (this component can be re-used
+  // across artistId changes without unmounting).
+  const requestedArtistIdRef = useRef(artistId);
+
   useEffect(() => {
     fetchCampaigns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artistId]);
 
   const fetchCampaigns = async () => {
+    requestedArtistIdRef.current = artistId;
+    setIsLoading(true);
     try {
       const res = await fetch(`/api/artists/${artistId}/campaigns`);
       if (!res.ok) throw new Error('Error al cargar campañas');
       const data = await res.json();
+      if (requestedArtistIdRef.current !== artistId) return;
       setCampaigns(data.campaigns || []);
     } catch (err: any) {
-      customAlert(err.message);
+      if (requestedArtistIdRef.current === artistId) customAlert(err.message);
     } finally {
-      setIsLoading(false);
+      if (requestedArtistIdRef.current === artistId) setIsLoading(false);
     }
   };
 
