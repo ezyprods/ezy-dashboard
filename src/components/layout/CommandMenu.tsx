@@ -32,6 +32,10 @@ export function CommandMenu() {
   const [results, setResults] = React.useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = React.useState(false);
   const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guards against an in-flight search response landing after a newer one
+  // (or after the query was cleared), which could otherwise overwrite fresher
+  // results with stale ones under network jitter.
+  const latestQueryRef = React.useRef('');
   const router = useRouter();
   const { activeArtists } = useArtists();
   const { theme, setTheme } = useTheme();
@@ -83,22 +87,26 @@ export function CommandMenu() {
   React.useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (!query || query.trim().length < 2) {
+      latestQueryRef.current = '';
       setResults(null);
       setIsSearching(false);
       return;
     }
     setIsSearching(true);
+    const thisQuery = query.trim();
+    latestQueryRef.current = thisQuery;
     searchTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`);
+        const res = await fetch(`/api/search?q=${encodeURIComponent(thisQuery)}`);
         if (res.ok) {
           const data = await res.json();
+          if (latestQueryRef.current !== thisQuery) return; // stale response
           setResults(data);
         }
       } catch (e) {
         console.error('Search error:', e);
       } finally {
-        setIsSearching(false);
+        if (latestQueryRef.current === thisQuery) setIsSearching(false);
       }
     }, 350);
     return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };

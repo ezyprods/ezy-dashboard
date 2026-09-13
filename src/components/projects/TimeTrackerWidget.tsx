@@ -39,6 +39,19 @@ export function TimeTrackerWidget({ projectId }: { projectId: string }) {
     return () => clearInterval(interval);
   }, [isRunning]);
 
+  // The running timer only lives in React state — closing the tab, reloading,
+  // or navigating away mid-session silently threw away all the elapsed time
+  // with no way to recover it. Warn before that happens.
+  useEffect(() => {
+    if (!isRunning && !showSaveDialog) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isRunning, showSaveDialog]);
+
   const fetchSessions = async () => {
     setIsLoading(true);
     try {
