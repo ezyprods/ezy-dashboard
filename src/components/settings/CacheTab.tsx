@@ -12,17 +12,17 @@ export function CacheTab() {
   }, [cleared]);
 
   const calculateSize = () => {
+    // Only counts what handleClearCache below actually removes (sessionStorage
+    // caches). It used to also add up localStorage's "ezy_" keys, but those
+    // are the user's saved preferences (theme, studio profile, notification
+    // settings, etc.) that "Limpiar Caché" deliberately never touches — so
+    // the displayed size never matched what clearing the cache actually
+    // freed, and it explicitly promises "no perderás... configuraciones".
     let total = 0;
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
       if (key && (key.startsWith('release_cache_') || key.startsWith('ezy_'))) {
         total += (sessionStorage.getItem(key)?.length || 0) * 2; // approx 2 bytes per char
-      }
-    }
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('ezy_')) {
-        total += (localStorage.getItem(key)?.length || 0) * 2;
       }
     }
     if (total === 0) setCacheSize('0 B');
