@@ -42,6 +42,13 @@ let cachedCoreURL: string | null = null;
 let cachedWasmURL: string | null = null;
 let isPreloadingFFmpeg = false;
 
+// Global cache to persist decoded audio between modal opens. Must live at
+// module scope (not inside the hook body) — otherwise a fresh Map is created
+// on every mount of the component that calls useMiniDAW(), and closing +
+// reopening the modal (which unmounts/remounts the hook) would never hit
+// the cache, defeating its purpose.
+const globalAudioCache = new Map<string, AudioBuffer>();
+
 export function useMiniDAW(): UseMiniDAWReturn {
   const [status, setStatus] = useState<DAWStatus>('idle');
   const [duration, setDuration] = useState(0);
@@ -107,9 +114,6 @@ export function useMiniDAW(): UseMiniDAWReturn {
       });
     }
   }, []);
-
-// Global cache to persist decoded audio between modal opens
-const globalAudioCache = new Map<string, AudioBuffer>();
 
   const loadAudio = useCallback(async (fileId: string, fileName: string) => {
     // Reset state before loading

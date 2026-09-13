@@ -391,7 +391,10 @@ export function MiniDAWModal({ fileId, fileName, onClose }: MiniDAWModalProps) {
 
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [daw, canvasWidth, getTimeAtX]
+    // isPlaying/handlePlay are read inside but weren't listed here before, so
+    // useCallback kept returning a stale handler (and a stale handlePlay
+    // closure with outdated trim/gain/playhead) whenever only those changed.
+    [daw, canvasWidth, getTimeAtX, isPlaying, stopPlayback, handlePlay]
   );
 
   const handlePointerMove = useCallback(
