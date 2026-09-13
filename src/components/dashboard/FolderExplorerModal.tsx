@@ -106,6 +106,11 @@ export function FolderExplorerModal({
     setMounted(true);
   }, []);
 
+  // Tracks the folder actually requested last, so a slow response for a
+  // folder the user already navigated away from can't overwrite the list
+  // currently on screen.
+  const requestedFolderRef = React.useRef<string | null>(null);
+
   const currentTrack = audio?.currentTrack;
   const isPlaying = audio?.isPlaying ?? false;
   const playTrack = audio?.playTrack;
@@ -113,6 +118,7 @@ export function FolderExplorerModal({
 
   const fetchFolder = useCallback(async (id: string) => {
     if (!id) return;
+    requestedFolderRef.current = id;
     setIsLoading(true);
     try {
       const res = await fetch(`/api/files?folderId=${encodeURIComponent(id)}`);
@@ -122,11 +128,12 @@ export function FolderExplorerModal({
       const filtered = itemsList.filter(
         (i: any) => i && typeof i.name === 'string' && !i.name.endsWith('.json') && i.mimeType !== 'application/json'
       );
+      if (requestedFolderRef.current !== id) return; // stale response, user already navigated elsewhere
       setItems(filtered);
     } catch {
-      setItems([]);
+      if (requestedFolderRef.current === id) setItems([]);
     } finally {
-      setIsLoading(false);
+      if (requestedFolderRef.current === id) setIsLoading(false);
     }
   }, []);
 

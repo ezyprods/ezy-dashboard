@@ -60,6 +60,11 @@ const formatModificationTime = (timeStr?: string) => {
 
 export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }: { rootFolderId: string, rootName: string, artistEmail?: string, artistId?: string }) {
   const [currentFolderId, setCurrentFolderId] = useState(rootFolderId);
+  // Tracks the latest requested folder so an out-of-order fetchItems response
+  // (from a folder the user already navigated away from) is discarded instead
+  // of clobbering the currently displayed folder's contents.
+  const currentFolderIdRef = useRef(rootFolderId);
+  useEffect(() => { currentFolderIdRef.current = currentFolderId; }, [currentFolderId]);
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([{ id: rootFolderId, name: rootName }]);
   const [items, setItems] = useState<DriveItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -307,11 +312,14 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
       if (!res.ok) throw new Error('Error al cargar archivos');
       const data = await res.json();
       const filteredItems = (data.items || []).filter((item: any) => !item.name?.endsWith('.json') && item.mimeType !== 'application/json');
+      // Ignore stale responses: if the user already navigated to another
+      // folder before this request resolved, don't overwrite its contents.
+      if (currentFolderIdRef.current !== folderId) return;
       setItems(filteredItems);
     } catch (e: any) {
-      customAlert(e.message);
+      if (currentFolderIdRef.current === folderId) customAlert(e.message);
     } finally {
-      setIsLoading(false);
+      if (currentFolderIdRef.current === folderId) setIsLoading(false);
     }
   };
 
