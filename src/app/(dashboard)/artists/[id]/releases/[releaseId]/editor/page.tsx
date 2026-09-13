@@ -17,6 +17,7 @@ import { TrackPickerModal } from '@/components/releases/TrackPickerModal';
 import { customAlert, customConfirm } from '@/lib/dialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { getCoverArtUrl } from '@/lib/utils';
+import { uploadFileToDrive } from '@/lib/driveUpload';
 
 export default function ReleaseEditorPage() {
   const params = useParams();
@@ -100,7 +101,13 @@ export default function ReleaseEditorPage() {
         // Google Drive has eventual consistency - the new config file may not be
         // indexed yet. Wait 1.5s and retry.
         await new Promise(r => setTimeout(r, 1500));
-        return fetchRelease(retries - 1);
+        // `return await` (not just `return`) matters here: without it, this
+        // function's own `finally` below runs setIsLoading(false) as soon as
+        // the retry call is *kicked off* rather than once it *resolves*, so
+        // isLoading flips false mid-retry and briefly renders "Preview no
+        // encontrado" (below) before the actual result comes back — visible
+        // as a repeated flash of the not-found screen while it keeps retrying.
+        return await fetchRelease(retries - 1);
       }
       if (!res.ok) throw new Error(`Error al cargar el lanzamiento (${res.status})`);
       const data = await res.json();
@@ -179,9 +186,19 @@ export default function ReleaseEditorPage() {
     });
   };
 
+  // Tracks whose conversion/upload already failed once this session — the
+  // effect below re-runs optimizeTracksToMp3() on every conversionState.active
+  // change, and without this a track that keeps failing (e.g. a transient
+  // network error) would be retried forever in a tight loop.
+  const failedTrackIdsRef = useRef<Set<string>>(new Set());
+
   const optimizeTracksToMp3 = async () => {
     try {
-      const tracksToConvert = release?.tracks.filter(t => !t.previewFileId && (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav'))) || [];
+      const tracksToConvert = (release?.tracks || []).filter(t =>
+        !t.previewFileId &&
+        (!t.originalFileName || t.originalFileName.toLowerCase().endsWith('.wav')) &&
+        !failedTrackIdsRef.current.has(t.id)
+      );
       if (tracksToConvert.length === 0) return;
 
       setConversionState({ active: true, progress: 0, trackTitle: 'Iniciando motor FFmpeg...' });
@@ -205,44 +222,52 @@ export default function ReleaseEditorPage() {
       let newTracks = [...(release?.tracks || [])];
 
       for (const track of tracksToConvert) {
-        setConversionState({ active: true, progress: 0, trackTitle: `Descargando: ${track.title}` });
-        
-        const response = await fetch(`/api/audio/${track.originalFileId}`);
-        if (!response.ok) throw new Error('No se pudo descargar ' + track.title);
-        const blob = await response.blob();
-        
-        setConversionState({ active: true, progress: 0, trackTitle: `Optimizando: ${track.title}` });
-        
-        await ffmpeg.writeFile('input.wav', await fetchFile(blob));
-        await ffmpeg.exec(['-i', 'input.wav', '-b:a', '320k', 'output.mp3']);
-        
-        const data = await ffmpeg.readFile('output.mp3');
-        const mp3Blob = new Blob([data], { type: 'audio/mpeg' });
-        
-        setConversionState({ active: true, progress: 100, trackTitle: `Guardando: ${track.title}` });
-        const formData = new FormData();
-        const safeTitle = track.title.replace(/[^a-z0-9]/gi, '_');
-        formData.append('file', mp3Blob, `Preview_${safeTitle}.mp3`);
-        formData.append('parentId', releaseId);
-        formData.append('skipSimilarity', 'true');
-        
-        const uploadRes = await fetch('/api/files', { method: 'POST', body: formData });
-        if (!uploadRes.ok) throw new Error('Error subiendo MP3 de ' + track.title);
-        const uploadData = await uploadRes.json();
-        const mp3FileId = uploadData.file?.id || uploadData.id;
-        
-        newTracks = newTracks.map(t => t.id === track.id ? { ...t, previewFileId: mp3FileId } : t);
-        setRelease(prev => prev ? { ...prev, tracks: newTracks } : null);
-        
-        await fetch(`/api/releases/${releaseId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tracks: newTracks }),
-        });
+        try {
+          setConversionState({ active: true, progress: 0, trackTitle: `Descargando: ${track.title}` });
+
+          const response = await fetch(`/api/audio/${track.originalFileId}`);
+          if (!response.ok) throw new Error('No se pudo descargar ' + track.title);
+          const blob = await response.blob();
+
+          setConversionState({ active: true, progress: 0, trackTitle: `Optimizando: ${track.title}` });
+
+          await ffmpeg.writeFile('input.wav', await fetchFile(blob));
+          await ffmpeg.exec(['-i', 'input.wav', '-b:a', '320k', 'output.mp3']);
+
+          const data = await ffmpeg.readFile('output.mp3');
+          const mp3Blob = new Blob([data], { type: 'audio/mpeg' });
+
+          setConversionState({ active: true, progress: 100, trackTitle: `Guardando: ${track.title}` });
+          const safeTitle = track.title.replace(/[^a-z0-9]/gi, '_');
+          // Direct-to-Drive upload: a 320kbps MP3 of a full song is routinely
+          // >4.5MB, which the old /api/files POST route (a Vercel serverless
+          // function) silently rejected. That left previewFileId unset, and
+          // since the effect below re-triggers this whole function on every
+          // conversionState.active change, the track was downloaded,
+          // re-converted and re-uploaded forever without ever succeeding.
+          const uploaded = await uploadFileToDrive(mp3Blob, releaseId, { name: `Preview_${safeTitle}.mp3` });
+          const mp3FileId = uploaded.id;
+
+          newTracks = newTracks.map(t => t.id === track.id ? { ...t, previewFileId: mp3FileId } : t);
+          setRelease(prev => prev ? { ...prev, tracks: newTracks } : null);
+
+          await fetch(`/api/releases/${releaseId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tracks: newTracks }),
+          });
+        } catch (trackErr) {
+          console.error(`Error optimizing track "${track.title}":`, trackErr);
+          failedTrackIdsRef.current.add(track.id);
+        }
       }
     } catch (err: any) {
       console.error(err);
-      // We log the error but don't show an alert to not block UI since it's background
+      // Setup-level failure (e.g. FFmpeg failed to load) — mark every pending
+      // track as failed too so it doesn't retry in a tight loop.
+      for (const t of release?.tracks || []) {
+        if (!t.previewFileId) failedTrackIdsRef.current.add(t.id);
+      }
     } finally {
       setConversionState({ active: false, progress: 0, trackTitle: '' });
     }
@@ -300,20 +325,9 @@ export default function ReleaseEditorPage() {
       const version = (release?.coverHistory?.length || 0) + 1;
       const cleanTitle = (release?.title || 'Preview').replace(/[^a-z0-9]/gi, '_');
       const newFileName = `Portada - ${cleanTitle} - v${version}.${ext}`;
-      
-      const formData = new FormData();
-      formData.append('file', croppedFile, newFileName);
-      formData.append('parentId', release?.id || releaseId);
-      formData.append('skipSimilarity', 'true');
-      
-      const res = await fetch('/api/files', { method: 'POST', body: formData });
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || 'Error subiendo imagen');
-      }
-      const data = await res.json();
-      
-      const fileId = data.file?.id || data.id || data.fileId;
+
+      const uploaded = await uploadFileToDrive(croppedFile, release?.id || releaseId, { name: newFileName });
+      const fileId = uploaded.id;
       if (!fileId) throw new Error('No se recibió ID del archivo');
 
       const newEntry = { fileId, uploadedAt: new Date().toISOString() };
