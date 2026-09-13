@@ -8,7 +8,7 @@ import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Fi
 import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
 
@@ -25,7 +25,7 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const projectId = params.id as string;
   const { showMenu } = useContextMenu();
-  const { playTrack } = useAudio();
+  const { playTrack } = useAudioControls();
   
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);

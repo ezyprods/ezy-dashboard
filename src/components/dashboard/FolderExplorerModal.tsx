@@ -10,7 +10,7 @@ import {
   Clock, Timer as TimerIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { DeleteModal } from '@/components/artists/DeleteModal';
 import { ShareModal } from '@/components/artists/ShareModal';
@@ -100,7 +100,7 @@ export function FolderExplorerModal({
   const [miniDAWFile, setMiniDAWFile] = useState<{ id: string; name: string } | null>(null);
   const [resolvingArtistFor, setResolvingArtistFor] = useState<string | null>(null);
 
-  const audio = useAudio();
+  const audio = useAudioControls();
 
   useEffect(() => {
     setMounted(true);

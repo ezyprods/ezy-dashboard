@@ -18,7 +18,7 @@ import { BpmKeyDetector } from '@/components/tools/BpmKeyDetector';
 import { StemsSplitter } from '@/components/tools/StemsSplitter';
 import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { isBrowserCompatible, getCoverArtUrl } from '@/lib/utils';
 import { Scissors, Tags, Activity, Layers } from 'lucide-react';
 
@@ -37,7 +37,7 @@ import { customAlert } from '@/lib/dialog';
 // ─── Main Portal Page ─────────────────────────────────────────────────────────
 export default function PortalPage() {
   const params = useParams();
-  const { playTrack } = useAudio();
+  const { playTrack } = useAudioControls();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);

@@ -9,7 +9,7 @@ import {
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { customAlert } from '@/lib/dialog';
 import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 import type { FlexTaskStatus } from '@/types';
@@ -49,7 +49,7 @@ function TaskCard({
   onUpdateStatus: (task: PendingTask, newStatus: FlexTaskStatus) => void;
 }) {
   const { showMenu } = useContextMenu();
-  const { playTrack } = useAudio();
+  const { playTrack } = useAudioControls();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: task

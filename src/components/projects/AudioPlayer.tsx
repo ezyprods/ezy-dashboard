@@ -2,7 +2,7 @@
 
 import { FileAudio, Play, Pause, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
 
 interface AudioPlayerProps {
@@ -13,7 +13,7 @@ interface AudioPlayerProps {
 }
 
 export function AudioPlayer({ fileId, fileName, artistName, onContextMenu }: AudioPlayerProps) {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
   
   const displayName = fileName.replace(/\.[^/.]+$/, '');
   const isThisTrackActive = currentTrack?.id === fileId;

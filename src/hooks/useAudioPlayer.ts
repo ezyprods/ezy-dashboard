@@ -26,6 +26,16 @@ export function useAudioPlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const nextAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  // The main playback effect below only re-runs when `currentTrackUrl` changes
+  // (by design, to avoid remounting the <audio> element on every render).
+  // `onTrackEnd` is very often a fresh inline closure on every parent render
+  // (e.g. `() => handleNext(true)`), so it's read through a ref to always call
+  // the latest version instead of the stale one captured when the track loaded.
+  const onTrackEndRef = useRef(onTrackEnd);
+  useEffect(() => {
+    onTrackEndRef.current = onTrackEnd;
+  }, [onTrackEnd]);
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -127,7 +137,7 @@ export function useAudioPlayer({
     const handleEnded = () => {
       setIsPlaying(false);
       setIsBuffering(false);
-      onTrackEnd();
+      onTrackEndRef.current();
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);

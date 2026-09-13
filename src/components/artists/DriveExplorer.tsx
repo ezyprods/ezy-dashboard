@@ -8,7 +8,7 @@ import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
 import { cn, isBrowserCompatible } from '@/lib/utils';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import { ShareModal } from './ShareModal';
 import { DeleteModal } from './DeleteModal';
@@ -66,7 +66,7 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
   const [isUploading, setIsUploading] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const { showMenu } = useContextMenu();
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
   const { isDraggingFiles, triggerUploadForArtist } = useGlobalDragDrop();
 
   const getPathSegments = (fileName: string, currentBreadcrumbs: Breadcrumb[]) => {

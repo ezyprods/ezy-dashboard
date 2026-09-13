@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/Button";
 import { ArrowLeft, Play, Pause, Clock, Music, Heart, MoreHorizontal, Share2 } from "lucide-react";
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 
 function formatTime(seconds: number): string {
   if (!seconds || isNaN(seconds)) return '0:00';
@@ -17,7 +17,7 @@ export default function ProjectPreviewPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
   
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);

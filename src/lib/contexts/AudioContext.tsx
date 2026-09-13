@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from 'react';
 
 export interface AudioTrack {
   id: string;
@@ -13,11 +13,18 @@ export interface AudioTrack {
   musicalKey?: string | null;
 }
 
-interface AudioContextType {
+interface AudioTimeState {
+  currentTime: number;
+  duration: number;
+}
+
+// Playback controls / state that changes rarely (once per track, not per tick).
+// Kept separate from AudioTimeContext so that components which only need
+// "what's playing" (lists, sidebars, context menus) don't re-render on every
+// `timeupdate` event (~4x/sec) while a track is playing.
+interface AudioControlsContextType {
   currentTrack: AudioTrack | null;
   isPlaying: boolean;
-  duration: number;
-  currentTime: number;
   playTrack: (track: AudioTrack) => void;
   togglePlay: () => void;
   seek: (time: number) => void;
@@ -27,13 +34,62 @@ interface AudioContextType {
   isLoading: boolean;
 }
 
-const AudioContext = createContext<AudioContextType | undefined>(undefined);
+interface AudioContextType extends AudioControlsContextType, AudioTimeState {}
+
+const AudioControlsContext = createContext<AudioControlsContextType | undefined>(undefined);
+const AudioTimeContext = createContext<AudioTimeState>({ currentTime: 0, duration: 0 });
+
+const noopControls: AudioControlsContextType = {
+  currentTrack: null,
+  isPlaying: false,
+  playTrack: () => {},
+  togglePlay: () => {},
+  seek: () => {},
+  volume: 1,
+  setVolume: () => {},
+  closePlayer: () => {},
+  isLoading: false,
+};
+
+// Isolated from AudioProvider's own state: its re-renders (once per timeupdate
+// tick) never bubble up into AudioControlsContext's value, so consumers of
+// useAudioControls()/the non-time part of useAudio() are unaffected.
+function AudioTimeBridge({
+  audioRef,
+  trackId,
+  children,
+}: {
+  audioRef: React.RefObject<HTMLAudioElement | null>;
+  trackId: string | null;
+  children: React.ReactNode;
+}) {
+  const [state, setState] = useState<AudioTimeState>({ currentTime: 0, duration: 0 });
+
+  // Reset immediately when the track changes, instead of waiting for the
+  // next timeupdate/loadedmetadata event (avoids a flash of stale time/duration).
+  useEffect(() => {
+    setState({ currentTime: 0, duration: 0 });
+  }, [trackId]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onTimeUpdate = () => setState(s => (s.currentTime === el.currentTime ? s : { ...s, currentTime: el.currentTime }));
+    const onLoadedMetadata = () => setState(s => ({ ...s, duration: isFinite(el.duration) ? el.duration : 0 }));
+    el.addEventListener('timeupdate', onTimeUpdate);
+    el.addEventListener('loadedmetadata', onLoadedMetadata);
+    return () => {
+      el.removeEventListener('timeupdate', onTimeUpdate);
+      el.removeEventListener('loadedmetadata', onLoadedMetadata);
+    };
+  }, [audioRef]);
+
+  return <AudioTimeContext.Provider value={state}>{children}</AudioTimeContext.Provider>;
+}
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<AudioTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -70,9 +126,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       // New track: update src and play
       setCurrentTrack(track);
       setIsLoading(true);
-      setCurrentTime(0);
-      setDuration(0);
-      
+
       let finalUrl = track.url;
       // Guarantee reliable streaming endpoint
       if (!finalUrl || (finalUrl.includes('drive.google.com') || finalUrl.includes('googleusercontent.com')) && track.id) {
@@ -80,10 +134,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       } else if (track.id && !finalUrl.startsWith('/api/audio/')) {
         finalUrl = `/api/audio/${track.id}`;
       }
-      
+
       audioRef.current.src = finalUrl;
       audioRef.current.load();
-      
+
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise.then(() => {
@@ -102,8 +156,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           .then(res => res.json())
           .then(data => {
             if (data.pathSegments) {
-              setCurrentTrack(prev => prev && prev.id === track.id ? { 
-                ...prev, 
+              setCurrentTrack(prev => prev && prev.id === track.id ? {
+                ...prev,
                 pathSegments: data.pathSegments,
                 artistName: data.artistName || prev.artistName
               } : prev);
@@ -138,36 +192,36 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const seek = (time: number) => {
     if (audioRef.current) {
       audioRef.current.currentTime = time;
-      setCurrentTime(time);
+      // Give an instant UI update instead of waiting for the browser's next
+      // (throttled) native timeupdate event.
+      audioRef.current.dispatchEvent(new Event('timeupdate'));
     }
   };
 
   const closePlayer = () => setCurrentTrack(null);
 
+  const controlsValue = useMemo<AudioControlsContextType>(() => ({
+    currentTrack,
+    isPlaying,
+    playTrack,
+    togglePlay,
+    seek,
+    volume,
+    setVolume,
+    closePlayer,
+    isLoading,
+  }), [currentTrack, isPlaying, volume, isLoading]);
+
   return (
-    <AudioContext.Provider value={{
-      currentTrack,
-      isPlaying,
-      duration,
-      currentTime,
-      playTrack,
-      togglePlay,
-      seek,
-      volume,
-      setVolume,
-      closePlayer,
-      isLoading
-    }}>
-      {children}
+    <AudioControlsContext.Provider value={controlsValue}>
+      <AudioTimeBridge audioRef={audioRef} trackId={currentTrack?.id ?? null}>
+        {children}
+      </AudioTimeBridge>
       {/* Real, mounted audio element handles all events cleanly */}
       <audio
         ref={audioRef}
         preload="none"
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => {
-          setDuration(e.currentTarget.duration);
-          setIsLoading(false);
-        }}
+        onLoadedMetadata={() => setIsLoading(false)}
         onLoadedData={() => setIsLoading(false)}
         onEnded={() => {
           setIsPlaying(false);
@@ -194,26 +248,28 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         }}
         style={{ display: 'none' }}
       />
-    </AudioContext.Provider>
+    </AudioControlsContext.Provider>
   );
 }
 
-export function useAudio() {
-  const context = useContext(AudioContext);
-  if (!context) {
-    return {
-      currentTrack: null,
-      isPlaying: false,
-      duration: 0,
-      currentTime: 0,
-      playTrack: () => {},
-      togglePlay: () => {},
-      seek: () => {},
-      volume: 1,
-      setVolume: () => {},
-      closePlayer: () => {},
-      isLoading: false,
-    };
-  }
-  return context;
+/** Playback controls + state, WITHOUT currentTime/duration — does not re-render on every tick. */
+export function useAudioControls(): AudioControlsContextType {
+  const context = useContext(AudioControlsContext);
+  return context ?? noopControls;
+}
+
+/** currentTime/duration only — for scrubbers/time displays. Re-renders every tick while playing. */
+export function useAudioTime(): AudioTimeState {
+  return useContext(AudioTimeContext);
+}
+
+/**
+ * @deprecated Prefer `useAudioControls()` for playback controls (no per-tick
+ * re-renders) and `useAudioTime()` for currentTime/duration. Kept for
+ * backwards compatibility with existing call sites during the migration.
+ */
+export function useAudio(): AudioContextType {
+  const controls = useAudioControls();
+  const time = useAudioTime();
+  return useMemo(() => ({ ...controls, ...time }), [controls, time]);
 }

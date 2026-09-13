@@ -5,7 +5,7 @@ import { Loader2, Plus, Trash2, CheckCircle2, Clock, Eye, Circle, GripVertical, 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { ProductionGrid, FlexTaskStatus, GridCell } from '@/types';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { customConfirm, customAlert } from '@/lib/dialog';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 
@@ -87,7 +87,7 @@ function SortableRow({
   selectedCells: Set<string>;
   onToggleSelect: (rowId: string, colId: string, e: React.MouseEvent | React.PointerEvent) => void;
 }) {
-  const { playTrack } = useAudio();
+  const { playTrack } = useAudioControls();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' as const, zIndex: isDragging ? 50 : 1 };
 

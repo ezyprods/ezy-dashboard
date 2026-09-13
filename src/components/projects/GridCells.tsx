@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { DatePicker } from '@/components/ui/DatePicker';
 import type { GridCell, FlexTaskStatus, ColumnType } from '@/types';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { customAlert, customConfirm } from '@/lib/dialog';
 import { uploadFileToDrive, findSimilarFileInFolder } from '@/lib/driveUpload';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
@@ -440,7 +440,7 @@ export function CellComponent({
 }) {
   const [isUploading, setIsUploading] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
 
   const { showMenu } = useContextMenu();
   const handleUpdate = (updates: Partial<GridCell>) => onUpdate(rowId, colId, updates);

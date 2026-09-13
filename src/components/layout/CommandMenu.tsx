@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useArtists } from '@/lib/hooks/useArtists';
 import { useTheme } from '@/lib/contexts/ThemeContext';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { useSmoothScroll } from '@/hooks/useSmoothScroll';
 import {
   Search, User, Calendar, Settings, Moon, Sun,
@@ -35,7 +35,7 @@ export function CommandMenu() {
   const router = useRouter();
   const { activeArtists } = useArtists();
   const { theme, setTheme } = useTheme();
-  const { playTrack } = useAudio();
+  const { playTrack } = useAudioControls();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);

@@ -22,7 +22,7 @@ import {
   UploadCloud,
   Download
 } from 'lucide-react';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { 
   PERSONAL_PROJECT_CATEGORIES, 
   PERSONAL_PROJECT_STATUS_CONFIG 
@@ -68,7 +68,7 @@ export function PersonalProjectListItem({
   onCloneToArtist,
   onReplaceAudio,
 }: PersonalProjectListItemProps) {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
   const [showMenu, setShowMenu] = useState(false);
   const [showPackMenu, setShowPackMenu] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<PackTrack | null>(null);

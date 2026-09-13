@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, Download, ExternalLink, FileAudio, Loader2, FolderOpen } from 'lucide-react';
-import { useAudio } from '@/lib/contexts/AudioContext';
+import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { FolderExplorerModal } from './FolderExplorerModal';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useSmoothScroll } from '@/hooks/useSmoothScroll';
@@ -26,7 +26,7 @@ import { useAppData } from '@/lib/contexts/AppDataContext';
 export function RecentFilesWidget() {
   const { recentFiles: files, recentFilesLoading: isLoading, fetchRecentFiles } = useAppData();
   const [explorerContext, setExplorerContext] = useState<{ folderId: string; fileId: string; fileName: string } | null>(null);
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handlePlay = (file: DriveFile) => {
