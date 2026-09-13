@@ -47,18 +47,23 @@ import { useAppData } from '@/lib/contexts/AppDataContext';
 export default function CalendarPage() {
   const router = useRouter();
   const { showMenu } = useContextMenu();
-  const { 
-    calendarEvents: events, 
-    artists, 
-    calendarLoading: isLoading, 
-    calendarError: error, 
-    fetchCalendar, 
-    fetchArtists 
-  } = useAppData();
+  const { artists, fetchArtists } = useAppData();
 
   const [showNewEvent, setShowNewEvent] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // The shared AppDataContext cache (calendarEvents/fetchCalendar) only ever
+  // covers a fixed rolling 60-day window from today — fine for the dashboard's
+  // "upcoming events" widget, but it meant navigating this page to a past
+  // month or more than ~2 months ahead always showed "no events" even when
+  // events existed. This page fetches its own range instead, scoped to
+  // whatever month is currently visible (padded one month each side so the
+  // 42-day grid's leading/trailing days from adjacent months are covered too).
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestedRangeKeyRef = useRef<string | null>(null);
 
   // Form states for modal
   const [initialDate, setInitialDate] = useState<string | undefined>(undefined);
@@ -84,11 +89,35 @@ export default function CalendarPage() {
   }, []);
 
   const fetchEvents = useCallback(async () => {
-    await Promise.all([
-      fetchCalendar(true),
-      fetchArtists(true),
-    ]);
-  }, [fetchCalendar, fetchArtists]);
+    const rangeStart = startOfMonth(subMonths(currentMonth, 1));
+    const rangeEnd = new Date(startOfMonth(addMonths(currentMonth, 2)).getTime() - 1);
+    const rangeKey = `${rangeStart.toISOString()}_${rangeEnd.toISOString()}`;
+    requestedRangeKeyRef.current = rangeKey;
+
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/calendar?timeMin=${encodeURIComponent(rangeStart.toISOString())}&timeMax=${encodeURIComponent(rangeEnd.toISOString())}`);
+      const data = await res.json();
+      if (requestedRangeKeyRef.current !== rangeKey) return; // stale: user already switched month again
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch calendar');
+      setEvents(data.events || []);
+      setError(null);
+    } catch (err: any) {
+      if (requestedRangeKeyRef.current === rangeKey) setError(err.message);
+    } finally {
+      if (requestedRangeKeyRef.current === rangeKey) setIsLoading(false);
+    }
+  }, [currentMonth]);
+
+  // Refetch whenever the visible month changes
+  useEffect(() => {
+    fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth]);
+
+  useEffect(() => {
+    fetchArtists();
+  }, [fetchArtists]);
 
   const detectArtist = (summary: string) => {
     if (!summary) return null;
