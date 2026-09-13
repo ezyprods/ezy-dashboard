@@ -41,12 +41,12 @@ function SortableColHeader({ col, onDelete, onRename }: { col: { id: string; nam
         <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity shrink-0">
           <GripVertical className="w-3.5 h-3.5" />
         </button>
-        <input 
-          value={localName} 
+        <input
+          value={localName}
           onChange={e => setLocalName(e.target.value)}
           onBlur={() => { if(localName.trim() && localName !== col.name) onRename(col.id, localName.trim()); else setLocalName(col.name); }}
           onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
-          className="font-semibold text-sm text-center bg-transparent border-none outline-none w-full truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors" 
+          className="font-semibold text-sm text-center bg-transparent border-none outline-none w-full truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors"
           title={localName}
         />
         <button onClick={() => onDelete(col.id)} className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-error hover:bg-error/10 p-0.5 rounded transition-opacity shrink-0" title="Eliminar columna">
@@ -125,22 +125,22 @@ function SortableRow({
       <td className="p-1 sm:p-3 border-b border-r border-border font-medium text-sm text-text-primary bg-surface/10 w-40 sm:w-64 min-w-[160px] sm:min-w-[250px] max-w-[160px] sm:max-w-[400px]">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <button {...attributes} {...listeners} className="cursor-grab text-text-secondary opacity-40 sm:opacity-0 sm:group-hover/row:opacity-60 hover:opacity-100 transition-opacity shrink-0"><GripVertical className="w-3.5 h-3.5" /></button>
-          <input 
-            value={localName} 
+          <input
+            value={localName}
             onChange={e => setLocalName(e.target.value)}
             onBlur={() => { if(localName.trim() && localName !== row.name) onRename(row.id, localName.trim()); else setLocalName(row.name); }}
             onKeyDown={e => { if(e.key === 'Enter') e.currentTarget.blur(); }}
             onContextMenu={handleContextMenu}
             data-context="ignore"
-            className="font-medium text-sm bg-transparent border-none outline-none flex-1 min-w-0 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors cursor-context-menu" 
+            className="font-medium text-sm bg-transparent border-none outline-none flex-1 min-w-0 truncate focus:ring-0 text-text-primary px-1 hover:bg-surface-elevated/50 focus:bg-surface-elevated rounded transition-colors cursor-context-menu"
             title={localName}
           />
           {row.linkedFile?.sourceProjectId && (() => {
              const p = projects.find((x:any) => x.id === row.linkedFile!.sourceProjectId);
              if (!p) return null;
              return (
-               <span 
-                 className="text-[9px] px-1.5 py-0.5 rounded bg-surface-elevated border border-border/50 text-text-secondary truncate max-w-[100px] shrink-0" 
+               <span
+                 className="text-[9px] px-1.5 py-0.5 rounded bg-surface-elevated border border-border/50 text-text-secondary truncate max-w-[100px] shrink-0"
                  title={`Archivo del proyecto: ${p.title}`}
                >
                  {p.title}
@@ -151,8 +151,8 @@ function SortableRow({
             {row.linkedFile && (
               <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1 py-0.5 rounded border border-border/50">
                 {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
-                  <button onClick={(e) => { 
-                    e.stopPropagation(); 
+                  <button onClick={(e) => {
+                    e.stopPropagation();
                     const pathSegs: { name: string; url?: string }[] = [
                       { name: 'Artistas', url: '/artists' },
                       { name: artistName, url: `/artists/${artistId}` }
@@ -162,8 +162,8 @@ function SortableRow({
                       if (p) pathSegs.push({ name: p.title, url: `/artists/${artistId}?project=${projectId}` });
                     }
                     pathSegs.push({ name: row.name || row.linkedFile!.name });
-                    
-                    playTrack({ id: row.linkedFile!.id, name: row.name || row.linkedFile!.name, url: `/api/audio/${row.linkedFile!.id}`, artistName, pathSegments: pathSegs }); 
+
+                    playTrack({ id: row.linkedFile!.id, name: row.name || row.linkedFile!.name, url: `/api/audio/${row.linkedFile!.id}`, artistName, pathSegments: pathSegs });
                   }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
                     <Play className="w-3.5 h-3.5" />
                   </button>
@@ -180,12 +180,12 @@ function SortableRow({
                 )}
               </div>
             )}
-            <button 
+            <button
               onClick={() => {
                 const customEvent = new CustomEvent('open-comments-modal', { detail: { rowId: row.id, name: row.name } });
                 window.dispatchEvent(customEvent);
-              }} 
-              className="text-text-secondary hover:text-accent p-1 rounded transition-colors shrink-0" 
+              }}
+              className="text-text-secondary hover:text-accent p-1 rounded transition-colors shrink-0"
               title="Observaciones"
             >
               <MessageSquare className="w-3.5 h-3.5" />
@@ -208,17 +208,17 @@ function SortableRow({
 }
 
 // --- Main Grid Component ---
-export function ProductionGridBoard({ 
-  artistId, 
-  matrixId, 
-  matrixName = 'Matriz de Producción', 
+export function ProductionGridBoard({
+  artistId,
+  matrixId,
+  matrixName = 'Matriz de Producción',
   artistName = 'Artista',
   initialGrid,
   initialProjectId
-}: { 
-  artistId: string; 
-  matrixId: string; 
-  matrixName?: string; 
+}: {
+  artistId: string;
+  matrixId: string;
+  matrixName?: string;
   artistName?: string;
   initialGrid?: ProductionGrid;
   initialProjectId?: string;
@@ -228,12 +228,12 @@ export function ProductionGridBoard({
   const [isSaving, setIsSaving] = useState(false);
   const [newRowName, setNewRowName] = useState('');
   const { showMenu } = useContextMenu();
-  
+
   // Modals state
   const [linkingRowId, setLinkingRowId] = useState<string | null>(null);
   const [commentingRow, setCommentingRow] = useState<{id: string, name: string} | null>(null);
   const [commentsText, setCommentsText] = useState('');
-  
+
   // Projects, Campaigns and Files logic
   const [projects, setProjects] = useState<any[]>([]);
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -250,9 +250,62 @@ export function ProductionGridBoard({
   // Refs for callbacks to avoid stale closures
   const gridRef = useRef(grid);
   useEffect(() => { gridRef.current = grid; }, [grid]);
-  
+
   const selectedCellsRef = useRef(selectedCells);
   useEffect(() => { selectedCellsRef.current = selectedCells; }, [selectedCells]);
+
+  const linkedProjectIdRef = useRef(linkedProjectId);
+  useEffect(() => { linkedProjectIdRef.current = linkedProjectId; }, [linkedProjectId]);
+
+  const lastSelectedCellIdRef = useRef<string | null>(null);
+  useEffect(() => { lastSelectedCellIdRef.current = lastSelectedCellId; }, [lastSelectedCellId]);
+
+  const selectionBoxActiveRef = useRef(false);
+  useEffect(() => { selectionBoxActiveRef.current = selectionBox.active; }, [selectionBox.active]);
+
+  // ── Serialized save queue ────────────────────────────────────────────────
+  // Every save sends the whole grid. Requests could finish out of order (each one also
+  // syncs Google Calendar), so an older grid could overwrite a newer one. Saves are sent
+  // one at a time and intermediate states are coalesced: only the latest grid is sent next.
+  const pendingSaveRef = useRef<{ grid: ProductionGrid; projectId: string } | null>(null);
+  const isSavingRef = useRef(false);
+
+  const flushSaves = useCallback(async () => {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsSaving(true);
+    try {
+      while (pendingSaveRef.current) {
+        const job = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        try {
+          const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productionGrid: job.grid, projectId: job.projectId })
+          });
+          if (!res.ok) throw new Error('save failed');
+        } catch (e) {
+          console.error(e);
+          customAlert('Error guardando en Drive. Los cambios podrían no haberse sincronizado.');
+        }
+      }
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
+  }, [artistId, matrixId]);
+
+  const saveGrid = useCallback((newGrid: ProductionGrid, newLinkedProjectId?: string) => {
+    // Optimistic UI update (the ref is updated immediately so consecutive edits build on it)
+    gridRef.current = newGrid;
+    setGrid(newGrid);
+    pendingSaveRef.current = {
+      grid: newGrid,
+      projectId: newLinkedProjectId !== undefined ? newLinkedProjectId : linkedProjectIdRef.current,
+    };
+    flushSaves();
+  }, [flushSaves]);
 
   // DND sensors
   const sensors = useSensors(
@@ -262,23 +315,18 @@ export function ProductionGridBoard({
   useEffect(() => {
     const handleOpenLink = (e: any) => setLinkingRowId(e.detail.rowId);
     const handleUnlink = (e: any) => {
-      setGrid(prev => {
-        const newRows = prev.rows.map(r => r.id === e.detail.rowId ? { ...r, linkedFile: undefined } : r);
-        saveGrid({ ...prev, rows: newRows });
-        return { ...prev, rows: newRows };
-      });
+      const current = gridRef.current;
+      const newRows = current.rows.map(r => r.id === e.detail.rowId ? { ...r, linkedFile: undefined } : r);
+      saveGrid({ ...current, rows: newRows });
     };
     const handleOpenComments = (e: any) => {
+      const row = gridRef.current.rows.find(r => r.id === e.detail.rowId);
+      setCommentsText(row?.cells?.['_comments']?.textValue || '');
       setCommentingRow({ id: e.detail.rowId, name: e.detail.name });
-      setGrid(prev => {
-        const row = prev.rows.find(r => r.id === e.detail.rowId);
-        setCommentsText(row?.cells['_comments']?.textValue || '');
-        return prev;
-      });
     };
 
     const handleGlobalUp = () => {
-      if (selectionBox.active) setSelectionBox(prev => ({ ...prev, active: false }));
+      if (selectionBoxActiveRef.current) setSelectionBox(prev => ({ ...prev, active: false }));
     };
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -301,7 +349,7 @@ export function ProductionGridBoard({
       window.removeEventListener('pointerup', handleGlobalUp);
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, []);
+  }, [saveGrid]);
 
   useEffect(() => {
     if (artistId && matrixId) {
@@ -315,7 +363,8 @@ export function ProductionGridBoard({
     if (artistId) {
       fetchFiles(linkedProjectId);
     }
-  }, [artistId, linkedProjectId]);
+    // campaigns: a matrix linked to a campaign needs the campaign list to resolve its folders
+  }, [artistId, linkedProjectId, campaigns]);
 
   const fetchGrid = async () => {
     if (!grid.rows.length && !grid.columns.length) {
@@ -408,129 +457,102 @@ export function ProductionGridBoard({
       setFiles(allFiles);
 
       // ── 4. Intelligent Auto-Match Logic ─────────────────────────────────
-      setGrid(prevGrid => {
-        let hasChanges = false;
-        const audioFiles = allFiles;
+      const prevGrid = gridRef.current;
+      let hasChanges = false;
+      const audioFiles = allFiles;
 
-        const normalize = (s: string) => {
-          if (!s) return '';
-          return s.toLowerCase().normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .replace(/\b(master|mix|24bits|16bits|48khz|44khz|instrumental|vocal|acapella|beat|final|bounce|ft|feat|prod)\b/g, "")
-            .replace(/[^a-z0-9]/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
-        };
+      const normalize = (str: string) => {
+        if (!str) return '';
+        return str.toLowerCase().normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\b(master|mix|24bits|16bits|48khz|44khz|instrumental|vocal|acapella|beat|final|bounce|ft|feat|prod)\b/g, "")
+          .replace(/[^a-z0-9]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      };
 
-        const checkMatch = (fileName: string, rowName: string) => {
-          const fileNameNorm = normalize(fileName.replace(/\.(wav|mp3|m4a|flac|aiff|ogg)$/i, ''));
-          const rowNameNorm = normalize(rowName);
-          if (!fileNameNorm || !rowNameNorm) return 0;
-          
-          // Token-based match with heavy penalty for non-matching long tokens
-          const rowTokens = rowNameNorm.split(' ').filter(t => t.length > 1);
-          const fileTokens = fileNameNorm.split(' ').filter(t => t.length > 1);
-          
-          if (rowTokens.length === 0 || fileTokens.length === 0) return 0;
+      const checkMatch = (fileName: string, rowName: string) => {
+        const fileNameNorm = normalize(fileName.replace(/\.(wav|mp3|m4a|flac|aiff|ogg)$/i, ''));
+        const rowNameNorm = normalize(rowName);
+        if (!fileNameNorm || !rowNameNorm) return 0;
 
-          // Find how many row tokens are present in file tokens exactly
-          let matchCount = 0;
-          for (const rt of rowTokens) {
-            if (fileTokens.includes(rt)) matchCount += 2; // Exact word match is stronger
-            else if (fileTokens.some(ft => ft.includes(rt) || rt.includes(ft))) matchCount += 1;
-          }
+        // Token-based match with heavy penalty for non-matching long tokens
+        const rowTokens = rowNameNorm.split(' ').filter(t => t.length > 1);
+        const fileTokens = fileNameNorm.split(' ').filter(t => t.length > 1);
 
-          if (matchCount > 0 && (matchCount / (rowTokens.length * 2)) >= 0.5) {
-             return 1000 + matchCount * 10 - Math.abs(fileNameNorm.length - rowNameNorm.length);
-          }
-          return 0;
-        };
+        if (rowTokens.length === 0 || fileTokens.length === 0) return 0;
 
-        const newRows = prevGrid.rows.map(row => {
-          if (!row.name?.trim()) return row;
-          let rowModified = false;
-          const newCells = { ...row.cells };
-
-          // Find best matching audio file for this row
-          let bestMatch: any = null;
-          let bestScore = 0;
-          for (const file of audioFiles) {
-            const score = checkMatch(file.name, row.name);
-            if (score > bestScore) {
-              bestScore = score;
-              bestMatch = file;
-            }
-          }
-
-          // Apply to file-type columns if not already set
-          for (const col of prevGrid.columns) {
-            if (col.type === 'file') {
-              const cell = newCells[col.id] || { status: 'todo' };
-              if (!cell.fileId && bestMatch) {
-                newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
-                rowModified = true;
-              }
-            }
-          }
-
-          // Always attach linkedFile for the play button
-          if (!row.linkedFile && bestMatch) {
-            row.linkedFile = {
-              id: bestMatch.id,
-              name: bestMatch.name,
-              webViewLink: bestMatch.webViewLink,
-              webContentLink: bestMatch.webContentLink,
-              mimeType: bestMatch.mimeType,
-              sourceProjectId: bestMatch.sourceProjectId // NEW
-            } as any;
-            rowModified = true;
-          }
-
-          if (rowModified) {
-            hasChanges = true;
-            return { ...row, cells: newCells };
-          }
-          return row;
-        });
-
-        if (hasChanges) {
-          const updatedGrid = { ...prevGrid, rows: newRows };
-          fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ productionGrid: updatedGrid, projectId: projId })
-          }).catch(console.error);
-          return updatedGrid;
+        let matchCount = 0;
+        for (const rt of rowTokens) {
+          if (fileTokens.includes(rt)) matchCount += 2; // Exact word match is stronger
+          else if (fileTokens.some(ft => ft.includes(rt) || rt.includes(ft))) matchCount += 1;
         }
-        return prevGrid;
+
+        if (matchCount > 0 && (matchCount / (rowTokens.length * 2)) >= 0.5) {
+          return 1000 + matchCount * 10 - Math.abs(fileNameNorm.length - rowNameNorm.length);
+        }
+        return 0;
+      };
+
+      const newRows = prevGrid.rows.map(row => {
+        if (!row.name?.trim()) return row;
+        let rowModified = false;
+        const newCells = { ...row.cells };
+        let newLinkedFile = row.linkedFile;
+
+        // Find best matching audio file for this row
+        let bestMatch: any = null;
+        let bestScore = 0;
+        for (const file of audioFiles) {
+          const score = checkMatch(file.name, row.name);
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = file;
+          }
+        }
+
+        // Apply to file-type columns if not already set
+        for (const col of prevGrid.columns) {
+          if (col.type === 'file') {
+            const cell = newCells[col.id] || { status: 'todo' };
+            if (!cell.fileId && bestMatch) {
+              newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
+              rowModified = true;
+            }
+          }
+        }
+
+        // Always attach linkedFile for the play button
+        if (!row.linkedFile && bestMatch) {
+          newLinkedFile = {
+            id: bestMatch.id,
+            name: bestMatch.name,
+            webViewLink: bestMatch.webViewLink,
+            webContentLink: bestMatch.webContentLink,
+            mimeType: bestMatch.mimeType,
+            sourceProjectId: bestMatch.sourceProjectId
+          } as any;
+          rowModified = true;
+        }
+
+        if (rowModified) {
+          hasChanges = true;
+          return { ...row, cells: newCells, linkedFile: newLinkedFile };
+        }
+        return row;
       });
+
+      // Only save if the grid did not change meanwhile and the project is still the same
+      if (hasChanges && gridRef.current === prevGrid && linkedProjectIdRef.current === projId) {
+        saveGrid({ ...prevGrid, rows: newRows }, projId);
+      }
     } catch (e) { console.error(e); }
   };
 
-  const saveGrid = async (newGrid: ProductionGrid, newLinkedProjectId?: string) => {
-    // Actualización optimista de la UI
-    setGrid(newGrid);
-    setIsSaving(true);
-    try {
-      await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          productionGrid: newGrid,
-          projectId: newLinkedProjectId !== undefined ? newLinkedProjectId : linkedProjectId 
-        })
-      });
-    } catch (e) { 
-      console.error(e); 
-      customAlert('Error guardando en Drive. Los cambios podrían no haberse sincronizado.');
-    } finally { 
-      setIsSaving(false); 
-    }
-  };
-
-  const handleLinkProject = async (projId: string) => {
+  const handleLinkProject = (projId: string) => {
     setLinkedProjectId(projId);
-    await saveGrid(grid, projId);
+    linkedProjectIdRef.current = projId;
+    saveGrid(gridRef.current, projId);
   };
 
 
@@ -540,8 +562,9 @@ export function ProductionGridBoard({
     const currentGrid = gridRef.current;
     const currentSelected = selectedCellsRef.current;
 
-    if (e.shiftKey && lastSelectedCellId) {
-      const [lastRowId, lastColId] = lastSelectedCellId.split(':');
+    const lastId = lastSelectedCellIdRef.current;
+    if (e.shiftKey && lastId) {
+      const [lastRowId, lastColId] = lastId.split(':');
       const rIdx1 = currentGrid.rows.findIndex(r => r.id === lastRowId);
       const cIdx1 = currentGrid.columns.findIndex(c => c.id === lastColId);
       const rIdx2 = currentGrid.rows.findIndex(r => r.id === rowId);
@@ -570,7 +593,7 @@ export function ProductionGridBoard({
       });
     }
     setLastSelectedCellId(cellId);
-  }, [lastSelectedCellId]);
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLTableElement>) => {
     if (e.button !== 0 || (!e.ctrlKey && !e.metaKey && !e.shiftKey)) return;
@@ -601,7 +624,7 @@ export function ProductionGridBoard({
 
     const newSelection = new Set(selectionInitialSet.current);
     const cellElements = document.querySelectorAll('[data-cell-id]');
-    
+
     cellElements.forEach(el => {
       const cellRect = el.getBoundingClientRect();
       if (
@@ -635,29 +658,43 @@ export function ProductionGridBoard({
 
   const addRow = () => {
     if (!newRowName.trim()) return;
-    const newRow = { id: Math.random().toString(36).substring(7), name: newRowName.trim(), cells: {} };
-    saveGrid({ ...grid, rows: [...grid.rows, newRow] });
+    const current = gridRef.current;
+    const newRow = { id: Math.random().toString(36).substring(2, 11), name: newRowName.trim(), cells: {} };
+    saveGrid({ ...current, rows: [...current.rows, newRow] });
     setNewRowName('');
   };
 
   const renameColumn = (id: string, newName: string) => {
     if (!newName.trim()) return;
-    saveGrid({ ...grid, columns: grid.columns.map(c => c.id === id ? { ...c, name: newName } : c) });
+    const current = gridRef.current;
+    saveGrid({ ...current, columns: current.columns.map(c => c.id === id ? { ...c, name: newName } : c) });
   };
 
   const renameRow = (id: string, newName: string) => {
     if (!newName.trim()) return;
-    saveGrid({ ...grid, rows: grid.rows.map(r => r.id === id ? { ...r, name: newName } : r) });
+    const current = gridRef.current;
+    saveGrid({ ...current, rows: current.rows.map(r => r.id === id ? { ...r, name: newName } : r) });
   };
 
   const deleteColumn = async (id: string) => {
-    if (!await customConfirm('Eliminar columna y sus datos?')) return;
-    saveGrid({ ...grid, columns: grid.columns.filter(c => c.id !== id) });
+    if (!await customConfirm('¿Eliminar columna y sus datos?')) return;
+    const current = gridRef.current;
+    // Remove the column's cells too (otherwise they stayed as "ghost" pending tasks)
+    saveGrid({
+      ...current,
+      columns: current.columns.filter(c => c.id !== id),
+      rows: current.rows.map(r => {
+        if (!r.cells || !(id in r.cells)) return r;
+        const { [id]: _removed, ...rest } = r.cells;
+        return { ...r, cells: rest };
+      }),
+    });
   };
 
   const deleteRow = async (id: string) => {
-    if (!await customConfirm('Eliminar fila?')) return;
-    saveGrid({ ...grid, rows: grid.rows.filter(r => r.id !== id) });
+    if (!await customConfirm('¿Eliminar fila?')) return;
+    const current = gridRef.current;
+    saveGrid({ ...current, rows: current.rows.filter(r => r.id !== id) });
   };
 
   const handleCellUpdate = useCallback((rowId: string, colId: string, updates: Partial<any>) => {
@@ -685,32 +722,34 @@ export function ProductionGridBoard({
       return { ...r, cells: { ...r.cells, [colId]: updatedCell } };
     });
     saveGrid({ ...currentGrid, rows: newRows });
-  }, []);
+  }, [saveGrid]);
 
   const handleUnifiedDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    
+
     const isCol = grid.columns.some(c => c.id === active.id);
     if (isCol) {
       const oldIdx = grid.columns.findIndex(c => c.id === active.id);
       const newIdx = grid.columns.findIndex(c => c.id === over.id);
       if (oldIdx !== -1 && newIdx !== -1) {
-        saveGrid({ ...grid, columns: arrayMove(grid.columns, oldIdx, newIdx) });
+        saveGrid({ ...gridRef.current, columns: arrayMove(gridRef.current.columns, oldIdx, newIdx) });
       }
     } else {
       const oldIdx = grid.rows.findIndex(r => r.id === active.id);
       const newIdx = grid.rows.findIndex(r => r.id === over.id);
       if (oldIdx !== -1 && newIdx !== -1) {
-        saveGrid({ ...grid, rows: arrayMove(grid.rows, oldIdx, newIdx) });
+        saveGrid({ ...gridRef.current, rows: arrayMove(gridRef.current.rows, oldIdx, newIdx) });
       }
     }
   };
 
   if (isLoading) return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-accent" /></div>;
 
-  const totalCells = grid.columns.length * grid.rows.length;
-  const doneCells = grid.rows.reduce((acc, row) => acc + Object.values(row.cells).filter(c => c.status === 'done').length, 0);
+  // Progress only counts trackable columns that still exist (ignores notes/_comments and deleted columns)
+  const trackableCols = grid.columns.filter(c => !c.type || c.type === 'status' || c.type === 'file');
+  const totalCells = trackableCols.length * grid.rows.length;
+  const doneCells = grid.rows.reduce((acc, row) => acc + trackableCols.filter(c => row.cells?.[c.id]?.status === 'done').length, 0);
   const progress = totalCells === 0 ? 0 : Math.round((doneCells / totalCells) * 100);
 
   return (
@@ -721,12 +760,12 @@ export function ProductionGridBoard({
           <p className="text-xs sm:text-sm text-text-secondary">Trackeo modular por canción y fase.</p>
         </div>
         <div className="w-full sm:w-auto flex flex-col sm:items-end items-start gap-2 sm:gap-3">
-          <CampaignSelector 
-            linkedProjectId={linkedProjectId} 
-            campaigns={campaigns} 
-            projects={projects} 
-            onLinkProject={handleLinkProject} 
-            onOpenCampaignModal={() => customAlert('Funcionalidad de crear campaña en desarrollo. Ve a Artistas > Campañas por ahora.')} 
+          <CampaignSelector
+            linkedProjectId={linkedProjectId}
+            campaigns={campaigns}
+            projects={projects}
+            onLinkProject={handleLinkProject}
+            onOpenCampaignModal={() => customAlert('Funcionalidad de crear campaña en desarrollo. Ve a Artistas > Campañas por ahora.')}
           />
           <div className="flex items-center gap-4 w-full justify-between sm:justify-end">
             <div className="text-xs sm:text-sm font-bold text-text-secondary">{progress}% Completado</div>
@@ -741,7 +780,7 @@ export function ProductionGridBoard({
         <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-8 bg-gradient-to-l from-background/80 to-transparent z-10 md:hidden rounded-r-xl" />
         <div className="overflow-x-auto bg-surface-elevated/30 rounded-xl border border-border shadow-sm relative" style={{ touchAction: 'pan-x pan-y' }}>
           {selectionBox.active && (
-            <div 
+            <div
               className="absolute bg-accent/20 border border-accent pointer-events-none z-50 rounded"
               style={{
                 left: Math.min(selectionBox.start.x, selectionBox.end.x),
@@ -752,7 +791,7 @@ export function ProductionGridBoard({
             />
           )}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleUnifiedDragEnd}>
-            <table 
+            <table
               ref={containerRef}
               className="w-full text-left border-collapse select-none"
               onPointerDown={handlePointerDown}
@@ -772,21 +811,22 @@ export function ProductionGridBoard({
                   </SortableContext>
 
                   <th className="p-1 sm:p-2 border-b border-border bg-surface/50 w-10 min-w-[40px] max-w-[40px] shrink-0 text-center">
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       onClick={(e) => {
                         e.preventDefault();
                         showMenu(e.clientX, e.clientY, COL_TYPES.map(t => ({
                           label: t.label,
                           icon: t.id === 'status' ? 'Circle' : t.id === 'file' ? 'Paperclip' : t.id === 'checklist' ? 'CheckSquare' : t.id === 'text' ? 'AlignLeft' : 'Calendar',
                           action: () => {
-                            const id = Math.random().toString(36).substring(7);
-                            const updatedRows = grid.rows.map(r => ({ ...r, cells: { ...r.cells, [id]: { status: 'todo' as FlexTaskStatus } } }));
-                            saveGrid({ ...grid, columns: [...grid.columns, { id, name: t.label, type: t.id }], rows: updatedRows });
+                            const current = gridRef.current;
+                            const id = Math.random().toString(36).substring(2, 11);
+                            const updatedRows = current.rows.map(r => ({ ...r, cells: { ...r.cells, [id]: { status: 'todo' as FlexTaskStatus } } }));
+                            saveGrid({ ...current, columns: [...current.columns, { id, name: t.label, type: t.id }], rows: updatedRows });
                           }
                         })));
-                      }} 
+                      }}
                       className="h-7 w-7 p-0 shrink-0 text-text-secondary hover:text-text-primary hover:bg-surface-elevated"
                       title="Añadir Columna"
                     >
@@ -834,10 +874,11 @@ export function ProductionGridBoard({
                 <button
                   key={f.id}
                   onClick={() => {
+                    const current = gridRef.current;
                     const updatedGrid = {
-                      ...grid,
-                      rows: grid.rows.map(r => r.id === linkingRowId ? { 
-                        ...r, 
+                      ...current,
+                      rows: current.rows.map(r => r.id === linkingRowId ? {
+                        ...r,
                         linkedFile: { id: f.id, name: f.name, webViewLink: f.webViewLink, webContentLink: f.webContentLink, mimeType: f.mimeType, sourceProjectId: f.sourceProjectId } as any
                       } : r)
                     };
@@ -882,11 +923,12 @@ export function ProductionGridBoard({
             </div>
             <div className="p-4 border-t border-border flex justify-end shrink-0">
               <Button onClick={() => {
-                const newRows = grid.rows.map(r => r.id === commentingRow.id ? {
+                const current = gridRef.current;
+                const newRows = current.rows.map(r => r.id === commentingRow.id ? {
                   ...r,
                   cells: { ...r.cells, _comments: { status: 'todo' as FlexTaskStatus, textValue: commentsText } }
                 } : r);
-                saveGrid({ ...grid, rows: newRows });
+                saveGrid({ ...current, rows: newRows });
                 setCommentingRow(null);
               }}>Guardar Observaciones</Button>
             </div>

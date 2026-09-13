@@ -148,6 +148,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const [isInitialWarmed, setIsInitialWarmed] = useState(false);
 
+  // Latest data snapshot, so the fetchers below can stay referentially stable
+  // (they used to change on every data update, re-running effects that depend on them).
+  const dataRef = useRef({ artists, pulseData, matrices, completedMatrices, personalProjects, payments, recentFiles, calendarEvents });
+  dataRef.current = { artists, pulseData, matrices, completedMatrices, personalProjects, payments, recentFiles, calendarEvents };
+
   // ==========================================
   // FETCHERS (With in-flight deduplication)
   // ==========================================
@@ -155,7 +160,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   // --- Fetch Artists ---
   const fetchArtists = useCallback(async (force = false): Promise<Artist[]> => {
     if (!force && artistsLoadedRef.current) {
-      return artists;
+      return dataRef.current.artists;
     }
     if (inFlightRef.current['artists']) {
       return inFlightRef.current['artists'];
@@ -190,12 +195,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     inFlightRef.current['artists'] = promise;
     return promise;
-  }, [artists]);
+  }, []);
 
   // --- Fetch Pulse ---
   const fetchPulse = useCallback(async (force = false): Promise<DashboardPulseData> => {
     if (!force && pulseLoadedRef.current) {
-      return pulseData;
+      return dataRef.current.pulseData;
     }
     if (inFlightRef.current['pulse']) {
       return inFlightRef.current['pulse'];
@@ -227,12 +232,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     inFlightRef.current['pulse'] = promise;
     return promise;
-  }, [pulseData]);
+  }, []);
 
   // --- Fetch Matrices ---
   const fetchMatrices = useCallback(async (force = false): Promise<{ matrices: any[]; completedMatrices: any[] }> => {
     if (!force && matricesLoadedRef.current) {
-      return { matrices, completedMatrices };
+      return { matrices: dataRef.current.matrices, completedMatrices: dataRef.current.completedMatrices };
     }
     if (inFlightRef.current['matrices']) {
       return inFlightRef.current['matrices'];
@@ -263,12 +268,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     inFlightRef.current['matrices'] = promise;
     return promise;
-  }, [matrices, completedMatrices]);
+  }, []);
 
   // --- Fetch Personal Projects ---
   const fetchPersonalProjects = useCallback(async (force = false): Promise<PersonalProject[]> => {
     if (!force && personalProjectsLoadedRef.current) {
-      return personalProjects;
+      return dataRef.current.personalProjects;
     }
     if (inFlightRef.current['personalProjects']) {
       return inFlightRef.current['personalProjects'];
@@ -300,12 +305,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     inFlightRef.current['personalProjects'] = promise;
     return promise;
-  }, [personalProjects]);
+  }, []);
 
   // --- Fetch Payments ---
   const fetchPayments = useCallback(async (force = false): Promise<Payment[]> => {
     if (!force && paymentsLoadedRef.current) {
-      return payments;
+      return dataRef.current.payments;
     }
     if (inFlightRef.current['payments']) {
       return inFlightRef.current['payments'];
@@ -334,12 +339,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     inFlightRef.current['payments'] = promise;
     return promise;
-  }, [payments]);
+  }, []);
 
   // --- Fetch Recent Files ---
   const fetchRecentFiles = useCallback(async (force = false): Promise<DriveFile[]> => {
     if (!force && recentFilesLoadedRef.current) {
-      return recentFiles;
+      return dataRef.current.recentFiles;
     }
     if (inFlightRef.current['recentFiles']) {
       return inFlightRef.current['recentFiles'];
@@ -366,12 +371,12 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     inFlightRef.current['recentFiles'] = promise;
     return promise;
-  }, [recentFiles]);
+  }, []);
 
   // --- Fetch Calendar ---
   const fetchCalendar = useCallback(async (force = false): Promise<CalendarEvent[]> => {
     if (!force && calendarLoadedRef.current) {
-      return calendarEvents;
+      return dataRef.current.calendarEvents;
     }
     if (inFlightRef.current['calendar']) {
       return inFlightRef.current['calendar'];
@@ -402,7 +407,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
     inFlightRef.current['calendar'] = promise;
     return promise;
-  }, [calendarEvents]);
+  }, []);
 
   // ==========================================
   // PREFETCH ALL ON APP MOUNT (WARMUP)
@@ -449,8 +454,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to create artist');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'No se pudo crear el artista');
       }
 
       const newArtist: Artist = await res.json();
@@ -476,8 +481,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to update artist');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'No se pudo actualizar el artista');
       }
 
       const { artist: updatedArtist } = await res.json();
@@ -605,7 +610,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to create payment');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'No se pudo registrar el pago');
+      }
       const newPayment = await res.json();
       setPayments(prev => [newPayment.payment, ...prev]);
       return { success: true, payment: newPayment.payment };
@@ -621,7 +629,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status }),
       });
-      if (!res.ok) throw new Error('Failed to update payment');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'No se pudo actualizar el pago');
+      }
       const updated = await res.json();
       setPayments(prev => prev.map(p => p.id === id ? updated.payment : p));
       return { success: true };
@@ -709,6 +720,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     fetchPersonalProjects,
     createPersonalProject,
     updatePersonalProject,
+    replacePersonalProjectAudio,
     deletePersonalProject,
     clonePersonalProjectToArtist,
     matrices,

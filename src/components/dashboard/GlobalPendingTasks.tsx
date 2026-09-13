@@ -285,14 +285,19 @@ export function GlobalPendingTasks() {
     matrices.forEach((m: any) => {
       if (!m.productionGrid || !m.productionGrid.rows || !m.productionGrid.columns) return;
       
+      // Only trackable columns that still exist (same criterion as the matrices progress):
+      // ignores deleted columns, the "_comments" pseudo-cell and text/date/checklist columns.
       const colMap: Record<string, string> = {};
       m.productionGrid.columns.forEach((c: any) => {
-        colMap[c.id] = c.name;
+        if (!c.type || c.type === 'status' || c.type === 'file') {
+          colMap[c.id] = c.name;
+        }
       });
 
       m.productionGrid.rows.forEach((row: any) => {
         if (!row.cells) return;
         Object.keys(row.cells).forEach((colId) => {
+          if (!(colId in colMap)) return;
           const cell = row.cells[colId];
           if (cell && (cell.status === 'todo' || cell.status === 'in_progress' || cell.status === 'review')) {
             extracted.push({
@@ -369,14 +374,18 @@ export function GlobalPendingTasks() {
       if (!matrix || !matrix.productionGrid) throw new Error('Matrix not found');
 
       // 3. Update cell in grid
-      const newGrid = { ...matrix.productionGrid };
-      const rowIdx = newGrid.rows.findIndex((r: any) => r.id === task.rowId);
-      if (rowIdx > -1) {
-        newGrid.rows[rowIdx].cells[task.colId] = {
-          ...(newGrid.rows[rowIdx].cells[task.colId] || {}),
-          status: newStatus
-        };
-      }
+      const rowIdx = (matrix.productionGrid.rows || []).findIndex((r: any) => r.id === task.rowId);
+      if (rowIdx === -1) throw new Error('Row not found');
+      const newGrid = {
+        ...matrix.productionGrid,
+        rows: matrix.productionGrid.rows.map((r: any, i: number) => i !== rowIdx ? r : {
+          ...r,
+          cells: {
+            ...(r.cells || {}),
+            [task.colId]: { ...(r.cells?.[task.colId] || {}), status: newStatus },
+          },
+        }),
+      };
 
       // 4. Save to Drive
       const putRes = await fetch(`/api/artists/${task.artistId}/matrices/${task.matrixId}`, {

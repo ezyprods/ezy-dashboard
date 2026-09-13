@@ -147,8 +147,7 @@ export default function PersonalProjectsPage() {
   pendingRef.current = pendingReplacement;
 
   const handleInitiateReplaceAudio = (project: PersonalProject, file: File) => {
-    if (timerRef.current) clearInterval(timerRef.current);
-
+    // The running countdown (if any) keeps ticking and simply picks up this new replacement
     setPendingReplacement({
       project,
       file,
@@ -166,16 +165,18 @@ export default function PersonalProjectsPage() {
   };
 
   const executeReplaceAudio = async (project: PersonalProject, file: File) => {
+    // Only touch the toast if it still belongs to this replacement (another one may have started)
+    const isSame = (p: PendingAudioReplacement | null) => !!p && p.project.id === project.id && p.file === file;
     try {
       await replaceAudio(project.id, file);
-      setPendingReplacement(prev => prev ? { ...prev, status: 'done' } : null);
+      setPendingReplacement(prev => isSame(prev) ? { ...prev!, status: 'done' } : prev);
       setTimeout(() => {
-        setPendingReplacement(null);
+        setPendingReplacement(prev => isSame(prev) ? null : prev);
       }, 2500);
     } catch (err: any) {
-      setPendingReplacement(prev => prev ? { ...prev, status: 'error', error: err.message } : null);
+      setPendingReplacement(prev => isSame(prev) ? { ...prev!, status: 'error', error: err.message } : prev);
       setTimeout(() => {
-        setPendingReplacement(null);
+        setPendingReplacement(prev => isSame(prev) ? null : prev);
       }, 4000);
     }
   };
@@ -185,15 +186,20 @@ export default function PersonalProjectsPage() {
     if (!pendingReplacement || pendingReplacement.status !== 'counting') return;
 
     const interval = setInterval(() => {
-      setPendingReplacement(prev => {
-        if (!prev || prev.status !== 'counting') return prev;
-        if (prev.secondsLeft <= 1) {
-          clearInterval(interval);
-          executeReplaceAudio(prev.project, prev.file);
-          return { ...prev, secondsLeft: 0, status: 'uploading' };
-        }
-        return { ...prev, secondsLeft: prev.secondsLeft - 1 };
-      });
+      const prev = pendingRef.current;
+      if (!prev || prev.status !== 'counting') return;
+      if (prev.secondsLeft <= 1) {
+        clearInterval(interval);
+        const uploading = { ...prev, secondsLeft: 0, status: 'uploading' as const };
+        pendingRef.current = uploading;
+        setPendingReplacement(uploading);
+        // Side effect outside of the state updater (updaters may run twice)
+        executeReplaceAudio(prev.project, prev.file);
+      } else {
+        const next = { ...prev, secondsLeft: prev.secondsLeft - 1 };
+        pendingRef.current = next;
+        setPendingReplacement(next);
+      }
     }, 1000);
 
     timerRef.current = interval;
@@ -420,7 +426,7 @@ export default function PersonalProjectsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => fetchProjects()}
+            onClick={() => fetchProjects(true)}
             disabled={isLoading}
             className="p-2.5"
             title="Refrescar catálogo desde Drive"
@@ -623,7 +629,7 @@ export default function PersonalProjectsPage() {
       ) : error ? (
         <div className="glass p-8 rounded-2xl border border-danger/40 bg-danger/5 text-center space-y-3">
           <p className="text-sm font-semibold text-danger">{error}</p>
-          <Button variant="outline" size="sm" onClick={() => fetchProjects()}>
+          <Button variant="outline" size="sm" onClick={() => fetchProjects(true)}>
             Reintentar
           </Button>
         </div>

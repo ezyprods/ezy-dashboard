@@ -739,7 +739,6 @@ export const MemoizedCellComponent = React.memo(CellComponent, (prev, next) => {
     prev.artistName === next.artistName &&
     prev.files === next.files &&
     prev.projects === next.projects &&
-    prev.onUpdate === next.onUpdate &&
-    prev.onToggleSelect === next.onToggleSelect
+    prev.onUpdate === next.onUpdate
   );
 });
