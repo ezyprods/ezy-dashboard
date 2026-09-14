@@ -13,7 +13,8 @@ import {
   getYouTubeVideoId,
   isSpotifyUrl,
   isSoundCloudUrl,
-  searchYouTubeFirstVideoId,
+  getSpotifyTrackMetadata,
+  pickBestYouTubeMatch,
 } from '../engines';
 
 const execFileAsync = promisify(execFile);
@@ -99,13 +100,19 @@ export async function GET(req: Request) {
 
     let videoId = getYouTubeVideoId(url);
 
-    // Spotify fallback resolution
+    // Spotify fallback resolution (only reached if the task's in-memory/disk
+    // cache expired or was never populated by /process). Same fix as the
+    // other entry points: fetch the artist via getSpotifyTrackMetadata
+    // (Spotify's oEmbed alone never includes it) and verify candidates
+    // against it via pickBestYouTubeMatch instead of trusting the first
+    // unvalidated search result — that mismatch was the root cause of
+    // "downloads incorrect audios" for Spotify links.
     if (!videoId && isSpotifyUrl(url)) {
       try {
-        const spotOembed = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`).then(r => r.json());
-        if (spotOembed.title) {
-          videoId = await searchYouTubeFirstVideoId(`${spotOembed.title} audio`);
-        }
+        const meta = await getSpotifyTrackMetadata(url);
+        const query = meta.artist ? `${meta.artist.split(',')[0].trim()} ${meta.track}` : `${meta.track} audio`;
+        const match = await pickBestYouTubeMatch(query, meta.artist, meta.track);
+        videoId = match?.videoId || null;
       } catch (e) {}
     }
 
@@ -115,8 +122,10 @@ export async function GET(req: Request) {
         const scOembed = await fetch(`https://soundcloud.com/oembed?url=${encodeURIComponent(url)}&format=json`).then(r => r.json());
         if (scOembed.title) {
           const scTitle = (scOembed.title || '').replace(/by.*$/i, '').trim();
-          const q = scOembed.author_name ? `${scOembed.author_name} - ${scTitle}` : scTitle;
-          videoId = await searchYouTubeFirstVideoId(q);
+          const author = scOembed.author_name || '';
+          const q = author ? `${author} ${scTitle}` : scTitle;
+          const match = await pickBestYouTubeMatch(q, author, scTitle);
+          videoId = match?.videoId || null;
         }
       } catch (e) {}
     }

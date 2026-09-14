@@ -13,7 +13,8 @@ import {
   isYouTubeUrl,
   isSpotifyUrl,
   isSoundCloudUrl,
-  searchYouTubeFirstVideoId,
+  getSpotifyTrackMetadata,
+  pickBestYouTubeMatch,
 } from './engines';
 
 const execFileAsync = promisify(execFile);
@@ -43,11 +44,17 @@ export async function GET(req: Request) {
         );
       }
       try {
-        const spotOembed = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(rawUrl)}`).then(r => r.json());
-        if (spotOembed.title) {
-          title = spotOembed.title;
-          videoId = await searchYouTubeFirstVideoId(`${spotOembed.title} audio`);
-        }
+        // Spotify's oEmbed endpoint only ever returns the track title, never
+        // the artist — searching YouTube with just "Song Name audio" is
+        // ambiguous enough to routinely match a completely unrelated video
+        // for common titles. getSpotifyTrackMetadata pulls the artist too,
+        // and pickBestYouTubeMatch verifies candidates before picking one
+        // instead of blindly trusting the first search result.
+        const meta = await getSpotifyTrackMetadata(rawUrl);
+        title = meta.fullTitle;
+        const query = meta.artist ? `${meta.artist.split(',')[0].trim()} ${meta.track}` : `${meta.track} audio`;
+        const match = await pickBestYouTubeMatch(query, meta.artist, meta.track);
+        videoId = match?.videoId || null;
       } catch (e) {}
     }
 
@@ -63,8 +70,11 @@ export async function GET(req: Request) {
         const scOembed = await fetch(`https://soundcloud.com/oembed?url=${encodeURIComponent(rawUrl)}&format=json`).then(r => r.json());
         if (scOembed.title) {
           const scTitle = (scOembed.title || '').replace(/by.*$/i, '').trim();
-          title = scOembed.author_name ? `${scOembed.author_name} - ${scTitle}` : scTitle;
-          videoId = await searchYouTubeFirstVideoId(title);
+          const author = scOembed.author_name || '';
+          title = author ? `${author} - ${scTitle}` : scTitle;
+          const query = author ? `${author} ${scTitle}` : scTitle;
+          const match = await pickBestYouTubeMatch(query, author, scTitle);
+          videoId = match?.videoId || null;
         }
       } catch (e) {}
     }

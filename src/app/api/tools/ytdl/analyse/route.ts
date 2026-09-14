@@ -4,6 +4,7 @@ import { createDecipheriv } from 'crypto';
 import { extractPlaylistId, fetchYouTubePlaylist, isRadioOrMix } from '../playlist';
 import { isSpotifyPlaylistOrAlbum, fetchSpotifyPlaylist } from '../spotify_playlist';
 import { isSoundCloudPlaylist, fetchSoundCloudPlaylist } from '../soundcloud_playlist';
+import { getSpotifyTrackMetadata, pickBestYouTubeMatch } from '../engines';
 
 export const maxDuration = 60;
 
@@ -128,47 +129,6 @@ async function searchYouTubeFirstVideoId(query: string): Promise<string | null> 
   } catch (e) {}
 
   return null;
-}
-
-async function getSpotifyMetadata(url: string) {
-  let title = '';
-  let artist = '';
-  let thumbnail = '';
-
-  try {
-    const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
-    const data = await fetchUrl(oembedUrl);
-    const json = JSON.parse(data);
-    if (json.title) title = json.title;
-    if (json.thumbnail_url) thumbnail = json.thumbnail_url;
-  } catch (e) {}
-
-  try {
-    const html = await fetchUrl(url);
-    const titleMatch = html.match(/<title>([^<]+)<\/title>/);
-    if (titleMatch) {
-      const titleText = titleMatch[1];
-      const spMatch = titleText.match(/^(.+?)\s*[-–]\s*(?:song.*?by|canción.*?de|música y letra de)\s*(.+?)\s*\|/i);
-      if (spMatch) {
-        return {
-          track: spMatch[1].trim(),
-          artist: spMatch[2].trim(),
-          fullTitle: `${spMatch[2].trim()} - ${spMatch[1].trim()}`,
-          thumbnail: thumbnail || ''
-        };
-      }
-      const simpleMatch = titleText.match(/^(.+?)\s*\|/);
-      if (simpleMatch && !title) {
-        title = simpleMatch[1].trim();
-      }
-    }
-  } catch (e) {}
-
-  if (title) {
-    return { track: title, artist, fullTitle: artist ? `${artist} - ${title}` : title, thumbnail };
-  }
-
-  throw new Error('Esta pista o lista de Spotify es privada o no se pudo acceder. Asegúrate de que sea pública.');
 }
 
 async function getSoundCloudMetadata(url: string) {
@@ -329,17 +289,29 @@ export async function POST(req: Request) {
     // 3. SPOTIFY INDIVIDUAL TRACKS
     // =========================================================================
     if (trimmedUrl.includes('spotify.com') || trimmedUrl.includes('spotify.link')) {
-      const spotMeta = await getSpotifyMetadata(trimmedUrl);
-      
-      const query = spotMeta.artist && spotMeta.track 
-        ? `${spotMeta.artist.split(',')[0].trim()} ${spotMeta.track}` 
+      // getSpotifyTrackMetadata reads Spotify's own embed JSON (same source
+      // used for playlists), which reliably includes the artist — the old
+      // getSpotifyMetadata here only had a fragile <title>-tag regex that
+      // silently dropped the artist whenever Spotify's copy didn't match the
+      // expected "Track - song and lyrics by Artist" pattern. Without the
+      // artist, the YouTube search query was just the track name, which is
+      // ambiguous enough to match an unrelated song for common titles.
+      const spotMeta = await getSpotifyTrackMetadata(trimmedUrl);
+
+      const query = spotMeta.artist && spotMeta.track
+        ? `${spotMeta.artist.split(',')[0].trim()} ${spotMeta.track}`
         : `${spotMeta.fullTitle.replace(/[-|,]/g, ' ')} audio`;
 
-      const matchedVideoId = await searchYouTubeFirstVideoId(query);
+      // pickBestYouTubeMatch verifies each candidate's title/channel against
+      // the expected artist/track instead of blindly trusting the first
+      // YouTube search result (which used to be the actual cause of
+      // downloading completely unrelated audio for Spotify links).
+      const match = await pickBestYouTubeMatch(query, spotMeta.artist, spotMeta.track);
+      const matchedVideoId = match?.videoId || null;
       if (matchedVideoId) {
         return NextResponse.json({
           title: spotMeta.fullTitle,
-          thumbnail: spotMeta.thumbnail || `https://i.ytimg.com/vi/${matchedVideoId}/hqdefault.jpg`,
+          thumbnail: spotMeta.thumbnail || match?.thumbnail || `https://i.ytimg.com/vi/${matchedVideoId}/hqdefault.jpg`,
           duration: null,
           platform: 'spotify',
           resolvedUrl: `https://www.youtube.com/watch?v=${matchedVideoId}`,
@@ -390,7 +362,8 @@ export async function POST(req: Request) {
     } else if (trimmedUrl.includes('soundcloud.com')) {
       const scMeta = await getSoundCloudMetadata(trimmedUrl);
 
-      const matchedVideoId = await searchYouTubeFirstVideoId(scMeta.title);
+      const match = await pickBestYouTubeMatch(scMeta.title, scMeta.author, scMeta.title);
+      const matchedVideoId = match?.videoId || null;
       if (matchedVideoId) {
         return NextResponse.json({
           title: scMeta.title,

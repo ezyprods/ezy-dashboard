@@ -8,6 +8,7 @@ import {
   getYouTubeVideoId,
   isSpotifyUrl,
   searchYouTubeVideoIds,
+  pickBestYouTubeMatch,
 } from '../engines';
 import { processAudioBuffer, AudioProcessOptions } from '../processor';
 import { spawn } from 'child_process';
@@ -77,11 +78,29 @@ async function processDownload(taskId: string, options: AudioProcessOptions) {
       videoIdsToTry.push(existingVideoId);
     }
 
-    // If Spotify or SoundCloud track, resolve candidate YouTube video IDs
+    // If Spotify or SoundCloud track, resolve candidate YouTube video IDs.
+    // This is the path taken when downloading individual tracks from inside
+    // a Spotify/SoundCloud PLAYLIST (single-track downloads are already
+    // resolved to a specific videoId beforehand by /analyse). It used to
+    // just grab whichever of 3 raw search candidates happened to download
+    // successfully first, with no check that the audio actually matched the
+    // track — the same root cause behind "downloads incorrect audios" for
+    // Spotify links. task.title is "Artist - Track" (set from the playlist
+    // metadata), so split it to verify candidates against the artist too.
     if (videoIdsToTry.length === 0 && (isSpotifyUrl(task.url) || task.url.includes('soundcloud.com') || !task.url.startsWith('http'))) {
+      const dashIdx = task.title.indexOf(' - ');
+      const expectedArtist = dashIdx > 0 ? task.title.slice(0, dashIdx).trim() : '';
+      const expectedTrack = dashIdx > 0 ? task.title.slice(dashIdx + 3).trim() : task.title;
       const query = `${task.title} audio`;
-      const candidates = await searchYouTubeVideoIds(query, 3);
-      videoIdsToTry.push(...candidates);
+
+      const best = await pickBestYouTubeMatch(query, expectedArtist, expectedTrack);
+      const rawCandidates = await searchYouTubeVideoIds(query, 3);
+
+      // Try the verified best match first, then fall back to the other raw
+      // candidates (in case the best match is unavailable for a technical
+      // reason, e.g. region-locked or removed).
+      const ordered = best ? [best.videoId, ...rawCandidates.filter(id => id !== best.videoId)] : rawCandidates;
+      videoIdsToTry.push(...ordered);
     }
 
     // =========================================================================
