@@ -518,7 +518,7 @@ export function FolderExplorerModal({
                         </button>
                       ) : (
                         <a
-                          href={item.webContentLink || `/api/files/${item.id}?inline=true`}
+                          href={item.webContentLink || `/api/files/${item.id}?download=true`}
                           target="_blank"
                           rel="noopener noreferrer"
                           download={item.name}
@@ -674,7 +674,7 @@ export function FolderExplorerModal({
                         </button>
                       )}
                       <a
-                        href={item.webContentLink || `/api/files/${item.id}?inline=true`}
+                        href={item.webContentLink || `/api/files/${item.id}?download=true`}
                         target="_blank"
                         rel="noopener noreferrer"
                         download={item.name}

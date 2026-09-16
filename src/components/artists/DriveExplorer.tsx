@@ -396,6 +396,20 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
         icon: 'Scissors',
         action: () => setMiniDAWFile({ id: item.id, name: item.name })
       }] : []),
+      ...(!isFolder ? [{
+        label: 'Descargar',
+        icon: 'Download',
+        action: () => {
+          const a = document.createElement('a');
+          a.href = `/api/files/${item.id}?download=true`;
+          a.download = item.name || 'archivo';
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+      }] : []),
       {
         label: 'Renombrar',
         icon: 'Edit3',
@@ -1069,9 +1083,17 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                             <Scissors className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        <button onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }} className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors" title="Descargar/Ver">
+                        <a
+                          href={`/api/files/${item.id}?download=true`}
+                          download={item.name || 'archivo'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors inline-flex items-center justify-center"
+                          title="Descargar"
+                        >
                           <Download className="w-3.5 h-3.5" />
-                        </button>
+                        </a>
                         <button onClick={(e) => { e.stopPropagation(); handleOpenFileLocation(item.parentFolderId); }} className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors" title="Abrir ubicación">
                           <FolderOpen className="w-3.5 h-3.5" />
                         </button>
@@ -1571,13 +1593,17 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                               >
                                 <Scissors className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
-                                className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
-                                title="Descargar/Ver"
+                              <a
+                                href={`/api/files/${item.id}?download=true`}
+                                download={item.name || 'archivo'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors inline-flex items-center justify-center"
+                                title="Descargar"
                               >
                                 <Download className="w-3.5 h-3.5" />
-                              </button>
+                              </a>
                               <button
                                 onClick={(e) => { e.stopPropagation(); setShareModalFile(item); }}
                                 className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
@@ -1659,12 +1685,12 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                               </button>
                               {!isFolder && (
                                 <a
-                                  href={item.webContentLink || item.webViewLink}
+                                  href={`/api/files/${item.id}?download=true`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  download={item.name}
+                                  download={item.name || 'archivo'}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface transition-colors"
+                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface transition-colors inline-flex items-center justify-center"
                                   title="Descargar"
                                 >
                                   <Download className="w-4 h-4" />
@@ -1868,13 +1894,17 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                             >
                               <Scissors className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/api/files/${item.id}?inline=true`, '_blank'); }}
-                              className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors"
-                              title="Descargar/Ver"
+                            <a
+                              href={`/api/files/${item.id}?download=true`}
+                              download={item.name || 'archivo'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-1.5 text-text-secondary hover:text-accent hover:bg-surface rounded-md transition-colors inline-flex items-center justify-center"
+                              title="Descargar"
                             >
                               <Download className="w-3.5 h-3.5" />
-                            </button>
+                            </a>
                           </div>
                         </>
                         ) : (
@@ -1940,12 +1970,12 @@ export function DriveExplorer({ rootFolderId, rootName, artistEmail, artistId }:
                               </button>
                               {!isFolder && (
                                 <a
-                                  href={item.webContentLink || item.webViewLink}
+                                  href={`/api/files/${item.id}?download=true`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  download={item.name}
+                                  download={item.name || 'archivo'}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface"
+                                  className="p-1.5 text-text-secondary hover:text-text-primary rounded-md hover:bg-surface inline-flex items-center justify-center"
                                   title="Descargar"
                                 >
                                   <Download className="w-3.5 h-3.5" />

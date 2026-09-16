@@ -128,17 +128,17 @@ export function RecentFilesWidget() {
                   {/* Gradient mask behind buttons */}
                   <div className="absolute -inset-y-3 -left-8 -right-2 bg-gradient-to-r from-transparent via-surface/90 to-surface pointer-events-none -z-10 dark:via-surface-elevated/90 dark:to-surface-elevated" />
                   
-                  {file.webContentLink && (
-                    <a
-                      href={file.webContentLink}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors border border-border/60 shadow-sm"
-                      title="Descargar"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                    </a>
-                  )}
+                  <a
+                    href={`/api/files/${file.id}?download=true`}
+                    download={file.name || 'archivo'}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors border border-border/60 shadow-sm"
+                    title="Descargar"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </a>
                   {file.parents && file.parents.length > 0 && (
                     <button
                       onClick={() => setExplorerContext({ folderId: file.parents![0], fileId: file.id, fileName: file.name })}

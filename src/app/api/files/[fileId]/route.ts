@@ -42,6 +42,18 @@ export async function GET(
     // 2. For file downloads (!inline): Redirect directly to Google Drive download link.
     // This saves 100% of Fast Origin Transfer on Vercel (0 bytes transferred through Serverless Functions).
     if (!inline) {
+      if (meta.mimeType?.startsWith('application/vnd.google-apps.')) {
+        if (meta.mimeType.includes('document')) {
+          return NextResponse.redirect(`https://docs.google.com/document/d/${fileId}/export?format=docx`, { status: 307 });
+        } else if (meta.mimeType.includes('spreadsheet')) {
+          return NextResponse.redirect(`https://docs.google.com/spreadsheets/d/${fileId}/export?format=xlsx`, { status: 307 });
+        } else if (meta.mimeType.includes('presentation')) {
+          return NextResponse.redirect(`https://docs.google.com/presentation/d/${fileId}/export?format=pptx`, { status: 307 });
+        } else if (meta.webViewLink) {
+          return NextResponse.redirect(meta.webViewLink, { status: 307 });
+        }
+      }
+
       try {
         const drive = getDriveService();
         await drive.permissions.create({
