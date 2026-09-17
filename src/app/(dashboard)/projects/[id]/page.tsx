@@ -1,685 +1,321 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Button } from "@/components/ui/Button";
-import { ArrowLeft, Folder, FileAudio, File as FileIcon, FileImage, FileText, Film, UploadCloud, Loader2, Music, CheckSquare, Send, DollarSign, ExternalLink, FolderOpen, Headphones, Trash2, MoreVertical, Edit3, FolderInput, X } from "lucide-react";
-import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
-import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
-import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
-import { useAudioControls } from '@/lib/contexts/AudioContext';
-import { Play, Download, Eye, Copy, ExternalLink as ExternalLinkIcon, Settings2 } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  ArrowLeft, ChevronRight, Edit3, UploadCloud, HardDrive, Table2, X, ExternalLink, CalendarClock, Lock,
+  AlertTriangle, MoreHorizontal, Plus, Clock, Disc, Disc3, Library, Sparkles, FolderOpen,
+} from 'lucide-react';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
+import { TimeTrackerWidget } from '@/components/projects/TimeTrackerWidget';
+import { FileExplorer } from '@/components/explorer/FileExplorer';
+import { EditProjectModal, PROJECT_STATUS_META, saveProject } from '@/components/projects/EditProjectModal';
+import { useIndex, loadIndex } from '@/components/explorer/driveStore';
+import { formatBytes } from '@/components/explorer/fileKinds';
+import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
+import { useDropContext, useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
+import { useAppData } from '@/lib/contexts/AppDataContext';
+import { customConfirm, customPrompt } from '@/lib/dialog';
+import { PROJECT_TYPE_LABELS } from '@/lib/constants';
+import { matrixProgress } from '@/lib/matrixStats';
+import { cn } from '@/lib/utils';
+import type { Project, ProjectStatus } from '@/types';
 
-import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
-import { CustomSortModal } from '@/components/projects/CustomSortModal';
-import { STATUS_CONFIG } from '@/lib/constants';
-import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
-import { isBrowserCompatible } from '@/lib/utils';
-import { uploadFileToDrive, findSimilarFileInFolder } from '@/lib/driveUpload';
-
+const TYPE_ICON: Record<string, React.ElementType> = { single: Disc, ep: Disc3, album: Library, free: Sparkles };
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
   const { showMenu } = useContextMenu();
-  const { playTrack } = useAudioControls();
-  
-  const [data, setData] = useState<any>(null);
+  const { openSmartUpload } = useGlobalDragDrop();
+  const { artists } = useAppData();
+
+  const [project, setProject] = useState<Project | null>(null);
+  const [matrix, setMatrix] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [uploadingTo, setUploadingTo] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<{key: 'name'|'date'|'size'|'custom', direction: 'asc'|'desc'}>({key: 'name', direction: 'asc'});
-  const [sortModalFolder, setSortModalFolder] = useState<any | null>(null);
-  const [linkedMatrix, setLinkedMatrix] = useState<any | null>(null);
-  const [isMatrixModalOpen, setIsMatrixModalOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [matrixOpen, setMatrixOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
 
-  const handleSaveCustomOrder = async (orderedFileIds: string[]) => {
-    if (!sortModalFolder || !data?.project) return;
-    try {
-      const customFileOrders = data.project.customFileOrders || {};
-      customFileOrders[sortModalFolder.id] = orderedFileIds;
-      
-      const res = await fetch(`/api/projects/${projectId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customFileOrders })
-      });
-      if (!res.ok) throw new Error('Failed to save order');
-      
-      // Update local state
-      setData({
-        ...data,
-        project: {
-          ...data.project,
-          customFileOrders
-        }
-      });
-    } catch (e) {
-      console.error(e);
-      customAlert('Error guardando el orden personalizado');
-    } finally {
-      setSortModalFolder(null);
-    }
-  };
-
-  const handleDeleteFolder = async (folderId: string) => {
-    if (!await customConfirm('¿Estás seguro de que quieres eliminar esta carpeta y todo su contenido? Se moverá a la papelera de Google Drive.')) return;
-    try {
-      const res = await fetch(`/api/files?id=${folderId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error al eliminar la carpeta');
-      customAlert('Carpeta eliminada con éxito');
-      fetchProject();
-    } catch (err: any) {
-      customAlert(err.message);
-    }
-  };
-
-  const handleDeleteFile = async (fileId: string) => {
-    if (!await customConfirm('¿Estás seguro de que quieres eliminar este archivo? Se moverá a la papelera de Google Drive.')) return;
-    try {
-      const res = await fetch(`/api/files?id=${fileId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error al eliminar el archivo');
-      customAlert('Archivo eliminado con éxito');
-      fetchProject();
-    } catch (err: any) {
-      customAlert(err.message);
-    }
-  };
-
-  const handleRenameFile = async (fileId: string, currentName: string) => {
-    const dotIndex = currentName.lastIndexOf('.');
-    const ext = dotIndex > 0 ? currentName.substring(dotIndex) : '';
-    const base = dotIndex > 0 ? currentName.substring(0, dotIndex) : currentName;
-    const newName = await customPrompt('Introduce el nuevo nombre del archivo:', base);
-    if (!newName || newName.trim() === '' || newName === base) return;
-    try {
-      const res = await fetch('/api/files', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, name: newName.trim() + ext })
-      });
-      if (!res.ok) throw new Error('Error al renombrar el archivo');
-      fetchProject();
-    } catch (err: any) {
-      customAlert(err.message);
-    }
-  };
-
-  const handleMoveFile = async (fileId: string, currentFolderId: string) => {
-    const allFolders = [...(data?.folders || [])];
-    if (data?.rootFiles?.length > 0) {
-      allFolders.unshift({ id: data.project.driveFolderId || projectId, name: 'Archivos del Proyecto' });
-    }
-    if (!allFolders || !allFolders.length) return;
-    const options = allFolders.map((f: any, i: number) => `${i + 1}. ${f.name}`).join('\n');
-    const choice = await customPrompt(`Mover a:\n\n${options}\n\nIntroduce el número de la carpeta de destino:`);
-    if (!choice) return;
-    const idx = parseInt(choice, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= allFolders.length) {
-      customAlert('Selección no válida.');
-      return;
-    }
-    const targetFolder = allFolders[idx];
-    if (targetFolder.id === currentFolderId) {
-      customAlert('El archivo ya está en esa carpeta.');
-      return;
-    }
-    try {
-      const res = await fetch('/api/files', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId, newParentId: targetFolder.id, oldParentId: currentFolderId })
-      });
-      if (!res.ok) throw new Error('Error al mover el archivo');
-      customAlert(`Archivo movido con éxito a ${targetFolder.name}`);
-      fetchProject();
-    } catch (err: any) {
-      customAlert(err.message);
-    }
-  };
-
-  useEffect(() => {
-    // New project → reset the view so the previous project is never shown meanwhile
-    setData(null);
-    setLinkedMatrix(null);
-    setIsLoading(true);
-    fetchProject();
-  }, [projectId]);
-
-  const fetchProject = async () => {
-    // Only show the full-page loader on the first load (refreshes keep the page visible)
-    if (!data) setIsLoading(true);
-    setError(null);
+  const fetchProject = useCallback(async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}`);
-      if (!res.ok) throw new Error('Error cargando el proyecto');
-      const json = await res.json();
-      setData(json);
-      
-      if (json.linkedMatrix) {
-        setLinkedMatrix(json.linkedMatrix);
-      } else if (json.project?.artistId) {
-        const matRes = await fetch(`/api/artists/${json.project.artistId}/matrices`);
-        if (matRes.ok) {
-          const matJson = await matRes.json();
-          const linked = matJson.matrices?.find((m: any) => 
-            m.projectId === projectId || 
-            m.projectId === json.project.id || 
-            (json.project.driveFolderId && m.projectId === json.project.driveFolderId)
-          );
-          if (linked) {
-            setLinkedMatrix(linked);
-          }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(res.status === 404 ? 'Este proyecto ya no existe o se movió a la papelera' : (data.error || 'No se pudo cargar el proyecto'));
+      setProject({ ...data.project, id: projectId, driveFolderId: projectId });
+      let linked = data.linkedMatrix || null;
+      if (!linked && data.project?.artistId) {
+        const mres = await fetch(`/api/artists/${data.project.artistId}/matrices`);
+        if (mres.ok) {
+          const mdata = await mres.json();
+          linked = (mdata.matrices || []).find((m: any) => m.projectId === projectId) || null;
         }
       }
+      setMatrix(linked);
+      setError(null);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [projectId]);
 
-  const handleFileUpload = async (folderId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    setIsLoading(true);
+    setProject(null);
+    setMatrix(null);
+    fetchProject();
+  }, [fetchProject]);
 
-    // Allow selecting the same file again later
-    e.target.value = '';
-    setUploadingTo(folderId);
+  const artist = artists.find(a => a.id === project?.artistId);
+  const index = useIndex(projectId, !!project);
 
-    try {
-      // Direct upload to Google Drive (no size limit), keeping the "similar file" check
-      const similar = await findSimilarFileInFolder(folderId, file.name);
-      let overwriteId: string | undefined;
+  useDropContext(project ? {
+    mode: 'artist',
+    artistId: project.artistId,
+    projectId,
+    label: `Subir a ${project.title}`,
+    hint: 'Suéltalo sobre una carpeta para elegir el destino exacto',
+    onFinished: () => loadIndex(projectId, { force: true }),
+  } : null);
 
-      if (similar) {
-        const replace = await customConfirm(`Se encontró un archivo similar: "${similar.name}".\n\nPresiona 'Aceptar' para REEMPLAZARLO.\nPresiona 'Cancelar' para decidir si quieres subirlo como archivo NUEVO.`);
-        if (replace) {
-          overwriteId = similar.id;
-        } else {
-          const uploadAsNew = await customConfirm(`¿Deseas subir "${file.name}" como un archivo nuevo independiente?`);
-          if (!uploadAsNew) return;
-        }
-      }
-
-      await uploadFileToDrive(file, folderId, { fileId: overwriteId, name: file.name });
-      window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
-      await fetchProject(); // Recargar archivos
-      customAlert('Archivo subido con éxito');
-    } catch (err: any) {
-      customAlert(err.message || 'Error subiendo el archivo');
-    } finally {
-      setUploadingTo(null);
-    }
-  };
+  const stats = useMemo(() => {
+    const files = index.items.filter(i => !i.isFolder);
+    return { ready: index.status === 'ready' || files.length > 0, files: files.length, audio: files.filter(f => f.kind === 'audio').length, bytes: files.reduce((s, f) => s + (f.size || 0), 0) };
+  }, [index.items, index.status]);
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
-  }
-
-  if (error || !data) {
     return (
-      <div className="glass p-8 rounded-xl text-center border-error/20">
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p className="text-text-secondary mb-6">{error}</p>
-        <Button onClick={() => router.back()}>Volver</Button>
+      <div className="space-y-6 animate-fade-in">
+        <div className="h-8 w-56 rounded-lg bg-surface-elevated animate-pulse" />
+        <div className="h-36 rounded-2xl bg-surface-elevated border border-border animate-pulse" />
+        <div className="h-[420px] rounded-2xl bg-surface-elevated border border-border animate-pulse" />
       </div>
     );
   }
 
-  const { project, folders, rootFiles } = data;
-  const displayFolders = [...(folders || [])];
-  if (rootFiles && rootFiles.length > 0) {
-    displayFolders.unshift({
-      id: project.driveFolderId || projectId,
-      name: 'Archivos del Proyecto',
-      files: rootFiles
-    });
+  if (error || !project) {
+    return (
+      <div className="rounded-2xl border border-error/20 bg-surface-elevated p-10 text-center max-w-lg mx-auto mt-10">
+        <AlertTriangle className="w-12 h-12 text-error mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">No se pudo abrir el proyecto</h2>
+        <p className="text-text-secondary text-sm mb-6">{error}</p>
+        <button type="button" onClick={() => router.back()} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold">Volver</button>
+      </div>
+    );
   }
 
+  const status = project.status || 'active';
+  const meta = PROJECT_STATUS_META[status] || PROJECT_STATUS_META.active;
+  const TypeIcon = TYPE_ICON[project.type] || FolderOpen;
+  const progress = matrix ? matrixProgress(matrix) : null;
+  const delivery = project.deliveryDate ? new Date(project.deliveryDate) : null;
+  const overdue = delivery && status === 'active' && delivery.getTime() < Date.now() - 86_400_000;
+  const artistHref = `/artists/${project.artistId}?tab=projects`;
+
+  const changeStatus = async (next: ProjectStatus) => {
+    const prev = project.status;
+    setProject(p => (p ? { ...p, status: next } : p));
+    try {
+      await saveProject(projectId, { status: next });
+      toast.success(`Proyecto ${PROJECT_STATUS_META[next].label.toLowerCase()}`);
+    } catch (err: any) {
+      setProject(p => (p ? { ...p, status: prev } : p));
+      toast.error(err.message);
+    }
+  };
+
+  const createMatrix = async () => {
+    const name = (await customPrompt('Nombre de la matriz', project.title, 'Nueva matriz'))?.trim();
+    if (!name) return;
+    const t = toast.loading('Creando matriz…');
+    try {
+      const res = await fetch(`/api/artists/${project.artistId}/matrices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, projectId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error');
+      setMatrix(data.matrix);
+      setMatrixOpen(true);
+      toast.success('Matriz creada', { id: t });
+    } catch (err: any) {
+      toast.error(`No se pudo crear la matriz: ${err.message}`, { id: t });
+    }
+  };
+
+  const trashProject = async () => {
+    if (!await customConfirm(`"${project.title}" y todos sus archivos se moverán a la papelera de Google Drive.`, 'Eliminar proyecto')) return;
+    const t = toast.loading('Eliminando…');
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('No se pudo eliminar el proyecto');
+      toast.success('Proyecto movido a la papelera', { id: t });
+      loadIndex(project.artistId, { force: true });
+      router.push(artistHref);
+    } catch (err: any) {
+      toast.error(err.message, { id: t });
+    }
+  };
+
+  const moreMenu = (x: number, y: number) => showMenu(x, y, [
+    { heading: project.title },
+    { label: 'Editar proyecto', icon: 'Edit3', action: () => setEditing(true) },
+    ...(Object.keys(PROJECT_STATUS_META) as ProjectStatus[]).filter(s => s !== status).map(s => ({
+      label: `Marcar como ${PROJECT_STATUS_META[s].label.toLowerCase()}`,
+      icon: s === 'completed' ? 'CheckCircle2' : s === 'archived' ? 'Paperclip' : 'RotateCcw',
+      action: () => changeStatus(s),
+    })),
+    { separator: true },
+    matrix ? { label: 'Abrir matriz', icon: 'Table2', action: () => setMatrixOpen(true) } : { label: 'Crear matriz vinculada', icon: 'Table2', action: createMatrix },
+    { label: 'Registro de tiempo', icon: 'Clock', action: () => setTimeOpen(true) },
+    { label: 'Ver en el perfil del artista', icon: 'User', action: () => router.push(`/artists/${project.artistId}?tab=files&folderId=${projectId}`) },
+    { label: 'Abrir en Google Drive', icon: 'HardDrive', action: () => window.open(project.driveUrl || `https://drive.google.com/drive/folders/${projectId}`, '_blank', 'noopener') },
+    { separator: true },
+    { label: 'Eliminar proyecto', icon: 'Trash2', variant: 'danger', action: trashProject },
+  ]);
+
   return (
-    <div className="space-y-6 animate-fade-in pb-20">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-text-secondary hover:text-text-primary">
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary">{project.title}</h1>
-            <div className="flex items-center gap-3 mt-1">
-              <span className="text-text-secondary text-sm uppercase tracking-widest">{project.type}</span>
-              {linkedMatrix && (
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
-                  className="h-6 text-xs px-2.5 ml-2 bg-accent/15 hover:bg-accent/25 text-accent border border-accent/30 font-medium transition-all"
-                  onClick={() => setIsMatrixModalOpen(true)}
-                  title={`Abrir matriz: ${linkedMatrix.name}`}
-                >
-                  <ExternalLinkIcon className="w-3 h-3 mr-1.5" />
-                  Abrir Matriz Relacionada
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-        
-        <div className="w-full md:w-80">
-          <TimeTrackerWidget projectId={projectId} />
-        </div>
-      </div>
+    <div className="space-y-5 md:space-y-6 animate-fade-in">
+      <nav className="flex items-center gap-1.5 text-sm min-w-0">
+        <Link href={artistHref} className="inline-flex items-center gap-1.5 h-9 pr-1 text-text-secondary hover:text-text-primary shrink-0">
+          <ArrowLeft className="w-4 h-4" /> <span className="truncate max-w-[40vw]">{artist?.name || 'Artista'}</span>
+        </Link>
+        <ChevronRight className="w-4 h-4 text-text-secondary/50 shrink-0" />
+        <span className="font-semibold text-text-primary truncate">{project.title}</span>
+      </nav>
 
-      {/* 1. Archivos del Proyecto (Google Drive) */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-border/50 pb-2">
-          <h3 className="text-xl font-bold text-text-primary">Archivos de Google Drive</h3>
-        </div>
-        <div className="space-y-8 animate-fade-in">
-          {displayFolders.map((folder: any) => (
-            <div key={folder.id} className="glass rounded-xl border border-border overflow-hidden">
-              <div 
-                className="flex justify-between items-center p-4 border-b border-border bg-surface/50"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  showMenu(e.clientX, e.clientY, [
-                    {
-                      label: 'Copiar ID de carpeta',
-                      icon: 'Copy',
-                      action: () => {
-                        navigator.clipboard.writeText(folder.id);
-                        customAlert('ID de carpeta copiado');
-                      }
-                    },
-                    {
-                      label: 'Personalizar orden',
-                      icon: 'Settings2',
-                      action: () => setSortModalFolder(folder)
-                    },
-                    {
-                      label: 'Eliminar Carpeta',
-                      icon: 'Trash2',
-                      variant: 'danger',
-                      action: () => handleDeleteFolder(folder.id)
-                    }
-                  ]);
-                }}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Folder className="w-5 h-5 text-accent" />
-                    <h3 className="font-bold text-lg">{folder.name}</h3>
-                  </div>
-                  
-                  <FolderStatusPicker
-                    currentStatus={data?.project?.folderStatuses?.[folder.id] || ''}
-                    statusConfig={STATUS_CONFIG}
-                    onStatusChange={async (newStatus) => {
-                      const customStatuses = data?.project?.folderStatuses || {};
-                      if (!newStatus) {
-                        delete customStatuses[folder.id];
-                      } else {
-                        customStatuses[folder.id] = newStatus;
-                      }
-                      
-                      try {
-                        const res = await fetch(`/api/projects/${projectId}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ folderStatuses: customStatuses })
-                        });
-                        if (!res.ok) throw new Error('Error');
-                        setData({
-                          ...data,
-                          project: { ...data.project, folderStatuses: customStatuses }
-                        });
-                      } catch (err) {
-                        customAlert('Error guardando el estado');
-                      }
-                    }}
-                  />
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <select
-                    className="bg-surface border border-border rounded-md text-sm px-2 py-1.5 focus:outline-none focus:border-accent text-text-primary"
-                    value={`${sortConfig.key}-${sortConfig.direction}`}
-                    onChange={(e) => {
-                      const [key, direction] = e.target.value.split('-') as ['name'|'date'|'size', 'asc'|'desc'];
-                      setSortConfig({ key, direction });
-                    }}
-                  >
-                    <option value="name-asc">Nombre (A-Z)</option>
-                    <option value="name-desc">Nombre (Z-A)</option>
-                    <option value="date-desc">Fecha (Más nuevos)</option>
-                    <option value="date-asc">Fecha (Más antiguos)</option>
-                    <option value="size-desc">Tamaño (Mayor a menor)</option>
-                    <option value="custom-asc">Orden personalizado</option>
-                  </select>
-                  {sortConfig.key === 'custom' && (
-                    <Button variant="ghost" size="sm" onClick={() => setSortModalFolder(folder)}>
-                      <Settings2 className="w-4 h-4 mr-2" />
-                      Personalizar Orden
-                    </Button>
-                  )}
-
-                  <div>
-                    <input 
-                      type="file" 
-                      id={`upload-${folder.id}`} 
-                      className="hidden" 
-                      onChange={(e) => handleFileUpload(folder.id, e)}
-                    />
-                    <label htmlFor={`upload-${folder.id}`}>
-                      <Button variant="secondary" size="sm" className="cursor-pointer" asChild>
-                        <span>
-                          {uploadingTo === folder.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-2" />}
-                          Subir Archivo
-                        </span>
-                      </Button>
-                    </label>
-                  </div>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-8 h-8 rounded-lg text-text-secondary hover:text-text-primary"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      showMenu(rect.left, rect.bottom + 8, [
-                        {
-                          label: 'Copiar ID de carpeta',
-                          icon: 'Copy',
-                          action: () => {
-                            navigator.clipboard.writeText(folder.id);
-                            customAlert('ID de carpeta copiado');
-                          }
-                        },
-                        {
-                          label: 'Personalizar orden',
-                          icon: 'Settings2',
-                          action: () => setSortModalFolder(folder)
-                        },
-                        {
-                          label: 'Eliminar Carpeta',
-                          icon: 'Trash2',
-                          variant: 'danger',
-                          action: () => handleDeleteFolder(folder.id)
-                        }
-                      ]);
-                    }}
-                  >
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="p-4">
-                {folder.files.length === 0 ? (
-                  <p className="text-text-secondary text-sm text-center py-4">La carpeta está vacía.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {[...folder.files].sort((a: any, b: any) => {
-                      if (sortConfig.key === 'name') {
-                        return sortConfig.direction === 'asc' 
-                          ? a.name.localeCompare(b.name)
-                          : b.name.localeCompare(a.name);
-                      } else if (sortConfig.key === 'date') {
-                        return sortConfig.direction === 'desc'
-                          ? new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime()
-                          : new Date(a.createdTime).getTime() - new Date(b.createdTime).getTime();
-                      } else if (sortConfig.key === 'size') {
-                        return sortConfig.direction === 'desc'
-                          ? Number(b.size || 0) - Number(a.size || 0)
-                          : Number(a.size || 0) - Number(b.size || 0);
-                      } else if (sortConfig.key === 'custom') {
-                        const order = data?.project?.customFileOrders?.[folder.id] || [];
-                        const indexA = order.indexOf(a.id);
-                        const indexB = order.indexOf(b.id);
-                        if (indexA === -1 && indexB === -1) return 0;
-                        if (indexA === -1) return 1;
-                        if (indexB === -1) return -1;
-                        return indexA - indexB;
-                      }
-                      return 0;
-                    }).map((file: any) => {
-                      const isAudio = file.mimeType?.startsWith('audio/');
-                      return isAudio ? (
-                        <WaveformPlayer 
-                          key={file.id} 
-                          fileId={file.id} 
-                          fileName={file.name} 
-                          artistName={project.title}
-                          folders={folders}
-                          onRefresh={fetchProject}
-                          currentFolderId={folder.id}
-                          bpm={file.bpm}
-                          trackKey={file.key}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            showMenu(e.clientX, e.clientY, [
-                              {
-                                label: 'Reproducir',
-                                icon: 'Play',
-                                action: () => {
-                                  playTrack({
-                                    id: file.id,
-                                    name: file.name.replace(/\.[^/.]+$/, ''),
-                                    url: `/api/audio/${file.id}`,
-                                    artistName: project.title
-                                  });
-                                }
-                              },
-                              {
-                                label: 'Renombrar',
-                                icon: 'Edit3',
-                                action: () => handleRenameFile(file.id, file.name)
-                              },
-                              {
-                                label: 'Mover a carpeta',
-                                icon: 'FolderInput',
-                                action: () => handleMoveFile(file.id, folder.id)
-                              },
-                              {
-                                label: 'Ver en Navegador',
-                                icon: 'ExternalLink',
-                                action: () => {
-                                  if (isBrowserCompatible(file.mimeType)) {
-                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
-                                  } else if (file.webViewLink) {
-                                    window.open(file.webViewLink, '_blank');
-                                  } else {
-                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
-                                  }
-                                }
-                              },
-                              {
-                                label: 'Descargar',
-                                icon: 'Download',
-                                action: () => {
-                                  if (file.webContentLink) {
-                                    window.open(file.webContentLink, '_blank');
-                                  } else {
-                                    window.open(`/api/audio/${file.id}`, '_blank');
-                                  }
-                                }
-                              },
-                              {
-                                label: 'Eliminar Archivo',
-                                icon: 'Trash2',
-                                variant: 'danger',
-                                action: () => handleDeleteFile(file.id)
-                              }
-                            ]);
-                          }}
-                        />
-                      ) : (
-                        <div 
-                          key={file.id} 
-                          className="py-1.5 px-3 rounded-lg border border-border bg-surface-elevated/50 hover:border-accent/30 transition-colors flex items-center justify-between gap-4 group/file"
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            showMenu(e.clientX, e.clientY, [
-                              {
-                                label: 'Ver archivo',
-                                icon: 'Eye',
-                                action: () => {
-                                  if (isBrowserCompatible(file.mimeType)) {
-                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
-                                  } else if (file.webViewLink) {
-                                    window.open(file.webViewLink, '_blank');
-                                  } else {
-                                    window.open(`/api/files/${file.id}?inline=true`, '_blank');
-                                  }
-                                }
-                              },
-                              {
-                                label: 'Renombrar',
-                                icon: 'Edit3',
-                                action: () => handleRenameFile(file.id, file.name)
-                              },
-                              {
-                                label: 'Mover a carpeta',
-                                icon: 'FolderInput',
-                                action: () => handleMoveFile(file.id, folder.id)
-                              },
-                              {
-                                label: 'Copiar enlace',
-                                icon: 'Copy',
-                                action: () => {
-                                  navigator.clipboard.writeText(`${window.location.origin}/api/files/${file.id}?inline=true`);
-                                }
-                              },
-                              {
-                                label: 'Eliminar Archivo',
-                                icon: 'Trash2',
-                                variant: 'danger',
-                                action: () => handleDeleteFile(file.id)
-                              }
-                            ]);
-                          }}
-                        >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            {file.mimeType?.startsWith('image/') ? <FileImage className="w-4 h-4 text-accent-secondary shrink-0" /> :
-                             file.mimeType?.startsWith('video/') ? <Film className="w-4 h-4 text-warning shrink-0" /> :
-                             file.mimeType === 'application/pdf' ? <FileText className="w-4 h-4 text-error shrink-0" /> :
-                             <FileIcon className="w-4 h-4 text-text-secondary shrink-0" />}
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium truncate block text-text-primary">{file.name}</span>
-                            </div>
-                            {file.size && (
-                              <span className="text-[10px] text-text-secondary font-mono shrink-0 hidden sm:inline">
-                                {(Number(file.size) / 1024 / 1024).toFixed(1)} MB
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={() => handleRenameFile(file.id, file.name)}
-                              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/file:opacity-100 transition-opacity"
-                              title="Renombrar archivo"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleMoveFile(file.id, folder.id)}
-                              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/file:opacity-100 transition-opacity"
-                              title="Mover de carpeta"
-                            >
-                              <FolderInput className="w-3.5 h-3.5" />
-                            </button>
-                            <a
-                              href={`/api/files/${file.id}?inline=false`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 text-text-secondary hover:text-accent-light rounded hover:bg-surface/50 opacity-0 group-hover/file:opacity-100 transition-opacity"
-                              title="Descargar"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                            </a>
-                            <button
-                              onClick={() => handleDeleteFile(file.id)}
-                              className="p-1 text-text-secondary hover:text-error rounded hover:bg-error/10 opacity-0 group-hover/file:opacity-100 transition-opacity"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                            <a 
-                              href={isBrowserCompatible(file.mimeType) ? `/api/files/${file.id}?inline=true` : (file.webViewLink || `/api/files/${file.id}?inline=true`)}
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="p-1 text-text-secondary hover:text-accent rounded hover:bg-surface/50"
-                              title="Ver en Navegador"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-surface-elevated p-4 md:p-6">
+        <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-accent/10 blur-[80px] pointer-events-none" />
+        <div className="relative flex flex-col lg:flex-row lg:items-center gap-5">
+          <div className="flex items-start gap-4 min-w-0 flex-1">
+            <span className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-accent/15 text-accent flex items-center justify-center shrink-0"><TypeIcon className="w-7 h-7" /></span>
+            <div className="min-w-0 space-y-2">
+              <p className="text-[11px] uppercase tracking-widest font-bold text-text-secondary">{PROJECT_TYPE_LABELS[project.type] || 'Proyecto'}</p>
+              <h1 className="text-2xl md:text-3xl font-black text-text-primary tracking-tight break-words">{project.title}</h1>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); showMenu(r.left, r.bottom + 4, (Object.keys(PROJECT_STATUS_META) as ProjectStatus[]).map(s => ({ label: PROJECT_STATUS_META[s].label, checked: s === status, action: () => s !== status && changeStatus(s) }))); }} className={cn('inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border text-xs font-semibold', meta.chip)}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full', meta.dot)} /> {meta.label}
+                </button>
+                {delivery && (
+                  <span className={cn('inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-xs font-medium', overdue ? 'text-error bg-error/10 border-error/25' : 'text-text-secondary border-border')}>
+                    {overdue ? <AlertTriangle className="w-3.5 h-3.5" /> : <CalendarClock className="w-3.5 h-3.5" />}
+                    Entrega {delivery.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+                {project.releaseDate && (
+                  <span className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-border text-xs font-medium text-text-secondary">
+                    Lanzamiento {new Date(project.releaseDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                )}
+                {project.requirePaymentForDownload && (
+                  <span className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border border-warning/30 bg-warning/10 text-xs font-medium text-warning" title="Las descargas del portal se bloquean mientras haya pagos pendientes">
+                    <Lock className="w-3.5 h-3.5" /> Descargas protegidas
+                  </span>
                 )}
               </div>
+              {project.notes && <p className="text-sm text-text-secondary whitespace-pre-line line-clamp-3 max-w-2xl">{project.notes}</p>}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {sortModalFolder && (
-        <CustomSortModal 
-          folderName={sortModalFolder.name} 
-          files={sortModalFolder.files} 
-          onClose={() => setSortModalFolder(null)} 
-          onSave={handleSaveCustomOrder} 
-        />
+          <div className="grid grid-cols-3 gap-2 lg:w-[340px] shrink-0">
+            <div className="rounded-xl bg-surface border border-border px-3 py-2.5">
+              <p className="text-lg font-black text-text-primary leading-none">{stats.ready ? stats.files : '…'}</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mt-1">Archivos</p>
+            </div>
+            <div className="rounded-xl bg-surface border border-border px-3 py-2.5">
+              <p className="text-lg font-black text-text-primary leading-none truncate">{stats.ready ? formatBytes(stats.bytes) : '…'}</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mt-1">Tamaño</p>
+            </div>
+            <button type="button" onClick={() => (matrix ? setMatrixOpen(true) : createMatrix())} className="rounded-xl bg-surface border border-border px-3 py-2.5 text-left hover:border-accent/40">
+              <p className="text-lg font-black text-text-primary leading-none">{progress ? `${progress.percent}%` : '—'}</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mt-1">{matrix ? 'Matriz' : 'Crear matriz'}</p>
+            </button>
+          </div>
+        </div>
+
+        {progress && progress.total > 0 && (
+          <div className="relative mt-4 h-1.5 rounded-full bg-surface overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-accent to-accent-light" style={{ width: `${progress.percent}%` }} />
+          </div>
+        )}
+
+        <div className="relative flex items-center gap-2 mt-5 overflow-x-auto scrollbar-hide -mx-1 px-1" data-no-swipe>
+          <button type="button" onClick={() => openSmartUpload({ files: [], targetType: 'artist', artistId: project.artistId, projectId, onFinished: () => loadIndex(projectId, { force: true }) })} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold inline-flex items-center gap-2 shrink-0 hover:bg-accent/90">
+            <UploadCloud className="w-4 h-4" /> Subir
+          </button>
+          <button type="button" onClick={() => setEditing(true)} className="h-10 px-3.5 rounded-xl border border-border text-sm font-medium inline-flex items-center gap-2 shrink-0 hover:bg-surface">
+            <Edit3 className="w-4 h-4" /> Editar
+          </button>
+          {matrix ? (
+            <button type="button" onClick={() => setMatrixOpen(true)} className="h-10 px-3.5 rounded-xl border border-border text-sm font-medium inline-flex items-center gap-2 shrink-0 hover:bg-surface">
+              <Table2 className="w-4 h-4 text-accent" /> Matriz
+            </button>
+          ) : (
+            <button type="button" onClick={createMatrix} className="h-10 px-3.5 rounded-xl border border-dashed border-border text-sm font-medium inline-flex items-center gap-2 shrink-0 hover:bg-surface text-text-secondary">
+              <Plus className="w-4 h-4" /> Matriz
+            </button>
+          )}
+          <button type="button" onClick={() => setTimeOpen(true)} className="h-10 px-3.5 rounded-xl border border-border text-sm font-medium inline-flex items-center gap-2 shrink-0 hover:bg-surface">
+            <Clock className="w-4 h-4" /> Tiempo
+          </button>
+          <a href={project.driveUrl || `https://drive.google.com/drive/folders/${projectId}`} target="_blank" rel="noopener noreferrer" className="hidden md:inline-flex h-10 px-3.5 rounded-xl border border-border text-sm font-medium items-center gap-2 shrink-0 hover:bg-surface">
+            <HardDrive className="w-4 h-4" /> Drive
+          </a>
+          <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); moreMenu(r.right - 230, r.bottom + 6); }} className="h-10 w-10 rounded-xl border border-border inline-flex items-center justify-center shrink-0 hover:bg-surface ml-auto" aria-label="Más acciones">
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
+      </section>
+
+      <FileExplorer
+        rootId={projectId}
+        rootName={project.title}
+        scope={{ type: 'artist', artistId: project.artistId, artistEmail: artist?.email || undefined }}
+      />
+
+      <EditProjectModal project={editing ? project : null} onClose={() => setEditing(false)} onSaved={saved => setProject(p => (p ? { ...p, ...saved } : p))} />
+
+      {timeOpen && (
+        <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center md:p-6" role="dialog" aria-modal="true" aria-label="Registro de tiempo">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setTimeOpen(false)} />
+          <div className="relative w-full md:max-w-md bg-surface-elevated border-t md:border border-border rounded-t-[28px] md:rounded-2xl shadow-2xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-slide-up">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold">Registro de tiempo</h3>
+              <button type="button" onClick={() => setTimeOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface" aria-label="Cerrar"><X className="w-5 h-5" /></button>
+            </div>
+            <TimeTrackerWidget projectId={projectId} />
+          </div>
+        </div>
       )}
 
-      {/* Modal / Drawer Matriz Relacionada */}
-      {isMatrixModalOpen && linkedMatrix && data?.project && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-2 sm:p-6 animate-fade-in"
-          onClick={() => setIsMatrixModalOpen(false)}
-        >
-          <div 
-            className="glass w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-2xl border border-border p-4 sm:p-6 shadow-2xl bg-surface/95 relative animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase font-bold text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20">Matriz del Proyecto</span>
-                <h3 className="font-bold text-base sm:text-lg text-text-primary truncate">{linkedMatrix.name}</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <Link
-                  href={`/matrices?id=${linkedMatrix.id}&artist=${data.project.artistId}`}
-                  className="text-xs text-text-secondary hover:text-text-primary flex items-center gap-1.5 h-8 px-2.5 rounded-lg hover:bg-surface transition-colors"
-                  title="Abrir en página completa"
-                >
-                  <ExternalLinkIcon className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Página Completa</span>
-                </Link>
-                <button 
-                  onClick={() => setIsMatrixModalOpen(false)}
-                  className="p-1 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated transition-colors"
-                  title="Cerrar"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+      {matrixOpen && matrix && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-6" role="dialog" aria-modal="true" aria-label="Matriz del proyecto">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" onClick={() => { setMatrixOpen(false); fetchProject(); }} />
+          <div className="relative w-full max-w-6xl max-h-[92dvh] flex flex-col rounded-2xl border border-border bg-surface-elevated shadow-2xl animate-scale-in">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 shrink-0">
+              <Table2 className="w-5 h-5 text-accent shrink-0" />
+              <h3 className="font-bold text-text-primary truncate flex-1">{matrix.name}</h3>
+              <Link href={`/artists/${project.artistId}?tab=matrices&matrixId=${matrix.id}`} className="h-9 px-3 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface inline-flex items-center gap-1.5">
+                <ExternalLink className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Abrir en matrices</span>
+              </Link>
+              <button type="button" onClick={() => { setMatrixOpen(false); fetchProject(); }} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface" aria-label="Cerrar"><X className="w-5 h-5" /></button>
             </div>
-
-            <ProductionGridBoard 
-              artistId={data.project.artistId}
-              matrixId={linkedMatrix.id}
-              matrixName={linkedMatrix.name}
-              artistName={data.project.artistName}
-              initialGrid={linkedMatrix.productionGrid}
-              initialProjectId={projectId}
-            />
+            <div className="flex-1 min-h-0 overflow-auto p-3 md:p-5">
+              <ProductionGridBoard
+                artistId={project.artistId}
+                matrixId={matrix.id}
+                matrixName={matrix.name}
+                artistName={artist?.name}
+                initialGrid={matrix.productionGrid}
+                initialProjectId={projectId}
+              />
+            </div>
           </div>
         </div>
       )}

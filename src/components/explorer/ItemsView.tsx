@@ -192,6 +192,7 @@ function useItemInteractionProps(item: DriveItem) {
   const dropProps = item.isFolder && ex.view !== 'trash' ? ex.getFolderDropProps(item.id, { springLoad: true }) : {};
   return {
     'data-item-id': item.id,
+    style: { scrollMarginTop: 'calc(var(--x-top) + var(--x-toolbar) + 44px)', scrollMarginBottom: '96px' } as React.CSSProperties,
     role: 'option',
     'aria-selected': ex.selectedSet.has(item.id),
     draggable: ex.canHover && ex.renamingId !== item.id && ex.view !== 'trash',
@@ -521,7 +522,7 @@ export function ItemsView() {
 
   return (
     <div className="min-h-full flex flex-col" onContextMenu={onBackgroundContextMenu}>
-      <div className="hidden md:flex items-center gap-3 px-4 h-9 border-b border-border/60 sticky top-0 z-10 bg-surface-elevated/95 backdrop-blur">
+      <div className="hidden md:flex items-center gap-3 px-4 h-9 border-b border-border/60 sticky top-[calc(var(--x-top)+var(--x-toolbar))] z-[15] bg-surface-elevated/95 backdrop-blur">
         {ex.canHover && <span className="w-5 shrink-0" />}
         <span className="w-9 shrink-0" />
         <div className="flex-1 grid grid-cols-[minmax(0,1fr)_150px_90px] gap-4 items-center">

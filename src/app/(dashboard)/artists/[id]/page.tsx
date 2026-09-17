@@ -1,432 +1,361 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { Button } from "@/components/ui/Button";
-import { ArrowLeft, RefreshCw, Folder, Mail, Phone, Settings, AlertCircle, Loader2, Plus, Disc, MoreVertical, Calendar, FolderPlus, ExternalLink, Headphones, Copy } from "lucide-react";
-import type { Artist, Project } from '@/types';
-import { PROJECT_TYPE_LABELS, STATUS_CONFIG } from '@/lib/constants';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import {
+  ArrowLeft, AlertCircle, Loader2, Mail, Phone, MessageCircle, Edit3, Globe, Copy, HardDrive, Headphones,
+  FolderPlus, UploadCloud, MoreHorizontal, Files, FolderKanban, Target, Table2, LayoutTemplate, ChevronRight,
+} from 'lucide-react';
+import type { Artist, Campaign } from '@/types';
 import { useProjects } from '@/lib/hooks/useProjects';
-import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
-import { CustomSortModal } from '@/components/projects/CustomSortModal';
 import { FileExplorer } from '@/components/explorer/FileExplorer';
 import { ArtistPortalTab } from '@/components/artists/ArtistPortalTab';
-import { NewProjectModal } from '@/components/projects/NewProjectModal';
-import { getProjectTypeIcon } from '@/lib/utils';
-import { ArtistReleasesTab } from '@/components/artists/ArtistReleasesTab';
+import { ArtistProjectsTab } from '@/components/artists/ArtistProjectsTab';
 import { ArtistMatricesTab } from '@/components/artists/ArtistMatricesTab';
 import { ArtistCampaignsTab } from '@/components/artists/ArtistCampaignsTab';
-import { EditArtistModal } from "@/components/artists/EditArtistModal";
+import { NewProjectModal } from '@/components/projects/NewProjectModal';
+import { EditArtistModal } from '@/components/artists/EditArtistModal';
+import { ArtistAvatar } from '@/components/ui/ArtistAvatar';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
-import * as LucideIcons from 'lucide-react';
-import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
-import { ArtistAvatar } from "@/components/ui/ArtistAvatar";
+import { useDropContext, useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
+import { useIndex, loadIndex } from '@/components/explorer/driveStore';
+import { formatBytes } from '@/components/explorer/fileKinds';
+import { copyText } from '@/components/explorer/explorerUtils';
+import { matrixProgress } from '@/lib/matrixStats';
+import { cn, getWhatsAppUrl } from '@/lib/utils';
 
+const TABS = [
+  { key: 'files', label: 'Archivos', icon: Files },
+  { key: 'projects', label: 'Proyectos', icon: FolderKanban },
+  { key: 'campaigns', label: 'Campañas', icon: Target },
+  { key: 'matrices', label: 'Matrices', icon: Table2 },
+  { key: 'portal', label: 'Portal', icon: LayoutTemplate },
+] as const;
+
+type TabKey = typeof TABS[number]['key'];
 
 export default function ArtistDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const artistId = params.id as string;
   const { showMenu } = useContextMenu();
-  
+  const { openSmartUpload } = useGlobalDragDrop();
+
   const [artist, setArtist] = useState<Artist | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const [activeTab, setActiveTab] = useState('files');
-  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
-  const [isEditArtistModalOpen, setIsEditArtistModalOpen] = useState(false);
+  const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [matrices, setMatrices] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+
+  const tabParam = searchParams.get('tab') as TabKey | null;
+  const activeTab: TabKey = TABS.some(t => t.key === tabParam) ? (tabParam as TabKey) : 'files';
 
   const { projects, isLoading: projectsLoading, fetchProjects } = useProjects(artistId);
+  const index = useIndex(artistId);
 
-  const handleDeleteProject = async (projectId: string) => {
-    if (!await customConfirm('¿Estás seguro de que quieres eliminar este proyecto y su carpeta en Google Drive de forma permanente?')) return;
-    try {
-      const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error al eliminar el proyecto');
-      customAlert('Proyecto eliminado con éxito');
-      fetchProjects();
-    } catch (err: any) {
-      customAlert(err.message);
-    }
-  };
-
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const tab = searchParams.get('tab');
-    if (tab && ['files', 'projects', 'campaigns', 'matrices', 'portal'].includes(tab)) {
-      setActiveTab(tab);
-    }
-    fetchArtist();
-  }, [artistId]);
-
-  const fetchArtist = async () => {
-    setIsLoading(true);
+  // ─── Data ────────────────────────────────────────────────────────────────
+  const fetchArtist = useCallback(async () => {
     try {
       const res = await fetch(`/api/artists/${artistId}`);
-      if (!res.ok) throw new Error('Error cargando el artista');
+      if (!res.ok) throw new Error('No se pudo cargar el artista');
       const data = await res.json();
       setArtist(data.artist);
+      setError(null);
+      try { localStorage.setItem(`accessed_${artistId}`, Date.now().toString()); } catch {}
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
+  }, [artistId]);
+
+  const fetchMatrices = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices`);
+      if (res.ok) setMatrices((await res.json()).matrices || []);
+    } catch {}
+  }, [artistId]);
+
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/artists/${artistId}/campaigns`);
+      if (res.ok) setCampaigns((await res.json()).campaigns || []);
+    } catch {}
+  }, [artistId]);
+
+  useEffect(() => {
+    setIsLoading(true);
+    setArtist(null);
+    fetchArtist();
+    fetchMatrices();
+    fetchCampaigns();
+  }, [fetchArtist, fetchMatrices, fetchCampaigns]);
+
+  // Deep link from the global right-click menu: /artists/[id]?newProject=true
+  useEffect(() => {
+    if (searchParams.get('newProject') !== 'true') return;
+    setIsNewProjectOpen(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('newProject');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+  }, [searchParams]);
+
+  const setTab = (key: TabKey) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', key);
+    if (key !== 'files') ['folderId', 'view', 'fileId', 'highlight'].forEach(p => url.searchParams.delete(p));
+    if (key !== 'matrices') url.searchParams.delete('matrixId');
+    window.history.replaceState(null, '', `${url.pathname}?${url.searchParams.toString()}`);
+    if (key === 'projects') fetchProjects();
+    if (key === 'matrices' || key === 'projects') fetchMatrices();
+    if (key === 'campaigns' || key === 'projects') fetchCampaigns();
   };
 
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch(`/api/artists/${artistId}/sync`, { method: 'POST' });
-      if (!res.ok) throw new Error('Error sincronizando la carpeta');
-      await fetchArtist();
-    } catch (err: any) {
-      customAlert(err.message);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  // ─── Sticky tab bar height (the file explorer sticks right below it) ────
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const [tabsHeight, setTabsHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const update = () => setTabsHeight(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [artist]);
+
+  // ─── Drag & drop anywhere on the page uploads to this artist ────────────
+  const currentFolderId = activeTab === 'files' ? searchParams.get('folderId') : null;
+  useDropContext(artist ? {
+    mode: 'artist',
+    artistId,
+    label: `Subir a ${artist.name}`,
+    hint: activeTab === 'files'
+      ? 'Suéltalo sobre una carpeta para elegir el destino exacto'
+      : activeTab === 'projects'
+        ? 'Suéltalo sobre un proyecto, o en cualquier parte para organizarlo automáticamente'
+        : 'Se detectará el proyecto y el tipo de cada archivo',
+    folderId: currentFolderId || undefined,
+    onFinished: () => { loadIndex(artistId, { force: true }); fetchProjects(); },
+  } : null);
+
+  const stats = useMemo(() => {
+    const files = index.items.filter(i => !i.isFolder);
+    return {
+      ready: index.items.length > 0 || index.status === 'ready',
+      files: files.length,
+      audio: files.filter(f => f.kind === 'audio').length,
+      bytes: files.reduce((s, f) => s + (f.size || 0), 0),
+    };
+  }, [index.items, index.status]);
+
+  const activeProjects = projects.filter(p => (p.status || 'active') === 'active').length;
+  const activeMatrices = matrices.filter(m => !matrixProgress(m).completed).length;
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-64"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
-  }
-
-  if (error || !artist) {
     return (
-      <div className="glass p-8 rounded-xl text-center border-error/20">
-        <AlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
-        <h2 className="text-xl font-bold mb-2">Error</h2>
-        <p className="text-text-secondary mb-6">{error || 'Artista no encontrado'}</p>
-        <Button onClick={() => router.push('/artists')}>Volver a Artistas</Button>
+      <div className="space-y-6 animate-fade-in">
+        <div className="h-8 w-40 rounded-lg bg-surface-elevated animate-pulse" />
+        <div className="h-40 rounded-2xl bg-surface-elevated border border-border animate-pulse" />
+        <div className="h-[420px] rounded-2xl bg-surface-elevated border border-border animate-pulse" />
       </div>
     );
   }
 
-  const isOldFolder = false; // Ya no hay carpetas antiguas, todo se auto-sincroniza
+  if (error || !artist) {
+    return (
+      <div className="rounded-2xl border border-error/20 bg-surface-elevated p-10 text-center max-w-lg mx-auto mt-10">
+        <AlertCircle className="w-12 h-12 text-error mx-auto mb-4" />
+        <h2 className="text-xl font-bold mb-2">No se pudo abrir el artista</h2>
+        <p className="text-text-secondary text-sm mb-6">{error || 'Artista no encontrado'}</p>
+        <div className="flex justify-center gap-2">
+          <button type="button" onClick={() => { setIsLoading(true); fetchArtist(); }} className="h-10 px-4 rounded-xl border border-border text-sm font-medium hover:bg-surface">Reintentar</button>
+          <button type="button" onClick={() => router.push('/artists')} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold">Volver a Artistas</button>
+        </div>
+      </div>
+    );
+  }
+
+  const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/${artistId}` : `/portal/${artistId}`;
+  const driveFolderId = artist.driveFolderId || artistId;
+
+  const moreMenu = (x: number, y: number) => showMenu(x, y, [
+    { heading: artist.name },
+    { label: 'Editar perfil', icon: 'Edit3', action: () => setIsEditOpen(true) },
+    { label: 'Nuevo proyecto', icon: 'FolderPlus', action: () => setIsNewProjectOpen(true) },
+    { label: 'Subir archivos', icon: 'UploadCloud', action: () => openSmartUpload({ files: [], targetType: 'artist', artistId }) },
+    { separator: true },
+    { label: 'Abrir portal del artista', icon: 'ExternalLink', action: () => window.open(`/portal/${artistId}`, '_blank', 'noopener') },
+    { label: 'Copiar enlace del portal', icon: 'Copy', action: () => copyText(portalUrl, 'Enlace del portal copiado') },
+    { label: 'Gestor de previews', icon: 'Music', action: () => router.push(`/artists/${artistId}/previews`) },
+    { label: 'Abrir carpeta en Google Drive', icon: 'HardDrive', action: () => window.open(`https://drive.google.com/drive/folders/${driveFolderId}`, '_blank', 'noopener') },
+  ]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <NewProjectModal isOpen={isNewProjectModalOpen} onClose={() => setIsNewProjectModalOpen(false)} artistId={artistId} />
-      {artist && (
-        <EditArtistModal
-          isOpen={isEditArtistModalOpen}
-          onClose={(saved, optimisticData) => {
-            setIsEditArtistModalOpen(false);
-            if (saved && optimisticData) {
-              setArtist(prev => prev ? { ...prev, ...optimisticData } : null);
-            }
-          }}
-          artist={artist}
-        />
-      )}
+    <div className="space-y-5 md:space-y-6 animate-fade-in">
+      <NewProjectModal isOpen={isNewProjectOpen} onClose={() => { setIsNewProjectOpen(false); fetchProjects(); loadIndex(artistId, { force: true }); }} artistId={artistId} />
+      <EditArtistModal
+        isOpen={isEditOpen}
+        artist={artist}
+        onClose={(saved, optimistic) => {
+          setIsEditOpen(false);
+          if (saved && optimistic) setArtist(prev => (prev ? { ...prev, ...optimistic } : prev));
+        }}
+      />
 
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/artists')} className="text-text-secondary hover:text-text-primary">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <h1 className="text-2xl font-bold text-text-primary">Perfil del Artista</h1>
-      </div>
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-sm -mb-1">
+        <Link href="/artists" className="inline-flex items-center gap-1.5 h-9 pr-2 text-text-secondary hover:text-text-primary">
+          <ArrowLeft className="w-4 h-4" /> Artistas
+        </Link>
+        <ChevronRight className="w-4 h-4 text-text-secondary/50" />
+        <span className="font-semibold text-text-primary truncate">{artist.name}</span>
+      </nav>
 
-      {/* Header Profile */}
-      <div className="glass rounded-xl p-4 md:p-5 border border-border relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-accent/10 blur-[80px] rounded-full pointer-events-none" />
-        
-        <div className="flex flex-col gap-4 relative z-10 w-full">
-          
-          {/* Left side: Avatar + Info */}
-          <div className="flex items-center gap-3 min-w-0">
-            <ArtistAvatar name={artist.name || '?'} photoUrl={artist.photoUrl} size="md" className="w-10 h-10 md:w-12 md:h-12" />
-            
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold text-text-primary truncate">{artist.name}</h2>
-              </div>
-              <div className="flex items-center gap-3 mt-0.5 text-text-secondary text-xs">
-                {artist.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {artist.email}</span>}
-                {artist.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {artist.phone}</span>}
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-surface-elevated p-4 md:p-6">
+        <div className="absolute -top-24 -right-16 w-72 h-72 rounded-full bg-accent/10 blur-[80px] pointer-events-none" />
+        <div className="relative flex flex-col lg:flex-row lg:items-center gap-5">
+          <div className="flex items-center gap-4 min-w-0 flex-1">
+            <ArtistAvatar name={artist.name} photoUrl={artist.photoUrl} size="xl" className="w-16 h-16 md:w-20 md:h-20 text-xl" />
+            <div className="min-w-0 space-y-1.5">
+              <h1 className="text-2xl md:text-3xl font-black text-text-primary tracking-tight truncate">{artist.name}</h1>
+              {artist.genre?.length ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {artist.genre.slice(0, 4).map(g => <span key={g} className="h-6 px-2 rounded-full bg-surface border border-border text-[11px] font-medium text-text-secondary inline-flex items-center">{g}</span>)}
+                </div>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-secondary">
+                {artist.email && <a href={`mailto:${artist.email}`} className="inline-flex items-center gap-1.5 hover:text-accent min-w-0"><Mail className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{artist.email}</span></a>}
+                {artist.phone && <a href={`tel:${artist.phone.replace(/\s/g, '')}`} className="inline-flex items-center gap-1.5 hover:text-accent"><Phone className="w-3.5 h-3.5" />{artist.phone}</a>}
+                {artist.phone && <a href={getWhatsAppUrl(artist.phone, `Hola ${artist.name}!`)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 hover:text-[#25D366]"><MessageCircle className="w-3.5 h-3.5" />WhatsApp</a>}
+                {!artist.email && !artist.phone && <button type="button" onClick={() => setIsEditOpen(true)} className="text-accent font-medium">Añadir email o teléfono</button>}
               </div>
             </div>
           </div>
-          
-          {/* Right side: Actions */}
-          <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto pb-1 scrollbar-hide w-full">
-            <Button variant="outline" size="sm" onClick={() => setIsEditArtistModalOpen(true)} className="h-8 text-xs shrink-0 px-2 md:px-3">
-              <LucideIcons.Edit3 className="w-3.5 h-3.5 mr-1.5" />
-              Editar Perfil
-            </Button>
-            <div className="flex items-center h-8 rounded-md border border-accent/30 bg-accent/5 overflow-hidden shrink-0">
-              <a
-                href={`/portal/${artistId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 h-full flex items-center text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors"
-                title="Ver Portal"
-              >
-                Portal Artista
-              </a>
-              <div className="w-[1px] h-4 bg-accent/20" />
-              <button
-                onClick={() => {
-                  const url = `${window.location.origin}/portal/${artistId}`;
-                  navigator.clipboard.writeText(url);
-                  customAlert('¡Enlace del portal copiado al portapapeles!');
-                }}
-                className="px-3 h-full flex items-center text-xs font-medium text-accent hover:bg-accent hover:text-white transition-colors"
-                title="Copiar Enlace Portal"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <a 
-              href={`https://drive.google.com/drive/folders/${artistId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 shrink-0 h-8 text-xs px-3 bg-blue-500/10 text-blue-500 border border-blue-500/30 hover:bg-blue-500/20 hover:text-blue-500"
-              title="Abrir carpeta en Google Drive"
-            >
-              <LucideIcons.HardDrive className="w-3.5 h-3.5 mr-1.5" /> Drive
-            </a>
-            <Button variant="secondary" size="sm" onClick={() => router.push(`/artists/${artistId}/previews`)} className="shrink-0 h-8 text-xs px-3">
-              <Headphones className="w-3.5 h-3.5 mr-1.5" /> Gestor Previews
-            </Button>
-            <Button size="sm" onClick={() => setIsNewProjectModalOpen(true)} className="shrink-0 h-8 text-xs px-3">
-              <FolderPlus className="w-3.5 h-3.5 mr-1.5" /> Nuevo Proyecto
-            </Button>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2 lg:w-[340px] shrink-0">
+            <button type="button" onClick={() => setTab('projects')} className="rounded-xl bg-surface border border-border px-3 py-2.5 text-left hover:border-accent/40 transition-colors">
+              <p className="text-lg font-black text-text-primary leading-none">{projectsLoading && projects.length === 0 ? '…' : activeProjects}</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mt-1">Proyectos</p>
+            </button>
+            <button type="button" onClick={() => setTab('files')} className="rounded-xl bg-surface border border-border px-3 py-2.5 text-left hover:border-accent/40 transition-colors">
+              <p className="text-lg font-black text-text-primary leading-none">{stats.ready ? stats.files : '…'}</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mt-1 truncate">{stats.ready ? formatBytes(stats.bytes) : 'Archivos'}</p>
+            </button>
+            <button type="button" onClick={() => setTab('matrices')} className="rounded-xl bg-surface border border-border px-3 py-2.5 text-left hover:border-accent/40 transition-colors">
+              <p className="text-lg font-black text-text-primary leading-none">{activeMatrices}</p>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-text-secondary mt-1">Matrices</p>
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-3 md:gap-6 border-b border-border/50 px-1 overflow-x-auto mt-4 md:mt-8 scrollbar-hide sticky top-0 z-30 bg-background/95 backdrop-blur-md pt-2">
-        {(['files', 'projects', 'campaigns', 'matrices', 'portal'] as const).map(tab => (
-          <button 
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`pb-3 pt-1 border-b-2 transition-colors whitespace-nowrap capitalize text-sm min-h-[44px] flex items-end ${
-              activeTab === tab 
-                ? 'border-accent text-text-primary font-medium' 
-                : 'border-transparent text-text-secondary hover:text-text-primary font-medium'
-            }`}
-          >
-            {tab === 'files' ? 'Archivos' : tab === 'projects' ? 'Proyectos' : tab === 'campaigns' ? 'Campañas' : tab === 'matrices' ? 'Matrices' : 'Portal'}
+        {/* Actions */}
+        <div className="relative flex items-center gap-2 mt-5 overflow-x-auto scrollbar-hide -mx-1 px-1" data-no-swipe>
+          <button type="button" onClick={() => openSmartUpload({ files: [], targetType: 'artist', artistId })} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold inline-flex items-center gap-2 shrink-0 hover:bg-accent/90 shadow-sm shadow-accent/20">
+            <UploadCloud className="w-4 h-4" /> Subir
           </button>
-        ))}
+          <button type="button" onClick={() => setIsNewProjectOpen(true)} className="h-10 px-3.5 rounded-xl border border-border text-sm font-medium inline-flex items-center gap-2 shrink-0 hover:bg-surface">
+            <FolderPlus className="w-4 h-4" /> Nuevo proyecto
+          </button>
+          <div className="flex items-center h-10 rounded-xl border border-border overflow-hidden shrink-0">
+            <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="h-full px-3.5 inline-flex items-center gap-2 text-sm font-medium hover:bg-surface">
+              <Globe className="w-4 h-4 text-accent" /> Portal
+            </a>
+            <button type="button" onClick={() => copyText(portalUrl, 'Enlace del portal copiado')} className="h-full px-3 border-l border-border hover:bg-surface" aria-label="Copiar enlace del portal" title="Copiar enlace del portal">
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+          <Link href={`/artists/${artistId}/previews`} className="hidden sm:inline-flex h-10 px-3.5 rounded-xl border border-border text-sm font-medium items-center gap-2 shrink-0 hover:bg-surface">
+            <Headphones className="w-4 h-4" /> Previews
+          </Link>
+          <a href={`https://drive.google.com/drive/folders/${driveFolderId}`} target="_blank" rel="noopener noreferrer" className="hidden md:inline-flex h-10 px-3.5 rounded-xl border border-border text-sm font-medium items-center gap-2 shrink-0 hover:bg-surface">
+            <HardDrive className="w-4 h-4" /> Drive
+          </a>
+          <button type="button" onClick={() => setIsEditOpen(true)} className="hidden md:inline-flex h-10 px-3.5 rounded-xl border border-border text-sm font-medium items-center gap-2 shrink-0 hover:bg-surface">
+            <Edit3 className="w-4 h-4" /> Editar
+          </button>
+          <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); moreMenu(r.right - 230, r.bottom + 6); }} className="h-10 w-10 rounded-xl border border-border inline-flex items-center justify-center shrink-0 hover:bg-surface ml-auto" aria-label="Más acciones">
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
+      </section>
+
+      {/* Tabs (sticky) */}
+      <div ref={tabsRef} className="sticky -top-4 md:-top-6 z-30 -mx-4 md:-mx-6 px-4 md:px-6 pt-4 md:pt-6 -mt-4 md:-mt-6 bg-background/90 backdrop-blur-xl border-b border-border/60">
+        <div role="tablist" className="flex items-center gap-1 overflow-x-auto scrollbar-hide" data-no-swipe>
+          {TABS.map(tab => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.key;
+            const badge = tab.key === 'projects' ? activeProjects : tab.key === 'campaigns' ? campaigns.length : tab.key === 'matrices' ? activeMatrices : 0;
+            return (
+              <button
+                key={tab.key}
+                role="tab"
+                aria-selected={active}
+                type="button"
+                onClick={() => setTab(tab.key)}
+                className={cn(
+                  'relative h-12 px-3 md:px-4 inline-flex items-center gap-2 text-sm font-medium whitespace-nowrap transition-colors shrink-0',
+                  active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
+                )}
+              >
+                <Icon className={cn('w-4 h-4', active && 'text-accent')} />
+                {tab.label}
+                {badge > 0 && <span className={cn('text-[10px] font-bold px-1.5 rounded-full', active ? 'bg-accent text-white' : 'bg-surface-elevated text-text-secondary')}>{badge}</span>}
+                {active && <span className="absolute left-2 right-2 bottom-0 h-0.5 rounded-full bg-accent" />}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tab Content: Campaigns */}
-      {activeTab === 'campaigns' && (
-        <ArtistCampaignsTab artistId={artistId} projects={projects} />
-      )}
-
-      {/* Tab Content: Projects */}
-      {activeTab === 'projects' && (
-        <div className="space-y-4 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xl font-semibold">Proyectos Activos</h3>
-            <Button onClick={() => setIsNewProjectModalOpen(true)} disabled={isOldFolder} title={isOldFolder ? "Sincroniza el artista primero" : ""}>
-              <Plus className="w-4 h-4 mr-2" /> Nuevo Proyecto
-            </Button>
-          </div>
-
-          {projectsLoading ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>
-          ) : projects.length === 0 ? (
-            <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border">
-              <Disc className="w-12 h-12 mb-4 mx-auto opacity-50" />
-              <p>No hay proyectos para este artista.</p>
-                <Button variant="link" onClick={() => setIsNewProjectModalOpen(true)}>Crear el primer proyecto</Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {projects.map(project => {
-                const status = STATUS_CONFIG[project.status === 'active' ? 'in_progress' : project.status] || STATUS_CONFIG['not_started'];
-                return (
-                   <Link 
-                    key={project.id} 
-                    href={`/projects/${project.id}`}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      showMenu(e.clientX, e.clientY, [
-                        {
-                          label: 'Abrir proyecto',
-                          icon: 'FolderOpen',
-                          action: () => router.push(`/projects/${project.id}`)
-                        },
-                        {
-                          label: 'Descargar carpeta completa',
-                          icon: 'Download',
-                          action: () => {
-                            if (project.driveUrl) {
-                              window.open(project.driveUrl, '_blank');
-                              customAlert('Se abrirá Drive. Haz clic en "Descargar" arriba a la derecha.');
-                            } else {
-                              customAlert('El enlace no está disponible. Sincroniza el artista.');
-                            }
-                          }
-                        },
-                        {
-                          label: 'Copiar ID de carpeta',
-                          icon: 'Copy',
-                          action: () => {
-                            navigator.clipboard.writeText(project.id);
-                            customAlert('ID de carpeta copiado');
-                          }
-                        },
-                        {
-                          label: 'Enlace Google Drive',
-                          icon: 'ExternalLink',
-                          action: () => {
-                            const url = `https://drive.google.com/drive/folders/${project.id}`;
-                            navigator.clipboard.writeText(url);
-                            customAlert('Enlace de Drive copiado al portapapeles');
-                          }
-                        },
-                        {
-                          label: 'Eliminar Proyecto',
-                          icon: 'Trash2',
-                          variant: 'danger',
-                          action: () => handleDeleteProject(project.id)
-                        }
-                      ]);
-                    }}
-                    className="bg-surface-elevated rounded-xl p-5 border border-border card-hover block group cursor-pointer"
-                  >
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2">
-                        {(() => {
-                          const iconName = getProjectTypeIcon(project.type);
-                          const IconComponent = (LucideIcons as any)[iconName] || Folder;
-                          return <IconComponent className="w-4 h-4 text-accent" />;
-                        })()}
-                        <span className="text-[10px] uppercase font-bold text-text-secondary tracking-widest">
-                          {PROJECT_TYPE_LABELS[project.type] || project.type}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button 
-                          className="text-text-secondary hover:text-accent p-1 rounded hover:bg-surface"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const url = `https://drive.google.com/drive/folders/${project.id}`;
-                            navigator.clipboard.writeText(url);
-                            customAlert('Enlace de Drive copiado al portapapeles');
-                          }}
-                          title="Copiar enlace a Drive"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                        <button 
-                          className="text-text-secondary hover:text-text-primary p-1 rounded hover:bg-surface"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            showMenu(rect.left, rect.bottom + 8, [
-                              {
-                                label: 'Abrir proyecto',
-                                icon: 'FolderOpen',
-                                action: () => router.push(`/projects/${project.id}`)
-                              },
-                              {
-                                label: 'Descargar carpeta completa',
-                                icon: 'Download',
-                                action: () => {
-                                  if (project.driveUrl) {
-                                    window.open(project.driveUrl, '_blank');
-                                    customAlert('Se abrirá Drive. Haz clic en "Descargar" arriba a la derecha.');
-                                  } else {
-                                    customAlert('El enlace no está disponible. Sincroniza el artista.');
-                                  }
-                                }
-                              },
-                              {
-                                label: 'Copiar ID de carpeta',
-                                icon: 'Copy',
-                                action: () => {
-                                  navigator.clipboard.writeText(project.id);
-                                  customAlert('ID de carpeta copiado');
-                                }
-                              },
-                              {
-                                label: 'Enlace Google Drive',
-                                icon: 'ExternalLink',
-                                action: () => {
-                                  const url = `https://drive.google.com/drive/folders/${project.id}`;
-                                  navigator.clipboard.writeText(url);
-                                  customAlert('Enlace de Drive copiado al portapapeles');
-                                }
-                              },
-                              {
-                                label: 'Eliminar Proyecto',
-                                icon: 'Trash2',
-                                variant: 'danger',
-                                action: () => handleDeleteProject(project.id)
-                              }
-                            ]);
-                          }}
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <h4 className="text-lg font-bold text-text-primary mb-1 group-hover:text-accent transition-colors">
-                      {project.title}
-                    </h4>
-                    
-                    <div className="flex items-center justify-between mt-4">
-                      <div className="flex items-center gap-2 text-xs text-text-secondary">
-                        <Folder className="w-3.5 h-3.5" />
-                        <span>Sincronizado con Drive</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: status?.bgColor, color: status?.color }}>
-                        {status?.label || 'Desconocido'}
-                      </span>
-                    </div>
-
-                    {project.deliveryDate && (
-                      <div className="mt-4 pt-3 border-t border-border/50 flex items-center gap-2 text-xs text-text-secondary">
-                        <Calendar className="w-3.5 h-3.5 text-warning" />
-                        <span>Entrega: {new Date(project.deliveryDate).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab Content: Matrices */}
-      {activeTab === 'matrices' && (
-        <ArtistMatricesTab artistId={artistId} artistName={artist?.name} />
-      )}
-
-      {/* Tab Content: Files (Drive Explorer) */}
       {activeTab === 'files' && (
         <FileExplorer
-          rootId={artist?.driveFolderId || artistId}
-          rootName={artist?.name || 'Archivos'}
-          scope={{ type: 'artist', artistId, artistEmail: artist?.email || undefined }}
+          rootId={driveFolderId}
+          rootName={artist.name}
+          scope={{ type: 'artist', artistId, artistEmail: artist.email || undefined }}
+          stickyTop={tabsHeight}
         />
       )}
 
-      {/* Tab Content: Portal */}
-      {activeTab === 'portal' && (
-        <ArtistPortalTab artistId={artistId} artistName={artist?.name} />
+      {activeTab === 'projects' && (
+        <ArtistProjectsTab
+          artistId={artistId}
+          artistName={artist.name}
+          projects={projects}
+          isLoading={projectsLoading}
+          matrices={matrices}
+          campaigns={campaigns}
+          onRefresh={fetchProjects}
+          onNewProject={() => setIsNewProjectOpen(true)}
+          onMatricesChanged={fetchMatrices}
+        />
       )}
 
-      {/* Tab Content: Placeholder for others */}
-      {activeTab !== 'projects' && activeTab !== 'matrices' && activeTab !== 'files' && activeTab !== 'portal' && activeTab !== 'campaigns' && (
-        <div className="glass rounded-xl p-12 text-center text-text-secondary border border-border animate-fade-in">
-          <h3 className="text-lg font-medium text-text-primary mb-2 capitalize">Módulo de {activeTab}</h3>
-          <p className="max-w-md mx-auto">Esta sección se está construyendo actualmente.</p>
-        </div>
+      {activeTab === 'campaigns' && (
+        <ArtistCampaignsTab
+          artistId={artistId}
+          projects={projects}
+          matrices={matrices}
+          onCampaignsChanged={setCampaigns}
+          onMatricesChanged={fetchMatrices}
+        />
+      )}
+
+      {activeTab === 'matrices' && (
+        <ArtistMatricesTab artistId={artistId} artistName={artist.name} projects={projects} onMatricesChanged={setMatrices} />
+      )}
+
+      {activeTab === 'portal' && <ArtistPortalTab artistId={artistId} artistName={artist.name} projects={projects} />}
+
+      {projectsLoading && activeTab === 'projects' && projects.length > 0 && (
+        <p className="text-[11px] text-text-secondary flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Actualizando proyectos…</p>
       )}
     </div>
   );

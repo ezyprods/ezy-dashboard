@@ -1,453 +1,443 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { Button } from '@/components/ui/Button';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import {
-  Loader2, Eye, EyeOff, ArrowUp, ArrowDown, Layout,
-  ExternalLink, Copy, CheckCircle2, Globe, Wrench,
-  Download, RefreshCw, Scissors, Tags, Activity, Layers
+  Loader2, Eye, EyeOff, ArrowUp, ArrowDown, ExternalLink, Copy, Globe, Wrench, Download, RefreshCw, Scissors,
+  Tags, Activity, Layers, MessageSquare, Send, Trash2, Check, CheckCheck, FolderOpen, Sparkles, LayoutTemplate,
+  CircleCheck, Share2, Mail, CornerDownRight,
 } from 'lucide-react';
-import { customAlert } from '@/lib/dialog';
-import { PORTAL_TOOLS, type PortalConfig, type PortalModule, type PortalToolId } from '@/types/portal';
+import { cn, formatRelativeTime } from '@/lib/utils';
+import { customConfirm } from '@/lib/dialog';
+import { copyText, canNativeShare, nativeShare } from '@/components/explorer/explorerUtils';
+import { useAppData } from '@/lib/contexts/AppDataContext';
+import { PORTAL_TOOLS, type PortalConfig, type PortalMessage, type PortalModule, type PortalToolId } from '@/types/portal';
+import type { Project } from '@/types';
+import { PROJECT_STATUS_META } from '@/components/projects/EditProjectModal';
 
-const TOOL_ICON_COMPONENTS: Record<string, any> = {
-  Download,
-  RefreshCw,
-  Scissors,
-  Tags,
-  Activity,
-  Layers,
+const TOOL_ICONS: Record<string, React.ElementType> = { Download, RefreshCw, Scissors, Tags, Activity, Layers };
+
+const MODULE_INFO: Record<string, { label: string; description: string; emoji: string }> = {
+  bounces: { label: 'Archivos y mezclas', description: 'Últimos audios y archivos, por proyecto, con reproductor y descargas', emoji: '🎧' },
+  releases: { label: 'Previews y lanzamientos', description: 'Reproductor de los lanzamientos marcados como públicos', emoji: '💿' },
+  tasks: { label: 'Estado del trabajo', description: 'Progreso de las matrices compartidas y tareas del proyecto', emoji: '✅' },
+  finances: { label: 'Resumen financiero', description: 'Presupuesto, pagado y pendiente', emoji: '💶' },
 };
 
 interface PortalTabProps {
   artistId: string;
   artistName?: string;
+  projects?: Project[];
 }
 
-// Local state that only commits (and saves to Drive via updateModule) on
-// blur/Enter/a short pause, instead of firing a PUT request on every keystroke.
-function ModuleTitleInput({ title, placeholder, onCommit }: { title: string; placeholder: string; onCommit: (title: string) => void }) {
-  const [value, setValue] = useState(title);
-  const lastCommitted = useRef(title);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (title !== lastCommitted.current) {
-      lastCommitted.current = title;
-      setValue(title);
-    }
-  }, [title]);
-
-  const commit = (v: string) => {
-    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-    if (v === lastCommitted.current) return;
-    lastCommitted.current = v;
-    onCommit(v);
-  };
-
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-
+function Section({ title, icon: Icon, action, children, className }: { title: string; icon: React.ElementType; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <input
-      type="text"
-      value={value}
-      onChange={e => {
-        const v = e.target.value;
-        setValue(v);
-        if (timerRef.current) clearTimeout(timerRef.current);
-        timerRef.current = setTimeout(() => commit(v), 900);
-      }}
-      onBlur={() => commit(value)}
-      onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur(); }}
-      placeholder={placeholder}
-      className="bg-transparent text-sm font-semibold text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/50 rounded px-1 -ml-1 w-full max-w-xs transition-colors"
-    />
+    <section className={cn('rounded-2xl border border-border bg-surface-elevated', className)}>
+      <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
+        <Icon className="w-4 h-4 text-accent shrink-0" />
+        <h3 className="text-sm font-bold text-text-primary flex-1 truncate">{title}</h3>
+        {action}
+      </div>
+      <div className="p-4 md:p-5">{children}</div>
+    </section>
   );
 }
 
-export function ArtistPortalTab({ artistId, artistName }: PortalTabProps) {
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} className={cn('w-10 h-6 rounded-full p-0.5 transition-colors shrink-0', checked ? 'bg-accent' : 'bg-surface border border-border')}>
+      <span className={cn('block w-5 h-5 rounded-full bg-white shadow transition-transform', checked && 'translate-x-4')} />
+    </button>
+  );
+}
+
+export function ArtistPortalTab({ artistId, artistName, projects = [] }: PortalTabProps) {
+  const { artists } = useAppData();
+  const artist = artists.find(a => a.id === artistId);
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [messages, setMessages] = useState<PortalMessage[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestConfig = useRef<PortalConfig | null>(null);
 
-  const currentAllowedTools: PortalToolId[] = config
-    ? (Array.isArray(config.allowedTools)
-        ? config.allowedTools
-        : (config.enableTools ? PORTAL_TOOLS.map(t => t.id) : []))
-    : [];
+  const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/${artistId}` : `/portal/${artistId}`;
 
-  const handleToggleMasterTools = (enabled: boolean) => {
-    if (!config) return;
-    const newConfig: PortalConfig = {
-      ...config,
-      enableTools: enabled,
-      allowedTools: enabled
-        ? (config.allowedTools && config.allowedTools.length > 0 ? config.allowedTools : PORTAL_TOOLS.map(t => t.id))
-        : config.allowedTools
-    };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-  };
-
-  const handleToggleTool = (toolId: PortalToolId) => {
-    if (!config) return;
-    const isCurrentlyAllowed = currentAllowedTools.includes(toolId);
-    let updatedTools: PortalToolId[];
-    if (isCurrentlyAllowed) {
-      updatedTools = currentAllowedTools.filter(id => id !== toolId);
-    } else {
-      updatedTools = [...currentAllowedTools, toolId];
-    }
-    const newConfig: PortalConfig = {
-      ...config,
-      enableTools: updatedTools.length > 0 ? true : config.enableTools,
-      allowedTools: updatedTools
-    };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-  };
-
-  const handleSelectAllTools = () => {
-    if (!config) return;
-    const allIds = PORTAL_TOOLS.map(t => t.id);
-    const newConfig: PortalConfig = { ...config, enableTools: true, allowedTools: allIds };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-  };
-
-  const handleDeselectAllTools = () => {
-    if (!config) return;
-    const newConfig: PortalConfig = { ...config, allowedTools: [] };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-  };
-
-  useEffect(() => {
-    fetchConfig();
-  }, [artistId]);
-
-  const fetchConfig = async () => {
-    setIsLoading(true);
+  const fetchConfig = useCallback(async () => {
     try {
       const res = await fetch(`/api/artists/${artistId}/portal`);
-      if (!res.ok) throw new Error('Error al cargar config');
+      if (!res.ok) throw new Error('No se pudo cargar la configuración del portal');
       const data = await res.json();
       setConfig(data.config);
-    } catch (e: any) {
-      customAlert(e.message);
+      latestConfig.current = data.config;
+    } catch (err: any) {
+      toast.error(err.message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [artistId]);
 
-  const saveConfig = async (newConfig: PortalConfig) => {
+  const fetchMessages = useCallback(async () => {
     try {
-      await fetch(`/api/artists/${artistId}/portal`, {
+      const res = await fetch(`/api/artists/${artistId}/portal/feedback`);
+      if (res.ok) setMessages((await res.json()).feedback || []);
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [artistId]);
+
+  useEffect(() => { fetchConfig(); fetchMessages(); }, [fetchConfig, fetchMessages]);
+
+  const flush = useCallback(async () => {
+    const cfg = latestConfig.current;
+    if (!cfg) return;
+    setSaveState('saving');
+    try {
+      const res = await fetch(`/api/artists/${artistId}/portal`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newConfig)
+        body: JSON.stringify(cfg),
       });
-    } catch (e: any) {
-      console.error('Error auto-guardando config:', e);
+      if (!res.ok) throw new Error();
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+      toast.error('No se pudo guardar la configuración del portal');
+    }
+  }, [artistId]);
+
+  /** Applies a change locally and saves it (debounced for typing). */
+  const change = (patch: Partial<PortalConfig>, debounce = 0) => {
+    if (!config) return;
+    const next = { ...config, ...patch };
+    setConfig(next);
+    latestConfig.current = next;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSaveState('saving');
+    saveTimer.current = setTimeout(flush, debounce);
+  };
+
+  useEffect(() => () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      flush();
+    }
+  }, [flush]);
+
+  const modules = useMemo(
+    () => [...(config?.modules || [])].filter(m => MODULE_INFO[m.type]).sort((a, b) => a.order - b.order),
+    [config?.modules],
+  );
+
+  const updateModule = (id: string, patch: Partial<PortalModule>, debounce = 0) => {
+    change({ modules: (config?.modules || []).map(m => (m.id === id ? { ...m, ...patch } : m)) }, debounce);
+  };
+
+  const moveModule = (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= modules.length) return;
+    const reordered = [...modules];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    const orderById = new Map(reordered.map((m, i) => [m.id, i]));
+    change({ modules: (config?.modules || []).map(m => (orderById.has(m.id) ? { ...m, order: orderById.get(m.id)! } : m)) });
+  };
+
+  const allowedTools: PortalToolId[] = config
+    ? (Array.isArray(config.allowedTools) ? config.allowedTools : (config.enableTools ? PORTAL_TOOLS.map(t => t.id) : []))
+    : [];
+
+  const hidden = new Set(config?.hiddenProjectIds || []);
+
+  // ─── Messages ───────────────────────────────────────────────────────────
+  const inbox = messages.filter(m => !m.fromProducer);
+  const unread = inbox.filter(m => !m.isRead).length;
+  const repliesFor = (id: string) => messages.filter(m => m.fromProducer && m.replyTo === id).reverse();
+
+  const markRead = async (ids: string[] | null, isRead = true) => {
+    const prev = messages;
+    setMessages(ms => ms.map(m => (!ids || ids.includes(m.id) ? { ...m, isRead } : m)));
+    const res = await fetch(`/api/artists/${artistId}/portal/feedback`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, isRead }),
+    }).catch(() => null);
+    if (!res?.ok) { setMessages(prev); toast.error('No se pudo actualizar'); }
+  };
+
+  const sendReply = async (messageId: string) => {
+    if (!replyText.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/artists/${artistId}/portal/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: replyText.trim(), replyTo: messageId, authorName: config?.producerName || 'Productor' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMessages(ms => [data.feedback, ...ms.map(m => (m.id === messageId ? { ...m, isRead: true } : m))]);
+      setReplyText('');
+      setReplyTo(null);
+      toast.success('Respuesta enviada: el artista la verá en su portal');
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo enviar la respuesta');
+    } finally {
+      setSending(false);
     }
   };
 
-  const handleCopyLink = () => {
-    const url = `${window.location.origin}/portal/${artistId}`;
-    navigator.clipboard.writeText(url);
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2500);
-  };
-
-  const updateModule = (id: string, updates: Partial<PortalModule>) => {
-    if (!config) return;
-    const newConfig = {
-      ...config,
-      modules: config.modules?.map(m => m.id === id ? { ...m, ...updates } : m)
-    };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-  };
-
-  const moveModule = (index: number, direction: 'up' | 'down') => {
-    if (!config || !config.modules) return;
-    const newModules = [...config.modules];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= newModules.length) return;
-    const temp = newModules[index];
-    newModules[index] = newModules[targetIndex];
-    newModules[targetIndex] = temp;
-    newModules.forEach((m, i) => m.order = i);
-    const newConfig = { ...config, modules: newModules };
-    setConfig(newConfig);
-    saveConfig(newConfig);
-  };
-
-  const MODULE_LABELS: Record<string, { label: string; description: string; emoji: string }> = {
-    bounces: { label: 'Mezclas / Audios', description: 'Reproductor de archivos de audio', emoji: '🎧' },
-    releases: { label: 'Previews / Lanzamientos', description: 'Player de previews públicas', emoji: '💿' },
-    tasks: { label: 'Estado del Trabajo', description: 'Lista de tareas y progreso', emoji: '✅' },
-    custom_text: { label: 'Texto Personalizado', description: 'Bloque de texto libre', emoji: '📝' },
-    custom_link: { label: 'Enlace Personalizado', description: 'Enlace a recursos externos', emoji: '🔗' },
+  const deleteMessage = async (messageId: string) => {
+    if (!await customConfirm('Se eliminará el mensaje y sus respuestas.', 'Eliminar mensaje')) return;
+    const prev = messages;
+    setMessages(ms => ms.filter(m => m.id !== messageId && m.replyTo !== messageId));
+    const res = await fetch(`/api/artists/${artistId}/portal/feedback?messageId=${encodeURIComponent(messageId)}`, { method: 'DELETE' }).catch(() => null);
+    if (!res?.ok) { setMessages(prev); toast.error('No se pudo eliminar'); }
   };
 
   if (isLoading) {
     return (
-      <div className="p-12 flex justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-accent" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 h-72 rounded-2xl bg-surface-elevated border border-border animate-pulse" />
+        <div className="h-72 rounded-2xl bg-surface-elevated border border-border animate-pulse" />
       </div>
     );
   }
 
   if (!config) {
     return (
-      <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
-        <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border mt-8">
-          <Layout className="w-16 h-16 mb-6 mx-auto opacity-50" />
-          <h2 className="text-xl font-bold text-text-primary mb-2">Portal no inicializado</h2>
-          <p className="mb-6 max-w-md mx-auto">Ha ocurrido un error al cargar la configuración del portal.</p>
-          <Button onClick={fetchConfig}>Reintentar</Button>
-        </div>
+      <div className="rounded-2xl border border-dashed border-border bg-surface-elevated p-10 text-center">
+        <p className="text-sm font-semibold">No se pudo cargar el portal</p>
+        <button type="button" onClick={() => { setIsLoading(true); fetchConfig(); }} className="mt-4 h-10 px-4 rounded-xl border border-border text-sm hover:bg-surface">Reintentar</button>
       </div>
     );
   }
 
-  const modules = [...(config.modules || [])]
-    .filter(m => m.type !== 'projects') // Ensure projects module is hidden
-    .sort((a, b) => a.order - b.order);
-  
-  const portalUrl = typeof window !== 'undefined' ? `${window.location.origin}/portal/${artistId}` : `/portal/${artistId}`;
+  const shareText = `Hola${artistName ? ` ${artistName}` : ''}! Aquí tienes tu portal con todos tus archivos, mezclas y el estado del trabajo:\n${portalUrl}`;
 
   return (
-    <div className="space-y-5 animate-fade-in max-w-4xl mx-auto">
-
-      {/* Portal URL card */}
-      <div className="glass rounded-xl border border-border/60 p-5 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-accent/5 blur-[60px] rounded-full pointer-events-none" />
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-3">
-            <Globe className="w-4 h-4 text-accent" />
-            <h3 className="font-semibold text-text-primary text-sm">Enlace del Portal del Artista</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 flex items-center gap-2 min-w-0">
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />
-              <span className="text-xs text-text-secondary font-mono truncate">{portalUrl}</span>
+    <div className="space-y-4 animate-fade-in">
+      {/* Link */}
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-surface-elevated p-4 md:p-5">
+        <div className="absolute -top-20 -right-10 w-60 h-60 rounded-full bg-accent/10 blur-[70px] pointer-events-none" />
+        <div className="relative flex flex-col md:flex-row md:items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <span className="w-11 h-11 rounded-xl bg-accent/15 text-accent flex items-center justify-center shrink-0"><Globe className="w-5 h-5" /></span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-text-primary">Portal de {artistName || 'el artista'}</p>
+              <button type="button" onClick={() => copyText(portalUrl, 'Enlace copiado')} className="text-xs text-text-secondary font-mono truncate max-w-full hover:text-accent block">{portalUrl}</button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyLink}
-              className={`shrink-0 transition-all ${linkCopied ? 'border-success text-success bg-success/10' : 'border-accent text-accent hover:bg-accent/10'}`}
-            >
-              {linkCopied ? <><CheckCircle2 className="w-4 h-4 mr-1.5" /> Copiado</> : <><Copy className="w-4 h-4 mr-1.5" /> Copiar</>}
-            </Button>
-            <a
-              href={`/portal/${artistId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-surface border border-border text-text-secondary hover:text-text-primary hover:border-border/80 transition-colors font-medium"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Ver
-            </a>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn('text-[11px] font-medium mr-1 inline-flex items-center gap-1', saveState === 'error' ? 'text-error' : 'text-text-secondary')}>
+              {saveState === 'saving' ? <><Loader2 className="w-3 h-3 animate-spin" /> Guardando…</> : saveState === 'saved' ? <><Check className="w-3 h-3 text-success" /> Guardado</> : saveState === 'error' ? 'Error al guardar' : null}
+            </span>
+            <button type="button" onClick={() => copyText(portalUrl, 'Enlace copiado')} className="h-10 px-3.5 rounded-xl border border-border text-sm font-medium inline-flex items-center gap-2 hover:bg-surface"><Copy className="w-4 h-4" /> Copiar</button>
+            {artist?.phone && (
+              <a href={`https://wa.me/${artist.phone.replace(/\D/g, '')}?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer" className="h-10 px-3.5 rounded-xl border border-border text-sm font-medium inline-flex items-center gap-2 hover:bg-surface"><Share2 className="w-4 h-4 text-[#25D366]" /> WhatsApp</a>
+            )}
+            {artist?.email && (
+              <a href={`mailto:${artist.email}?subject=${encodeURIComponent('Tu portal de archivos')}&body=${encodeURIComponent(shareText)}`} className="h-10 px-3.5 rounded-xl border border-border text-sm font-medium inline-flex items-center gap-2 hover:bg-surface"><Mail className="w-4 h-4" /> Email</a>
+            )}
+            {canNativeShare() && (
+              <button type="button" onClick={() => nativeShare(`Portal de ${artistName}`, portalUrl)} className="h-10 w-10 rounded-xl border border-border inline-flex items-center justify-center hover:bg-surface" aria-label="Compartir"><Share2 className="w-4 h-4" /></button>
+            )}
+            <a href={`/portal/${artistId}`} target="_blank" rel="noopener noreferrer" className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-accent/90"><ExternalLink className="w-4 h-4" /> Ver portal</a>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Tools Access Section */}
-      <div className="glass rounded-xl border border-border p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
-              <Wrench className="w-4 h-4 text-accent" />
-              Acceso a Herramientas
-            </h3>
-            <p className="text-xs text-text-secondary mt-1">
-              Permite a este artista utilizar las herramientas que selecciones directamente desde su portal.
-            </p>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer shrink-0">
-            <input 
-              type="checkbox" 
-              className="sr-only peer"
-              checked={config.enableTools || false}
-              onChange={(e) => handleToggleMasterTools(e.target.checked)}
-            />
-            <div className="w-11 h-6 bg-surface-elevated peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-secondary peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent border border-border/50"></div>
-          </label>
-        </div>
-
-        {config.enableTools && (
-          <div className="pt-3 border-t border-border/50 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-text-secondary">
-                Herramientas permitidas ({currentAllowedTools.length} de {PORTAL_TOOLS.length} activas)
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAllTools}
-                  className="text-xs text-accent hover:underline font-medium cursor-pointer"
-                >
-                  Seleccionar todas
-                </button>
-                <span className="text-border">•</span>
-                <button
-                  type="button"
-                  onClick={handleDeselectAllTools}
-                  className="text-xs text-text-secondary hover:text-text-primary font-medium cursor-pointer"
-                >
-                  Desmarcar todas
-                </button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="lg:col-span-2 space-y-4">
+          {/* Inbox */}
+          <Section
+            title={`Mensajes del artista${unread ? ` · ${unread} sin leer` : ''}`}
+            icon={MessageSquare}
+            action={unread > 0 ? <button type="button" onClick={() => markRead(null)} className="text-xs font-semibold text-accent inline-flex items-center gap-1"><CheckCheck className="w-3.5 h-3.5" /> Marcar todo leído</button> : undefined}
+          >
+            {!config.showFeedback && (
+              <p className="text-xs text-warning mb-3">Los comentarios están desactivados: el artista no puede enviar mensajes. Actívalos en Personalización.</p>
+            )}
+            {messagesLoading ? (
+              <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
+            ) : inbox.length === 0 ? (
+              <div className="py-8 text-center">
+                <MessageSquare className="w-8 h-8 text-text-secondary/40 mx-auto mb-2" />
+                <p className="text-sm text-text-secondary">Aún no hay mensajes. El artista puede escribirte desde su portal, incluso sobre una canción concreta.</p>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {PORTAL_TOOLS.map((tool) => {
-                const isSelected = currentAllowedTools.includes(tool.id);
-                const IconComponent = TOOL_ICON_COMPONENTS[tool.iconName] || Wrench;
-
-                return (
-                  <div
-                    key={tool.id}
-                    onClick={() => handleToggleTool(tool.id)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2.5 relative overflow-hidden group ${
-                      isSelected
-                        ? 'bg-surface-elevated/70 border-accent/40 shadow-sm'
-                        : 'bg-surface/40 border-border/60 hover:bg-surface-elevated/30 hover:border-border'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tool.bg} ${tool.color}`}>
-                          <IconComponent className="w-4 h-4" />
+            ) : (
+              <div className="space-y-2">
+                {inbox.map(msg => (
+                  <div key={msg.id} className={cn('rounded-xl border p-3', msg.isRead ? 'border-border/60' : 'border-accent/40 bg-accent/5')}>
+                    <div className="flex items-start gap-3">
+                      <span className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold text-text-primary shrink-0">
+                        {(msg.authorName || '?').slice(0, 1).toUpperCase()}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-sm font-semibold text-text-primary">{msg.authorName}</span>
+                          <span className="text-[11px] text-text-secondary">{formatRelativeTime(msg.timestamp)}</span>
+                          {!msg.isRead && <span className="text-[10px] font-bold uppercase text-accent">Nuevo</span>}
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold text-xs text-text-primary truncate block">
-                              {tool.name}
-                            </span>
-                            {tool.badge && (
-                              <span className="text-[10px] px-1 py-0.2 rounded bg-indigo-500/20 text-indigo-400 font-bold uppercase shrink-0">
-                                {tool.badge}
-                              </span>
-                            )}
+                        {msg.trackTitle && <p className="text-[11px] text-accent mt-0.5 truncate">🎵 {msg.trackTitle}</p>}
+                        <p className="text-sm text-text-primary mt-1 whitespace-pre-line break-words">{msg.message}</p>
+                        {repliesFor(msg.id).map(r => (
+                          <div key={r.id} className="mt-2 pl-3 border-l-2 border-accent/40">
+                            <p className="text-[11px] text-text-secondary inline-flex items-center gap-1"><CornerDownRight className="w-3 h-3" /> Tu respuesta · {formatRelativeTime(r.timestamp)}</p>
+                            <p className="text-sm text-text-primary whitespace-pre-line break-words">{r.message}</p>
                           </div>
-                          <p className="text-[11px] text-text-secondary line-clamp-1 mt-0.5">
-                            {tool.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 pt-0.5">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => {}} // Click handled by wrapper div
-                          className="w-4 h-4 rounded border-border text-accent focus:ring-accent accent-accent cursor-pointer"
-                        />
+                        ))}
+                        {replyTo === msg.id ? (
+                          <div className="mt-2 space-y-2">
+                            <textarea autoFocus value={replyText} onChange={e => setReplyText(e.target.value)} rows={3} placeholder="Escribe tu respuesta… (el artista la verá en su portal)" className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none" onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendReply(msg.id); }} />
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => { setReplyTo(null); setReplyText(''); }} className="h-9 px-3 rounded-lg border border-border text-xs font-medium hover:bg-surface">Cancelar</button>
+                              <button type="button" disabled={sending || !replyText.trim()} onClick={() => sendReply(msg.id)} className="h-9 px-3 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-40 inline-flex items-center gap-1.5">
+                                {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Responder
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-2 flex items-center gap-1">
+                            <button type="button" onClick={() => { setReplyTo(msg.id); setReplyText(''); }} className="h-8 px-2.5 rounded-lg text-xs font-semibold text-accent hover:bg-accent/10 inline-flex items-center gap-1"><Send className="w-3.5 h-3.5" /> Responder</button>
+                            <button type="button" onClick={() => markRead([msg.id], !msg.isRead)} className="h-8 px-2.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-surface">{msg.isRead ? 'Marcar no leído' : 'Marcar leído'}</button>
+                            <button type="button" onClick={() => deleteMessage(msg.id)} className="h-8 w-8 rounded-lg text-text-secondary hover:text-error hover:bg-error/10 inline-flex items-center justify-center ml-auto" aria-label="Eliminar"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        )}
                       </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+
+          {/* Projects visibility */}
+          <Section title="Proyectos visibles en el portal" icon={FolderOpen}>
+            {projects.length === 0 ? (
+              <p className="text-sm text-text-secondary">Este artista no tiene proyectos. Los archivos sueltos y la carpeta Bounces siempre se muestran en “Bounces y archivos generales”.</p>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-xs text-text-secondary mb-2">Oculta los proyectos que el artista no debe ver (por ejemplo, trabajos en borrador). Sus archivos tampoco aparecerán.</p>
+                {projects.map(p => {
+                  const visible = !hidden.has(p.id);
+                  const meta = PROJECT_STATUS_META[p.status || 'active'] || PROJECT_STATUS_META.active;
+                  return (
+                    <div key={p.id} className="flex items-center gap-3 min-h-[48px] px-2 rounded-xl hover:bg-surface">
+                      <span className={cn('w-2 h-2 rounded-full shrink-0', meta.dot)} title={meta.label} />
+                      <span className={cn('flex-1 min-w-0 truncate text-sm', visible ? 'text-text-primary' : 'text-text-secondary line-through')}>{p.title}</span>
+                      <span className="text-[11px] text-text-secondary hidden sm:inline">{visible ? 'Visible' : 'Oculto'}</span>
+                      <Toggle
+                        checked={visible}
+                        label={`Mostrar ${p.title}`}
+                        onChange={v => {
+                          const next = new Set(hidden);
+                          if (v) next.delete(p.id); else next.add(p.id);
+                          change({ hiddenProjectIds: Array.from(next) });
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+
+          {/* Modules */}
+          <Section title="Secciones del portal" icon={LayoutTemplate}>
+            <div className="space-y-2">
+              {modules.map((mod, index) => {
+                const info = MODULE_INFO[mod.type];
+                return (
+                  <div key={mod.id} className={cn('flex items-start gap-3 p-3 rounded-xl border transition-opacity', mod.isVisible ? 'border-border bg-surface/40' : 'border-border/50 opacity-60')}>
+                    <div className="flex flex-col shrink-0">
+                      <button type="button" onClick={() => moveModule(index, -1)} disabled={index === 0} className="w-7 h-6 flex items-center justify-center rounded text-text-secondary hover:text-text-primary disabled:opacity-20" aria-label="Subir"><ArrowUp className="w-3.5 h-3.5" /></button>
+                      <button type="button" onClick={() => moveModule(index, 1)} disabled={index === modules.length - 1} className="w-7 h-6 flex items-center justify-center rounded text-text-secondary hover:text-text-primary disabled:opacity-20" aria-label="Bajar"><ArrowDown className="w-3.5 h-3.5" /></button>
+                    </div>
+                    <span className="text-xl shrink-0 mt-1">{info.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <input
+                        value={mod.title || ''}
+                        placeholder={info.label}
+                        onChange={e => updateModule(mod.id, { title: e.target.value }, 900)}
+                        className="w-full bg-transparent text-sm font-semibold text-text-primary focus:outline-none focus:bg-surface rounded-md px-1.5 py-1 -ml-1.5"
+                        aria-label="Título de la sección"
+                      />
+                      <p className="text-[11px] text-text-secondary">{info.description}</p>
+                      {mod.type === 'releases' && (
+                        <label className="mt-2 flex items-center gap-2 cursor-pointer w-fit">
+                          <input type="checkbox" checked={!!mod.config?.allowArtistEdit} onChange={e => updateModule(mod.id, { config: { ...mod.config, allowArtistEdit: e.target.checked } })} className="w-4 h-4 accent-[var(--accent)]" />
+                          <span className="text-[11px] text-text-secondary">El artista puede editar portada, canciones y orden</span>
+                        </label>
+                      )}
+                    </div>
+                    <button type="button" onClick={() => updateModule(mod.id, { isVisible: !mod.isVisible })} className={cn('h-8 px-2.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 shrink-0', mod.isVisible ? 'bg-accent/10 text-accent' : 'bg-surface text-text-secondary')}>
+                      {mod.isVisible ? <><Eye className="w-3.5 h-3.5" /> Visible</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
+                    </button>
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Modules */}
-      <div className="glass rounded-xl border border-border p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-2">
-            <Layout className="w-4 h-4 text-accent" />
-            Módulos del Portal
-          </h3>
+          </Section>
         </div>
-        <p className="text-xs text-text-secondary -mt-2">
-          Arrastra para reordenar. Los módulos ocultos no aparecen en el portal. (Guardado automático)
-        </p>
 
-        <div className="space-y-2">
-          {modules.map((mod, index) => {
-            const info = MODULE_LABELS[mod.type] || { label: mod.type, description: '', emoji: '📦' };
-            return (
-              <div
-                key={mod.id}
-                className={`flex items-center gap-3 p-4 rounded-xl border transition-all ${
-                  mod.isVisible
-                    ? 'bg-surface border-border shadow-sm'
-                    : 'bg-surface/40 border-border/30 opacity-50'
-                }`}
-              >
-                {/* Move arrows */}
-                <div className="flex flex-col gap-0.5 shrink-0">
-                  <button
-                    onClick={() => moveModule(index, 'up')}
-                    disabled={index === 0}
-                    className="p-0.5 text-text-secondary hover:text-text-primary disabled:opacity-20 rounded transition-colors"
-                  >
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => moveModule(index, 'down')}
-                    disabled={index === modules.length - 1}
-                    className="p-0.5 text-text-secondary hover:text-text-primary disabled:opacity-20 rounded transition-colors"
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Icon */}
-                <span className="text-xl shrink-0">{info.emoji}</span>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-accent uppercase tracking-wider">{mod.type}</span>
-                  </div>
-                  <ModuleTitleInput
-                    title={mod.title || ''}
-                    placeholder={info.label}
-                    onCommit={(title) => updateModule(mod.id, { title })}
-                  />
-                  <p className="text-[10px] text-text-secondary mt-0.5">{info.description}</p>
-                  
-                  {mod.type === 'releases' && (
-                    <div className="mt-3 pt-3 border-t border-border/40">
-                      <label className="flex items-center gap-2 cursor-pointer group w-max">
-                        <input
-                          type="checkbox"
-                          checked={mod.config?.allowArtistEdit || false}
-                          onChange={(e) => updateModule(mod.id, { config: { ...mod.config, allowArtistEdit: e.target.checked } })}
-                          className="w-3.5 h-3.5 rounded border-border/60 text-accent focus:ring-accent focus:ring-offset-surface bg-surface-elevated cursor-pointer"
-                        />
-                        <span className="text-[11px] font-medium text-text-secondary group-hover:text-text-primary transition-colors">
-                          Permitir al artista editar portada, lista y orden de canciones
-                        </span>
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                {/* Visibility toggle */}
-                <button
-                  onClick={() => updateModule(mod.id, { isVisible: !mod.isVisible })}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
-                    mod.isVisible
-                      ? 'bg-accent/10 text-accent hover:bg-accent/20'
-                      : 'bg-surface-elevated text-text-secondary hover:text-text-primary hover:bg-surface'
-                  }`}
-                >
-                  {mod.isVisible
-                    ? <><Eye className="w-3.5 h-3.5" /> Visible</>
-                    : <><EyeOff className="w-3.5 h-3.5" /> Oculto</>
-                  }
-                </button>
+        <div className="space-y-4">
+          {/* Branding */}
+          <Section title="Personalización" icon={Sparkles}>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary">Nombre del estudio</label>
+                <input value={config.producerName || ''} onChange={e => change({ producerName: e.target.value }, 900)} placeholder="EZY Studio" className="w-full h-10 bg-surface border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-accent" />
               </div>
-            );
-          })}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary">Mensaje de bienvenida</label>
+                <textarea value={config.welcomeMessage || ''} onChange={e => change({ welcomeMessage: e.target.value }, 900)} rows={4} placeholder={`Ej: ¡Hola ${artistName || ''}! Aquí tienes las últimas mezclas. Cualquier cambio, déjame un mensaje abajo.`} className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none" />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-text-primary">Mensajes del artista</p>
+                  <p className="text-[11px] text-text-secondary">Permite enviarte comentarios desde el portal</p>
+                </div>
+                <Toggle checked={config.showFeedback !== false} onChange={v => change({ showFeedback: v })} label="Mensajes del artista" />
+              </div>
+            </div>
+          </Section>
+
+          {/* Tools */}
+          <Section
+            title="Herramientas"
+            icon={Wrench}
+            action={<Toggle checked={!!config.enableTools} label="Herramientas" onChange={v => change({ enableTools: v, allowedTools: v && allowedTools.length === 0 ? PORTAL_TOOLS.map(t => t.id) : config.allowedTools })} />}
+          >
+            {!config.enableTools ? (
+              <p className="text-xs text-text-secondary">Da acceso al artista a las herramientas del estudio (descargador, conversor, recortador…) desde su portal.</p>
+            ) : (
+              <div className="space-y-1">
+                {PORTAL_TOOLS.map(tool => {
+                  const Icon = TOOL_ICONS[tool.iconName] || Wrench;
+                  const on = allowedTools.includes(tool.id);
+                  return (
+                    <button
+                      key={tool.id}
+                      type="button"
+                      onClick={() => change({ allowedTools: on ? allowedTools.filter(id => id !== tool.id) : [...allowedTools, tool.id] })}
+                      className={cn('w-full flex items-center gap-3 p-2 rounded-xl text-left transition-colors', on ? 'bg-accent/5' : 'hover:bg-surface')}
+                    >
+                      <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', tool.bg, tool.color)}><Icon className="w-4 h-4" /></span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-xs font-semibold text-text-primary truncate">{tool.name}{tool.badge ? ` · ${tool.badge}` : ''}</span>
+                        <span className="block text-[11px] text-text-secondary truncate">{tool.description}</span>
+                      </span>
+                      {on ? <CircleCheck className="w-4 h-4 text-accent shrink-0" /> : <span className="w-4 h-4 rounded-full border border-border shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
         </div>
       </div>
     </div>

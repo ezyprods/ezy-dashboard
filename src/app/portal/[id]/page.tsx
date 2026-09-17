@@ -1,1123 +1,721 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
 import {
-  Loader2, Music, CheckCircle2, Circle, Headphones, CreditCard,
-  AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
-  SkipForward, SkipBack, ChevronRight, Lock, Download, ExternalLink,
-  Star, Clock, TrendingUp, ListMusic, Eye, Wrench, Paperclip, Calendar as CalendarIcon, CheckSquare, ListTodo,
-  FolderArchive, FileText, FileImage, Film, File as FileIcon, Archive, Folder, RefreshCw, FileSpreadsheet
+  Loader2, Music, CheckCircle2, Circle, CreditCard, AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
+  ChevronRight, Lock, Download, ExternalLink, Clock, TrendingUp, ListMusic, Eye, Wrench, RefreshCw, Search, X,
+  FolderOpen, Home, Files, FileText, FileImage, Film, FolderArchive, File as FileIcon, CornerDownRight, ChevronDown,
+  Scissors, Tags, Activity, Layers, Table2,
 } from 'lucide-react';
-import { WaveformPlayer } from '@/components/projects/WaveformPlayer';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
 import { AudioConverter } from '@/components/tools/AudioConverter';
 import { AudioTrimmer } from '@/components/tools/AudioTrimmer';
 import { TagEditor } from '@/components/tools/TagEditor';
 import { BpmKeyDetector } from '@/components/tools/BpmKeyDetector';
 import { StemsSplitter } from '@/components/tools/StemsSplitter';
-import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
+import { PortalReleasePlayer } from '@/components/releases/PortalReleasePlayer';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
-import { isBrowserCompatible, getCoverArtUrl } from '@/lib/utils';
-import { Scissors, Tags, Activity, Layers } from 'lucide-react';
+import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
+import { cn, getCoverArtUrl, formatRelativeTime } from '@/lib/utils';
 
-const PORTAL_TOOL_ICONS: Record<string, any> = {
-  Download,
-  RefreshCw,
-  Scissors,
-  Tags,
-  Activity,
-  Layers,
-};
+const TOOL_ICONS: Record<string, React.ElementType> = { Download, RefreshCw, Scissors, Tags, Activity, Layers };
 
-import { PortalReleasePlayer } from '@/components/releases/PortalReleasePlayer';
-import { customAlert } from '@/lib/dialog';
+type Section = 'home' | 'files' | 'releases' | 'tools';
+type FileFilter = 'all' | 'audio' | 'other';
 
-// ─── Main Portal Page ─────────────────────────────────────────────────────────
+const AUDIO_RE = /\.(wav|mp3|m4a|flac|aiff?|ogg|opus|aac)$/i;
+const isAudio = (f: any) => (f.mimeType || '').startsWith('audio/') || AUDIO_RE.test(f.name || '');
+const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
+
+function formatSize(bytes?: string | number) {
+  const n = typeof bytes === 'string' ? parseInt(bytes, 10) : bytes;
+  if (!n || isNaN(n)) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+  return `${(n / Math.pow(1024, i)).toFixed(i >= 2 ? 1 : 0)} ${units[i]}`;
+}
+
+function fileIcon(file: any) {
+  const name = (file.name || '').toLowerCase();
+  const mime = file.mimeType || '';
+  if (mime.startsWith('image/')) return { Icon: FileImage, cls: 'text-emerald-400 bg-emerald-500/10' };
+  if (mime.startsWith('video/')) return { Icon: Film, cls: 'text-rose-400 bg-rose-500/10' };
+  if (mime.includes('pdf') || /\.(pdf|docx?|txt)$/.test(name)) return { Icon: FileText, cls: 'text-orange-400 bg-orange-500/10' };
+  if (/\.(zip|rar|7z)$/.test(name)) return { Icon: FolderArchive, cls: 'text-amber-400 bg-amber-500/10' };
+  return { Icon: FileIcon, cls: 'text-text-secondary bg-surface' };
+}
+
 export default function PortalPage() {
   const params = useParams();
-  const { playTrack } = useAudioControls();
+  const artistId = params.id as string;
+  const { currentTrack, isPlaying, playTrack } = useAudioControls();
+
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [section, setSection] = useState<Section>('home');
+  const [projectId, setProjectId] = useState<string>('all');
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<FileFilter>('all');
   const [activeReleaseId, setActiveReleaseId] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<'overview' | 'releases' | 'tools'>('overview');
   const [activeToolId, setActiveToolId] = useState<PortalToolId>('downloader');
+  const [expandedMatrix, setExpandedMatrix] = useState<string | null>(null);
+  const [composer, setComposer] = useState<{ open: boolean; trackId?: string; trackTitle?: string }>({ open: false });
 
-  const configuredAllowedTools = data?.config?.allowedTools;
-  const allowedTools: PortalToolId[] = Array.isArray(configuredAllowedTools)
-    ? configuredAllowedTools
-    : (data?.config?.enableTools ? ['downloader', 'converter', 'trimmer', 'tags', 'detector', 'stems'] : []);
-
-  useEffect(() => {
-    if (allowedTools.length > 0 && !allowedTools.includes(activeToolId)) {
-      setActiveToolId(allowedTools[0]);
-    }
-  }, [allowedTools, activeToolId]);
-
-  // Theme is now enforced by ThemeContext based on route
-
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const fetchPortal = async () => {
-    setIsLoading(true);
+  const fetchPortal = useCallback(async (silent = false) => {
+    if (silent) setIsRefreshing(true);
     try {
-      const res = await fetch(`/api/portal/${params.id}`, {
-        cache: 'no-store',
-        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
-      });
-      if (!res.ok) throw new Error('Portal no encontrado');
+      const res = await fetch(`/api/portal/${artistId}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error();
       const json = await res.json();
       setData(json);
-      // Keep the current selection on refresh when it still exists
-      if (json.projects && json.projects.length > 0) {
-        setSelectedProjectId(prev =>
-          prev && json.projects.some((p: any) => p.id === prev) ? prev : json.projects[0].id
-        );
-      }
-      if (json.releases && json.releases.length > 0) {
-        setActiveReleaseId(prev =>
-          prev && json.releases.some((r: any) => r.id === prev) ? prev : json.releases[0].id
-        );
-      }
-      // Update browser tab title
-      if (json.artist?.name) {
-        document.title = json.artist.name;
-      }
-    } catch (err) {
-      console.error(err);
+      setFailed(false);
+      if (json.artist?.name) document.title = `${json.artist.name} · Portal`;
+      setActiveReleaseId(prev => (prev && json.releases?.some((r: any) => r.id === prev) ? prev : json.releases?.[0]?.id || null));
+      setProjectId(prev => (json.projects?.some((p: any) => p.id === prev) ? prev : 'all'));
+    } catch {
+      if (!silent) setFailed(true);
+      else toast.error('No se pudo actualizar');
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, [artistId]);
+
+  useEffect(() => { fetchPortal(); }, [fetchPortal]);
+
+  const config = data?.config || {};
+  const modules: any[] = useMemo(() => (config.modules || []).filter((m: any) => m.isVisible !== false).sort((a: any, b: any) => a.order - b.order), [config.modules]);
+  const moduleOf = (type: string) => modules.find(m => m.type === type);
+  const allowedTools: PortalToolId[] = Array.isArray(config.allowedTools) ? config.allowedTools : (config.enableTools ? PORTAL_TOOLS.map(t => t.id) : []);
+  const toolsEnabled = !!config.enableTools && allowedTools.length > 0;
 
   useEffect(() => {
-    fetchPortal();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id, refreshKey]);
+    if (allowedTools.length && !allowedTools.includes(activeToolId)) setActiveToolId(allowedTools[0]);
+  }, [allowedTools, activeToolId]);
 
+  const projects: any[] = data?.projects || [];
+  const realProjects = projects.filter(p => p.id !== 'all' && p.id !== 'general');
+  const allFiles: any[] = projects.find(p => p.id === 'all')?.files || [];
+  const pending = data?.finances?.pendingPayment || 0;
+  const projectById = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
+
+  const isLocked = (file: any) => {
+    const p = file.projectId ? projectById.get(file.projectId) : null;
+    return !!(p?.requirePaymentForDownload && pending > 0);
+  };
+
+  const currentProject = projectById.get(projectId) || projects[0];
+  const visibleFiles = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (currentProject?.files || []).filter((f: any) =>
+      (filter === 'all' || (filter === 'audio' ? isAudio(f) : !isAudio(f))) && (!q || (f.name || '').toLowerCase().includes(q)));
+  }, [currentProject, query, filter]);
+
+  const play = (file: any) => {
+    playTrack({
+      id: file.id,
+      name: stripExt(file.name),
+      url: `/api/audio/${file.id}`,
+      artistName: data?.artist?.name,
+      bpm: file.bpm,
+      musicalKey: file.key,
+      pathSegments: [{ name: data?.artist?.name || 'Portal' }, ...(file.parentFolderName ? [{ name: file.parentFolderName }] : [])],
+    });
+  };
+
+  // ─── States ─────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex justify-center items-center">
+      <div className="min-h-[100dvh] bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="relative">
-            <div className="w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto">
-              <Sparkles className="w-8 h-8 text-accent animate-pulse" />
-            </div>
+          <div className="w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center mx-auto">
+            <Sparkles className="w-8 h-8 text-accent animate-pulse" />
           </div>
-          <p className="text-xs text-text-secondary font-medium tracking-widest uppercase">Cargando Portal...</p>
+          <p className="text-xs text-text-secondary font-semibold tracking-widest uppercase">Cargando tu portal…</p>
         </div>
       </div>
     );
   }
 
-  if (!data || data.error) {
+  if (failed || !data) {
     return (
-      <div className="min-h-screen bg-background text-text-primary flex justify-center items-center p-6">
-        <div className="max-w-md w-full p-8 rounded-2xl border border-red-500/20 bg-red-500/5 text-center space-y-4 backdrop-blur-xl">
-          <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
+      <div className="min-h-[100dvh] bg-background text-text-primary flex items-center justify-center p-6">
+        <div className="max-w-md w-full p-8 rounded-2xl border border-border bg-surface-elevated text-center space-y-4">
+          <AlertCircle className="w-12 h-12 text-error mx-auto" />
           <h1 className="text-2xl font-bold">Portal no disponible</h1>
-          <p className="text-text-secondary text-sm">El artista no está configurado o el enlace no es válido. Si crees que es un error, contacta a tu productor.</p>
+          <p className="text-text-secondary text-sm">El enlace no es válido o el portal no está configurado. Si crees que es un error, contacta con tu productor.</p>
+          <button type="button" onClick={() => { setIsLoading(true); fetchPortal(); }} className="h-10 px-4 rounded-xl border border-border text-sm hover:bg-surface">Reintentar</button>
         </div>
       </div>
     );
   }
 
-  const activeProject = data.projects.find((p: any) => p.id === selectedProjectId) || data.projects[0];
-  const totalTasks = activeProject?.tasks?.length || 0;
-  const completedTasks = activeProject?.tasks?.filter((t: any) => t.status === 'completed').length || 0;
-  const progressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const paywallLocked = activeProject?.requirePaymentForDownload && data.finances?.pendingPayment > 0;
-  const activeRelease = data.releases?.find((r: any) => r.id === activeReleaseId) || data.releases?.[0];
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const newThisWeek = allFiles.filter(f => (f.effectiveDate || 0) > weekAgo).length;
+  const sharedMatrices: any[] = data.sharedMatrices || [];
+  const activeMatrices = sharedMatrices.filter(m => m.stats?.total > 0 && m.stats.done < m.stats.total);
+  const avgProgress = activeMatrices.length ? Math.round(activeMatrices.reduce((s, m) => s + m.stats.percent, 0) / activeMatrices.length) : null;
 
-  const visibleModules = (data.config?.modules || []).filter((m: any) => m.isVisible !== false).sort((a: any, b: any) => a.order - b.order);
+  const navItems: { key: Section; label: string; icon: React.ElementType; show: boolean }[] = [
+    { key: 'home', label: 'Inicio', icon: Home, show: true },
+    { key: 'files', label: 'Archivos', icon: Files, show: !!moduleOf('bounces') },
+    { key: 'releases', label: 'Previews', icon: ListMusic, show: !!moduleOf('releases') && data.releases?.length > 0 },
+    { key: 'tools', label: 'Herramientas', icon: Wrench, show: toolsEnabled },
+  ];
 
-  const hasReleases = data.releases && data.releases.length > 0;
-  const hasFinances = data.finances;
-  const showSidebar = (hasReleases && visibleModules.some((m: any) => m.type === 'releases')) ||
-                      (hasFinances && visibleModules.some((m: any) => m.type === 'finances'));
-
-  const formatFileSize = (bytes?: string | number) => {
-    if (!bytes) return '';
-    const num = typeof bytes === 'string' ? parseInt(bytes, 10) : bytes;
-    if (isNaN(num) || num <= 0) return '';
-    if (num < 1024) return `${num} B`;
-    if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
-    if (num < 1024 * 1024 * 1024) return `${(num / (1024 * 1024)).toFixed(1)} MB`;
-    return `${(num / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  const openProjectFiles = (id: string) => {
+    setProjectId(id);
+    setQuery('');
+    setFilter('all');
+    setSection('files');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const formatFileDate = (timeStr?: string) => {
-    if (!timeStr) return '';
-    const date = new Date(timeStr);
-    if (isNaN(date.getTime())) return '';
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const d = pad(date.getDate());
-    const m = pad(date.getMonth() + 1);
-    const y = date.getFullYear();
-    const h = pad(date.getHours());
-    const min = pad(date.getMinutes());
-    return `${d}/${m}/${y} ${h}:${min}`;
-  };
-
-  const getFileCategory = (mimeType?: string, fileName?: string) => {
-    const name = (fileName || '').toLowerCase();
-    const mime = (mimeType || '').toLowerCase();
-
-    const AUDIO_EXTS = /\.(wav|mp3|m4a|flac|aiff|aif|ogg|opus|wma|alac)$/i;
-    if (mime.startsWith('audio/') || AUDIO_EXTS.test(name)) return 'audio';
-
-    const ARCHIVE_EXTS = /\.(zip|rar|7z|tar|gz|bz2|xz|iso)$/i;
-    if (
-      mime.includes('zip') || 
-      mime.includes('rar') || 
-      mime.includes('tar') || 
-      mime.includes('7z') || 
-      mime.includes('compressed') || 
-      mime.includes('archive') || 
-      ARCHIVE_EXTS.test(name)
-    ) return 'archive';
-
-    const IMAGE_EXTS = /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i;
-    if (mime.startsWith('image/') || IMAGE_EXTS.test(name)) return 'image';
-
-    const VIDEO_EXTS = /\.(mp4|mov|avi|mkv|webm|m4v|flv|wmv)$/i;
-    if (mime.startsWith('video/') || VIDEO_EXTS.test(name)) return 'video';
-
-    const PDF_EXTS = /\.pdf$/i;
-    if (mime.includes('pdf') || PDF_EXTS.test(name)) return 'pdf';
-
-    const DOC_EXTS = /\.(doc|docx|txt|rtf|odt|pages|md)$/i;
-    if (
-      mime.includes('document') || 
-      mime.includes('word') || 
-      mime.includes('text') || 
-      DOC_EXTS.test(name)
-    ) return 'document';
-
-    const SHEET_EXTS = /\.(xls|xlsx|csv|numbers)$/i;
-    if (mime.includes('sheet') || mime.includes('excel') || mime.includes('csv') || SHEET_EXTS.test(name)) return 'spreadsheet';
-
-    if (name.endsWith('.flp')) return 'flp';
-
-    return 'other';
-  };
-
-  const renderFileIcon = (mimeType?: string, fileName?: string) => {
-    const category = getFileCategory(mimeType, fileName);
-    if (category === 'archive') {
-      return (
-        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-sm" title="Archivo comprimido (Stems/RAR/ZIP)">
-          <FolderArchive className="w-4 h-4 md:w-3.5 md:h-3.5" />
-        </div>
-      );
-    }
-    if (category === 'image') {
-      return (
-        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-sm" title="Imagen">
-          <FileImage className="w-4 h-4 md:w-3.5 md:h-3.5" />
-        </div>
-      );
-    }
-    if (category === 'video') {
-      return (
-        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0 shadow-sm" title="Vídeo">
-          <Film className="w-4 h-4 md:w-3.5 md:h-3.5" />
-        </div>
-      );
-    }
-    if (category === 'pdf') {
-      return (
-        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 shrink-0 shadow-sm" title="Documento PDF">
-          <FileText className="w-4 h-4 md:w-3.5 md:h-3.5" />
-        </div>
-      );
-    }
-    if (category === 'spreadsheet') {
-      return (
-        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 shadow-sm" title="Hoja de cálculo">
-          <FileSpreadsheet className="w-4 h-4 md:w-3.5 md:h-3.5" />
-        </div>
-      );
-    }
-    if (category === 'document') {
-      return (
-        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-sm" title="Documento">
-          <FileText className="w-4 h-4 md:w-3.5 md:h-3.5" />
-        </div>
-      );
-    }
-    if (category === 'flp') {
-      return (
-        <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-[#ff793f]/15 border border-[#ff793f]/30 flex items-center justify-center shrink-0 shadow-sm" title="Proyecto FL Studio">
-          <svg viewBox="0 0 24 24" className="w-4 h-4 md:w-3.5 md:h-3.5 fill-[#ff793f]">
-            <path d="M12 2c1.2 1.5 1.5 3 .5 4.5 1.5-1 2.2-2.5 1.5-4.5z" fill="#2ed573" />
-            <path d="M12 5.5c-3.5 0-6 2-6 5.5 0 3.2 2 6.5 6 11 4-4.5 6-7.8 6-11 0-3.5-2.5-5.5-6-5.5z" />
-            <ellipse cx="12" cy="11" rx="1.5" ry="2" fill="#ffa502" opacity="0.7" />
-          </svg>
-        </div>
-      );
-    }
+  // ─── Pieces ─────────────────────────────────────────────────────────────
+  const FileRow = ({ file, showProject }: { file: any; showProject?: boolean }) => {
+    const audio = isAudio(file);
+    const active = currentTrack?.id === file.id;
+    const playing = active && isPlaying;
+    const locked = isLocked(file);
+    const { Icon, cls } = fileIcon(file);
+    const date = file.effectiveDate ? new Date(file.effectiveDate) : null;
     return (
-      <div className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-surface border border-border flex items-center justify-center text-text-secondary shrink-0 shadow-sm">
-        <FileIcon className="w-4 h-4 md:w-3.5 md:h-3.5" />
-      </div>
-    );
-  };
-
-  const renderNonAudioFile = (file: any, keyVal?: string) => {
-    const isViewableInBrowser = isBrowserCompatible(file.mimeType) || file.mimeType?.startsWith('image/') || file.mimeType?.startsWith('video/') || file.mimeType?.includes('pdf');
-    const sizeFormatted = formatFileSize(file.size);
-    const dateFormatted = formatFileDate(file.modifiedTime || file.createdTime);
-
-    return (
-      <div key={keyVal || file.id} className="flex flex-col gap-2 w-full min-w-0">
-        <div
-          className="py-2 px-3 rounded-xl border border-border/60 bg-surface-elevated/40 hover:bg-surface-elevated/70 hover:border-accent/40 flex items-center justify-between gap-4 transition-all group/file shadow-sm hover:shadow-md"
-        >
-          <div className="flex flex-col w-full gap-2">
-            <div className="flex items-center gap-3 w-full">
-              {renderFileIcon(file.mimeType, file.name)}
-
-              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className="text-[13px] font-semibold text-text-primary truncate max-w-full group-hover/file:text-accent transition-colors"
-                    title={file.name}
-                  >
-                    {file.name}
-                  </span>
-                  {file.expiresAt && (
-                    <RealtimeCountdown expiresAt={file.expiresAt} />
-                  )}
-                  {sizeFormatted && (
-                    <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0">
-                      {sizeFormatted}
-                    </span>
-                  )}
-                  {dateFormatted && (
-                    <span className="text-[10px] text-text-secondary font-mono bg-surface/60 px-1.5 py-0.5 rounded border border-border/30 shrink-0 hidden sm:inline-block">
-                      {dateFormatted}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-0.5 md:gap-1.5 shrink-0">
-                {paywallLocked ? (
-                  <button
-                    onClick={() => customAlert('Descarga bloqueada. Tienes pagos pendientes.')}
-                    className="p-2 md:p-1.5 text-warning hover:text-warning/80 rounded-md hover:bg-warning/10 transition-all"
-                    title="Pago pendiente"
-                  >
-                    <Lock className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                  </button>
-                ) : (
-                  <>
-                    {isViewableInBrowser && (
-                      <a
-                        href={`/api/files/${file.id}?inline=true`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
-                        title="Ver archivo"
-                      >
-                        <Eye className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                      </a>
-                    )}
-                    <a
-                      href={`/api/files/${file.id}?inline=false`}
-                      download={file.name}
-                      className="p-2 md:p-1.5 text-text-secondary hover:text-accent-light rounded-md hover:bg-surface transition-all"
-                      title="Descargar archivo"
-                    >
-                      <Download className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                    </a>
-                  </>
-                )}
-
-                {!paywallLocked && (
-                  <a
-                    href={file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 md:p-1.5 text-text-secondary hover:text-accent rounded-md hover:bg-surface transition-all"
-                    title="Abrir en Google Drive"
-                  >
-                    <ExternalLink className="w-4 h-4 md:w-3.5 md:h-3.5" />
-                  </a>
-                )}
-              </div>
-            </div>
-
-            <div className="w-full h-3 md:h-1 bg-border/20 rounded-full overflow-hidden">
-              <div className="w-full h-full bg-gradient-to-r from-accent/20 to-transparent" />
-            </div>
+      <div className={cn('group flex items-center gap-3 px-3 md:px-4 py-2.5 transition-colors', active ? 'bg-accent/5' : 'hover:bg-surface/60')}>
+        {audio ? (
+          <button type="button" onClick={() => play(file)} className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all', active ? 'bg-accent text-white shadow-md shadow-accent/30' : 'bg-violet-500/10 text-violet-400 hover:bg-accent hover:text-white')} aria-label={playing ? 'Pausar' : 'Reproducir'}>
+            {playing ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current translate-x-px" />}
+          </button>
+        ) : (
+          <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', cls)}><Icon className="w-5 h-5" /></span>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className={cn('text-sm font-medium truncate', active ? 'text-accent' : 'text-text-primary')} title={file.name}>{audio ? stripExt(file.name) : file.name}</p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-secondary">
+            {date && <span>{formatRelativeTime(date.toISOString())}</span>}
+            {file.size && <span>· {formatSize(file.size)}</span>}
+            {file.bpm && <span className="font-mono font-bold text-amber-400">{file.bpm} BPM</span>}
+            {file.key && <span className="font-mono font-bold text-violet-400">{file.key}</span>}
+            {showProject && file.parentFolderName && <span className="truncate max-w-[180px]">· {file.parentFolderName}</span>}
+            {file.expiresAt && <RealtimeCountdown expiresAt={file.expiresAt} />}
           </div>
         </div>
-      </div>
-    );
-  };
-
-  const renderBounces = () => {
-    const mod = visibleModules.find((m: any) => m.type === 'bounces');
-    if (!mod || !activeProject) return null;
-    const filesList = activeProject.bounces || activeProject.files || [];
-
-    return (
-      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-6 flex flex-col gap-4 shadow-sm">
-        <div className="flex items-center justify-between pb-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <FolderArchive className="w-5 h-5 text-accent" />
-            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Últimas Mezclas y Archivos'}</h3>
-            {filesList.length > 0 && (
-              <span className="text-[10px] bg-accent/15 text-accent px-2 py-0.5 rounded-full font-bold">
-                {filesList.length}
-              </span>
-            )}
-          </div>
-          {paywallLocked && (
-            <div className="flex items-center gap-1.5 text-[10px] text-warning bg-[#fdcb6e]/10 border border-[#fdcb6e]/20 px-2.5 py-1 rounded-full font-semibold">
-              <Lock className="w-3 h-3" /> Descarga bloqueada
-            </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {config.showFeedback !== false && (
+            <button type="button" onClick={() => setComposer({ open: true, trackId: file.id, trackTitle: stripExt(file.name) })} className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface md:opacity-0 md:group-hover:opacity-100 focus:opacity-100" title="Comentar este archivo" aria-label="Comentar">
+              <MessageSquare className="w-4 h-4" />
+            </button>
+          )}
+          {!audio && !locked && (
+            <a href={`/api/files/${file.id}?inline=true`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-text-secondary hover:text-accent hover:bg-surface" title="Ver" aria-label="Ver"><Eye className="w-4 h-4" /></a>
+          )}
+          {locked ? (
+            <span className="w-9 h-9 rounded-lg flex items-center justify-center text-warning" title="Descarga disponible cuando el pago esté completado"><Lock className="w-4 h-4" /></span>
+          ) : (
+            <a href={`/api/files/${file.id}?download=true`} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface" title="Descargar" aria-label="Descargar"><Download className="w-4 h-4" /></a>
           )}
         </div>
-
-        {filesList && filesList.length > 0 ? (
-          <div className="space-y-3">
-            {[...filesList].sort((a, b) => {
-              const getEffectiveDate = (f: any) => {
-                const match = (f.name || '').match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
-                if (match) {
-                  const [, day, month, year] = match;
-                  const parsed = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)).getTime();
-                  if (!isNaN(parsed) && parsed > 0) return parsed;
-                }
-                return new Date(f.modifiedTime || f.createdTime || 0).getTime();
-              };
-              return getEffectiveDate(b) - getEffectiveDate(a);
-            }).map((file: any) => {
-              const isAudio = getFileCategory(file.mimeType, file.name) === 'audio';
-              if (isAudio) {
-                return (
-                  <WaveformPlayer
-                    key={file.id}
-                    fileId={file.id}
-                    fileName={file.name}
-                    artistName={data.artist.name}
-                    isPortal={true}
-                    paywallLocked={paywallLocked}
-                    modifiedTime={file.modifiedTime}
-                    expiresAt={file.expiresAt}
-                    bpm={file.bpm}
-                    trackKey={file.key}
-                  />
-                );
-              }
-              return renderNonAudioFile(file, file.id);
-            })}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-16 text-center bg-white/2 rounded-xl border border-dashed border-border">
-            <Music className="w-10 h-10 text-text-secondary opacity-40 mb-2" />
-            <p className="text-sm text-text-secondary italic">No hay archivos disponibles para este proyecto.</p>
-          </div>
-        )}
       </div>
     );
   };
 
-  const renderTasks = () => {
-    const mod = visibleModules.find((m: any) => m.type === 'tasks');
-    if (!mod) return null;
+  const statusIcon = (status: string) => status === 'done' ? <CheckCircle2 className="w-3.5 h-3.5 text-success" /> : status === 'in_progress' ? <Clock className="w-3.5 h-3.5 text-accent" /> : status === 'review' ? <Eye className="w-3.5 h-3.5 text-warning" /> : <Circle className="w-3.5 h-3.5 text-text-secondary/50" />;
+  const statusLabel: Record<string, string> = { todo: 'Pendiente', in_progress: 'En progreso', review: 'Revisión', done: 'Hecho' };
 
-    const isMatrixCompleted = (m: any) => {
-      const cols = m.productionGrid?.columns || [];
-      const rows = m.productionGrid?.rows || [];
-      if (cols.length === 0 || rows.length === 0) return false;
-      let hasTrackable = false;
-      const allDone = rows.every((r: any) => 
-        cols.every((c: any) => {
-          if (!c.type || c.type === 'status' || c.type === 'file') {
-            hasTrackable = true;
-            return r.cells?.[c.id]?.status === 'done';
-          }
-          return true;
-        })
-      );
-      return hasTrackable && allDone;
-    };
-
-    // Sólo mostrar matrices que NO estén 100% completadas (siempre visibles, sin importar la carpeta seleccionada)
-    const matrices = (data.sharedMatrices || []).filter((m: any) => !isMatrixCompleted(m));
-    const projectTasks = activeProject?.tasks || [];
-
-    let totalMatrixTasks = 0;
-    let completedMatrixTasks = 0;
-    matrices.forEach((matrix: any) => {
-      const columns = matrix.productionGrid?.columns || [];
-      const rows = matrix.productionGrid?.rows || [];
-      const trackableCols = columns.filter((c: any) => !c.type || c.type === 'status' || c.type === 'file');
-      totalMatrixTasks += trackableCols.length * rows.length;
-      rows.forEach((row: any) => {
-        trackableCols.forEach((col: any) => {
-          if (row.cells?.[col.id]?.status === 'done') {
-            completedMatrixTasks++;
-          }
-        });
-      });
-    });
-
-    const hasProjectTasks = projectTasks.length > 0;
-    const hasMatrices = matrices.length > 0;
-
-    if (!hasProjectTasks && !hasMatrices) {
+  const renderHomeModule = (mod: any) => {
+    if (mod.type === 'bounces') {
+      const latest = allFiles.slice(0, 8);
       return (
-        <div key={mod.id} className="bg-surface rounded-2xl border border-border p-6 flex flex-col gap-4 shadow-sm">
-          <div className="flex items-center gap-2 pb-3 border-b border-border">
-            <CheckCircle2 className="w-5 h-5 text-accent" />
-            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Estado del Trabajo'}</h3>
+        <section key={mod.id} className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
+          <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
+            <Music className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Últimas mezclas y archivos'}</h2>
+            <button type="button" onClick={() => openProjectFiles('all')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5">Ver todo <ChevronRight className="w-3.5 h-3.5" /></button>
           </div>
-          <div className="flex flex-col items-center justify-center py-16 text-center bg-white/2 rounded-xl border border-dashed border-border">
-            <CheckCircle2 className="w-10 h-10 text-text-secondary opacity-40 mb-2" />
-            <p className="text-sm text-text-secondary italic">No hay tareas ni matrices asignadas para este proyecto.</p>
-          </div>
-        </div>
+          {latest.length === 0 ? (
+            <p className="text-sm text-text-secondary text-center py-10">Todavía no hay archivos. Tu productor los subirá aquí.</p>
+          ) : (
+            <div className="divide-y divide-border/40">{latest.map(f => <FileRow key={f.id} file={f} showProject />)}</div>
+          )}
+          {realProjects.length > 0 && (
+            <div className="border-t border-border/60 p-3 md:p-4">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-text-secondary mb-2 px-1">Proyectos</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {projects.filter(p => p.id !== 'all').map(p => (
+                  <button key={p.id} type="button" onClick={() => openProjectFiles(p.id)} className="text-left rounded-xl border border-border bg-surface/40 hover:border-accent/40 hover:bg-surface p-3 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-accent shrink-0" />
+                      <span className="text-sm font-semibold text-text-primary truncate flex-1">{p.title}</span>
+                      {p.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-success shrink-0" />}
+                    </div>
+                    <p className="text-[11px] text-text-secondary mt-1">{p.files.length} archivo{p.files.length === 1 ? '' : 's'}{p.lastActivity ? ` · ${formatRelativeTime(new Date(p.lastActivity).toISOString())}` : ''}</p>
+                    {typeof p.progress === 'number' && (
+                      <div className="mt-2 h-1.5 rounded-full bg-surface overflow-hidden"><div className="h-full bg-accent rounded-full" style={{ width: `${p.progress}%` }} /></div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
       );
     }
 
-    return (
-      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-6 flex flex-col gap-5 shadow-sm">
-        <div className="flex items-center gap-2 pb-3 border-b border-border">
-          <CheckCircle2 className="w-5 h-5 text-accent" />
-          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Estado del Trabajo'}</h3>
-        </div>
-
-        {hasProjectTasks && (
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-widest">Tareas del Proyecto</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {projectTasks.map((t: any) => (
-                <div key={t.id} className="flex items-center gap-3 p-3 rounded-xl border border-border/60 bg-surface-elevated/40">
-                  {t.status === 'completed' ? (
-                    <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                  ) : (
-                    <Circle className="w-4 h-4 text-text-secondary/50 shrink-0" />
-                  )}
-                  <span className={`text-xs font-medium ${t.status === 'completed' ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
-                    {t.title}
-                  </span>
-                </div>
-              ))}
-            </div>
+    if (mod.type === 'tasks') {
+      if (sharedMatrices.length === 0) return null;
+      return (
+        <section key={mod.id} className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
+          <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
+            <TrendingUp className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Estado del trabajo'}</h2>
           </div>
-        )}
-
-        {hasMatrices && (
-          <div className="space-y-6">
-            {totalMatrixTasks > 0 && (
-              <div className="flex items-center gap-4 bg-surface-elevated/30 p-4 rounded-xl border border-border/50">
-                <div className="relative w-14 h-14 shrink-0">
-                  <svg className="w-full h-full -rotate-90" viewBox="0 0 56 56">
-                    <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="6" />
-                    <circle
-                      cx="28" cy="28" r="22" fill="none"
-                      stroke="url(#progressGradTasks)" strokeWidth="6"
-                      strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 22}`}
-                      strokeDashoffset={`${2 * Math.PI * 22 * (1 - (totalMatrixTasks > 0 ? Math.round((completedMatrixTasks / totalMatrixTasks) * 100) : 0) / 100)}`}
-                      className="transition-all duration-1000"
-                    />
-                    <defs>
-                      <linearGradient id="progressGradTasks" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#6c5ce7" />
-                        <stop offset="100%" stopColor="#a29bfe" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-text-primary">
-                    {totalMatrixTasks > 0 ? Math.round((completedMatrixTasks / totalMatrixTasks) * 100) : 0}%
-                  </span>
-                </div>
-                <div>
-                  <p className="text-text-primary font-bold text-sm">Seguimiento de Producción</p>
-                  <p className="text-xs text-text-secondary">{completedMatrixTasks} de {totalMatrixTasks} tareas de la matriz completadas</p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-6">
-              {matrices.map((matrix: any) => (
-                <div key={matrix.id} className="bg-background rounded-xl border border-border overflow-hidden">
-                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest p-4 pb-2 bg-surface-elevated/40 border-b border-border/40">{matrix.name}</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-border bg-surface-elevated/20">
-                          <th className="p-3 text-text-secondary font-bold">Elemento</th>
-                          {matrix.productionGrid?.columns?.map((col: any) => (
-                            <th key={col.id} className="p-3 text-text-secondary font-bold text-center">{col.name}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {matrix.productionGrid?.rows?.map((row: any) => (
-                          <tr key={row.id} className="border-b border-border hover:bg-surface-elevated/10 transition-colors">
-                            <td className="p-3 font-semibold text-text-primary">
-                              <div className="flex items-center gap-2">
-                                {row.linkedFile && (
-                                  <div className="flex items-center gap-1 shrink-0 bg-surface-elevated px-1.5 py-0.5 rounded border border-border/50">
-                                    {(row.linkedFile.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(row.linkedFile.name)) && (
-                                      <button onClick={(e) => { e.stopPropagation(); playTrack({ id: row.linkedFile.id, name: row.name || row.linkedFile.name, url: `/api/audio/${row.linkedFile.id}`, artistName: data?.artist?.name || 'Artista' }); }} className="text-accent hover:text-accent-light transition-colors" title="Reproducir audio">
-                                        <Play className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                    {row.linkedFile.webViewLink && (
-                                      <a href={isBrowserCompatible(row.linkedFile.mimeType) ? `/api/files/${row.linkedFile.id}?inline=true` : row.linkedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="text-text-secondary hover:text-text-primary transition-colors" title="Ver en Navegador">
-                                        <ExternalLink className="w-3.5 h-3.5" />
-                                      </a>
-                                    )}
-                                    {row.linkedFile.webContentLink && (
-                                      <a href={`/api/files/${row.linkedFile.id}?inline=false`} className="text-text-secondary hover:text-text-primary transition-colors" title="Descargar archivo">
-                                        <Download className="w-3.5 h-3.5" />
-                                      </a>
+          <div className="divide-y divide-border/50">
+            {sharedMatrices.map(m => {
+              const open = expandedMatrix === m.id;
+              const cols = m.productionGrid?.columns || [];
+              const rows = m.productionGrid?.rows || [];
+              return (
+                <div key={m.id}>
+                  <button type="button" onClick={() => setExpandedMatrix(open ? null : m.id)} className="w-full flex items-center gap-3 px-4 md:px-5 py-3 text-left hover:bg-surface/50">
+                    <span className="w-9 h-9 rounded-xl bg-accent/10 text-accent flex items-center justify-center shrink-0"><Table2 className="w-4 h-4" /></span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-text-primary truncate">{m.name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex-1 h-1.5 rounded-full bg-surface overflow-hidden"><div className={cn('h-full rounded-full', m.stats.percent === 100 ? 'bg-success' : 'bg-accent')} style={{ width: `${m.stats.percent}%` }} /></div>
+                        <span className="text-xs font-bold text-text-primary w-10 text-right">{m.stats.percent}%</span>
+                      </div>
+                    </div>
+                    <ChevronDown className={cn('w-4 h-4 text-text-secondary transition-transform shrink-0', open && 'rotate-180')} />
+                  </button>
+                  {open && (
+                    <div className="px-2 md:px-4 pb-4 animate-fade-in">
+                      {/* Phone: one card per song */}
+                      <div className="md:hidden space-y-2">
+                        {rows.map((row: any) => (
+                          <div key={row.id} className="rounded-xl border border-border p-3">
+                            <p className="text-sm font-semibold text-text-primary mb-2">{row.name}</p>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {cols.filter((c: any) => !c.type || c.type === 'status' || c.type === 'file').map((c: any) => {
+                                const cell = row.cells?.[c.id] || {};
+                                return (
+                                  <div key={c.id} className="flex items-center gap-1.5 text-[11px] text-text-secondary min-w-0">
+                                    {statusIcon(cell.status || 'todo')}<span className="truncate">{c.name}</span>
+                                    {c.type === 'file' && cell.fileId && isAudio({ name: cell.fileName }) && (
+                                      <button type="button" onClick={() => play({ id: cell.fileId, name: cell.fileName })} className="text-accent ml-auto" aria-label="Reproducir"><Play className="w-3 h-3" /></button>
                                     )}
                                   </div>
-                                )}
-                                <span className="truncate">{row.name}</span>
-                              </div>
-                            </td>
-                            {matrix.productionGrid?.columns?.map((col: any) => {
-                              const cell = row.cells?.[col.id] || {};
-                              const colType = col.type || 'status';
-
-                              if (colType === 'file') {
-                                const isAudio = cell.fileName?.match(/\.(mp3|wav|m4a|aac|flac|ogg)$/i);
-                                return (
-                                  <td key={col.id} className="p-3 text-center">
-                                    {cell.fileId ? (
-                                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface border border-border text-xs max-w-[180px]">
-                                        {isAudio && (
-                                          <button 
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              playTrack({
-                                                id: cell.fileId,
-                                                name: cell.fileName?.replace(/\.[^/.]+$/, '') || 'Audio',
-                                                url: `/api/audio/${cell.fileId}`,
-                                                artistName: data?.artist?.name || 'Artista'
-                                              });
-                                            }}
-                                            className="text-accent hover:text-accent-light shrink-0"
-                                            title="Reproducir"
-                                          >
-                                            <Play className="w-3 h-3" />
-                                          </button>
-                                        )}
-                                        <span className="truncate" title={cell.fileName}>{cell.fileName}</span>
-                                        <a 
-                                          href={`/api/files/${cell.fileId}?inline=false`} 
-                                          className="text-text-secondary hover:text-text-primary ml-1 shrink-0"
-                                          title="Descargar"
-                                        >
-                                          <Download className="w-3 h-3" />
-                                        </a>
-                                      </div>
-                                    ) : (
-                                      <span className="text-text-secondary/40 text-[11px]">-</span>
-                                    )}
-                                  </td>
                                 );
-                              }
-
-                              if (colType === 'checklist') {
-                                const list = cell.checklist || [];
-                                const total = list.length;
-                                const done = list.filter((item: any) => item.done).length;
-                                return (
-                                  <td key={col.id} className="p-3 text-center">
-                                    {total > 0 ? (
-                                      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface border border-border text-[11px] font-medium text-text-secondary">
-                                        <ListTodo className="w-3 h-3 text-accent" />
-                                        <span>{done}/{total}</span>
-                                      </span>
-                                    ) : (
-                                      <span className="text-text-secondary/40 text-[11px]">-</span>
-                                    )}
-                                  </td>
-                                );
-                              }
-
-                              if (colType === 'text') {
-                                const val = cell.textValue || cell.notes;
-                                return (
-                                  <td key={col.id} className="p-3 text-center">
-                                    {val ? (
-                                      <span className="text-xs text-text-primary truncate max-w-[160px] inline-block" title={val}>
-                                        {val}
-                                      </span>
-                                    ) : (
-                                      <span className="text-text-secondary/40 text-[11px]">-</span>
-                                    )}
-                                  </td>
-                                );
-                              }
-
-                              if (colType === 'date') {
-                                return (
-                                  <td key={col.id} className="p-3 text-center">
-                                    {cell.dueDate ? (
-                                      <span className="inline-flex items-center gap-1 text-[11px] text-text-secondary font-medium">
-                                        <CalendarIcon className="w-3 h-3 text-text-secondary" />
-                                        {cell.dueDate}
-                                      </span>
-                                    ) : (
-                                      <span className="text-text-secondary/40 text-[11px]">-</span>
-                                    )}
-                                  </td>
-                                );
-                              }
-
-                              // Default status column
-                              const status = cell.status || 'todo';
-                              const statusStyles: Record<string, string> = {
-                                todo: 'border-border bg-surface text-text-secondary',
-                                in_progress: 'border-accent/25 bg-accent/5 text-accent-light',
-                                review: 'border-warning/25 bg-warning/5 text-warning',
-                                done: 'border-success/25 bg-success/5 text-success'
-                              };
-                              const statusLabels: Record<string, string> = {
-                                todo: 'Pendiente', in_progress: 'En progreso',
-                                review: 'Revisión', done: 'Hecho'
-                              };
-                              const IconMap: Record<string, any> = {
-                                todo: Circle,
-                                in_progress: Clock,
-                                review: Eye,
-                                done: CheckCircle2
-                              };
-                              const StatusIcon = IconMap[status] || Circle;
-
-                              return (
-                                <td key={col.id} className="p-3 text-center">
-                                  <span className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold w-28 text-center transition-all ${statusStyles[status] || statusStyles.todo}`}>
-                                    <StatusIcon className="w-3.5 h-3.5 shrink-0" />
-                                    {statusLabels[status] || 'Pendiente'}
-                                  </span>
-                                </td>
-                              );
-                            })}
-                          </tr>
+                              })}
+                            </div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </div>
+                      {/* Desktop: table */}
+                      <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-surface/60 border-b border-border">
+                              <th className="text-left font-semibold text-text-secondary p-2.5">Tema</th>
+                              {cols.map((c: any) => <th key={c.id} className="text-left font-semibold text-text-secondary p-2.5 whitespace-nowrap">{c.name}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row: any) => (
+                              <tr key={row.id} className="border-b border-border/50 last:border-b-0">
+                                <td className="p-2.5 font-semibold text-text-primary whitespace-nowrap">{row.name}</td>
+                                {cols.map((c: any) => {
+                                  const cell = row.cells?.[c.id] || {};
+                                  const type = c.type || 'status';
+                                  if (type === 'file') {
+                                    return (
+                                      <td key={c.id} className="p-2.5">
+                                        {cell.fileId ? (
+                                          <span className="inline-flex items-center gap-1.5 max-w-[180px]">
+                                            {isAudio({ name: cell.fileName }) && <button type="button" onClick={() => play({ id: cell.fileId, name: cell.fileName })} className="text-accent shrink-0" aria-label="Reproducir"><Play className="w-3.5 h-3.5" /></button>}
+                                            <span className="truncate" title={cell.fileName}>{cell.fileName}</span>
+                                          </span>
+                                        ) : <span className="text-text-secondary/40">—</span>}
+                                      </td>
+                                    );
+                                  }
+                                  if (type === 'checklist') {
+                                    const list = cell.checklist || [];
+                                    return <td key={c.id} className="p-2.5 text-text-secondary">{list.length ? `${list.filter((i: any) => i.done).length}/${list.length}` : '—'}</td>;
+                                  }
+                                  if (type === 'text') return <td key={c.id} className="p-2.5 text-text-primary max-w-[180px] truncate" title={cell.textValue || cell.notes}>{cell.textValue || cell.notes || <span className="text-text-secondary/40">—</span>}</td>;
+                                  if (type === 'date') return <td key={c.id} className="p-2.5 text-text-secondary whitespace-nowrap">{cell.dueDate || '—'}</td>;
+                                  return <td key={c.id} className="p-2.5"><span className="inline-flex items-center gap-1.5 whitespace-nowrap">{statusIcon(cell.status || 'todo')}{statusLabel[cell.status || 'todo']}</span></td>;
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
-        )}
-      </div>
-    );
-  };
+        </section>
+      );
+    }
 
-  const renderFinances = () => {
-    const mod = visibleModules.find((m: any) => m.type === 'finances');
-    if (!mod || !data.finances) return null;
-    const pct = data.finances.totalBudget > 0
-      ? Math.round((data.finances.totalPaid / data.finances.totalBudget) * 100)
-      : 0;
-    return (
-      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 space-y-4 shadow-sm">
-        <div className="flex items-center gap-2 pb-3 border-b border-border">
-          <CreditCard className="w-5 h-5 text-accent" />
-          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Resumen Financiero'}</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-text-secondary font-medium">Presupuesto Total</span>
-            <span className="font-bold text-sm text-text-primary">{data.finances.totalBudget}€</span>
+    if (mod.type === 'releases') {
+      if (!data.releases?.length) return null;
+      return (
+        <section key={mod.id} className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
+          <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
+            <Disc className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Previews y lanzamientos'}</h2>
+            <button type="button" onClick={() => setSection('releases')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5">Abrir <ChevronRight className="w-3.5 h-3.5" /></button>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-text-secondary font-medium">Total Abonado</span>
-            <span className="font-bold text-sm text-success">{data.finances.totalPaid}€</span>
-          </div>
-
-          <div className="pt-1">
-            <div className="h-2 bg-surface-elevated rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-success to-emerald-400 rounded-full transition-all duration-1000"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-text-secondary mt-1 text-right font-medium">{pct}% liquidado</p>
-          </div>
-
-          <div className="flex justify-between items-center pt-3 border-t border-border">
-            <span className="text-xs font-semibold text-text-primary">Pendiente</span>
-            <span className={`text-lg font-black ${data.finances.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
-              {data.finances.pendingPayment}€
-            </span>
-          </div>
-          {data.finances.pendingPayment > 0 && (
-            <p className="text-[10px] text-warning flex items-center gap-1.5 bg-[#fdcb6e]/8 border border-[#fdcb6e]/15 p-2.5 rounded-xl">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              Listo para facturación y cobro final.
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderReleases = () => {
-    const mod = visibleModules.find((m: any) => m.type === 'releases');
-    if (!mod || !data.releases || data.releases.length === 0) return null;
-    return (
-      <div key={mod.id} className="bg-surface rounded-2xl border border-border p-5 space-y-4 shadow-sm">
-        <div className="flex items-center justify-between pb-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Disc className="w-5 h-5 text-accent" />
-            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">{mod.title || 'Previews'}</h3>
-          </div>
-          <button
-            onClick={() => setActiveSection('releases')}
-            className="text-[10px] text-accent hover:text-accent-light font-bold flex items-center gap-0.5 transition-colors"
-          >
-            Ver todas <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-        <div className="space-y-2.5">
-          {data.releases.slice(0, 3).map((r: any) => (
-            <button
-              key={r.id}
-              onClick={() => { setActiveReleaseId(r.id); setActiveSection('releases'); }}
-              className="w-full flex items-center gap-3 p-2.5 rounded-xl border border-border hover:border-accent/30 hover:bg-accent/5 transition-all text-left group"
-            >
-              <div className="w-10 h-10 rounded-lg overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
-                {r.coverArtId
-                  ? <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" />
-                  : <Disc className="w-5 h-5 text-text-secondary/40" />
-                }
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-text-primary truncate">{r.title}</p>
-                <p className="text-[10px] text-text-secondary">{r.tracks?.length || 0} canciones</p>
-              </div>
-              <Play className="w-4 h-4 text-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const mainModules = visibleModules.filter((m: any) => m.type === 'bounces' || m.type === 'tasks');
-
-  return (
-    <div className="h-screen overflow-y-auto overflow-x-hidden bg-background text-text-primary font-sans antialiased selection:bg-accent/30 relative">
-      {/* Ambient glow */}
-      <div className="fixed top-0 left-0 right-0 h-96 bg-gradient-to-b from-[#6c5ce7]/8 to-transparent pointer-events-none z-0" />
-      <div className="fixed top-40 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-accent/5 blur-[100px] rounded-full pointer-events-none z-0" />
-
-      {/* Header */}
-      <header className="border-b border-border bg-surface/90 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-[1600px] w-[95%] mx-auto px-5 py-3.5 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center border border-[#6c5ce7]/25">
-              <Sparkles className="w-4.5 h-4.5 text-accent-light" />
-            </div>
-            <div>
-              <p className="text-[9px] text-accent font-bold uppercase tracking-[0.15em]">Portal de</p>
-              <h1 className="text-lg font-bold text-text-primary leading-tight">{data.artist.name}</h1>
-            </div>
-          </div>
-
-          {/* Nav tabs */}
-          <div className="flex items-center gap-1 bg-surface-elevated rounded-xl p-1">
-            {[
-              { key: 'overview', label: 'Overview', icon: TrendingUp },
-              ...(data.releases?.length > 0 ? [{ key: 'releases', label: 'Previews', icon: ListMusic }] : []),
-              ...(data.config?.enableTools && allowedTools.length > 0 ? [{ key: 'tools', label: 'Herramientas', icon: Wrench }] : []),
-            ].map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setActiveSection(key as any)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeSection === key
-                    ? 'bg-accent text-white shadow-lg shadow-[#6c5ce7]/20'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span className="hidden sm:block">{label}</span>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-3 md:p-4">
+            {data.releases.map((r: any) => (
+              <button key={r.id} type="button" onClick={() => { setActiveReleaseId(r.id); setSection('releases'); }} className="text-left group">
+                <div className="aspect-square rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center">
+                  {r.coverArtId ? <img src={getCoverArtUrl(r.coverArtId, 400)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Disc className="w-10 h-10 text-text-secondary/30" />}
+                </div>
+                <p className="text-sm font-semibold text-text-primary truncate mt-2">{r.title}</p>
+                <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones</p>
               </button>
             ))}
           </div>
+        </section>
+      );
+    }
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setRefreshKey(k => k + 1)}
-              className="flex items-center gap-1.5 text-xs text-text-secondary px-3 py-1.5 rounded-full bg-surface-elevated border border-border hover:border-accent/40 hover:text-accent transition-all"
-              title="Actualizar archivos"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="font-medium hidden sm:block">Actualizar</span>
-            </button>
-            <div className="flex items-center gap-2 text-xs text-text-secondary px-3 py-1.5 rounded-full bg-surface-elevated border border-border">
-              <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-              <span className="font-medium hidden sm:block">Seguro</span>
-            </div>
+    if (mod.type === 'finances') {
+      const f = data.finances;
+      if (!f || !f.totalBudget) return null;
+      const pct = Math.min(100, Math.round((f.totalPaid / f.totalBudget) * 100));
+      return (
+        <section key={mod.id} className="rounded-2xl border border-border bg-surface-elevated p-4 md:p-5 space-y-3">
+          <div className="flex items-center gap-2"><CreditCard className="w-4 h-4 text-accent" /><h2 className="text-sm font-bold flex-1">{mod.title || 'Resumen financiero'}</h2></div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-surface p-3"><p className="text-lg font-black">{f.totalBudget}€</p><p className="text-[11px] text-text-secondary">Presupuesto</p></div>
+            <div className="rounded-xl bg-surface p-3"><p className="text-lg font-black text-success">{f.totalPaid}€</p><p className="text-[11px] text-text-secondary">Pagado</p></div>
+            <div className="rounded-xl bg-surface p-3"><p className={cn('text-lg font-black', f.pendingPayment > 0 ? 'text-warning' : 'text-success')}>{f.pendingPayment}€</p><p className="text-[11px] text-text-secondary">Pendiente</p></div>
           </div>
+          <div className="h-2 rounded-full bg-surface overflow-hidden"><div className="h-full rounded-full bg-success" style={{ width: `${pct}%` }} /></div>
+        </section>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="min-h-[100dvh] bg-background text-text-primary antialiased selection:bg-accent/30">
+      <div className="fixed inset-x-0 top-0 h-80 bg-gradient-to-b from-accent/10 to-transparent pointer-events-none" />
+
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-accent/15 border border-accent/25 flex items-center justify-center shrink-0">
+            {data.artist.photoUrl ? <img src={data.artist.photoUrl} alt="" className="w-full h-full object-cover" /> : <span className="text-sm font-black text-accent">{(data.artist.name || '?').slice(0, 2).toUpperCase()}</span>}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-accent truncate">{data.producerName || 'EZY Studio'}</p>
+            <h1 className="text-base font-bold leading-tight truncate">{data.artist.name}</h1>
+          </div>
+          <nav className="hidden md:flex items-center gap-1 bg-surface-elevated rounded-xl p-1 border border-border/60">
+            {navItems.filter(n => n.show).map(({ key, label, icon: Icon }) => (
+              <button key={key} type="button" onClick={() => setSection(key)} className={cn('h-9 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors', section === key ? 'bg-accent text-white shadow-sm' : 'text-text-secondary hover:text-text-primary')}>
+                <Icon className="w-4 h-4" /> {label}
+              </button>
+            ))}
+          </nav>
+          <button type="button" onClick={() => fetchPortal(true)} className="w-10 h-10 rounded-xl border border-border flex items-center justify-center text-text-secondary hover:text-accent" aria-label="Actualizar" title="Actualizar">
+            <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+          </button>
         </div>
+        {/* Mobile nav */}
+        <nav className="md:hidden flex items-center gap-1 px-3 pb-2 overflow-x-auto scrollbar-hide">
+          {navItems.filter(n => n.show).map(({ key, label, icon: Icon }) => (
+            <button key={key} type="button" onClick={() => setSection(key)} className={cn('h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shrink-0', section === key ? 'bg-accent text-white' : 'bg-surface-elevated text-text-secondary border border-border/60')}>
+              <Icon className="w-4 h-4" /> {label}
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <main className="max-w-[1600px] w-[95%] mx-auto px-5 py-8 relative z-10">
-
-        {/* ── OVERVIEW SECTION ── */}
-        {activeSection === 'overview' && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Stats row */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><Music className="w-3.5 h-3.5 text-accent" /> Proyectos</p>
-                <p className="text-2xl font-black text-text-primary">{data.projects.length}</p>
-                <p className="text-[10px] text-text-secondary mt-0.5">activos</p>
-              </div>
-              <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
-                <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-accent" /> Progreso</p>
-                <p className="text-2xl font-black text-accent-light">{progressPercent}%</p>
-                <p className="text-[10px] text-text-secondary mt-0.5">{completedTasks}/{totalTasks} tareas</p>
-              </div>
-              {data.finances && visibleModules.some((m: any) => m.type === 'finances') && (
-                <>
-                  <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
-                    <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-accent" /> Pagado</p>
-                    <p className="text-2xl font-black text-success">{data.finances.totalPaid}€</p>
-                    <p className="text-[10px] text-text-secondary mt-0.5">de {data.finances.totalBudget}€</p>
-                  </div>
-                  <div className="bg-surface border border-border rounded-2xl p-4 shadow-sm">
-                    <p className="text-xs text-text-secondary font-medium mb-2 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5 text-accent" /> Pendiente</p>
-                    <p className={`text-2xl font-black ${data.finances.pendingPayment > 0 ? 'text-warning' : 'text-success'}`}>
-                      {data.finances.pendingPayment}€
-                    </p>
-                    <p className="text-[10px] text-text-secondary mt-0.5">{data.finances.pendingPayment > 0 ? 'por liquidar' : '¡al día!'}</p>
-                  </div>
-                </>
+      <main className={cn('relative max-w-6xl mx-auto px-4 py-6 md:py-8 space-y-4', currentTrack ? 'pb-40' : 'pb-24')}>
+        {section === 'home' && (
+          <div className="space-y-4 animate-fade-in">
+            <section className="relative overflow-hidden rounded-2xl border border-border bg-surface-elevated p-5 md:p-6">
+              <div className="absolute -top-20 -right-10 w-64 h-64 rounded-full bg-accent/15 blur-[80px] pointer-events-none" />
+              <p className="relative text-2xl md:text-3xl font-black tracking-tight">Hola, {data.artist.name} 👋</p>
+              {data.welcomeMessage ? (
+                <p className="relative text-sm text-text-secondary mt-2 whitespace-pre-line max-w-2xl">{data.welcomeMessage}</p>
+              ) : (
+                <p className="relative text-sm text-text-secondary mt-2">Aquí tienes tus archivos, el estado del trabajo y todo lo que comparte contigo {data.producerName || 'tu productor'}.</p>
               )}
-            </div>
-
-            {/* Project Header / Selector */}
-            {data.projects.length > 0 && (
-              <div className="bg-surface border border-border rounded-2xl p-4 flex flex-wrap justify-between items-center shadow-sm gap-4">
-                <div className="flex flex-wrap gap-2 items-center">
-                  <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-2">
-                    {data.projects.length > 1 ? 'Proyecto:' : 'Proyecto Activo:'}
-                  </span>
-                  {data.projects.length > 1 ? (
-                    data.projects.map((proj: any) => (
-                      <button
-                        key={proj.id}
-                        onClick={() => setSelectedProjectId(proj.id)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          selectedProjectId === proj.id
-                            ? 'bg-accent text-white shadow-lg shadow-accent/20'
-                            : 'bg-surface-elevated border border-border hover:bg-surface-elevated/80 text-text-secondary hover:text-text-primary'
-                        }`}
-                      >
-                        {proj.title}
-                      </button>
-                    ))
-                  ) : (
-                    <span className="px-4 py-2 rounded-xl text-xs font-bold bg-accent text-white shadow-lg shadow-accent/20">
-                      {activeProject?.title}
-                    </span>
-                  )}
-                </div>
-                
-                {activeProject?.driveUrl && (
-                  <button 
-                    onClick={() => {
-                       window.open(activeProject.driveUrl, '_blank');
-                       customAlert('Se abrirá Google Drive. Haz clic en el botón "Descargar" arriba a la derecha para descargar toda la carpeta.');
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-elevated border border-border hover:bg-accent hover:text-white hover:border-accent text-text-secondary transition-colors text-xs font-bold"
-                  >
-                    <Download className="w-4 h-4" />
-                    Descargar Carpeta
-                  </button>
-                )}
+              <div className="relative grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
+                <div className="rounded-xl bg-surface border border-border p-3"><p className="text-xl font-black">{realProjects.filter(p => p.status !== 'archived').length}</p><p className="text-[11px] text-text-secondary">Proyectos</p></div>
+                <div className="rounded-xl bg-surface border border-border p-3"><p className="text-xl font-black">{allFiles.length}</p><p className="text-[11px] text-text-secondary">Archivos</p></div>
+                <div className="rounded-xl bg-surface border border-border p-3"><p className={cn('text-xl font-black', newThisWeek > 0 && 'text-accent')}>{newThisWeek}</p><p className="text-[11px] text-text-secondary">Nuevos esta semana</p></div>
+                <div className="rounded-xl bg-surface border border-border p-3"><p className="text-xl font-black">{avgProgress === null ? '—' : `${avgProgress}%`}</p><p className="text-[11px] text-text-secondary">Progreso</p></div>
               </div>
+              {pending > 0 && realProjects.some(p => p.requirePaymentForDownload) && (
+                <p className="relative mt-4 text-xs text-warning flex items-center gap-2 rounded-xl bg-warning/10 border border-warning/25 px-3 py-2">
+                  <Lock className="w-4 h-4 shrink-0" /> Algunas descargas se desbloquearán cuando el pago pendiente esté completado.
+                </p>
+              )}
+            </section>
+
+            {modules.map(renderHomeModule)}
+
+            {config.showFeedback !== false && (
+              <MessagesSection
+                artistId={artistId}
+                feedback={data.feedback || []}
+                producerName={data.producerName}
+                composer={composer}
+                setComposer={setComposer}
+                files={allFiles}
+                onSent={msg => setData((d: any) => ({ ...d, feedback: [msg, ...(d.feedback || [])] }))}
+              />
             )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 items-start">
-              {/* Main Column */}
-              <div className={`space-y-6 ${showSidebar ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
-                {mainModules.map((mod: any) => {
-                  if (mod.type === 'bounces') return renderBounces();
-                  if (mod.type === 'tasks') return renderTasks();
-                  return null;
-                })}
-              </div>
-
-              {/* Sidebar Column */}
-              {showSidebar && (
-                <div className="lg:col-span-4 space-y-6">
-                  {visibleModules
-                    .filter((m: any) => m.type === 'releases' || m.type === 'finances')
-                    .map((mod: any) => {
-                      if (mod.type === 'releases') return renderReleases();
-                      if (mod.type === 'finances') return renderFinances();
-                      return null;
-                    })}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
-        {/* ── RELEASES / PREVIEWS SECTION ── */}
-        {activeSection === 'releases' && (
+        {section === 'files' && (
+          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4 items-start animate-fade-in">
+            <aside className="lg:sticky lg:top-24 rounded-2xl border border-border bg-surface-elevated p-2">
+              <div className="lg:hidden relative">
+                <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full h-11 appearance-none bg-surface border border-border rounded-xl pl-3 pr-9 text-sm font-semibold focus:outline-none">
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.title} ({p.files.length})</option>)}
+                </select>
+                <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary" />
+              </div>
+              <div className="hidden lg:block space-y-0.5">
+                {projects.map(p => (
+                  <button key={p.id} type="button" onClick={() => setProjectId(p.id)} className={cn('w-full flex items-center gap-2.5 h-10 px-3 rounded-xl text-sm text-left transition-colors', projectId === p.id ? 'bg-accent/15 text-text-primary font-semibold' : 'text-text-secondary hover:bg-surface hover:text-text-primary')}>
+                    {p.id === 'all' ? <Files className="w-4 h-4 shrink-0" /> : p.id === 'general' ? <Disc className="w-4 h-4 shrink-0" /> : <FolderOpen className="w-4 h-4 shrink-0" />}
+                    <span className="flex-1 truncate">{p.title}</span>
+                    <span className="text-[11px] opacity-70">{p.files.length}</span>
+                  </button>
+                ))}
+              </div>
+            </aside>
+
+            <section className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
+              <div className="p-3 md:p-4 border-b border-border/60 space-y-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold flex-1 truncate">{currentProject?.title}</h2>
+                  {currentProject?.requirePaymentForDownload && pending > 0 && <span className="text-[11px] text-warning inline-flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Descargas bloqueadas</span>}
+                  {currentProject?.driveUrl && !(currentProject.requirePaymentForDownload && pending > 0) && (
+                    <a href={currentProject.driveUrl} target="_blank" rel="noopener noreferrer" className="h-9 px-3 rounded-xl border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-surface" title="Abre la carpeta en Google Drive para descargarla completa">
+                      <ExternalLink className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Descargar carpeta</span>
+                    </a>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar archivos…" className="w-full h-10 bg-surface border border-border rounded-xl pl-9 pr-8 text-sm focus:outline-none focus:border-accent" />
+                    {query && <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-text-secondary" aria-label="Borrar"><X className="w-4 h-4" /></button>}
+                  </div>
+                  <div className="flex p-0.5 rounded-xl bg-surface border border-border h-10 shrink-0">
+                    {(['all', 'audio', 'other'] as FileFilter[]).map(f => (
+                      <button key={f} type="button" onClick={() => setFilter(f)} className={cn('px-3 rounded-lg text-xs font-semibold', filter === f ? 'bg-surface-elevated text-text-primary shadow-sm' : 'text-text-secondary')}>
+                        {f === 'all' ? 'Todo' : f === 'audio' ? 'Audios' : 'Otros'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {visibleFiles.length === 0 ? (
+                <p className="text-sm text-text-secondary text-center py-14">{query || filter !== 'all' ? 'No hay archivos que coincidan' : 'Este proyecto todavía no tiene archivos'}</p>
+              ) : (
+                <div className="divide-y divide-border/40">{visibleFiles.map((f: any) => <FileRow key={f.id} file={f} showProject={projectId === 'all'} />)}</div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {section === 'releases' && (
           <div className="animate-fade-in">
-            {data.releases && data.releases.length > 0 ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Release list */}
-                <div className="space-y-3">
-                  <h2 className="text-sm font-bold text-text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Disc className="w-4 h-4" /> Lanzamientos
-                  </h2>
+            {data.releases?.length ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                <div className="space-y-2">
                   {data.releases.map((r: any) => (
-                    <button
-                      key={r.id}
-                      onClick={() => setActiveReleaseId(r.id)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                        activeReleaseId === r.id
-                          ? 'border-[#6c5ce7]/40 bg-accent/10'
-                          : 'border-border bg-white/2 hover:border-border hover:bg-white/4'
-                      }`}
-                    >
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#1a1a25] border border-border flex items-center justify-center shrink-0">
-                        {r.coverArtId
-                          ? <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" />
-                          : <Disc className="w-6 h-6 text-text-secondary/30" />
-                        }
+                    <button key={r.id} type="button" onClick={() => setActiveReleaseId(r.id)} className={cn('w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-colors', activeReleaseId === r.id ? 'border-accent/40 bg-accent/10' : 'border-border bg-surface-elevated hover:border-accent/30')}>
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
+                        {r.coverArtId ? <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" /> : <Disc className="w-6 h-6 text-text-secondary/30" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-bold text-text-primary text-sm truncate">{r.title}</p>
-                        <p className="text-[10px] text-text-secondary mt-0.5">{r.tracks?.length || 0} canciones</p>
+                        <p className="text-sm font-bold truncate">{r.title}</p>
+                        <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones</p>
                       </div>
-                      {activeReleaseId === r.id && <ChevronRight className="w-4 h-4 text-accent shrink-0" />}
                     </button>
                   ))}
                 </div>
-
-                {/* Player */}
-                <div className="lg:col-span-2">
-                  {activeRelease ? (
-                    <div className="bg-surface rounded-2xl border border-border p-6">
-                      <h2 className="text-lg font-bold text-text-primary mb-1">{activeRelease.title}</h2>
-                      <p className="text-xs text-text-secondary mb-6">{activeRelease.tracks?.length || 0} canciones · Escucha exclusiva</p>
-                      <PortalReleasePlayer 
-                        release={activeRelease} 
-                        allowArtistEdit={visibleModules.find((m: any) => m.type === 'releases')?.config?.allowArtistEdit}
-                        bounces={data.projects.find((p: any) => p.id === 'all')?.bounces || []}
-                        portalToken={data.config?.token}
-                        artistId={data.artist?.id || params.id}
-                        onReleaseUpdate={(updatedRelease) => {
-                          setData((prev: any) => ({
-                            ...prev,
-                            releases: prev.releases.map((r: any) => r.id === updatedRelease.id ? updatedRelease : r)
-                          }));
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-64 bg-surface rounded-2xl border border-border">
-                      <p className="text-text-secondary text-sm">Selecciona un lanzamiento</p>
-                    </div>
-                  )}
+                <div className="lg:col-span-2 rounded-2xl border border-border bg-surface-elevated p-4 md:p-6">
+                  {(() => {
+                    const release = data.releases.find((r: any) => r.id === activeReleaseId) || data.releases[0];
+                    return (
+                      <>
+                        <h2 className="text-lg font-bold">{release.title}</h2>
+                        <p className="text-xs text-text-secondary mb-5">{release.tracks?.length || 0} canciones · Escucha exclusiva</p>
+                        <PortalReleasePlayer
+                          release={release}
+                          allowArtistEdit={moduleOf('releases')?.config?.allowArtistEdit}
+                          bounces={allFiles}
+                          portalToken={config.token}
+                          artistId={artistId}
+                          onReleaseUpdate={(updated: any) => setData((d: any) => ({ ...d, releases: d.releases.map((r: any) => (r.id === updated.id ? updated : r)) }))}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-24 text-center">
-                <Disc className="w-16 h-16 text-text-secondary/30 mb-4" />
-                <h3 className="text-xl font-bold text-text-primary mb-2">Sin previews todavía</h3>
-                <p className="text-text-secondary text-sm">Tu productor aún no ha publicado ningún lanzamiento.</p>
-              </div>
+              <p className="text-sm text-text-secondary text-center py-20">Todavía no hay previews publicadas.</p>
             )}
           </div>
         )}
 
-        {/* ── TOOLS SECTION ── */}
-        {activeSection === 'tools' && (
-          <div className="animate-fade-in mt-8 max-w-[1600px] w-[95%] mx-auto pb-20 space-y-8">
-            {allowedTools.length === 0 ? (
-              <div className="max-w-md mx-auto text-center py-16 px-6 glass rounded-2xl border border-border space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-surface-elevated flex items-center justify-center mx-auto text-text-secondary">
-                  <Wrench className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-bold text-text-primary">Herramientas no disponibles</h3>
-                <p className="text-xs text-text-secondary leading-relaxed">
-                  Actualmente no tienes herramientas asignadas en tu portal. Si necesitas acceso a herramientas de producción, contacta con tu productor.
-                </p>
+        {section === 'tools' && toolsEnabled && (
+          <div className="space-y-5 animate-fade-in">
+            {allowedTools.length > 1 && (
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide p-1 rounded-2xl border border-border bg-surface-elevated w-fit max-w-full mx-auto">
+                {PORTAL_TOOLS.filter(t => allowedTools.includes(t.id)).map(tool => {
+                  const Icon = TOOL_ICONS[tool.iconName] || Wrench;
+                  return (
+                    <button key={tool.id} type="button" onClick={() => setActiveToolId(tool.id)} className={cn('h-10 px-3.5 rounded-xl text-xs font-bold inline-flex items-center gap-2 shrink-0', activeToolId === tool.id ? 'bg-accent text-white shadow-sm' : 'text-text-secondary hover:text-text-primary')}>
+                      <Icon className="w-4 h-4" /> {tool.shortName}
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              <>
-                {/* Selector de Herramientas (si hay más de 1 herramienta habilitada) */}
-                {allowedTools.length > 1 && (
-                  <div className="flex items-center justify-center">
-                    <div className="glass p-1.5 rounded-2xl border border-border/80 flex items-center gap-1.5 overflow-x-auto max-w-full no-scrollbar shadow-lg">
-                      {PORTAL_TOOLS.filter(t => allowedTools.includes(t.id)).map((tool) => {
-                        const IconComp = PORTAL_TOOL_ICONS[tool.iconName] || Wrench;
-                        const isActive = activeToolId === tool.id;
-                        return (
-                          <button
-                            key={tool.id}
-                            type="button"
-                            onClick={() => setActiveToolId(tool.id)}
-                            className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer shrink-0 ${
-                              isActive
-                                ? 'bg-accent text-white shadow-md shadow-accent/25 scale-[1.02]'
-                                : 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated/60'
-                            }`}
-                          >
-                            <IconComp className="w-4 h-4" />
-                            <span>{tool.shortName || tool.name}</span>
-                            {tool.badge && (
-                              <span className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-extrabold ${isActive ? 'bg-white/20 text-white' : 'bg-indigo-500/20 text-indigo-400'}`}>
-                                {tool.badge}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Renderizado de la Herramienta Activa */}
-                <div className="animate-fade-in">
-                  {activeToolId === 'downloader' && <MusicDownloader />}
-                  {activeToolId === 'converter' && <AudioConverter />}
-                  {activeToolId === 'trimmer' && <AudioTrimmer />}
-                  {activeToolId === 'tags' && <TagEditor />}
-                  {activeToolId === 'detector' && <BpmKeyDetector />}
-                  {activeToolId === 'stems' && <StemsSplitter />}
-                </div>
-              </>
             )}
+            {activeToolId === 'downloader' && <MusicDownloader />}
+            {activeToolId === 'converter' && <AudioConverter />}
+            {activeToolId === 'trimmer' && <AudioTrimmer />}
+            {activeToolId === 'tags' && <TagEditor />}
+            {activeToolId === 'detector' && <BpmKeyDetector />}
+            {activeToolId === 'stems' && <StemsSplitter />}
           </div>
         )}
-
       </main>
 
-      {/* Footer */}
-      <footer className="mt-16 py-6">
-        <div className="max-w-6xl mx-auto px-5 flex items-center justify-between">
-        </div>
-      </footer>
+      {/* Floating "message" button (outside the home, where the conversation lives) */}
+      {config.showFeedback !== false && section !== 'home' && section !== 'tools' && (
+        <button
+          type="button"
+          onClick={() => { setSection('home'); setComposer({ open: true }); setTimeout(() => document.getElementById('portal-messages')?.scrollIntoView({ behavior: 'smooth' }), 50); }}
+          className={cn('fixed right-4 z-40 h-12 px-4 rounded-full bg-accent text-white text-sm font-semibold shadow-xl shadow-accent/30 inline-flex items-center gap-2', currentTrack ? 'bottom-24' : 'bottom-6')}
+        >
+          <MessageSquare className="w-4 h-4" /> Mensaje
+        </button>
+      )}
     </div>
+  );
+}
+
+function MessagesSection({ artistId, feedback, producerName, composer, setComposer, files, onSent }: {
+  artistId: string;
+  feedback: any[];
+  producerName?: string;
+  composer: { open: boolean; trackId?: string; trackTitle?: string };
+  setComposer: (c: { open: boolean; trackId?: string; trackTitle?: string }) => void;
+  files: any[];
+  onSent: (msg: any) => void;
+}) {
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState('');
+  const [trackId, setTrackId] = useState('');
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    try { setName(localStorage.getItem('ezy-portal-name') || ''); } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (composer.trackId) setTrackId(composer.trackId);
+    if (composer.open) setTimeout(() => document.getElementById('portal-messages')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }, [composer]);
+
+  const threads = feedback.filter(f => !f.fromProducer).slice(0, 20);
+  const repliesFor = (id: string) => feedback.filter(f => f.fromProducer && f.replyTo === id).reverse();
+  const audioFiles = files.filter(isAudio).slice(0, 100);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !message.trim()) return;
+    setSending(true);
+    try {
+      const track = files.find(f => f.id === trackId);
+      const res = await fetch(`/api/portal/${artistId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorName: name.trim(), message: message.trim(), trackId: track?.id, trackTitle: track ? stripExt(track.name) : undefined, projectId: track?.projectId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo enviar');
+      try { localStorage.setItem('ezy-portal-name', name.trim()); } catch {}
+      onSent(data.feedback);
+      setMessage('');
+      setTrackId('');
+      setComposer({ open: false });
+      toast.success('Mensaje enviado. Tu productor lo verá enseguida.');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <section id="portal-messages" className="rounded-2xl border border-border bg-surface-elevated overflow-hidden scroll-mt-24">
+      <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
+        <MessageSquare className="w-4 h-4 text-accent" />
+        <h2 className="text-sm font-bold flex-1">Mensajes con {producerName || 'tu productor'}</h2>
+      </div>
+      <form onSubmit={send} className="p-4 md:p-5 space-y-3 border-b border-border/60">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Tu nombre" className="h-11 bg-surface border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-accent" required />
+          <div className="relative">
+            <select value={trackId} onChange={e => setTrackId(e.target.value)} className="w-full h-11 appearance-none bg-surface border border-border rounded-xl pl-3 pr-9 text-sm focus:outline-none focus:border-accent">
+              <option value="">Sobre… (opcional)</option>
+              {audioFiles.map(f => <option key={f.id} value={f.id}>{stripExt(f.name)}</option>)}
+            </select>
+            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary" />
+          </div>
+        </div>
+        <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} placeholder="Escribe tus comentarios: cambios en la mezcla, dudas, ideas…" className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-accent resize-none" required />
+        <div className="flex justify-end">
+          <button type="submit" disabled={sending || !name.trim() || !message.trim()} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold disabled:opacity-40 inline-flex items-center gap-2">
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
+          </button>
+        </div>
+      </form>
+      {threads.length > 0 && (
+        <div className="divide-y divide-border/50">
+          {threads.map(t => (
+            <div key={t.id} className="px-4 md:px-5 py-3">
+              <div className="flex items-center gap-2 text-[11px] text-text-secondary">
+                <span className="font-semibold text-text-primary">{t.authorName}</span>
+                <span>{formatRelativeTime(t.timestamp)}</span>
+                {t.trackTitle && <span className="text-accent truncate">· 🎵 {t.trackTitle}</span>}
+              </div>
+              <p className="text-sm text-text-primary whitespace-pre-line break-words mt-0.5">{t.message}</p>
+              {repliesFor(t.id).map(r => (
+                <div key={r.id} className="mt-2 ml-2 pl-3 border-l-2 border-accent/50">
+                  <p className="text-[11px] text-accent font-semibold inline-flex items-center gap-1"><CornerDownRight className="w-3 h-3" /> {r.authorName || producerName} · {formatRelativeTime(r.timestamp)}</p>
+                  <p className="text-sm text-text-primary whitespace-pre-line break-words">{r.message}</p>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

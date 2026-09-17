@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ChevronRight, Clock, AudioWaveform, Star, Timer, Trash2, HardDrive, Loader2, Home } from 'lucide-react';
+import { ChevronRight, Clock, AudioWaveform, Star, Timer, Trash2, HardDrive, Loader2, Home, Disc3, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { findItem, loadFolder, useFolder } from './driveStore';
 import { formatBytes, KindIcon } from './fileKinds';
@@ -114,6 +114,48 @@ export function ExplorerSidebarContent() {
             </button>
           );
         })}
+      </div>
+
+      <div className="px-2 pb-2 space-y-0.5">
+        <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-text-secondary/70">Accesos directos</p>
+        <button
+          type="button"
+          onClick={ex.openBounces}
+          {...(ex.bouncesFolder ? ex.getFolderDropProps(ex.bouncesFolder.id) : {})}
+          className={cn(
+            'w-full flex items-center gap-2.5 h-10 lg:h-9 px-2.5 rounded-lg text-sm transition-colors',
+            ex.view === 'folder' && ex.bouncesFolder && ex.crumbs.some(c => c.id === ex.bouncesFolder!.id)
+              ? 'bg-accent/15 text-text-primary font-semibold'
+              : 'text-text-secondary hover:bg-surface hover:text-text-primary',
+            ex.bouncesFolder && ex.dropTargetId === ex.bouncesFolder.id && 'bg-accent/20 ring-2 ring-accent text-text-primary',
+          )}
+          title={ex.bouncesFolder ? `Abrir ${ex.bouncesFolder.name}` : 'Crear la carpeta de bounces'}
+        >
+          <Disc3 className="w-4 h-4 shrink-0 text-violet-400" />
+          <span className="flex-1 text-left truncate">Bounces</span>
+          {!ex.bouncesFolder && <Plus className="w-3.5 h-3.5 shrink-0 opacity-60" />}
+        </button>
+        {ex.starredFolders.map(folder => (
+          <button
+            key={folder.id}
+            type="button"
+            onClick={() => ex.openFolder(folder)}
+            onContextMenu={e => { e.preventDefault(); e.stopPropagation(); ex.showItemMenu(e.clientX, e.clientY, folder); }}
+            {...ex.getFolderDropProps(folder.id)}
+            className={cn(
+              'w-full flex items-center gap-2.5 h-10 lg:h-9 px-2.5 rounded-lg text-sm transition-colors',
+              ex.view === 'folder' && ex.folderId === folder.id ? 'bg-accent/15 text-text-primary font-semibold' : 'text-text-secondary hover:bg-surface hover:text-text-primary',
+              ex.dropTargetId === folder.id && 'bg-accent/20 ring-2 ring-accent text-text-primary',
+            )}
+            title={folder.name}
+          >
+            <span className="relative shrink-0">
+              <KindIcon item={folder} className="w-4 h-4" />
+              <Star className="absolute -right-1 -bottom-1 w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+            </span>
+            <span className="flex-1 text-left truncate">{folder.name}</span>
+          </button>
+        ))}
       </div>
 
       <div className="mx-3 border-t border-border/50" />

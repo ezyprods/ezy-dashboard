@@ -1,570 +1,382 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Loader2, Plus, Table2, Trash2, Calendar, FileText, ChevronRight, Music, Layers, CheckCircle2, Check, MoreVertical, Copy, Link as LinkIcon, Pencil, RotateCcw } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { toast } from 'sonner';
+import {
+  Loader2, Plus, Table2, ChevronRight, ChevronLeft, Music, Layers, CheckCircle2, MoreVertical, Globe, FolderOpen,
+  Search, X, Maximize2,
+} from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { ProductionGridBoard } from '@/components/projects/ProductionGrid';
-import { customAlert, customConfirm, customPrompt } from '@/lib/dialog';
+import { customConfirm, customPrompt } from '@/lib/dialog';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
+import { copyText } from '@/components/explorer/explorerUtils';
+import { matrixProgress } from '@/lib/matrixStats';
+import { cn } from '@/lib/utils';
+import type { Project } from '@/types';
 
+interface ArtistMatricesTabProps {
+  artistId: string;
+  artistName?: string;
+  projects?: Project[];
+  onMatricesChanged?: (matrices: any[]) => void;
+}
 
-export function ArtistMatricesTab({ artistId, artistName }: { artistId: string; artistName?: string }) {
+function setMatrixParam(matrixId: string | null) {
+  const url = new URL(window.location.href);
+  if (matrixId) url.searchParams.set('matrixId', matrixId);
+  else url.searchParams.delete('matrixId');
+  window.history.replaceState(null, '', `${url.pathname}?${url.searchParams.toString()}`);
+}
+
+export function ArtistMatricesTab({ artistId, artistName, projects = [], onMatricesChanged }: ArtistMatricesTabProps) {
   const searchParams = useSearchParams();
+  const { showMenu } = useContextMenu();
   const [matrices, setMatrices] = useState<any[]>([]);
-  const [showCompleted, setShowCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeMatrixId, setActiveMatrixId] = useState<string | null>(searchParams.get('matrixId'));
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [query, setQuery] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState({ name: '', projectId: '', templateId: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [linking, setLinking] = useState<any | null>(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newMatrixName, setNewMatrixName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeMatrixId = searchParams.get('matrixId');
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsModalOpen(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const update = useCallback((next: any[]) => {
+    setMatrices(next);
+    onMatricesChanged?.(next);
+  }, [onMatricesChanged]);
 
-  useEffect(() => {
-    const mid = searchParams.get('matrixId');
-    if (mid !== null) {
-      setActiveMatrixId(mid);
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    fetchMatrices();
-  }, [artistId]);
-
-  const fetchMatrices = async () => {
-    setIsLoading(true);
+  const fetchMatrices = useCallback(async () => {
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices`);
-      if (res.ok) {
-        const data = await res.json();
-        setMatrices(data.matrices || []);
-      } else {
-        const err = await res.json();
-        console.error('fetchMatrices error:', err);
-      }
-    } catch (e) {
-      console.error(e);
+      if (!res.ok) throw new Error('No se pudieron cargar las matrices');
+      const data = await res.json();
+      update(data.matrices || []);
+    } catch (err: any) {
+      toast.error(err.message);
     } finally {
       setIsLoading(false);
     }
+  }, [artistId, update]);
+
+  useEffect(() => { fetchMatrices(); }, [fetchMatrices]);
+
+  const putMatrix = async (matrixId: string, body: Record<string, unknown>, optimistic: Record<string, unknown>, successMsg?: string) => {
+    const prev = matrices;
+    update(matrices.map(m => (m.id === matrixId ? { ...m, ...optimistic } : m)));
+    try {
+      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('No se pudo guardar la matriz');
+      if (successMsg) toast.success(successMsg);
+    } catch (err: any) {
+      update(prev);
+      toast.error(err.message);
+    }
   };
 
-  const createMatrix = async (e: React.FormEvent) => {
+  const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMatrixName.trim()) {
-      customAlert('Por favor, escribe un nombre para la matriz');
-      return;
-    }
-
-    setIsSubmitting(true);
+    if (!form.name.trim()) return;
+    setSubmitting(true);
     try {
       const res = await fetch(`/api/artists/${artistId}/matrices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newMatrixName.trim() })
+        body: JSON.stringify({ name: form.name.trim(), projectId: form.projectId || undefined, duplicateFromId: form.templateId || undefined }),
       });
-      if (res.ok) {
-        const result = await res.json();
-        setNewMatrixName('');
-        setIsModalOpen(false);
-        fetchMatrices();
-        customAlert('Matriz creada con éxito');
-        if (result.matrix) {
-          setActiveMatrixId(result.matrix.id);
-        }
-      } else {
-        const err = await res.json();
-        customAlert(`Error al crear matriz: ${err.error} - ${err.details}`);
-      }
-    } catch (e: any) {
-      console.error(e);
-      customAlert(`Error: ${e.message}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo crear la matriz');
+      update([...matrices, data.matrix]);
+      setCreateOpen(false);
+      setForm({ name: '', projectId: '', templateId: '' });
+      toast.success('Matriz creada');
+      setMatrixParam(data.matrix.id);
+    } catch (err: any) {
+      toast.error(err.message);
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  const deleteMatrix = async (matrixId: string) => {
-    if (!await customConfirm('¿Seguro que quieres eliminar esta matriz por completo?')) return;
+  const remove = async (matrix: any) => {
+    if (!await customConfirm(`La matriz "${matrix.name}" se eliminará por completo (también sus fechas en el calendario).`, 'Eliminar matriz')) return;
+    const prev = matrices;
+    update(matrices.filter(m => m.id !== matrix.id));
+    if (activeMatrixId === matrix.id) setMatrixParam(null);
     try {
-      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, { method: 'DELETE' });
-      if (res.ok) {
-        if (activeMatrixId === matrixId) setActiveMatrixId(null);
-        fetchMatrices();
-      }
-    } catch (e) {
-      console.error(e);
+      const res = await fetch(`/api/artists/${artistId}/matrices/${matrix.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('No se pudo eliminar la matriz');
+      toast.success('Matriz eliminada');
+    } catch (err: any) {
+      update(prev);
+      toast.error(err.message);
     }
   };
 
-  const togglePortalSharing = async (matrixId: string, shared: boolean) => {
-    // Optimistic UI update
-    setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, sharedInPortal: shared } : m));
-    try {
-      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sharedInPortal: shared })
-      });
-      if (!res.ok) {
-        // Revert on error
-        setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, sharedInPortal: !shared } : m));
-        customAlert('Error al actualizar el estado de compartir');
-      }
-    } catch (e) {
-      console.error(e);
-      // Revert on error
-      setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, sharedInPortal: !shared } : m));
-    }
+  const projectOf = (matrix: any) => projects.find(p => p.id === matrix.projectId || p.driveFolderId === matrix.projectId);
+
+  const menuFor = (matrix: any): MenuItem[] => {
+    const progress = matrixProgress(matrix);
+    const project = projectOf(matrix);
+    return [
+      { heading: matrix.name },
+      { label: 'Abrir matriz', icon: 'Table2', action: () => setMatrixParam(matrix.id) },
+      { label: 'Renombrar', icon: 'Pencil', action: async () => {
+        const name = (await customPrompt('Nuevo nombre', matrix.name, 'Renombrar matriz'))?.trim();
+        if (name && name !== matrix.name) putMatrix(matrix.id, { name }, { name }, 'Matriz renombrada');
+      } },
+      { label: project ? 'Cambiar proyecto vinculado' : 'Vincular a un proyecto', icon: 'FolderInput', action: () => setLinking(matrix) },
+      ...(project ? [{ label: 'Abrir proyecto', icon: 'FolderOpen', action: () => window.location.assign(`/projects/${project.id}`) }] : []),
+      { label: 'Duplicar como plantilla', icon: 'Copy', action: () => { setForm({ name: `${matrix.name} (copia)`, projectId: '', templateId: matrix.id }); setCreateOpen(true); } },
+      { label: 'Copiar enlace', icon: 'Link', action: () => copyText(`${window.location.origin}/artists/${artistId}?tab=matrices&matrixId=${matrix.id}`, 'Enlace copiado') },
+      { separator: true },
+      {
+        label: matrix.sharedInPortal ? 'Dejar de mostrar en el portal' : 'Mostrar en el portal del artista',
+        icon: 'Share2',
+        action: () => putMatrix(matrix.id, { sharedInPortal: !matrix.sharedInPortal }, { sharedInPortal: !matrix.sharedInPortal }, matrix.sharedInPortal ? 'Oculta en el portal' : 'Visible en el portal'),
+      },
+      {
+        label: progress.completed ? 'Marcar como activa' : 'Marcar como completada',
+        icon: progress.completed ? 'RotateCcw' : 'CheckCircle2',
+        action: () => {
+          const forceStatus = progress.completed ? 'active' : 'completed';
+          putMatrix(matrix.id, { forceStatus }, { forceStatus });
+        },
+      },
+      { separator: true },
+      { label: 'Eliminar', icon: 'Trash2', variant: 'danger', action: () => remove(matrix) },
+    ];
   };
 
-  const { showMenu } = useContextMenu();
-
-  const handleRenameMatrix = async (matrixId: string, currentName: string) => {
-    const newName = await customPrompt('Introduce el nuevo nombre para la matriz:', currentName, 'Renombrar Matriz');
-    if (!newName || newName === currentName) return;
-
-    // Optimistic Update
-    setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, name: newName } : m));
-
-    try {
-      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName })
-      });
-      if (!res.ok) throw new Error('Error al renombrar la matriz');
-    } catch (e) {
-      customAlert('Error de conexión al renombrar la matriz');
-      fetchMatrices();
-    }
-  };
-
-  const handleDuplicateMatrix = async (matrixId: string, currentName: string) => {
-    const newName = await customPrompt('Nombre de la nueva matriz (plantilla):', `${currentName} (Copia)`, 'Duplicar Matriz');
-    if (!newName) return;
-
-    try {
-      const res = await fetch(`/api/artists/${artistId}/matrices`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName, duplicateFromId: matrixId })
-      });
-      if (res.ok) {
-        await fetchMatrices();
-        customAlert('Matriz duplicada con éxito. Se ha copiado la estructura.');
-      } else {
-        customAlert('Error al duplicar la matriz');
-      }
-    } catch (e) {
-      customAlert('Error de red al duplicar la matriz');
-    }
-  };
-
-  const handleCopyLink = (matrixId: string) => {
-    const url = `${window.location.origin}/matrices?id=${matrixId}&artist=${artistId}`;
-    navigator.clipboard.writeText(url);
-    customAlert('Enlace directo a la matriz copiado al portapapeles');
-  };
-
-  const handleToggleStatus = async (matrixId: string, isCurrentlyCompleted: boolean) => {
-    const newStatus = isCurrentlyCompleted ? 'active' : 'completed';
-
-    // Optimistic Update
-    setMatrices(prev => prev.map(m => m.id === matrixId ? { ...m, forceStatus: newStatus } : m));
-
-    try {
-      const res = await fetch(`/api/artists/${artistId}/matrices/${matrixId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ forceStatus: newStatus })
-      });
-      if (!res.ok) throw new Error('Error updating status');
-    } catch (e) {
-      customAlert('Error al cambiar el estado de la matriz');
-      fetchMatrices();
-    }
-  };
-
-  const getMatrixMenuItems = (matrix: any, isCompleted: boolean): MenuItem[] => [
-    {
-      label: 'Abrir Matriz',
-      icon: 'Table2',
-      action: () => setActiveMatrixId(matrix.id),
-    },
-    {
-      label: 'Duplicar Matriz',
-      icon: 'Copy',
-      action: () => handleDuplicateMatrix(matrix.id, matrix.name),
-    },
-    {
-      label: 'Copiar Enlace',
-      icon: 'Link',
-      action: () => handleCopyLink(matrix.id),
-    },
-    {
-      label: 'Renombrar',
-      icon: 'Pencil',
-      action: () => handleRenameMatrix(matrix.id, matrix.name),
-    },
-    {
-      label: isCompleted ? 'Marcar como Activa' : 'Marcar como Completada',
-      icon: isCompleted ? 'RotateCcw' : 'CheckCircle2',
-      className: isCompleted ? 'text-info hover:bg-info/10 hover:text-info' : 'text-success hover:bg-success/10 hover:text-success',
-      iconClassName: isCompleted ? 'text-info' : 'text-success',
-      action: () => handleToggleStatus(matrix.id, isCompleted),
-    },
-    {
-      label: matrix.sharedInPortal ? 'Dejar de compartir en Portal' : 'Compartir en Portal',
-      icon: 'Share2',
-      action: () => togglePortalSharing(matrix.id, !matrix.sharedInPortal),
-    },
-    { separator: true },
-    {
-      label: 'Eliminar',
-      icon: 'Trash2',
-      variant: 'danger',
-      className: 'text-error hover:bg-error/10 hover:text-error',
-      iconClassName: 'text-error',
-      action: () => deleteMatrix(matrix.id),
-    }
-  ];
-
-  const handleMatrixContextMenu = (e: React.MouseEvent, matrix: any, isCompleted: boolean) => {
-    e.preventDefault();
-    e.stopPropagation();
-    showMenu(e.clientX, e.clientY, getMatrixMenuItems(matrix, isCompleted));
-  };
-
-  const handleMatrixMenuButtonClick = (e: React.MouseEvent, matrix: any, isCompleted: boolean) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    showMenu(rect.left, rect.bottom + 5, getMatrixMenuItems(matrix, isCompleted));
-  };
+  const { active, completed } = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = matrices.filter(m => !q || (m.name || '').toLowerCase().includes(q) || (projectOf(m)?.title || '').toLowerCase().includes(q));
+    return {
+      active: list.filter(m => !matrixProgress(m).completed),
+      completed: list.filter(m => matrixProgress(m).completed),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matrices, query, projects]);
 
   if (isLoading) {
-    return <div className="flex justify-center p-12"><Loader2 className="w-8 h-8 animate-spin text-accent" /></div>;
-  }
-
-  if (activeMatrixId) {
-    const matrix = matrices.find(m => m.id === activeMatrixId);
     return (
-      <div className="space-y-4 animate-fade-in">
-        <div className="flex items-center gap-3 mb-6">
-          <Button variant="ghost" size="sm" onClick={() => setActiveMatrixId(null)} className="text-text-secondary hover:text-text-primary">
-            Volver a Matrices
-          </Button>
-          <ChevronRight className="w-4 h-4 text-text-secondary" />
-          <h2 className="font-bold text-text-primary text-xl">{matrix?.name || 'Matriz'}</h2>
-        </div>
-        
-        <div className="glass rounded-xl p-6 border border-border">
-          <ProductionGridBoard 
-            artistId={artistId} 
-            matrixId={activeMatrixId} 
-            matrixName={matrix?.name} 
-            artistName={artistName}
-          />
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-40 rounded-2xl bg-surface-elevated border border-border animate-pulse" />)}
       </div>
     );
   }
 
-  // Separate active and completed matrices
-  const activeMatrices = [];
-  const completedMatrices = [];
-  
-  for (const m of matrices) {
-    const grid = m.productionGrid;
-    let isActive = false;
-    
-    if (m.forceStatus === 'active') {
-      isActive = true;
-    } else if (m.forceStatus === 'completed') {
-      isActive = false;
-    } else if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns) && grid.rows.length > 0 && grid.columns.length > 0) {
-      let hasTrackable = false;
-      for (const row of grid.rows) {
-        for (const col of grid.columns) {
-           if (!col.type || col.type === 'status' || col.type === 'file') {
-             hasTrackable = true;
-             const cell = row.cells?.[col.id];
-             if (!cell || cell.status !== 'done') {
-               isActive = true;
-               break;
-             }
-           }
-        }
-        if (isActive) break;
-      }
-      if (!hasTrackable) {
-        isActive = true;
-      }
-    } else {
-      isActive = true;
+  // ─── Single matrix view ─────────────────────────────────────────────────
+  if (activeMatrixId) {
+    const matrix = matrices.find(m => m.id === activeMatrixId);
+    if (!matrix) {
+      return (
+        <div className="rounded-2xl border border-border bg-surface-elevated p-10 text-center">
+          <p className="text-sm text-text-primary font-semibold">Esta matriz ya no existe</p>
+          <button type="button" onClick={() => setMatrixParam(null)} className="mt-4 h-10 px-4 rounded-xl border border-border text-sm hover:bg-surface">Volver a matrices</button>
+        </div>
+      );
     }
-    
-    if (isActive) {
-      activeMatrices.push(m);
-    } else {
-      completedMatrices.push(m);
-    }
-  }
-
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-text-primary">Matrices de Producción</h3>
-          <p className="text-sm text-text-secondary">Trackea tus proyectos, canciones y fases.</p>
-        </div>
-        <Button onClick={() => setIsModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Nueva Matriz</Button>
-      </div>
-
-      {activeMatrices.length === 0 && completedMatrices.length === 0 ? (
-        <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border">
-          <Table2 className="w-12 h-12 mx-auto mb-4 opacity-50 text-accent" />
-          <p>No tienes matrices creadas para este artista.</p>
-        </div>
-      ) : activeMatrices.length === 0 ? (
-        <div className="glass rounded-xl p-12 text-center text-text-secondary border border-dashed border-border">
-          <p>No tienes matrices activas en este momento.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {activeMatrices.map(m => {
-            const grid = m.productionGrid;
-            const rowCount = grid?.rows?.length || 0;
-            const colCount = grid?.columns?.length || 0;
-            let totalTasks = 0;
-            let completedTasks = 0;
-            if (rowCount > 0 && colCount > 0 && grid.rows) {
-              const trackableCols = grid.columns.filter((c: any) => !c.type || c.type === 'status' || c.type === 'file');
-              totalTasks = rowCount * trackableCols.length;
-              grid.rows.forEach((row: any) => {
-                trackableCols.forEach((col: any) => {
-                  const cell = row.cells?.[col.id];
-                  if (cell && cell.status === 'done') {
-                    completedTasks++;
-                  }
-                });
-              });
-            }
-            const completionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-            return (
-              <div 
-                key={m.id} 
-                data-context="ignore"
-                onClick={() => setActiveMatrixId(m.id)}
-                onContextMenu={(e) => handleMatrixContextMenu(e, m, false)}
-                className="glass rounded-xl p-4 md:p-5 border border-border hover:border-accent/50 transition-all group relative cursor-pointer hover:shadow-lg hover:shadow-accent/5 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-3 md:mb-4">
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
-                      <Table2 className="w-5 h-5 text-accent shrink-0" />
-                      <h4 className="font-bold text-lg text-text-primary truncate">{m.name}</h4>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={(e) => handleMatrixMenuButtonClick(e, m, false)} 
-                      className="p-1.5 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated/90 transition-colors shrink-0"
-                      title="Opciones de matriz"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
-                  {/* Useful dynamic stats / functional icons */}
-                  <div className="flex flex-wrap gap-1.5 md:gap-2 text-xs text-text-secondary mb-4 md:mb-6">
-                    <div className="flex items-center gap-1 bg-surface/30 px-2 py-1 md:px-2.5 md:py-1 rounded-md border border-border/10">
-                      <Music className="w-3.5 h-3.5 text-accent" />
-                      <span>{rowCount} {rowCount === 1 ? 'Tema' : 'Temas'}</span>
-                    </div>
-                    <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
-                      <Layers className="w-3.5 h-3.5 text-accent" />
-                      <span>{colCount} {colCount === 1 ? 'Fase' : 'Fases'}</span>
-                    </div>
-                    {totalTasks > 0 && (
-                      <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-                        <span>{completionPercent}%</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <button 
-                    className="flex items-center gap-2 text-xs text-text-primary border-t border-border/30 pt-3 mt-2 md:mt-3 mb-3 md:mb-4 w-fit group/cb"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const current = m.sharedInPortal || false;
-                      await togglePortalSharing(m.id, !current);
-                    }}
-                  >
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${m.sharedInPortal ? 'bg-accent border-accent text-white' : 'border-neutral-400 bg-white dark:bg-surface group-hover/cb:border-accent'}`}>
-                      {m.sharedInPortal && <Check className="w-3 h-3" />}
-                    </div>
-                    <span className="font-medium select-none">
-                      Compartir en Portal
-                    </span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Completed Matrices Section */}
-      {completedMatrices.length > 0 && (
-        <div className="mt-12">
-          <button 
-            onClick={() => setShowCompleted(!showCompleted)}
-            className="flex items-center gap-2 text-text-secondary hover:text-text-primary transition-colors mb-4 w-full"
-          >
-            <ChevronRight className={`w-5 h-5 transition-transform ${showCompleted ? 'rotate-90' : ''}`} />
-            <h4 className="text-lg font-bold">Matrices Completadas ({completedMatrices.length})</h4>
-            <div className="h-px bg-border flex-1 ml-4" />
+    const progress = matrixProgress(matrix);
+    const project = projectOf(matrix);
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => { setMatrixParam(null); fetchMatrices(); }} className="h-10 pl-2 pr-3 rounded-xl text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-elevated inline-flex items-center gap-1">
+            <ChevronLeft className="w-4 h-4" /> Matrices
           </button>
-          
-          {showCompleted && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-4 duration-300">
-              {completedMatrices.map((m: any) => {
-                const grid = m.productionGrid;
-                const rowCount = grid?.rows?.length || 0;
-                const colCount = grid?.columns?.length || 0;
-                let totalTasks = 0;
-                let completedTasks = 0;
-                if (rowCount > 0 && colCount > 0 && grid.rows) {
-                  const trackableCols = grid.columns.filter((c: any) => !c.type || c.type === 'status' || c.type === 'file');
-                  totalTasks = rowCount * trackableCols.length;
-                  grid.rows.forEach((row: any) => {
-                    trackableCols.forEach((col: any) => {
-                      const cell = row.cells?.[col.id];
-                      if (cell && cell.status === 'done') {
-                        completedTasks++;
-                      }
-                    });
-                  });
-                }
-                const completionPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-                return (
-                  <div 
-                    key={m.id} 
-                    data-context="ignore"
-                    onClick={() => setActiveMatrixId(m.id)}
-                    onContextMenu={(e) => handleMatrixContextMenu(e, m, true)}
-                    className="glass rounded-xl p-5 border border-border/50 hover:border-accent/30 transition-all group relative flex flex-col justify-between opacity-80 hover:opacity-100 bg-surface/50 cursor-pointer hover:shadow-lg hover:shadow-success/5"
-                  >
-                    <div>
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex items-center gap-2 min-w-0 pr-2">
-                          <Table2 className="w-5 h-5 text-success shrink-0" />
-                          <h4 className="font-bold text-lg text-text-primary truncate line-through decoration-text-secondary/50">{m.name}</h4>
-                        </div>
-                        <button 
-                          type="button"
-                          onClick={(e) => handleMatrixMenuButtonClick(e, m, true)} 
-                          className="p-1.5 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated/90 transition-colors shrink-0"
-                          title="Opciones de matriz"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Useful dynamic stats / functional icons for completed ones */}
-                      <div className="flex flex-wrap gap-2 text-xs text-text-secondary mb-6">
-                        <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
-                          <Music className="w-3.5 h-3.5 text-success" />
-                          <span>{rowCount} {rowCount === 1 ? 'Tema' : 'Temas'}</span>
-                        </div>
-                        <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
-                          <Layers className="w-3.5 h-3.5 text-success" />
-                          <span>{colCount} {colCount === 1 ? 'Fase' : 'Fases'}</span>
-                        </div>
-                        <div className="flex items-center gap-1 bg-surface/30 px-2.5 py-1 rounded-md border border-border/10">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-                          <span>Completada ({completionPercent}%)</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 mt-2 hidden">
-                      {/* Button removed */}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Modal Nueva Matriz */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
-            style={{ willChange: 'opacity' }}
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div 
-            className="relative z-10 glass w-full max-w-md rounded-xl border border-border p-6 shadow-2xl animate-in zoom-in-95 duration-200"
-            style={{ willChange: 'transform, opacity' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-xl font-bold text-text-primary mb-4 flex items-center gap-2">
-              <Table2 className="w-5 h-5 text-accent" />
-              Crear Nueva Matriz
-            </h2>
-            
-            <form onSubmit={createMatrix} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
-                  Nombre de la Matriz
-                </label>
-                <input 
-                  autoFocus
-                  type="text" 
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-                  placeholder="Ej: Álbum 2026, Single de Verano..."
-                  value={newMatrixName}
-                  onChange={(e) => setNewMatrixName(e.target.value)}
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={() => setIsModalOpen(false)}
-                  disabled={isSubmitting}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Table2 className="w-4 h-4 mr-2" />}
-                  Crear Matriz
-                </Button>
-              </div>
-            </form>
+          <ChevronRight className="w-4 h-4 text-text-secondary/50" />
+          <h2 className="text-lg font-bold text-text-primary truncate min-w-0 flex-1">{matrix.name}</h2>
+          <div className="flex items-center gap-2">
+            {project && (
+              <Link href={`/projects/${project.id}`} className="h-9 px-3 rounded-xl border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-surface-elevated">
+                <FolderOpen className="w-3.5 h-3.5" /> {project.title}
+              </Link>
+            )}
+            <span className="h-9 px-3 rounded-xl bg-accent/10 text-accent text-xs font-bold inline-flex items-center">{progress.percent}%</span>
+            <Link href={`/matrices?id=${matrix.id}&artist=${artistId}`} className="h-9 w-9 rounded-xl border border-border inline-flex items-center justify-center hover:bg-surface-elevated" title="Pantalla completa" aria-label="Pantalla completa">
+              <Maximize2 className="w-4 h-4" />
+            </Link>
+            <button type="button" onClick={e => { const r = e.currentTarget.getBoundingClientRect(); showMenu(r.right - 230, r.bottom + 4, menuFor(matrix)); }} className="h-9 w-9 rounded-xl border border-border inline-flex items-center justify-center hover:bg-surface-elevated" aria-label="Más acciones">
+              <MoreVertical className="w-4 h-4" />
+            </button>
           </div>
         </div>
+        <div className="rounded-2xl border border-border bg-surface-elevated p-3 md:p-5 overflow-x-auto">
+          <ProductionGridBoard
+            key={matrix.id}
+            artistId={artistId}
+            matrixId={matrix.id}
+            matrixName={matrix.name}
+            artistName={artistName}
+            initialProjectId={matrix.projectId || undefined}
+          />
+        </div>
+        {linking && <LinkProjectModal matrix={linking} projects={projects} onClose={() => setLinking(null)} onPick={projectId => { putMatrix(linking.id, { projectId }, { projectId }, projectId ? 'Matriz vinculada' : 'Vínculo eliminado'); setLinking(null); }} />}
+      </div>
+    );
+  }
+
+  // ─── List ───────────────────────────────────────────────────────────────
+  const card = (matrix: any) => {
+    const progress = matrixProgress(matrix);
+    const project = projectOf(matrix);
+    return (
+      <div
+        key={matrix.id}
+        data-context="ignore"
+        onClick={() => setMatrixParam(matrix.id)}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); showMenu(e.clientX, e.clientY, menuFor(matrix)); }}
+        className={cn('group rounded-2xl border bg-surface-elevated p-4 cursor-pointer transition-all hover:border-accent/40 hover:shadow-lg hover:shadow-accent/5 flex flex-col', progress.completed ? 'border-border/60 opacity-80 hover:opacity-100' : 'border-border')}
+      >
+        <div className="flex items-start gap-3">
+          <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', progress.completed ? 'bg-success/10 text-success' : 'bg-accent/10 text-accent')}>
+            {progress.completed ? <CheckCircle2 className="w-5 h-5" /> : <Table2 className="w-5 h-5" />}
+          </span>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-base font-bold text-text-primary truncate group-hover:text-accent transition-colors">{matrix.name}</h4>
+            {project ? (
+              <Link href={`/projects/${project.id}`} onClick={e => e.stopPropagation()} className="text-xs text-text-secondary hover:text-accent inline-flex items-center gap-1 max-w-full">
+                <FolderOpen className="w-3 h-3 shrink-0" /><span className="truncate">{project.title}</span>
+              </Link>
+            ) : (
+              <button type="button" onClick={e => { e.stopPropagation(); setLinking(matrix); }} className="text-xs text-text-secondary/80 hover:text-accent">Vincular a un proyecto</button>
+            )}
+          </div>
+          <button type="button" onClick={e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); showMenu(r.right - 230, r.bottom + 4, menuFor(matrix)); }} className="w-9 h-9 -mr-2 -mt-1 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface shrink-0" aria-label="Más acciones">
+            <MoreVertical className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-secondary">{progress.total > 0 ? `${progress.done} de ${progress.total} tareas` : 'Sin tareas todavía'}</span>
+            <span className="font-bold text-text-primary">{progress.percent}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-surface overflow-hidden">
+            <div className={cn('h-full rounded-full', progress.completed ? 'bg-success' : 'bg-gradient-to-r from-accent to-accent-light')} style={{ width: `${progress.percent}%` }} />
+          </div>
+        </div>
+
+        <div className="mt-auto pt-4 flex items-center gap-2 text-[11px] text-text-secondary">
+          <span className="inline-flex items-center gap-1"><Music className="w-3.5 h-3.5" /> {progress.songs} {progress.songs === 1 ? 'tema' : 'temas'}</span>
+          <span className="inline-flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> {progress.phases} {progress.phases === 1 ? 'fase' : 'fases'}</span>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); putMatrix(matrix.id, { sharedInPortal: !matrix.sharedInPortal }, { sharedInPortal: !matrix.sharedInPortal }, matrix.sharedInPortal ? 'Oculta en el portal' : 'Visible en el portal'); }}
+            className={cn('ml-auto h-7 px-2 rounded-lg border inline-flex items-center gap-1 font-semibold transition-colors', matrix.sharedInPortal ? 'border-accent/40 bg-accent/10 text-accent' : 'border-border hover:text-text-primary')}
+            title={matrix.sharedInPortal ? 'Visible en el portal del artista' : 'Oculta en el portal'}
+          >
+            <Globe className="w-3 h-3" /> {matrix.sharedInPortal ? 'En portal' : 'Privada'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar matriz o proyecto…" className="w-full h-10 bg-surface-elevated border border-border rounded-xl pl-9 pr-8 text-sm focus:outline-none focus:border-accent" />
+          {query && <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-text-secondary" aria-label="Borrar"><X className="w-4 h-4" /></button>}
+        </div>
+        <p className="text-xs text-text-secondary sm:flex-1">Seguimiento de temas y fases de producción. Márcalas como visibles para que el artista vea el progreso en su portal.</p>
+        <button type="button" onClick={() => { setForm({ name: '', projectId: '', templateId: '' }); setCreateOpen(true); }} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-accent/90 shrink-0">
+          <Plus className="w-4 h-4" /> Nueva matriz
+        </button>
+      </div>
+
+      {active.length === 0 && completed.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-surface-elevated/50 py-16 px-6 flex flex-col items-center text-center">
+          <div className="w-14 h-14 rounded-2xl bg-accent/10 text-accent flex items-center justify-center mb-3"><Table2 className="w-7 h-7" /></div>
+          <p className="text-sm font-semibold text-text-primary">{query ? 'Ninguna matriz coincide' : 'Sin matrices todavía'}</p>
+          <p className="text-xs text-text-secondary mt-1 max-w-sm">Crea una matriz para seguir cada tema de un proyecto: grabación, mezcla, master, entregas…</p>
+        </div>
+      ) : (
+        <>
+          {active.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">{active.map(card)}</div>
+          ) : (
+            <p className="text-sm text-text-secondary text-center py-6">Todas las matrices están completadas 🎉</p>
+          )}
+          {completed.length > 0 && (
+            <div className="pt-2">
+              <button type="button" onClick={() => setShowCompleted(v => !v)} className="w-full flex items-center gap-2 text-sm font-semibold text-text-secondary hover:text-text-primary">
+                <ChevronRight className={cn('w-4 h-4 transition-transform', showCompleted && 'rotate-90')} />
+                Completadas ({completed.length})
+                <span className="flex-1 h-px bg-border ml-2" />
+              </button>
+              {showCompleted && <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-3 animate-fade-in">{completed.map(card)}</div>}
+            </div>
+          )}
+        </>
       )}
+
+      {createOpen && (
+        <Modal isOpen onClose={() => setCreateOpen(false)} title={form.templateId ? 'Duplicar matriz' : 'Nueva matriz'} description={form.templateId ? 'Se copia la estructura (temas y fases) con los estados reiniciados.' : undefined}>
+          <form onSubmit={create} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-text-secondary">Nombre</label>
+              <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ej: Álbum 2026, Single de verano…" className="w-full h-11 bg-surface border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-accent" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-text-secondary">Proyecto vinculado</label>
+              <select value={form.projectId} onChange={e => { const id = e.target.value; setForm(f => ({ ...f, projectId: id, name: f.name || projects.find(p => p.id === id)?.title || '' })); }} className="w-full h-11 bg-surface border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-accent">
+                <option value="">Sin vincular</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+              </select>
+              <p className="text-[11px] text-text-secondary">Vincularla permite enlazar los archivos del proyecto a cada tema y verla desde la página del proyecto.</p>
+            </div>
+            {!form.templateId && matrices.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-text-secondary">Plantilla</label>
+                <select value={form.templateId} onChange={e => setForm(f => ({ ...f, templateId: e.target.value }))} className="w-full h-11 bg-surface border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-accent">
+                  <option value="">Matriz vacía</option>
+                  {matrices.map(m => <option key={m.id} value={m.id}>Copiar estructura de “{m.name}”</option>)}
+                </select>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setCreateOpen(false)} className="h-10 px-4 rounded-xl border border-border text-sm font-medium hover:bg-surface">Cancelar</button>
+              <button type="submit" disabled={submitting || !form.name.trim()} className="h-10 px-5 rounded-xl bg-accent text-white text-sm font-semibold disabled:opacity-40 inline-flex items-center gap-2">
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />} Crear
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {linking && <LinkProjectModal matrix={linking} projects={projects} onClose={() => setLinking(null)} onPick={projectId => { putMatrix(linking.id, { projectId }, { projectId }, projectId ? 'Matriz vinculada' : 'Vínculo eliminado'); setLinking(null); }} />}
     </div>
+  );
+}
+
+function LinkProjectModal({ matrix, projects, onClose, onPick }: { matrix: any; projects: Project[]; onClose: () => void; onPick: (projectId: string | null) => void }) {
+  return (
+    <Modal isOpen onClose={onClose} title="Vincular a un proyecto" description={matrix.name}>
+      <div className="space-y-1 max-h-[55dvh] overflow-y-auto -mx-1 px-1">
+        {projects.length === 0 && <p className="text-sm text-text-secondary text-center py-8">Este artista no tiene proyectos</p>}
+        {projects.map(p => (
+          <button key={p.id} type="button" onClick={() => onPick(p.id)} className={cn('w-full flex items-center gap-3 px-3 min-h-[48px] rounded-xl text-left', matrix.projectId === p.id ? 'bg-accent/10' : 'hover:bg-surface')}>
+            <FolderOpen className="w-4 h-4 text-accent shrink-0" />
+            <span className="flex-1 truncate text-sm text-text-primary">{p.title}</span>
+            {matrix.projectId === p.id && <CheckCircle2 className="w-4 h-4 text-accent" />}
+          </button>
+        ))}
+        {matrix.projectId && (
+          <button type="button" onClick={() => onPick(null)} className="w-full h-11 rounded-xl text-sm font-medium text-error hover:bg-error/10 mt-2">Quitar vínculo</button>
+        )}
+      </div>
+    </Modal>
   );
 }

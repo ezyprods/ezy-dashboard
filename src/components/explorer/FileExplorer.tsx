@@ -1,15 +1,13 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { UploadCloud, X, Clock, AudioWaveform, Star, Timer, Trash2, FolderOpen } from 'lucide-react';
+import { UploadCloud, X, Clock, AudioWaveform, Star, Timer, Trash2, FolderOpen, Disc3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
-import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import { Modal } from '@/components/ui/Modal';
 import { ShareModal } from '@/components/artists/ShareModal';
 import { DeleteModal } from '@/components/artists/DeleteModal';
-import { SmartUploadModal } from '@/components/layout/SmartUploadModal';
 import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
 import { DAWErrorBoundary } from '@/components/projects/DAWErrorBoundary';
 import { addToTrash, apiUpdate, insertItems, patchItems, removeFromTrash, removeItems, runPool } from './driveStore';
@@ -38,7 +36,36 @@ function ViewChips() {
   const ex = useExplorer();
   return (
     <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto scrollbar-hide px-2 md:px-3 py-2 border-b border-border/60 bg-surface-elevated" data-no-swipe>
-      {MOBILE_VIEWS.map(({ view, label, icon: Icon }) => {
+      {MOBILE_VIEWS.slice(0, 1).map(({ view, label, icon: Icon }) => (
+        <button
+          key={view}
+          type="button"
+          onClick={() => ex.setView(view)}
+          className={cn(
+            'inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors',
+            ex.view === view && !(ex.bouncesFolder && ex.crumbs.some(c => c.id === ex.bouncesFolder!.id))
+              ? 'bg-text-primary text-surface-elevated'
+              : 'bg-surface text-text-secondary border border-border/60',
+          )}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={ex.openBounces}
+        className={cn(
+          'inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors',
+          ex.view === 'folder' && ex.bouncesFolder && ex.crumbs.some(c => c.id === ex.bouncesFolder!.id)
+            ? 'bg-text-primary text-surface-elevated'
+            : 'bg-surface text-text-secondary border border-border/60',
+        )}
+      >
+        <Disc3 className="w-3.5 h-3.5" />
+        Bounces
+      </button>
+      {MOBILE_VIEWS.slice(1).map(({ view, label, icon: Icon }) => {
         const active = ex.view === view;
         const count = view === 'scheduled' ? ex.counts.scheduled : view === 'starred' ? ex.counts.starred : 0;
         return (
@@ -162,19 +189,6 @@ function ExplorerModals() {
         />,
       )}
 
-      {ex.upload && (
-        <SmartUploadModal
-          isOpen
-          onClose={() => { ex.setUpload(null); ex.onUploadFinished(); }}
-          onSuccess={ex.onUploadFinished}
-          initialFiles={ex.upload.files}
-          preselectedFolderId={ex.upload.folderId}
-          preselectedTargetType={ex.scope.type}
-          preselectedArtistId={ex.scope.type === 'artist' ? ex.scope.artistId : undefined}
-          preselectedPersonalProjectId={ex.scope.type === 'personal' ? ex.scope.projectId : undefined}
-        />
-      )}
-
       {ex.miniDawItem && (
         <DAWErrorBoundary onClose={() => ex.setMiniDawItem(null)}>
           <MiniDAWModal fileId={ex.miniDawItem.id} fileName={ex.miniDawItem.name} onClose={() => ex.setMiniDawItem(null)} />
@@ -184,13 +198,62 @@ function ExplorerModals() {
   );
 }
 
-function ExplorerLayout() {
+/**
+ * Sticky metrics inside the app's scroll container (#app-main).
+ * Sticky offsets are measured from the container's padding edge, so its top padding is
+ * compensated: `stickyTop` is the visual height already covered at the top (e.g. the artist tabs).
+ */
+function useStickyMetrics(stickyTop: number) {
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarH, setToolbarH] = useState(0);
+  const [metrics, setMetrics] = useState<{ padTop: number; usable: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    const update = () => setToolbarH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const main = document.getElementById('app-main');
+    if (!main) return;
+    const update = () => {
+      const cs = getComputedStyle(main);
+      setMetrics({
+        padTop: parseFloat(cs.paddingTop || '0'),
+        // Visible height excluding the space reserved at the bottom (mobile tab bar, mini player)
+        usable: main.clientHeight - parseFloat(cs.paddingBottom || '0'),
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(main);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  const padTop = metrics?.padTop ?? 0;
+  const style = {
+    '--x-top': `${stickyTop - padTop}px`,
+    '--x-toolbar': `${toolbarH}px`,
+    '--x-panel-h': metrics ? `${Math.max(320, metrics.usable - stickyTop)}px` : `calc(100dvh - ${stickyTop + 140}px)`,
+  } as React.CSSProperties;
+
+  return { toolbarRef, style };
+}
+
+function ExplorerLayout({ stickyTop }: { stickyTop: number }) {
   const ex = useExplorer();
-  const { currentTrack } = useAudioControls();
-  const { isDraggingFiles } = useGlobalDragDrop();
   const showSidebar = ex.isLg && !ex.sidebarCollapsed;
   const showInspector = ex.isXL && ex.inspectorVisible;
-  const dropFolderName = ex.currentFolderName;
+  const { toolbarRef, style } = useStickyMetrics(stickyTop);
 
   return (
     <div
@@ -198,36 +261,38 @@ function ExplorerLayout() {
       tabIndex={-1}
       onKeyDown={ex.onKeyDown}
       onPointerDownCapture={ex.onContainerPointerDown}
-      className={cn('outline-none w-full animate-fade-in', isDraggingFiles && 'relative z-[500]')}
+      style={style}
+      className="outline-none w-full animate-fade-in"
     >
-      <div
-        className={cn(
-          'flex rounded-2xl border border-border bg-surface-elevated overflow-hidden shadow-sm',
-          'md:min-h-[540px]',
-          currentTrack ? 'md:h-[calc(100dvh-14rem)]' : 'md:h-[calc(100dvh-10rem)]',
-        )}
-      >
+      {/* overflow-clip (not hidden) keeps the rounded corners without breaking position: sticky */}
+      <div className="flex items-stretch rounded-2xl border border-border bg-surface-elevated overflow-clip shadow-sm">
         {showSidebar && (
-          <aside className="w-64 shrink-0 border-r border-border/60 bg-surface-elevated/60 flex flex-col min-h-0" aria-label="Navegación de archivos">
-            <ExplorerSidebarContent />
+          <aside className="w-64 shrink-0 border-r border-border/60 bg-surface-elevated/60" aria-label="Navegación de archivos">
+            <div className="sticky top-[var(--x-top)] h-[var(--x-panel-h)] flex flex-col">
+              <ExplorerSidebarContent />
+            </div>
           </aside>
         )}
 
-        <section className="flex-1 min-w-0 flex flex-col min-h-0">
-          <ExplorerToolbar />
+        <section className="flex-1 min-w-0 flex flex-col">
+          <div ref={toolbarRef} className="sticky top-[var(--x-top)] z-20 rounded-t-2xl lg:rounded-none">
+            <ExplorerToolbar />
+          </div>
           <ViewChips />
           <div
             {...ex.containerDropProps}
-            className="relative flex-1 min-h-[360px] md:min-h-0 md:overflow-y-auto overscroll-contain bg-surface-elevated"
+            className="relative flex-1 min-h-[420px] bg-surface-elevated"
           >
             <ItemsView />
             {ex.fileDragOver && (
-              <div className="pointer-events-none absolute inset-2 z-20 rounded-2xl border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[2px] flex flex-col items-center justify-center text-center animate-fade-in">
-                <div className="w-14 h-14 rounded-2xl bg-accent/20 flex items-center justify-center mb-3">
-                  <UploadCloud className="w-7 h-7 text-accent" />
+              <div className="pointer-events-none absolute inset-2 z-10 rounded-2xl border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[2px] flex flex-col items-center justify-start pt-24 text-center animate-fade-in">
+                <div className="sticky top-[calc(var(--x-top)+var(--x-toolbar)+4rem)] flex flex-col items-center">
+                  <div className="w-14 h-14 rounded-2xl bg-accent/20 flex items-center justify-center mb-3">
+                    <UploadCloud className="w-7 h-7 text-accent" />
+                  </div>
+                  <p className="text-sm font-semibold text-text-primary">Suelta para subir a “{ex.currentFolderName}”</p>
+                  <p className="text-xs text-text-secondary mt-1">O suéltalos encima de una carpeta concreta</p>
                 </div>
-                <p className="text-sm font-semibold text-text-primary">Suelta para subir a “{dropFolderName}”</p>
-                <p className="text-xs text-text-secondary mt-1">O suéltalos encima de una carpeta concreta</p>
               </div>
             )}
           </div>
@@ -248,11 +313,11 @@ function ExplorerLayout() {
  * Tablet: folders in a drawer, details in a sheet. Phone: single column, tap to open,
  * long-press or "⋮" for actions, selection mode with a floating action bar.
  */
-export function FileExplorer(props: ExplorerProps) {
+export function FileExplorer({ stickyTop = 0, ...props }: ExplorerProps & { stickyTop?: number }) {
   const controller = useExplorerController(props);
   return (
     <ExplorerProvider value={controller}>
-      <ExplorerLayout />
+      <ExplorerLayout stickyTop={stickyTop} />
     </ExplorerProvider>
   );
 }

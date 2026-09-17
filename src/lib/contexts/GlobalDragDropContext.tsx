@@ -1,139 +1,179 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
+/**
+ * Platform-wide drag & drop of files from the computer.
+ *
+ * - Anything that accepts files itself (explorer folders, artist cards, project cards, tool drop zones…)
+ *   handles the `drop` event and calls `preventDefault()`.
+ * - Every other drop falls back to the *page drop context*: each page can describe what a drop "anywhere"
+ *   means there (upload to this artist, to this personal project, to the folder being viewed…) through
+ *   `useDropContext`. Without a registered context the drop opens the Smart Upload in auto-detect mode.
+ */
+
+export interface UploadRequest {
+  files: File[];
+  targetType?: 'artist' | 'personal';
+  artistId?: string;
+  /** Project folder of the artist (files are routed inside it by type) */
+  projectId?: string;
+  personalProjectId?: string;
+  /** Explicit destination folder. When omitted, Smart Upload routes files automatically. */
+  folderId?: string;
+  folderName?: string;
+  /** Called after the upload finished (successfully or not) so the page can refresh. */
+  onFinished?: () => void;
+}
+
+export interface DropContextInfo {
+  /** 'disabled' turns the global fallback off (pages with their own drop zones, e.g. tools). */
+  mode: 'auto' | 'artist' | 'personal' | 'disabled';
+  /** Short text shown while dragging, e.g. "Subir a Aaron Bzn". */
+  label?: string;
+  hint?: string;
+  artistId?: string;
+  projectId?: string;
+  personalProjectId?: string;
+  folderId?: string;
+  folderName?: string;
+  onFinished?: () => void;
+}
 
 interface GlobalDragDropContextValue {
   isDraggingFiles: boolean;
-  droppedFiles: File[];
-  preselectedArtistId: string | null;
-  preselectedFolderId: string | null;
-  preselectedTargetType: 'artist' | 'personal' | null;
-  preselectedPersonalProjectId: string | null;
-  clearDroppedFiles: () => void;
+  uploadRequest: (UploadRequest & { key: number }) | null;
+  dropContext: DropContextInfo | null;
+  openSmartUpload: (request: UploadRequest) => void;
+  closeSmartUpload: () => void;
+  registerDropContext: (info: DropContextInfo) => () => void;
+  /** @deprecated use openSmartUpload */
   triggerUploadForArtist: (files: File[], artistId: string, folderId?: string) => void;
+  /** @deprecated use openSmartUpload */
   triggerUploadForPersonalProject: (files: File[], projectId: string, folderId?: string) => void;
 }
 
+const noop = () => {};
+
 const GlobalDragDropContext = createContext<GlobalDragDropContextValue>({
   isDraggingFiles: false,
-  droppedFiles: [],
-  preselectedArtistId: null,
-  preselectedFolderId: null,
-  preselectedTargetType: null,
-  preselectedPersonalProjectId: null,
-  clearDroppedFiles: () => {},
-  triggerUploadForArtist: () => {},
-  triggerUploadForPersonalProject: () => {},
+  uploadRequest: null,
+  dropContext: null,
+  openSmartUpload: noop,
+  closeSmartUpload: noop,
+  registerDropContext: () => noop,
+  triggerUploadForArtist: noop,
+  triggerUploadForPersonalProject: noop,
 });
 
 export const useGlobalDragDrop = () => useContext(GlobalDragDropContext);
 
-export function GlobalDragDropProvider({ children }: { children: React.ReactNode }) {
-  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
-  const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
-  const [preselectedArtistId, setPreselectedArtistId] = useState<string | null>(null);
-  const [preselectedFolderId, setPreselectedFolderId] = useState<string | null>(null);
-  const [preselectedTargetType, setPreselectedTargetType] = useState<'artist' | 'personal' | null>(null);
-  const [preselectedPersonalProjectId, setPreselectedPersonalProjectId] = useState<string | null>(null);
-  const dragCounter = useRef(0);
+/** True when the drag carries real files from the OS (not text, links or in-app items). */
+export function isFileDrag(e: { dataTransfer: DataTransfer | null }): boolean {
+  return !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+}
+
+/**
+ * Describes what dropping files anywhere on the current page does.
+ * Pass `null` to leave the default (auto-detect) behaviour.
+ */
+export function useDropContext(info: DropContextInfo | null) {
+  const { registerDropContext } = useGlobalDragDrop();
+  const key = info ? JSON.stringify({ ...info, onFinished: undefined }) : '';
+  const onFinishedRef = useRef(info?.onFinished);
+  onFinishedRef.current = info?.onFinished;
 
   useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => {
-      // Only react to file drags
-      if (!e.dataTransfer?.types?.includes('Files')) return;
-      dragCounter.current++;
+    if (!info) return;
+    return registerDropContext({ ...info, onFinished: () => onFinishedRef.current?.() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, registerDropContext]);
+}
+
+export function GlobalDragDropProvider({ children }: { children: React.ReactNode }) {
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [uploadRequest, setUploadRequest] = useState<(UploadRequest & { key: number }) | null>(null);
+  const [contexts, setContexts] = useState<{ id: number; info: DropContextInfo }[]>([]);
+  const dragDepth = useRef(0);
+  const seq = useRef(0);
+
+  useEffect(() => {
+    const reset = () => {
+      dragDepth.current = 0;
+      setIsDraggingFiles(false);
+    };
+    const onDragEnter = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      dragDepth.current++;
       setIsDraggingFiles(true);
     };
-
-    const handleDragLeave = (e: DragEvent) => {
-      if (!e.dataTransfer?.types?.includes('Files')) return;
-      dragCounter.current--;
-      if (dragCounter.current <= 0) {
-        dragCounter.current = 0;
-        setIsDraggingFiles(false);
-      }
+    const onDragLeave = (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) reset();
+    };
+    const onDragOver = (e: DragEvent) => {
+      // Allow dropping files anywhere (otherwise the browser would open the file and leave the app)
+      if (isFileDrag(e)) e.preventDefault();
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      // Safety net for stuck states (e.g. the drag ended outside the window)
+      if (dragDepth.current > 0 && e.buttons === 0) reset();
     };
 
-    const handleDragOver = (e: DragEvent) => {
-      if (e.dataTransfer?.types?.includes('Files')) {
-        e.preventDefault();
-      }
-    };
-
-    const handleDrop = (e: DragEvent) => {
-      dragCounter.current = 0;
-      setIsDraggingFiles(false);
-    };
-
-    const handleDragEnd = () => {
-      dragCounter.current = 0;
-      setIsDraggingFiles(false);
-    };
-
-    // Failsafe for stuck drag states (common issue when dropping outside window)
-    const handleMouseMove = (e: MouseEvent) => {
-      if (dragCounter.current > 0 && e.buttons === 0) {
-        dragCounter.current = 0;
-        setIsDraggingFiles(false);
-      }
-    };
-
-    window.addEventListener('dragenter', handleDragEnter);
-    window.addEventListener('dragleave', handleDragLeave);
-    window.addEventListener('dragover', handleDragOver);
-    window.addEventListener('drop', handleDrop);
-    window.addEventListener('dragend', handleDragEnd);
-    window.addEventListener('mousemove', handleMouseMove);
-
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', reset);
+    window.addEventListener('dragend', reset);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('blur', reset);
     return () => {
-      window.removeEventListener('dragenter', handleDragEnter);
-      window.removeEventListener('dragleave', handleDragLeave);
-      window.removeEventListener('dragover', handleDragOver);
-      window.removeEventListener('drop', handleDrop);
-      window.removeEventListener('dragend', handleDragEnd);
-      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', reset);
+      window.removeEventListener('dragend', reset);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('blur', reset);
     };
   }, []);
 
-  const clearDroppedFiles = useCallback(() => {
-    setDroppedFiles([]);
-    setPreselectedArtistId(null);
-    setPreselectedFolderId(null);
-    setPreselectedTargetType(null);
-    setPreselectedPersonalProjectId(null);
+  const openSmartUpload = useCallback((request: UploadRequest) => {
+    dragDepth.current = 0;
+    setIsDraggingFiles(false);
+    setUploadRequest({ ...request, key: ++seq.current });
+  }, []);
+
+  const closeSmartUpload = useCallback(() => setUploadRequest(null), []);
+
+  const registerDropContext = useCallback((info: DropContextInfo) => {
+    const id = ++seq.current;
+    setContexts(prev => [...prev, { id, info }]);
+    return () => setContexts(prev => prev.filter(c => c.id !== id));
   }, []);
 
   const triggerUploadForArtist = useCallback((files: File[], artistId: string, folderId?: string) => {
-    setPreselectedTargetType('artist');
-    setPreselectedArtistId(artistId);
-    setPreselectedPersonalProjectId(null);
-    setPreselectedFolderId(folderId || null);
-    setDroppedFiles(files);
-    setIsDraggingFiles(false);
-  }, []);
+    openSmartUpload({ files, targetType: 'artist', artistId: artistId || undefined, folderId });
+  }, [openSmartUpload]);
 
   const triggerUploadForPersonalProject = useCallback((files: File[], projectId: string, folderId?: string) => {
-    setPreselectedTargetType('personal');
-    setPreselectedPersonalProjectId(projectId);
-    setPreselectedArtistId(null);
-    setPreselectedFolderId(folderId || null);
-    setDroppedFiles(files);
-    setIsDraggingFiles(false);
-  }, []);
+    openSmartUpload({ files, targetType: 'personal', personalProjectId: projectId || undefined, folderId });
+  }, [openSmartUpload]);
 
-  return (
-    <GlobalDragDropContext.Provider value={{
-      isDraggingFiles,
-      droppedFiles,
-      preselectedArtistId,
-      preselectedFolderId,
-      preselectedTargetType,
-      preselectedPersonalProjectId,
-      clearDroppedFiles,
-      triggerUploadForArtist,
-      triggerUploadForPersonalProject,
-    }}>
-      {children}
-    </GlobalDragDropContext.Provider>
-  );
+  // The most recently registered (deepest) context wins
+  const dropContext = contexts.length ? contexts[contexts.length - 1].info : null;
+
+  const value = useMemo(() => ({
+    isDraggingFiles,
+    uploadRequest,
+    dropContext,
+    openSmartUpload,
+    closeSmartUpload,
+    registerDropContext,
+    triggerUploadForArtist,
+    triggerUploadForPersonalProject,
+  }), [isDraggingFiles, uploadRequest, dropContext, openSmartUpload, closeSmartUpload, registerDropContext, triggerUploadForArtist, triggerUploadForPersonalProject]);
+
+  return <GlobalDragDropContext.Provider value={value}>{children}</GlobalDragDropContext.Provider>;
 }

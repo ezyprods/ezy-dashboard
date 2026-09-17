@@ -6,320 +6,305 @@ import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, getDriveService, listFolders, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
+
+// Artist-root folders that are never shown as projects in the portal
+const SYSTEM_FOLDERS = new Set([
+  'images', 'releases', 'documents', 'contracts', 'stems',
+  '01_legal_y_contratos', '02_diseño_y_media', '03_lanzamientos_y_proyectos', '02_bounces_y_grabaciones',
+]);
+// Folders whose content never appears in the portal (release artwork, profile images…)
+const HIDDEN_CONTENT_FOLDERS = new Set(['images', 'releases']);
+
+const DEFAULT_MODULES = [
+  { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas mezclas y archivos' },
+  { id: 'releases', type: 'releases', isVisible: true, order: 1, title: 'Previews y lanzamientos' },
+  { id: 'finances', type: 'finances', isVisible: false, order: 2, title: 'Resumen financiero' },
+  { id: 'tasks', type: 'tasks', isVisible: true, order: 3, title: 'Estado del trabajo' },
+];
+
+const FIELDS = 'nextPageToken, files(id, name, mimeType, webViewLink, createdTime, modifiedTime, size, appProperties, thumbnailLink, parents)';
+
+/** Effective date of a file: "[DD-MM-YYYY]" in the name (bounces) wins over Drive's modifiedTime. */
+function effectiveDate(file: any): number {
+  const match = (file.name || '').match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
+  if (match) {
+    const parsed = new Date(parseInt(match[3], 10), parseInt(match[2], 10) - 1, parseInt(match[1], 10)).getTime();
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return new Date(file.modifiedTime || file.createdTime || 0).getTime();
+}
+
+function isTrackable(col: any) {
+  return !col?.type || col.type === 'status' || col.type === 'file';
+}
+
+function matrixStats(matrix: any) {
+  const rows: any[] = matrix?.productionGrid?.rows || [];
+  const cols: any[] = (matrix?.productionGrid?.columns || []).filter(isTrackable);
+  const total = rows.length * cols.length;
+  let done = 0;
+  for (const r of rows) for (const c of cols) if (r?.cells?.[c.id]?.status === 'done') done++;
+  return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const resolvedParams = await params;
-    const { id } = resolvedParams;
+    const { id } = await params;
+    const drive = getDriveService();
 
-    // 1. Obtener la configuración del artista
-    const artistConfig = await findAndReadJsonFile<any>('artist_config.json', id);
+    const [artistConfig, storedPortalConfig, matricesData, feedbackData, allPayments] = await Promise.all([
+      findAndReadJsonFile<any>('artist_config.json', id),
+      findAndReadJsonFile<any>('portal_config.json', id).catch(() => null),
+      findAndReadJsonFile<any>('matrices.json', id).catch(() => null),
+      findAndReadJsonFile<any>('portal_feedback.json', id).catch(() => null),
+      findAndReadJsonFile<any[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null),
+    ]);
+
     if (!artistConfig) {
       return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
     }
 
-    // 1.5 Obtener configuración del portal
-    let portalConfig = await findAndReadJsonFile<any>('portal_config.json', id);
-    const defaultModules = [
-      { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas Mezclas / Archivos' },
-      { id: 'releases', type: 'releases', isVisible: true, order: 1, title: 'Previews y Lanzamientos' },
-      { id: 'finances', type: 'finances', isVisible: false, order: 2, title: 'Resumen Financiero' },
-      { id: 'tasks', type: 'tasks', isVisible: true, order: 3, title: 'Estado del Trabajo' },
-    ];
-    if (!portalConfig) {
-      portalConfig = { modules: defaultModules };
-    } else if (portalConfig.modules) {
-      const existingTypes = new Set(portalConfig.modules.map((m: any) => m.type));
-      defaultModules.forEach(defMod => {
-        if (!existingTypes.has(defMod.type)) {
-          portalConfig.modules.push({ ...defMod, order: portalConfig.modules.length });
-        }
-      });
-    } else {
-      portalConfig.modules = defaultModules;
+    const portalConfig: any = storedPortalConfig || { modules: DEFAULT_MODULES };
+    if (!Array.isArray(portalConfig.modules)) portalConfig.modules = [...DEFAULT_MODULES];
+    const existingTypes = new Set(portalConfig.modules.map((m: any) => m.type));
+    for (const def of DEFAULT_MODULES) {
+      if (!existingTypes.has(def.type)) portalConfig.modules.push({ ...def, order: portalConfig.modules.length });
     }
+    const hiddenProjectIds = new Set<string>(Array.isArray(portalConfig.hiddenProjectIds) ? portalConfig.hiddenProjectIds : []);
 
-    const drive = getDriveService();
-
-    // 2. Traversal recursivo — acumula todos los archivos y mapea carpetas de proyectos
-    const SYSTEM_FILES_SET = new Set([
-      'artist_config.json', 'portal_config.json', 'portal_feedback.json', 
-      'matrices.json', 'payments.json', 'tasks.json', 'project_config.json', 
-      'release_config.json', 'notes.json', 'payments_db.json', 'ezy-config.json'
-    ]);
-
-    const allArtistFiles: any[] = [];
-    const folderFilesMap = new Map<string, any[]>(); // folderId -> todos los archivos de esa carpeta y sus subcarpetas
-    const rootSubfolders: { id: string; name: string; webViewLink?: string }[] = [];
-
-    async function traverse(folderId: string, pathLabel: string, isRoot: boolean): Promise<any[]> {
-      const query = `'${folderId}' in parents and trashed=false`;
-      let pageToken: string | undefined = undefined;
-      const allFilesInBranch: any[] = [];
-
+    // ── 1. Breadth-first traversal of the artist folder, one level at a time in parallel ──
+    const listChildren = async (folderId: string) => {
+      const all: any[] = [];
+      let pageToken: string | undefined;
       do {
-        const response: any = await drive.files.list({
-          q: query,
-          fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size, appProperties)',
-          orderBy: 'folder, name',
+        const res: any = await drive.files.list({
+          q: `'${folderId}' in parents and trashed=false`,
+          fields: FIELDS,
           includeItemsFromAllDrives: true,
           supportsAllDrives: true,
           pageSize: 1000,
           pageToken,
         });
-        const items = response.data.files || [];
-
-        for (const item of items) {
-          const name = item.name || '';
-          if (item.mimeType === 'application/vnd.google-apps.folder') {
-            if (isRoot) rootSubfolders.push({ id: item.id, name: item.name, webViewLink: item.webViewLink });
-            // Recursión en toda subcarpeta
-            const subFiles = await traverse(item.id, pathLabel ? `${pathLabel} / ${name}` : name, false);
-            allFilesInBranch.push(...subFiles);
-          } else {
-            // Filtrar archivos de sistema
-            if (SYSTEM_FILES_SET.has(name) || name.endsWith('.json') || item.mimeType === 'application/json') continue;
-            // Filtrar expirados
-            const expiresAt = item.appProperties?.expiresAt ? parseInt(item.appProperties.expiresAt, 10) : null;
-            if (expiresAt && expiresAt < Date.now()) {
-              drive.files.delete({ fileId: item.id, supportsAllDrives: true }).catch(console.error);
-              continue;
-            }
-            const fileObj = {
-              ...item,
-              parentFolderId: folderId,
-              parentFolderName: pathLabel,
-              expiresAt,
-              bpm: item.appProperties?.bpm || null,
-              key: item.appProperties?.key || null,
-            };
-            allFilesInBranch.push(fileObj);
-            allArtistFiles.push(fileObj);
-          }
-        }
-        pageToken = response.data.nextPageToken || undefined;
+        all.push(...(res.data.files || []));
+        pageToken = res.data.nextPageToken || undefined;
       } while (pageToken);
+      return all;
+    };
 
-      folderFilesMap.set(folderId, allFilesInBranch);
-      return allFilesInBranch;
+    type FolderInfo = { id: string; name: string; path: string; projectId: string | null };
+    const folderInfo = new Map<string, FolderInfo>([[id, { id, name: artistConfig.name, path: '', projectId: null }]]);
+    const rootSubfolders: any[] = [];
+    const allFiles: any[] = [];
+    const now = Date.now();
+
+    let level = [id];
+    for (let depth = 0; level.length > 0 && depth < 12; depth++) {
+      const results = await Promise.all(level.map(async folderId => ({ folderId, items: await listChildren(folderId) })));
+      const next: string[] = [];
+      for (const { folderId, items } of results) {
+        const parent = folderInfo.get(folderId)!;
+        for (const item of items) {
+          const name: string = item.name || '';
+          if (item.mimeType === FOLDER_MIME) {
+            const lower = name.toLowerCase();
+            if (folderId === id) {
+              if (HIDDEN_CONTENT_FOLDERS.has(lower) || name.startsWith('00_') || name.startsWith('.')) continue;
+              rootSubfolders.push(item);
+            }
+            const isProject = folderId === id && !SYSTEM_FOLDERS.has(lower) && !/^bounces?$/i.test(name);
+            const projectId = folderId === id ? (isProject ? item.id : null) : parent.projectId;
+            if (projectId && hiddenProjectIds.has(projectId)) continue;
+            folderInfo.set(item.id, { id: item.id, name, path: parent.path ? `${parent.path} / ${name}` : name, projectId });
+            next.push(item.id);
+            continue;
+          }
+          if (name.endsWith('.json') || item.mimeType === 'application/json' || name.startsWith('.')) continue;
+          const expiresAt = item.appProperties?.expiresAt ? parseInt(item.appProperties.expiresAt, 10) : null;
+          if (expiresAt && expiresAt < now) {
+            drive.files.delete({ fileId: item.id, supportsAllDrives: true }).catch(() => {});
+            continue;
+          }
+          allFiles.push({
+            id: item.id,
+            name,
+            mimeType: item.mimeType,
+            size: item.size,
+            createdTime: item.createdTime,
+            modifiedTime: item.modifiedTime,
+            webViewLink: item.webViewLink,
+            thumbnailLink: item.thumbnailLink,
+            parentFolderId: folderId,
+            parentFolderName: parent.path,
+            projectId: parent.projectId,
+            expiresAt,
+            bpm: item.appProperties?.bpm || null,
+            key: item.appProperties?.key || null,
+            effectiveDate: effectiveDate(item),
+          });
+        }
+      }
+      level = next;
     }
 
-    await traverse(id, '', true);
+    allFiles.sort((a, b) => b.effectiveDate - a.effectiveDate);
 
-    const getEffectiveDate = (file: any) => {
-      const match = (file.name || '').match(/\[(\d{2})-(\d{2})-(\d{4})\]/);
-      if (match) {
-        const [, day, month, year] = match;
-        const parsed = new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)).getTime();
-        if (!isNaN(parsed) && parsed > 0) return parsed;
+    // ── 2. Projects ──
+    const matrices: any[] = Array.isArray(matricesData?.matrices) ? matricesData.matrices : [];
+    const projectFolders = rootSubfolders.filter(f => !SYSTEM_FOLDERS.has((f.name || '').toLowerCase()) && !/^bounces?$/i.test(f.name || '') && !hiddenProjectIds.has(f.id));
+
+    const projectsData = await Promise.all(projectFolders.map(async folder => {
+      const [projectConfig, tasksData] = await Promise.all([
+        findAndReadJsonFile<any>('project_config.json', folder.id).catch(() => null),
+        findAndReadJsonFile<any>('tasks.json', folder.id).catch(() => null),
+      ]);
+      const flatTasks: any[] = [];
+      if (Array.isArray(tasksData?.groups)) {
+        tasksData.groups.forEach((g: any) => (g.tasks || []).forEach((t: any) => flatTasks.push({ id: t.id, title: t.title, status: t.status === 'done' ? 'completed' : 'pending' })));
+      } else if (Array.isArray(tasksData)) {
+        tasksData.forEach((t: any) => flatTasks.push({ id: t.id, title: t.title, status: t.status === 'completed' ? 'completed' : 'pending' }));
       }
-      return new Date(file.modifiedTime || file.createdTime || 0).getTime();
-    };
+      const files = allFiles.filter(f => f.projectId === folder.id);
+      const sharedMatrix = matrices.find(m => m.projectId === folder.id && m.sharedInPortal === true);
+      return {
+        id: folder.id,
+        title: folder.name || projectConfig?.title || 'Proyecto',
+        type: projectConfig?.type || 'single',
+        status: projectConfig?.status || 'active',
+        deliveryDate: projectConfig?.deliveryDate || null,
+        releaseDate: projectConfig?.releaseDate || null,
+        budget: projectConfig?.budget || 0,
+        requirePaymentForDownload: !!projectConfig?.requirePaymentForDownload,
+        driveUrl: folder.webViewLink,
+        tasks: flatTasks,
+        progress: sharedMatrix ? matrixStats(sharedMatrix).percent : null,
+        lastActivity: files[0]?.effectiveDate || null,
+        bounces: files,
+        files,
+      };
+    }));
 
-    const dateSorter = (a: any, b: any) => {
-      return getEffectiveDate(b) - getEffectiveDate(a);
-    };
+    projectsData.sort((a, b) => {
+      if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
+      return (b.lastActivity || 0) - (a.lastActivity || 0);
+    });
 
-    allArtistFiles.sort(dateSorter);
+    // Files outside any project (e.g. the artist's Bounces folder or loose files)
+    const generalFiles = allFiles.filter(f => !f.projectId);
+    if (generalFiles.length > 0) {
+      projectsData.unshift({
+        id: 'general',
+        title: 'Bounces y archivos generales',
+        type: 'general',
+        status: 'active',
+        deliveryDate: null,
+        releaseDate: null,
+        budget: 0,
+        requirePaymentForDownload: false,
+        driveUrl: '',
+        tasks: [],
+        progress: null,
+        lastActivity: generalFiles[0]?.effectiveDate || null,
+        bounces: generalFiles,
+        files: generalFiles,
+      });
+    }
 
-    // 3. Proyectos del artista — carpetas de la raíz del artista que NO son carpetas del sistema
-    const SYSTEM_FOLDERS = new Set([
-      'Images', 'images', 'Releases', 'releases',
-      '01_Legal_y_Contratos', '02_Diseño_y_Media', '03_Lanzamientos_y_Proyectos', '02_Bounces_y_Grabaciones',
-      'Bounces', 'bounces', 'Documents', 'documents', 'Contracts', 'contracts', 'Stems', 'stems'
-    ]);
-    const projectFolders = rootSubfolders.filter(f => !SYSTEM_FOLDERS.has(f.name || ''));
-    const projectsData = await Promise.all(
-      projectFolders.map(async (projectFolder) => {
-        const projectConfig = await findAndReadJsonFile<any>('project_config.json', projectFolder.id) || { title: projectFolder.name, type: 'Project' };
-        const tasksData = await findAndReadJsonFile<any>('tasks.json', projectFolder.id) || { groups: [] };
-        const flatTasks: any[] = [];
-        if (tasksData && Array.isArray(tasksData.groups)) {
-          tasksData.groups.forEach((g: any) => {
-            if (Array.isArray(g.tasks)) {
-              g.tasks.forEach((t: any) => {
-                flatTasks.push({
-                  id: t.id,
-                  title: t.title,
-                  status: t.status === 'done' ? 'completed' : 'pending',
-                });
-              });
-            }
-          });
-        } else if (Array.isArray(tasksData)) {
-          tasksData.forEach((t: any) => {
-            flatTasks.push({
-              id: t.id,
-              title: t.title,
-              status: t.status === 'completed' ? 'completed' : 'pending',
-            });
-          });
-        }
-
-        const projectFiles = (folderFilesMap.get(projectFolder.id) || []).sort(dateSorter);
-
-        return {
-          id: projectFolder.id,
-          title: projectConfig.title || projectFolder.name,
-          type: projectConfig.type || 'Project',
-          status: projectConfig.status || 'active',
-          budget: projectConfig.budget || 0,
-          requirePaymentForDownload: !!projectConfig.requirePaymentForDownload,
-          driveUrl: projectFolder.webViewLink,
-          tasks: flatTasks,
-          bounces: projectFiles,
-          files: projectFiles,
-        };
-      })
-    );
-
-    // Entrada global "Todos los archivos" siempre al inicio
+    // "All files" entry first (kept for the release player and backwards compatibility)
     projectsData.unshift({
       id: 'all',
       title: 'Todos los archivos',
       type: 'Global',
       status: 'active',
+      deliveryDate: null,
+      releaseDate: null,
       budget: 0,
       requirePaymentForDownload: false,
       driveUrl: '',
       tasks: projectsData.flatMap(p => p.tasks),
-      bounces: allArtistFiles,
-      files: allArtistFiles,
+      progress: null,
+      lastActivity: allFiles[0]?.effectiveDate || null,
+      bounces: allFiles,
+      files: allFiles,
     });
 
-    // 4. Obtener resumen de pagos del artista
-    const allPayments = await findAndReadJsonFile<any[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID) || [];
-    const artistPayments = allPayments.filter(p => p.artistId === id && p.status === 'paid');
-
-    let totalBudget = 0;
-    let totalPaid = 0;
-
-    projectsData.forEach(p => {
-      totalBudget += (p.budget || 0);
-    });
-
-    artistPayments.forEach(p => {
-      totalPaid += (p.amount || 0);
-    });
-
+    // ── 3. Finances ──
+    const artistPayments = (allPayments || []).filter((p: any) => p.artistId === id && p.status === 'paid');
+    const totalBudget = projectsData.filter(p => p.id !== 'all' && p.id !== 'general').reduce((s, p) => s + (p.budget || 0), 0);
+    const totalPaid = artistPayments.reduce((s: number, p: any) => s + (p.amount || 0), 0);
     const pendingPayment = Math.max(0, totalBudget - totalPaid);
 
-    // 4.5 Obtener las matrices compartidas (solo las que tienen sharedInPortal === true)
-    const matricesData = await findAndReadJsonFile<any>('matrices.json', id) || { matrices: [] };
-    const sharedMatricesList = (matricesData.matrices || []).filter((m: any) => m.sharedInPortal === true);
-    const audioFilesForMatrix = allArtistFiles.filter((f: any) => 
-      f.mimeType?.includes('audio/') || 
-      /\.(wav|mp3|m4a|flac|aiff|ogg)$/i.test(f.name || '')
-    );
-
-    const normalize = (s: string) => {
-      if (!s) return '';
-      return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-    };
-
-    const sharedMatrices = sharedMatricesList.map((m: any) => {
-      let grid = m.productionGrid;
-      if (m.projectId && grid) {
-        const newRows = grid.rows.map((row: any) => {
-          const rowNameNorm = normalize(row.name);
-          if (!rowNameNorm) return row;
-          
-          const newCells = { ...row.cells };
-          let rowModified = false;
-
-          for (const col of grid.columns) {
-            if (col.type === 'file') {
-              const cell = newCells[col.id] || { status: 'todo' };
-              if (!cell.fileId) {
-                let bestMatch = null;
-                let bestScore = 0;
-                for (const file of audioFilesForMatrix) {
-                  const fileNameNorm = normalize(file.name);
-                  if (fileNameNorm.includes(rowNameNorm)) {
-                    const score = 1000 - (fileNameNorm.length - rowNameNorm.length);
-                    if (score > bestScore) {
-                      bestScore = score;
-                      bestMatch = file;
-                    }
-                  }
-                }
-                if (bestMatch) {
-                  newCells[col.id] = { ...cell, fileId: bestMatch.id, fileName: bestMatch.name, status: 'done' };
-                  rowModified = true;
+    // ── 4. Shared matrices (auto-link audio files by row name when a file column is empty) ──
+    const normalize = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+    const audioFiles = allFiles.filter(f => f.mimeType?.includes('audio/') || /\.(wav|mp3|m4a|flac|aiff?|ogg)$/i.test(f.name || ''));
+    const sharedMatrices = matrices
+      .filter(m => m.sharedInPortal === true && !(m.projectId && hiddenProjectIds.has(m.projectId)))
+      .map(m => {
+        let grid = m.productionGrid;
+        if (grid && Array.isArray(grid.rows) && Array.isArray(grid.columns)) {
+          grid = {
+            ...grid,
+            rows: grid.rows.map((row: any) => {
+              const rowName = normalize(row.name);
+              if (!rowName) return row;
+              const cells = { ...row.cells };
+              let changed = false;
+              for (const col of grid.columns) {
+                if (col.type !== 'file') continue;
+                const cell = cells[col.id] || { status: 'todo' };
+                if (cell.fileId) continue;
+                const candidates = audioFiles.filter(f => (!m.projectId || f.projectId === m.projectId) && normalize(f.name).includes(rowName));
+                const best = candidates.sort((a, b) => normalize(a.name).length - normalize(b.name).length)[0];
+                if (best) {
+                  cells[col.id] = { ...cell, fileId: best.id, fileName: best.name, status: 'done' };
+                  changed = true;
                 }
               }
-            }
-          }
-          return rowModified ? { ...row, cells: newCells } : row;
-        });
-        
-        grid = { ...grid, rows: newRows };
-      }
+              return changed ? { ...row, cells } : row;
+            }),
+          };
+        }
+        return { id: m.id, name: m.name, projectId: m.projectId || null, productionGrid: grid, stats: matrixStats({ productionGrid: grid }) };
+      });
 
-      return {
-        id: m.id,
-        name: m.name,
-        productionGrid: grid
-      };
-    });
-
-    // 5. Obtener releases públicas del artista
+    // ── 5. Public releases ──
     let releases: any[] = [];
     try {
-      const releasesQuery = `mimeType='application/vnd.google-apps.folder' and name='Releases' and '${id}' in parents and trashed=false`;
       const releasesRes = await drive.files.list({
-        q: releasesQuery,
+        q: `mimeType='${FOLDER_MIME}' and name='Releases' and '${id}' in parents and trashed=false`,
         fields: 'files(id)',
         includeItemsFromAllDrives: true,
         supportsAllDrives: true,
       });
-      
-      if (releasesRes.data.files && releasesRes.data.files.length > 0) {
-        const releasesFolderId = releasesRes.data.files[0].id!;
+      const releasesFolderId = releasesRes.data.files?.[0]?.id;
+      if (releasesFolderId) {
         const releaseFolders = await listFolders(releasesFolderId);
-
-        const releaseData = await Promise.all(
-          releaseFolders.map(async (rf) => {
-            const config = await findAndReadJsonFile<any>('release_config.json', rf.id!);
-            if (!config || !config.isPublic) return null;
-            return {
-              id: rf.id,
-              title: config.title,
-              coverArtId: config.coverArtId,
-              tracks: config.tracks || [],
-              isPublic: config.isPublic,
-              createdAt: config.createdAt,
-            };
-          })
-        );
-        releases = releaseData.filter(Boolean);
+        const data = await Promise.all(releaseFolders.map(async rf => {
+          const config = await findAndReadJsonFile<any>('release_config.json', rf.id!).catch(() => null);
+          if (!config || !config.isPublic) return null;
+          return { id: rf.id, title: config.title, coverArtId: config.coverArtId, tracks: config.tracks || [], isPublic: config.isPublic, createdAt: config.createdAt };
+        }));
+        releases = data.filter(Boolean);
       }
-    } catch (e) {
-      // silently ignore
+    } catch {
+      // releases are optional
     }
 
-    // 6. Leer feedbacks guardados
-    const feedbackData = await findAndReadJsonFile<any>('portal_feedback.json', id) || { feedback: [] };
+    // The producer-only fields never reach the artist
+    const { hiddenProjectIds: _hidden, ...publicConfig } = portalConfig;
 
-    const response = NextResponse.json({ 
-      artist: {
-        id: artistConfig.id,
-        name: artistConfig.name,
-        photo: artistConfig.photo,
-      },
+    const response = NextResponse.json({
+      artist: { id: artistConfig.id || id, name: artistConfig.name, photo: artistConfig.photo, photoUrl: artistConfig.photoUrl },
       producerName: portalConfig.producerName || 'EZY Studio',
       producerLogo: portalConfig.producerLogo,
+      welcomeMessage: portalConfig.welcomeMessage || '',
       projects: projectsData,
       releases,
-      finances: {
-        totalBudget,
-        totalPaid,
-        pendingPayment,
-      },
+      finances: { totalBudget, totalPaid, pendingPayment },
       sharedMatrices,
-      feedback: feedbackData.feedback || [],
-      config: portalConfig
+      feedback: (feedbackData?.feedback || []).filter((f: any) => !f.fromProducer || f.visibleToArtist !== false).slice(0, 50),
+      config: publicConfig,
     });
-
     response.headers.set('Cache-Control', 'no-store, max-age=0');
     return response;
   } catch (error: any) {
@@ -328,29 +313,33 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-// POST: guardar feedback del artista en el portal
+// POST: the artist sends a comment from the portal
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { message, authorName, trackId, trackTitle, timestamp } = body;
-
+    const message = typeof body.message === 'string' ? body.message.trim().slice(0, 4000) : '';
+    const authorName = typeof body.authorName === 'string' ? body.authorName.trim().slice(0, 80) : '';
     if (!message || !authorName) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Faltan el nombre o el mensaje' }, { status: 400 });
     }
 
-    const feedbackData = await findAndReadJsonFile<any>('portal_feedback.json', id) || { feedback: [] };
+    const portalConfig = await findAndReadJsonFile<any>('portal_config.json', id).catch(() => null);
+    if (portalConfig && portalConfig.showFeedback === false) {
+      return NextResponse.json({ error: 'Los comentarios están desactivados en este portal' }, { status: 403 });
+    }
 
+    const feedbackData = (await findAndReadJsonFile<any>('portal_feedback.json', id)) || { feedback: [] };
     const newFeedback = {
-      id: `fb_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      id: `fb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       message,
       authorName,
-      trackId: trackId || null,
-      trackTitle: trackTitle || null,
-      timestamp: timestamp || new Date().toISOString(),
+      trackId: typeof body.trackId === 'string' ? body.trackId : null,
+      trackTitle: typeof body.trackTitle === 'string' ? body.trackTitle.slice(0, 200) : null,
+      projectId: typeof body.projectId === 'string' ? body.projectId : null,
+      timestamp: new Date().toISOString(),
       isRead: false,
     };
-
     feedbackData.feedback = [newFeedback, ...(feedbackData.feedback || [])];
     await saveJsonFile('portal_feedback.json', feedbackData, id);
 

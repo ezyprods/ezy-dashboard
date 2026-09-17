@@ -59,7 +59,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    const updatedConfig = { ...config, ...body };
+    // Never let the client overwrite identity fields
+    const { id: _id, driveFolderId: _drive, artistId: _artist, ...safeBody } = body || {};
+    const updatedConfig = { ...config, ...safeBody, updatedAt: new Date().toISOString() };
+
+    // Renaming the project also renames its Drive folder
+    if (typeof safeBody.title === 'string' && safeBody.title.trim() && safeBody.title.trim() !== config.title) {
+      updatedConfig.title = safeBody.title.trim();
+      const drive = getDriveService();
+      await drive.files.update({ fileId: id, requestBody: { name: updatedConfig.title }, supportsAllDrives: true });
+    }
+
     await saveJsonFile('project_config.json', updatedConfig, id);
 
     return NextResponse.json({ project: updatedConfig });
@@ -74,9 +84,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const resolvedParams = await params;
     const { id } = resolvedParams;
 
+    // Move to the Drive trash (recoverable) instead of deleting permanently
     const drive = getDriveService();
-    await drive.files.delete({
+    await drive.files.update({
       fileId: id,
+      requestBody: { trashed: true },
       supportsAllDrives: true,
     });
 

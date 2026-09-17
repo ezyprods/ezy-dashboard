@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
+import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import { customConfirm, customPrompt } from '@/lib/dialog';
 import {
   addToTrash, apiCopy, apiCreateFolder, apiDeleteForever, apiSetExpiration, apiShareWith, apiTrash, apiUpdate,
@@ -163,6 +164,20 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
       });
   }, [folderId, rootId, rootName, index.items, setUrl]);
 
+  // Special folders: the artist's "Bounces" folder (where Smart Upload stores bounces) and
+  // the personal project's "01_Bounces_y_Demos".
+  const rootEntry = useFolder(rootId);
+  const bouncesFolder = useMemo(() => {
+    const folders = rootEntry.items.filter(i => i.isFolder);
+    return folders.find(f => /^bounces?$/i.test(f.name.trim()))
+      || folders.find(f => /bounce/i.test(f.name))
+      || null;
+  }, [rootEntry.items]);
+  const starredFolders = useMemo(
+    () => index.items.filter(i => i.isFolder && i.starred).sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true })),
+    [index.items],
+  );
+
   const currentFolderName = view === 'folder' ? (crumbs[crumbs.length - 1]?.name || rootName) : VIEW_LABEL[view];
 
   // ─── Visible items ───────────────────────────────────────────────────────
@@ -320,7 +335,6 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
   const [moveDialog, setMoveDialog] = useState<{ items: DriveItem[]; mode: 'move' | 'copy' } | null>(null);
   const [detailsSheetId, setDetailsSheetId] = useState<string | null>(null);
   const [miniDawItem, setMiniDawItem] = useState<DriveItem | null>(null);
-  const [upload, setUpload] = useState<{ files: File[]; folderId: string } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<string>(rootId);
@@ -365,9 +379,19 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
   const describe = (items: DriveItem[]) => (items.length === 1 ? `"${items[0].name}"` : `${items.length} elementos`);
 
   // ─── Navigation ──────────────────────────────────────────────────────────
+  /** After changing folder, bring the top of the explorer back into view if the page was scrolled past it. */
+  const scrollExplorerIntoView = useCallback(() => {
+    const el = containerRef.current;
+    const main = document.getElementById('app-main');
+    if (!el || !main) return;
+    const top = el.getBoundingClientRect().top - main.getBoundingClientRect().top;
+    const stickyTop = parseFloat(getComputedStyle(el).getPropertyValue('--x-top')) || 0;
+    if (top < stickyTop) main.scrollBy({ top: top - stickyTop - 8, behavior: 'smooth' });
+  }, []);
+
   const folderHref = useCallback((id: string) => {
     if (scope.type === 'artist') return `/artists/${scope.artistId}?tab=files${id !== rootId ? `&folderId=${id}` : ''}`;
-    return `/personal-projects/${scope.projectId}${id !== rootId ? `?folderId=${id}` : ''}`;
+    return `/personal-projects/${scope.projectId}?tab=files${id !== rootId ? `&folderId=${id}` : ''}`;
   }, [scope, rootId]);
 
   const openFolder = useCallback((target: Pick<DriveItem, 'id' | 'name' | 'parentId'> | Crumb, highlight?: string) => {
@@ -379,8 +403,8 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     setQuery('');
     setDrawerOpen(false);
     setUrl({ folderId: target.id, view: 'folder', highlight: highlight ?? null });
-    containerRef.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [rootId, rootName, setUrl]);
+    scrollExplorerIntoView();
+  }, [rootId, rootName, setUrl, scrollExplorerIntoView]);
 
   const openFolderById = useCallback((id: string) => {
     if (id === rootId) return openFolder({ id: rootId, name: rootName });
@@ -399,6 +423,27 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     setDrawerOpen(false);
     setUrl({ view: next, folderId: null, highlight: null });
   }, [setUrl]);
+
+  const openBounces = useCallback(async () => {
+    if (bouncesFolder) return openFolder(bouncesFolder);
+    if (rootEntry.status !== 'ready') {
+      await loadFolder(rootId, { force: true });
+    }
+    const name = scope.type === 'personal' ? '01_Bounces_y_Demos' : 'Bounces';
+    const ok = await customConfirm(
+      `Todavía no existe la carpeta "${name}" en ${rootName}. La Subida inteligente guarda ahí los bounces. ¿Quieres crearla ahora?`,
+      'Crear carpeta de bounces',
+    );
+    if (!ok) return;
+    try {
+      const id = await apiCreateFolder(name, rootId);
+      const now = new Date().toISOString();
+      insertItems([normalizeItem({ id, name, mimeType: FOLDER_MIME, createdTime: now, modifiedTime: now, parentFolderId: rootId }, rootId)], rootId);
+      openFolder({ id, name, parentId: rootId });
+    } catch (err: any) {
+      toast.error(`No se pudo crear la carpeta: ${err.message}`);
+    }
+  }, [bouncesFolder, rootEntry.status, rootId, rootName, scope.type, openFolder]);
 
   const revealInFolder = useCallback((item: DriveItem) => {
     if (!item.parentId) return;
@@ -745,10 +790,25 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
   }, [artistEmail]);
 
   // ─── Upload ──────────────────────────────────────────────────────────────
+  const { openSmartUpload } = useGlobalDragDrop();
   const openUpload = useCallback((files: File[], targetFolderId: string = folderId) => {
     if (files.length === 0) return;
-    setUpload({ files, folderId: targetFolderId });
-  }, [folderId]);
+    const targetName = targetFolderId === rootId ? rootName : (findItem(targetFolderId)?.name || currentFolderName);
+    openSmartUpload({
+      files,
+      targetType: scope.type,
+      artistId: scope.type === 'artist' ? scope.artistId : undefined,
+      personalProjectId: scope.type === 'personal' ? scope.projectId : undefined,
+      // At the root the Smart Upload routes files automatically (bounces → Bounces, projects…);
+      // inside a folder everything goes exactly where the user is.
+      folderId: targetFolderId === rootId ? undefined : targetFolderId,
+      folderName: targetFolderId === rootId ? undefined : targetName,
+      onFinished: () => {
+        loadFolder(targetFolderId, { force: true });
+        loadIndex(rootId, { force: true });
+      },
+    });
+  }, [folderId, rootId, rootName, currentFolderName, scope, openSmartUpload]);
 
   const pickFiles = useCallback((targetFolderId: string = folderId) => {
     uploadTargetRef.current = targetFolderId;
@@ -760,13 +820,6 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     e.target.value = '';
     if (files.length) openUpload(files, uploadTargetRef.current);
   }, [openUpload]);
-
-  const onUploadFinished = useCallback(() => {
-    const target = upload?.folderId || folderId;
-    loadFolder(target, { force: true });
-    if (target !== folderId) loadFolder(folderId, { force: true });
-    loadIndex(rootId, { force: true });
-  }, [upload, folderId, rootId]);
 
   const refresh = useCallback(() => {
     if (view === 'trash') loadTrash(rootId, { force: true });
@@ -1228,6 +1281,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     inspectorVisible, setInspectorVisible, drawerOpen, setDrawerOpen,
     // navigation
     view, setView, folderId, crumbs, currentFolderName, openFolder, openFolderById, goUp, revealInFolder, folderHref,
+    bouncesFolder, starredFolders, openBounces,
     // data
     folderEntry, index, trash, visibleItems, showLocation, isLoading, error, counts, locationOf, isSearchingEverywhere,
     query, setQuery, typeFilter, setTypeFilter, sortField, setSortField, sortDir, setSortDir,
@@ -1236,12 +1290,12 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     selectAll, clearSelection, highlightId, inspectorItem,
     // modals
     renamingId, setRenamingId, previewId, setPreviewId, shareItem, setShareItem, deleteDialog, setDeleteDialog,
-    moveDialog, setMoveDialog, detailsSheetId, setDetailsSheetId, miniDawItem, setMiniDawItem, upload, setUpload,
+    moveDialog, setMoveDialog, detailsSheetId, setDetailsSheetId, miniDawItem, setMiniDawItem,
     shortcutsOpen, setShortcutsOpen,
     // actions
     open, play, preview, openDetails, commitRename, startRename, performMove, performCopy, trashItems, restoreItems,
     deleteForever, toggleStar, setFolderColor, cancelSchedule, createFolder, download, openInDrive, copyLinks,
-    copyDownloadLink, shareNative, shareWithArtist, openUpload, pickFiles, onFileInputChange, onUploadFinished, refresh,
+    copyDownloadLink, shareNative, shareWithArtist, openUpload, pickFiles, onFileInputChange, refresh,
     undoLast, notify,
     // menus
     showItemMenu, showBackgroundMenu, showSortMenu, showColorMenu, buildItemMenu,

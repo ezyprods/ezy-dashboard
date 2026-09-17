@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   Music, 
   FolderTree, 
@@ -29,6 +29,7 @@ import type {
   WorkSession 
 } from '@/types';
 import { customAlert, customConfirm } from '@/lib/dialog';
+import { useDropContext } from '@/lib/contexts/GlobalDragDropContext';
 
 export default function PersonalProjectDetailPage() {
   const params = useParams();
@@ -38,7 +39,16 @@ export default function PersonalProjectDetailPage() {
   const [detail, setDetail] = useState<PersonalProjectDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'audio' | 'files' | 'tasks' | 'time' | 'soundbox'>('audio');
+  const searchParams = useSearchParams();
+  type TabKey = 'audio' | 'files' | 'tasks' | 'time' | 'soundbox';
+  const tabParam = searchParams.get('tab') as TabKey | null;
+  const activeTab: TabKey = tabParam && ['audio', 'files', 'tasks', 'time', 'soundbox'].includes(tabParam) ? tabParam : 'audio';
+  const setActiveTab = (key: TabKey) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', key);
+    if (key !== 'files') ['folderId', 'view', 'fileId', 'highlight'].forEach(k => url.searchParams.delete(k));
+    window.history.replaceState(null, '', `${url.pathname}?${url.searchParams.toString()}`);
+  };
 
   // Modals
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -68,6 +78,15 @@ export default function PersonalProjectDetailPage() {
       fetchDetail();
     }
   }, [projectId, fetchDetail]);
+
+  useDropContext(detail ? {
+    mode: 'personal',
+    personalProjectId: projectId,
+    label: `Subir a ${detail.project.title}`,
+    hint: activeTab === 'files' ? 'Suéltalo sobre una carpeta para elegir el destino exacto' : 'Los bounces van a 01_Bounces_y_Demos y los stems a 02_Stems_y_Pistas',
+    folderId: activeTab === 'files' ? (searchParams.get('folderId') || undefined) : undefined,
+    onFinished: () => fetchDetail(),
+  } : null);
 
   const handleUpdateStatus = async (newStatus: PersonalProjectStatus) => {
     if (!detail) return;

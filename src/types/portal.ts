@@ -90,6 +90,23 @@ export interface PortalConfig {
   enableTools?: boolean;
   allowedTools?: PortalToolId[];
   modules?: PortalModule[];
+  /** Short message shown at the top of the artist portal */
+  welcomeMessage?: string;
+  /** Artist projects (Drive folder ids) that are not shown in the portal */
+  hiddenProjectIds?: string[];
+}
+
+export interface PortalMessage {
+  id: string;
+  message: string;
+  authorName: string;
+  timestamp: string;
+  isRead: boolean;
+  fromProducer?: boolean;
+  replyTo?: string | null;
+  trackId?: string | null;
+  trackTitle?: string | null;
+  projectId?: string | null;
 }
 
 export interface FeedbackComment {

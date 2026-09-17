@@ -31,7 +31,8 @@ export async function GET(request: Request) {
       try {
         const config = await findAndReadJsonFile<Project>('project_config.json', folder.id!);
         if (config) {
-          return { ...config, driveFolderId: folder.id!, driveUrl: folder.webViewLink };
+          // The folder name is the source of truth for the title (it may have been renamed in Drive)
+          return { ...config, id: folder.id!, title: folder.name || config.title, driveFolderId: folder.id!, driveUrl: folder.webViewLink };
         } else {
           // Es una subcarpeta antigua que no fue creada por la app. Auto-inicializar como proyecto.
           const now = new Date().toISOString();

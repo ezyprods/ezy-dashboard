@@ -1,5 +1,6 @@
 'use client';
 
+import { isFileDrag, useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
@@ -174,29 +175,36 @@ export function PersonalProjectCard({
   };
 
   // Drag & drop handlers
+  const { openSmartUpload } = useGlobalDragDrop();
+
   const handleDragOver = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (!isDragOver) setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setIsDragOver(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg|aiff)$/i.test(file.name);
-      if (isAudio && onReplaceAudio) {
-        onReplaceAudio(project, file);
-      }
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length === 0) return;
+    const single = files.length === 1 ? files[0] : null;
+    const isAudio = !!single && (single.type.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg|aiff?)$/i.test(single.name));
+    if (single && isAudio && onReplaceAudio) {
+      // One audio file: replace the project's main bounce (with undo)
+      onReplaceAudio(project, single);
+    } else {
+      // Several files or other types: Smart Upload into this project
+      openSmartUpload({ files, targetType: 'personal', personalProjectId: project.id });
     }
   };
 

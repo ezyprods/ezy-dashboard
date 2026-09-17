@@ -273,15 +273,17 @@ export function DetailsContent() {
 export function InspectorPanel() {
   const ex = useExplorer();
   return (
-    <aside className="w-[320px] shrink-0 border-l border-border/60 bg-surface-elevated flex flex-col min-h-0" aria-label="Detalles">
-      <div className="flex items-center justify-between px-4 h-12 border-b border-border/60 shrink-0">
-        <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Detalles</span>
-        <button type="button" onClick={() => ex.setInspectorVisible(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-text-secondary hover:bg-surface hover:text-text-primary" aria-label="Cerrar detalles">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4">
-        <DetailsContent />
+    <aside className="w-[320px] shrink-0 border-l border-border/60 bg-surface-elevated" aria-label="Detalles">
+      <div className="sticky top-[var(--x-top)] h-[var(--x-panel-h)] flex flex-col">
+        <div className="flex items-center justify-between px-4 h-12 border-b border-border/60 shrink-0">
+          <span className="text-xs font-bold uppercase tracking-widest text-text-secondary">Detalles</span>
+          <button type="button" onClick={() => ex.setInspectorVisible(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-text-secondary hover:bg-surface hover:text-text-primary" aria-label="Cerrar detalles">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4">
+          <DetailsContent />
+        </div>
       </div>
     </aside>
   );

@@ -6,9 +6,10 @@ import { randomBytes } from 'crypto';
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_MODULES = [
-  { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas Mezclas / Audios' },
-  { id: 'tasks', type: 'tasks', isVisible: true, order: 1, title: 'Estado del Trabajo' },
-  { id: 'releases', type: 'releases', isVisible: true, order: 2, title: 'Releases / Previews' }
+  { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas mezclas y archivos' },
+  { id: 'releases', type: 'releases', isVisible: true, order: 1, title: 'Previews y lanzamientos' },
+  { id: 'finances', type: 'finances', isVisible: false, order: 2, title: 'Resumen financiero' },
+  { id: 'tasks', type: 'tasks', isVisible: true, order: 3, title: 'Estado del trabajo' },
 ];
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -20,8 +21,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       config = {
         artistId: id,
         token: randomBytes(16).toString('hex'),
-        producerName: 'Productor',
+        producerName: 'EZY Studio',
         showFeedback: true,
+        welcomeMessage: '',
+        hiddenProjectIds: [],
         createdAt: new Date().toISOString(),
         modules: DEFAULT_MODULES as any
       };
@@ -63,7 +66,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
     
     // The artist id and portal token can never be changed from the client
-    const updatedConfig = { ...config, ...body, artistId: config.artistId || id, token: config.token };
+    const { token: _token, artistId: _artistId, createdAt: _createdAt, ...safeBody } = body || {};
+    const updatedConfig = { ...config, ...safeBody, artistId: config.artistId || id, token: config.token };
     await saveJsonFile('portal_config.json', updatedConfig, id);
     
     return NextResponse.json({ config: updatedConfig });

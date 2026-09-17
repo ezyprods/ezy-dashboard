@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/Button";
 import { Plus, UploadCloud, AlertCircle, Music, Calendar, ChevronRight } from "lucide-react";
 import { NewArtistModal } from "@/components/artists/NewArtistModal";
-import { QuickUploadModal } from "@/components/dashboard/QuickUploadModal";
 import { NewProjectModal } from "@/components/projects/NewProjectModal";
 import { QuickMP3Downloader } from "@/components/dashboard/QuickMP3Downloader";
 import { CalendarWidget } from "@/components/dashboard/CalendarWidget";
@@ -20,7 +19,6 @@ import { useAppData } from '@/lib/contexts/AppDataContext';
 
 export default function DashboardPage() {
   const [isNewArtistModalOpen, setIsNewArtistModalOpen] = useState(false);
-  const [isQuickUploadOpen, setIsQuickUploadOpen] = useState(false);
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const router = useRouter();
   const { showMenu } = useContextMenu();
@@ -39,7 +37,6 @@ export default function DashboardPage() {
   return (
     <div className="flex-1 w-full h-auto min-h-full lg:h-full lg:min-h-0 flex flex-col gap-3 md:gap-6 animate-fade-in overflow-x-hidden lg:overflow-hidden pb-4 lg:pb-0">
       <NewArtistModal isOpen={isNewArtistModalOpen} onClose={() => setIsNewArtistModalOpen(false)} />
-      <QuickUploadModal isOpen={isQuickUploadOpen} onClose={() => setIsQuickUploadOpen(false)} artists={artists} />
       <NewProjectModal isOpen={isNewProjectOpen} onClose={() => setIsNewProjectOpen(false)} artists={artists} />
 
       {/* ROW 1: Compact Header */}
@@ -94,7 +91,7 @@ export default function DashboardPage() {
           </div>
 
           <div
-            onClick={() => setIsQuickUploadOpen(true)}
+            onClick={() => window.dispatchEvent(new CustomEvent('ezy:quick-upload'))}
             className="flex-1 relative overflow-hidden glass rounded-xl border border-border/60 hover:border-blue-500/50 cursor-pointer group transition-all flex items-center gap-3 p-3 md:px-4 shadow-sm hover:shadow-md hover:bg-surface-elevated/50"
           >
             <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none group-hover:scale-150 transition-transform duration-500" />
