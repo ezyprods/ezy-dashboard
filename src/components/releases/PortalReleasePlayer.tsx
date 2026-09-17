@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, SkipForward, SkipBack, Disc, GripVertical, Trash2, Plus, Image as ImageIcon, Loader2, ExternalLink } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Disc, GripVertical, Trash2, Plus, Image as ImageIcon, Loader2, ExternalLink, Download } from 'lucide-react';
 import { DndContext, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -67,6 +67,17 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       )}
+      <a 
+        href={`/api/files/${track.newFileId || track.originalFileId}?download=true`}
+        target="_blank"
+        rel="noopener noreferrer"
+        download
+        onClick={(e) => e.stopPropagation()}
+        className="p-1.5 text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none"
+        title="Descargar audio"
+      >
+        <Download className="w-3.5 h-3.5" />
+      </a>
       <a 
         href={`https://drive.google.com/file/d/${track.newFileId || track.originalFileId}/view`}
         target="_blank"
@@ -316,6 +327,29 @@ export function PortalReleasePlayer({
               Pista {currentTrackIndex + 1} de {tracks.length}
             </p>
           </div>
+          {currentTrack && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <a
+                href={`/api/files/${currentTrack.newFileId || currentTrack.originalFileId}?download=true`}
+                target="_blank"
+                rel="noopener noreferrer"
+                download
+                className="h-8 px-2.5 rounded-lg bg-surface/70 hover:bg-accent hover:text-white border border-border/60 text-text-secondary text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                title="Descargar esta canción"
+              >
+                <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Descargar</span>
+              </a>
+              <a
+                href={`https://drive.google.com/file/d/${currentTrack.newFileId || currentTrack.originalFileId}/view`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-8 h-8 rounded-lg bg-surface/70 hover:bg-surface border border-border/60 text-text-secondary hover:text-text-primary inline-flex items-center justify-center transition-colors"
+                title="Abrir en Google Drive"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Progress */}

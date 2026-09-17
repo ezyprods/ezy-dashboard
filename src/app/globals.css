@@ -73,7 +73,8 @@ html.light {
 html {
   scroll-behavior: smooth;
   color-scheme: dark;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior-x: none;
   /* iOS: no inflar el texto al girar a horizontal */
   -webkit-text-size-adjust: 100%;
@@ -93,7 +94,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   touch-action: manipulation;
-  overscroll-behavior: none;
+  overscroll-behavior-x: none;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 

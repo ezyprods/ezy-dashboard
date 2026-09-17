@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  Loader2, Music, CheckCircle2, Circle, CreditCard, AlertCircle, Sparkles, MessageSquare, Send, Disc, Play, Pause,
+  Loader2, Music, CheckCircle2, Circle, CreditCard, AlertCircle, Sparkles, Disc, Play, Pause,
   ChevronRight, Lock, Download, ExternalLink, Clock, TrendingUp, ListMusic, Eye, Wrench, RefreshCw, Search, X,
-  FolderOpen, Home, Files, FileText, FileImage, Film, FolderArchive, File as FileIcon, CornerDownRight, ChevronDown,
+  FolderOpen, Home, Files, FileText, FileImage, Film, FolderArchive, File as FileIcon, ChevronDown, ChevronUp,
   Scissors, Tags, Activity, Layers, Table2,
 } from 'lucide-react';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
@@ -61,10 +61,9 @@ export default function PortalPage() {
   const [projectId, setProjectId] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FileFilter>('all');
-  const [activeReleaseId, setActiveReleaseId] = useState<string | null>(null);
+  const [openReleaseId, setOpenReleaseId] = useState<string | null>(null);
   const [activeToolId, setActiveToolId] = useState<PortalToolId>('downloader');
   const [expandedMatrix, setExpandedMatrix] = useState<string | null>(null);
-  const [composer, setComposer] = useState<{ open: boolean; trackId?: string; trackTitle?: string }>({ open: false });
 
   const fetchPortal = useCallback(async (silent = false) => {
     if (silent) setIsRefreshing(true);
@@ -75,7 +74,7 @@ export default function PortalPage() {
       setData(json);
       setFailed(false);
       if (json.artist?.name) document.title = `${json.artist.name} · Portal`;
-      setActiveReleaseId(prev => (prev && json.releases?.some((r: any) => r.id === prev) ? prev : json.releases?.[0]?.id || null));
+      setOpenReleaseId(prev => (prev && json.releases?.some((r: any) => r.id === prev) ? prev : null));
       setProjectId(prev => (json.projects?.some((p: any) => p.id === prev) ? prev : 'all'));
     } catch {
       if (!silent) setFailed(true);
@@ -205,11 +204,6 @@ export default function PortalPage() {
           </div>
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
-          {config.showFeedback !== false && (
-            <button type="button" onClick={() => setComposer({ open: true, trackId: file.id, trackTitle: stripExt(file.name) })} className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface md:opacity-0 md:group-hover:opacity-100 focus:opacity-100" title="Comentar este archivo" aria-label="Comentar">
-              <MessageSquare className="w-4 h-4" />
-            </button>
-          )}
           {!audio && !locked && (
             <a href={`/api/files/${file.id}?inline=true`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-text-secondary hover:text-accent hover:bg-surface" title="Ver" aria-label="Ver"><Eye className="w-4 h-4" /></a>
           )}
@@ -372,18 +366,68 @@ export default function PortalPage() {
           <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
             <Disc className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Previews y lanzamientos'}</h2>
-            <button type="button" onClick={() => setSection('releases')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5">Abrir <ChevronRight className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={() => setSection('releases')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5 hover:underline">
+              Ver todo <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-3 md:p-4">
-            {data.releases.map((r: any) => (
-              <button key={r.id} type="button" onClick={() => { setActiveReleaseId(r.id); setSection('releases'); }} className="text-left group">
-                <div className="aspect-square rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center">
-                  {r.coverArtId ? <img src={getCoverArtUrl(r.coverArtId, 400)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <Disc className="w-10 h-10 text-text-secondary/30" />}
+          <div className="divide-y divide-border/40">
+            {data.releases.map((r: any) => {
+              const isOpen = openReleaseId === r.id;
+              return (
+                <div key={r.id}>
+                  <div className="flex items-center gap-3 px-4 md:px-5 py-3 hover:bg-surface/40 transition-colors">
+                    <div className="w-11 h-11 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
+                      {r.coverArtId ? (
+                        <img src={getCoverArtUrl(r.coverArtId, 160)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Disc className="w-5 h-5 text-accent/50" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-text-primary truncate">{r.title}</p>
+                      <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones · Escucha exclusiva</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
+                      className={cn(
+                        "h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all shrink-0 cursor-pointer",
+                        isOpen
+                          ? "bg-surface border border-border text-text-secondary hover:text-text-primary"
+                          : "bg-accent/10 hover:bg-accent text-accent hover:text-white"
+                      )}
+                    >
+                      {isOpen ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5" /> Cerrar
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5 fill-current" /> Abrir preview
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {isOpen && (
+                    <div className="p-4 md:p-5 border-t border-border/60 bg-surface/20 animate-fade-in">
+                      <PortalReleasePlayer
+                        release={r}
+                        allowArtistEdit={moduleOf('releases')?.config?.allowArtistEdit}
+                        bounces={allFiles}
+                        portalToken={config.token}
+                        artistId={artistId}
+                        onReleaseUpdate={(updated: any) =>
+                          setData((d: any) => ({
+                            ...d,
+                            releases: d.releases.map((rel: any) => (rel.id === updated.id ? updated : rel)),
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm font-semibold text-text-primary truncate mt-2">{r.title}</p>
-                <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones</p>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </section>
       );
@@ -468,18 +512,6 @@ export default function PortalPage() {
             </section>
 
             {modules.map(renderHomeModule)}
-
-            {config.showFeedback !== false && (
-              <MessagesSection
-                artistId={artistId}
-                feedback={data.feedback || []}
-                producerName={data.producerName}
-                composer={composer}
-                setComposer={setComposer}
-                files={allFiles}
-                onSent={msg => setData((d: any) => ({ ...d, feedback: [msg, ...(d.feedback || [])] }))}
-              />
-            )}
           </div>
         )}
 
@@ -539,41 +571,79 @@ export default function PortalPage() {
         )}
 
         {section === 'releases' && (
-          <div className="animate-fade-in">
+          <div className="space-y-4 animate-fade-in">
+            <div className="rounded-2xl border border-border bg-surface-elevated p-4 md:p-5 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                <Disc className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-bold text-text-primary">Previews y Lanzamientos</h2>
+                <p className="text-xs text-text-secondary">Escuchas exclusivas y descargas directas de tus canciones</p>
+              </div>
+            </div>
+
             {data.releases?.length ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-                <div className="space-y-2">
-                  {data.releases.map((r: any) => (
-                    <button key={r.id} type="button" onClick={() => setActiveReleaseId(r.id)} className={cn('w-full flex items-center gap-3 p-2.5 rounded-xl border text-left transition-colors', activeReleaseId === r.id ? 'border-accent/40 bg-accent/10' : 'border-border bg-surface-elevated hover:border-accent/30')}>
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
-                        {r.coverArtId ? <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" /> : <Disc className="w-6 h-6 text-text-secondary/30" />}
+              <div className="space-y-3">
+                {data.releases.map((r: any) => {
+                  const isOpen = openReleaseId === r.id;
+                  return (
+                    <div key={r.id} className="rounded-2xl border border-border bg-surface-elevated overflow-hidden transition-all shadow-sm">
+                      <div className="flex items-center gap-3.5 p-3.5 md:p-4">
+                        <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
+                          {r.coverArtId ? (
+                            <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <Disc className="w-6 h-6 text-accent/50" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm md:text-base font-bold text-text-primary truncate">{r.title}</h3>
+                          <p className="text-xs text-text-secondary mt-0.5">
+                            {r.tracks?.length || 0} canciones · Escucha exclusiva
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
+                          className={cn(
+                            "h-9 px-3.5 md:px-4 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 transition-all cursor-pointer",
+                            isOpen
+                              ? "bg-surface border border-border text-text-secondary hover:text-text-primary"
+                              : "bg-accent text-white shadow-md shadow-accent/25 hover:bg-accent/90"
+                          )}
+                        >
+                          {isOpen ? (
+                            <>
+                              <ChevronUp className="w-3.5 h-3.5" /> Cerrar preview
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5 fill-current" /> Abrir preview
+                            </>
+                          )}
+                        </button>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{r.title}</p>
-                        <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                <div className="lg:col-span-2 rounded-2xl border border-border bg-surface-elevated p-4 md:p-6">
-                  {(() => {
-                    const release = data.releases.find((r: any) => r.id === activeReleaseId) || data.releases[0];
-                    return (
-                      <>
-                        <h2 className="text-lg font-bold">{release.title}</h2>
-                        <p className="text-xs text-text-secondary mb-5">{release.tracks?.length || 0} canciones · Escucha exclusiva</p>
-                        <PortalReleasePlayer
-                          release={release}
-                          allowArtistEdit={moduleOf('releases')?.config?.allowArtistEdit}
-                          bounces={allFiles}
-                          portalToken={config.token}
-                          artistId={artistId}
-                          onReleaseUpdate={(updated: any) => setData((d: any) => ({ ...d, releases: d.releases.map((r: any) => (r.id === updated.id ? updated : r)) }))}
-                        />
-                      </>
-                    );
-                  })()}
-                </div>
+
+                      {isOpen && (
+                        <div className="border-t border-border/60 p-4 md:p-6 bg-surface/30 animate-fade-in">
+                          <PortalReleasePlayer
+                            release={r}
+                            allowArtistEdit={moduleOf('releases')?.config?.allowArtistEdit}
+                            bounces={allFiles}
+                            portalToken={config.token}
+                            artistId={artistId}
+                            onReleaseUpdate={(updated: any) =>
+                              setData((d: any) => ({
+                                ...d,
+                                releases: d.releases.map((rel: any) => (rel.id === updated.id ? updated : rel)),
+                              }))
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-text-secondary text-center py-20">Todavía no hay previews publicadas.</p>
@@ -604,118 +674,6 @@ export default function PortalPage() {
           </div>
         )}
       </main>
-
-      {/* Floating "message" button (outside the home, where the conversation lives) */}
-      {config.showFeedback !== false && section !== 'home' && section !== 'tools' && (
-        <button
-          type="button"
-          onClick={() => { setSection('home'); setComposer({ open: true }); setTimeout(() => document.getElementById('portal-messages')?.scrollIntoView({ behavior: 'smooth' }), 50); }}
-          className={cn('fixed right-4 z-40 h-12 px-4 rounded-full bg-accent text-white text-sm font-semibold shadow-xl shadow-accent/30 inline-flex items-center gap-2', currentTrack ? 'bottom-24' : 'bottom-6')}
-        >
-          <MessageSquare className="w-4 h-4" /> Mensaje
-        </button>
-      )}
     </div>
-  );
-}
-
-function MessagesSection({ artistId, feedback, producerName, composer, setComposer, files, onSent }: {
-  artistId: string;
-  feedback: any[];
-  producerName?: string;
-  composer: { open: boolean; trackId?: string; trackTitle?: string };
-  setComposer: (c: { open: boolean; trackId?: string; trackTitle?: string }) => void;
-  files: any[];
-  onSent: (msg: any) => void;
-}) {
-  const [name, setName] = useState('');
-  const [message, setMessage] = useState('');
-  const [trackId, setTrackId] = useState('');
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    try { setName(localStorage.getItem('ezy-portal-name') || ''); } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (composer.trackId) setTrackId(composer.trackId);
-    if (composer.open) setTimeout(() => document.getElementById('portal-messages')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
-  }, [composer]);
-
-  const threads = feedback.filter(f => !f.fromProducer).slice(0, 20);
-  const repliesFor = (id: string) => feedback.filter(f => f.fromProducer && f.replyTo === id).reverse();
-  const audioFiles = files.filter(isAudio).slice(0, 100);
-
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !message.trim()) return;
-    setSending(true);
-    try {
-      const track = files.find(f => f.id === trackId);
-      const res = await fetch(`/api/portal/${artistId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authorName: name.trim(), message: message.trim(), trackId: track?.id, trackTitle: track ? stripExt(track.name) : undefined, projectId: track?.projectId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No se pudo enviar');
-      try { localStorage.setItem('ezy-portal-name', name.trim()); } catch {}
-      onSent(data.feedback);
-      setMessage('');
-      setTrackId('');
-      setComposer({ open: false });
-      toast.success('Mensaje enviado. Tu productor lo verá enseguida.');
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <section id="portal-messages" className="rounded-2xl border border-border bg-surface-elevated overflow-hidden scroll-mt-24">
-      <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
-        <MessageSquare className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-bold flex-1">Mensajes con {producerName || 'tu productor'}</h2>
-      </div>
-      <form onSubmit={send} className="p-4 md:p-5 space-y-3 border-b border-border/60">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Tu nombre" className="h-11 bg-surface border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-accent" required />
-          <div className="relative">
-            <select value={trackId} onChange={e => setTrackId(e.target.value)} className="w-full h-11 appearance-none bg-surface border border-border rounded-xl pl-3 pr-9 text-sm focus:outline-none focus:border-accent">
-              <option value="">Sobre… (opcional)</option>
-              {audioFiles.map(f => <option key={f.id} value={f.id}>{stripExt(f.name)}</option>)}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary" />
-          </div>
-        </div>
-        <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} placeholder="Escribe tus comentarios: cambios en la mezcla, dudas, ideas…" className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-accent resize-none" required />
-        <div className="flex justify-end">
-          <button type="submit" disabled={sending || !name.trim() || !message.trim()} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold disabled:opacity-40 inline-flex items-center gap-2">
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar
-          </button>
-        </div>
-      </form>
-      {threads.length > 0 && (
-        <div className="divide-y divide-border/50">
-          {threads.map(t => (
-            <div key={t.id} className="px-4 md:px-5 py-3">
-              <div className="flex items-center gap-2 text-[11px] text-text-secondary">
-                <span className="font-semibold text-text-primary">{t.authorName}</span>
-                <span>{formatRelativeTime(t.timestamp)}</span>
-                {t.trackTitle && <span className="text-accent truncate">· 🎵 {t.trackTitle}</span>}
-              </div>
-              <p className="text-sm text-text-primary whitespace-pre-line break-words mt-0.5">{t.message}</p>
-              {repliesFor(t.id).map(r => (
-                <div key={r.id} className="mt-2 ml-2 pl-3 border-l-2 border-accent/50">
-                  <p className="text-[11px] text-accent font-semibold inline-flex items-center gap-1"><CornerDownRight className="w-3 h-3" /> {r.authorName || producerName} · {formatRelativeTime(r.timestamp)}</p>
-                  <p className="text-sm text-text-primary whitespace-pre-line break-words">{r.message}</p>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }

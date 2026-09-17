@@ -4,14 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Loader2, Eye, EyeOff, ArrowUp, ArrowDown, ExternalLink, Copy, Globe, Wrench, Download, RefreshCw, Scissors,
-  Tags, Activity, Layers, MessageSquare, Send, Trash2, Check, CheckCheck, FolderOpen, Sparkles, LayoutTemplate,
-  CircleCheck, Share2, Mail, CornerDownRight,
+  Tags, Activity, Layers, Check, FolderOpen, Sparkles, LayoutTemplate,
+  CircleCheck, Share2, Mail,
 } from 'lucide-react';
-import { cn, formatRelativeTime } from '@/lib/utils';
-import { customConfirm } from '@/lib/dialog';
+import { cn } from '@/lib/utils';
 import { copyText, canNativeShare, nativeShare } from '@/components/explorer/explorerUtils';
 import { useAppData } from '@/lib/contexts/AppDataContext';
-import { PORTAL_TOOLS, type PortalConfig, type PortalMessage, type PortalModule, type PortalToolId } from '@/types/portal';
+import { PORTAL_TOOLS, type PortalConfig, type PortalModule, type PortalToolId } from '@/types/portal';
 import type { Project } from '@/types';
 import { PROJECT_STATUS_META } from '@/components/projects/EditProjectModal';
 
@@ -57,11 +56,6 @@ export function ArtistPortalTab({ artistId, artistName, projects = [] }: PortalT
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [messages, setMessages] = useState<PortalMessage[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(true);
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState('');
-  const [sending, setSending] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestConfig = useRef<PortalConfig | null>(null);
 
@@ -81,16 +75,7 @@ export function ArtistPortalTab({ artistId, artistName, projects = [] }: PortalT
     }
   }, [artistId]);
 
-  const fetchMessages = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/artists/${artistId}/portal/feedback`);
-      if (res.ok) setMessages((await res.json()).feedback || []);
-    } finally {
-      setMessagesLoading(false);
-    }
-  }, [artistId]);
-
-  useEffect(() => { fetchConfig(); fetchMessages(); }, [fetchConfig, fetchMessages]);
+  useEffect(() => { fetchConfig(); }, [fetchConfig]);
 
   const flush = useCallback(async () => {
     const cfg = latestConfig.current;
@@ -152,51 +137,7 @@ export function ArtistPortalTab({ artistId, artistName, projects = [] }: PortalT
 
   const hidden = new Set(config?.hiddenProjectIds || []);
 
-  // ─── Messages ───────────────────────────────────────────────────────────
-  const inbox = messages.filter(m => !m.fromProducer);
-  const unread = inbox.filter(m => !m.isRead).length;
-  const repliesFor = (id: string) => messages.filter(m => m.fromProducer && m.replyTo === id).reverse();
 
-  const markRead = async (ids: string[] | null, isRead = true) => {
-    const prev = messages;
-    setMessages(ms => ms.map(m => (!ids || ids.includes(m.id) ? { ...m, isRead } : m)));
-    const res = await fetch(`/api/artists/${artistId}/portal/feedback`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids, isRead }),
-    }).catch(() => null);
-    if (!res?.ok) { setMessages(prev); toast.error('No se pudo actualizar'); }
-  };
-
-  const sendReply = async (messageId: string) => {
-    if (!replyText.trim()) return;
-    setSending(true);
-    try {
-      const res = await fetch(`/api/artists/${artistId}/portal/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: replyText.trim(), replyTo: messageId, authorName: config?.producerName || 'Productor' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMessages(ms => [data.feedback, ...ms.map(m => (m.id === messageId ? { ...m, isRead: true } : m))]);
-      setReplyText('');
-      setReplyTo(null);
-      toast.success('Respuesta enviada: el artista la verá en su portal');
-    } catch (err: any) {
-      toast.error(err.message || 'No se pudo enviar la respuesta');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const deleteMessage = async (messageId: string) => {
-    if (!await customConfirm('Se eliminará el mensaje y sus respuestas.', 'Eliminar mensaje')) return;
-    const prev = messages;
-    setMessages(ms => ms.filter(m => m.id !== messageId && m.replyTo !== messageId));
-    const res = await fetch(`/api/artists/${artistId}/portal/feedback?messageId=${encodeURIComponent(messageId)}`, { method: 'DELETE' }).catch(() => null);
-    if (!res?.ok) { setMessages(prev); toast.error('No se pudo eliminar'); }
-  };
 
   if (isLoading) {
     return (
@@ -252,69 +193,6 @@ export function ArtistPortalTab({ artistId, artistName, projects = [] }: PortalT
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
         <div className="lg:col-span-2 space-y-4">
-          {/* Inbox */}
-          <Section
-            title={`Mensajes del artista${unread ? ` · ${unread} sin leer` : ''}`}
-            icon={MessageSquare}
-            action={unread > 0 ? <button type="button" onClick={() => markRead(null)} className="text-xs font-semibold text-accent inline-flex items-center gap-1"><CheckCheck className="w-3.5 h-3.5" /> Marcar todo leído</button> : undefined}
-          >
-            {!config.showFeedback && (
-              <p className="text-xs text-warning mb-3">Los comentarios están desactivados: el artista no puede enviar mensajes. Actívalos en Personalización.</p>
-            )}
-            {messagesLoading ? (
-              <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-accent" /></div>
-            ) : inbox.length === 0 ? (
-              <div className="py-8 text-center">
-                <MessageSquare className="w-8 h-8 text-text-secondary/40 mx-auto mb-2" />
-                <p className="text-sm text-text-secondary">Aún no hay mensajes. El artista puede escribirte desde su portal, incluso sobre una canción concreta.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {inbox.map(msg => (
-                  <div key={msg.id} className={cn('rounded-xl border p-3', msg.isRead ? 'border-border/60' : 'border-accent/40 bg-accent/5')}>
-                    <div className="flex items-start gap-3">
-                      <span className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold text-text-primary shrink-0">
-                        {(msg.authorName || '?').slice(0, 1).toUpperCase()}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <span className="text-sm font-semibold text-text-primary">{msg.authorName}</span>
-                          <span className="text-[11px] text-text-secondary">{formatRelativeTime(msg.timestamp)}</span>
-                          {!msg.isRead && <span className="text-[10px] font-bold uppercase text-accent">Nuevo</span>}
-                        </div>
-                        {msg.trackTitle && <p className="text-[11px] text-accent mt-0.5 truncate">🎵 {msg.trackTitle}</p>}
-                        <p className="text-sm text-text-primary mt-1 whitespace-pre-line break-words">{msg.message}</p>
-                        {repliesFor(msg.id).map(r => (
-                          <div key={r.id} className="mt-2 pl-3 border-l-2 border-accent/40">
-                            <p className="text-[11px] text-text-secondary inline-flex items-center gap-1"><CornerDownRight className="w-3 h-3" /> Tu respuesta · {formatRelativeTime(r.timestamp)}</p>
-                            <p className="text-sm text-text-primary whitespace-pre-line break-words">{r.message}</p>
-                          </div>
-                        ))}
-                        {replyTo === msg.id ? (
-                          <div className="mt-2 space-y-2">
-                            <textarea autoFocus value={replyText} onChange={e => setReplyText(e.target.value)} rows={3} placeholder="Escribe tu respuesta… (el artista la verá en su portal)" className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none" onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) sendReply(msg.id); }} />
-                            <div className="flex justify-end gap-2">
-                              <button type="button" onClick={() => { setReplyTo(null); setReplyText(''); }} className="h-9 px-3 rounded-lg border border-border text-xs font-medium hover:bg-surface">Cancelar</button>
-                              <button type="button" disabled={sending || !replyText.trim()} onClick={() => sendReply(msg.id)} className="h-9 px-3 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-40 inline-flex items-center gap-1.5">
-                                {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Responder
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-2 flex items-center gap-1">
-                            <button type="button" onClick={() => { setReplyTo(msg.id); setReplyText(''); }} className="h-8 px-2.5 rounded-lg text-xs font-semibold text-accent hover:bg-accent/10 inline-flex items-center gap-1"><Send className="w-3.5 h-3.5" /> Responder</button>
-                            <button type="button" onClick={() => markRead([msg.id], !msg.isRead)} className="h-8 px-2.5 rounded-lg text-xs font-medium text-text-secondary hover:bg-surface">{msg.isRead ? 'Marcar no leído' : 'Marcar leído'}</button>
-                            <button type="button" onClick={() => deleteMessage(msg.id)} className="h-8 w-8 rounded-lg text-text-secondary hover:text-error hover:bg-error/10 inline-flex items-center justify-center ml-auto" aria-label="Eliminar"><Trash2 className="w-3.5 h-3.5" /></button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Section>
-
           {/* Projects visibility */}
           <Section title="Proyectos visibles en el portal" icon={FolderOpen}>
             {projects.length === 0 ? (
@@ -394,14 +272,7 @@ export function ArtistPortalTab({ artistId, artistName, projects = [] }: PortalT
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-text-secondary">Mensaje de bienvenida</label>
-                <textarea value={config.welcomeMessage || ''} onChange={e => change({ welcomeMessage: e.target.value }, 900)} rows={4} placeholder={`Ej: ¡Hola ${artistName || ''}! Aquí tienes las últimas mezclas. Cualquier cambio, déjame un mensaje abajo.`} className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none" />
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary">Mensajes del artista</p>
-                  <p className="text-[11px] text-text-secondary">Permite enviarte comentarios desde el portal</p>
-                </div>
-                <Toggle checked={config.showFeedback !== false} onChange={v => change({ showFeedback: v })} label="Mensajes del artista" />
+                <textarea value={config.welcomeMessage || ''} onChange={e => change({ welcomeMessage: e.target.value }, 900)} rows={4} placeholder={`Ej: ¡Hola ${artistName || ''}! Aquí tienes todos tus archivos, mezclas y el estado del trabajo.`} className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none" />
               </div>
             </div>
           </Section>
