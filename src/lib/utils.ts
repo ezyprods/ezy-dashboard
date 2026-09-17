@@ -343,3 +343,29 @@ export function sortArtistsByRecent<T extends { id: string, name: string, update
     return a.name.localeCompare(b.name);
   });
 }
+
+// Trigger silent file download without opening a new browser tab or playing audio
+export function triggerFileDownload(fileId: string, filename?: string) {
+  if (typeof window === 'undefined' || !fileId) return;
+
+  const url = `/api/files/${fileId}?download=true`;
+  const link = document.createElement('a');
+  link.href = url;
+  if (filename) {
+    link.setAttribute('download', filename);
+  } else {
+    link.setAttribute('download', '');
+  }
+  link.style.position = 'fixed';
+  link.style.top = '-9999px';
+  link.style.left = '-9999px';
+  link.style.opacity = '0';
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    if (document.body.contains(link)) {
+      document.body.removeChild(link);
+    }
+  }, 2000);
+}
+

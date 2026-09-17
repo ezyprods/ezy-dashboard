@@ -7,7 +7,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } 
 import { CSS } from '@dnd-kit/utilities';
 import { PortalTrackPickerModal } from './PortalTrackPickerModal';
 import { customAlert } from '@/lib/dialog';
-import { getCoverArtUrl } from '@/lib/utils';
+import { getCoverArtUrl, triggerFileDownload } from '@/lib/utils';
 
 // --- Sortable Track Item ---
 function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTrack, allowArtistEdit, onRemove }: any) {
@@ -20,64 +20,71 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
     opacity: isDragging ? 0.8 : 1,
   };
 
+  const isCurrent = currentTrackIndex === index;
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left group bg-surface ${
-        currentTrackIndex === index
+      onClick={() => playTrack(index)}
+      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left group bg-surface cursor-pointer select-none ${
+        isCurrent
           ? 'border-accent/30 bg-accent/8 text-text-primary shadow-sm'
           : 'border-transparent text-text-secondary hover:border-border/60 hover:text-text-primary hover:bg-surface-elevated/30'
       }`}
     >
       {allowArtistEdit && (
-        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 text-text-secondary/40 hover:text-text-primary transition-colors shrink-0 outline-none">
+        <div 
+          {...attributes} 
+          {...listeners} 
+          onClick={(e) => e.stopPropagation()}
+          className="cursor-grab active:cursor-grabbing p-1 text-text-secondary/40 hover:text-text-primary transition-colors shrink-0 outline-none"
+        >
           <GripVertical className="w-4 h-4" />
         </div>
       )}
       
-      <button onClick={() => playTrack(index)} className="flex items-center gap-3 flex-1 min-w-0 outline-none">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className="w-6 text-center shrink-0">
-          {currentTrackIndex === index && isPlaying ? (
+          {isCurrent && isPlaying ? (
             <div className="flex items-center justify-center gap-0.5 h-4">
               <div className="w-0.5 bg-accent h-3 animate-[bounce_0.8s_ease-in-out_infinite]" />
               <div className="w-0.5 bg-accent h-4 animate-[bounce_0.8s_ease-in-out_infinite_100ms]" />
               <div className="w-0.5 bg-accent h-2 animate-[bounce_0.8s_ease-in-out_infinite_200ms]" />
             </div>
           ) : (
-            <span className={`text-xs font-mono ${currentTrackIndex === index ? 'text-accent' : 'text-text-secondary/60'}`}>
+            <span className={`text-xs font-mono ${isCurrent ? 'text-accent font-bold' : 'text-text-secondary/60'}`}>
               {index + 1}
             </span>
           )}
         </div>
-        <span className={`text-xs font-semibold flex-1 truncate ${currentTrackIndex === index ? 'text-text-primary' : ''}`}>
+        <span className={`text-xs font-semibold flex-1 truncate ${isCurrent ? 'text-text-primary' : ''}`}>
           {track.title}
         </span>
-        {!allowArtistEdit && (
-          <Play className="w-3.5 h-3.5 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
-        )}
-      </button>
+      </div>
 
       {allowArtistEdit && (
         <button 
+          type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(track.id); }}
-          className="p-1.5 text-text-secondary/40 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all shrink-0 outline-none"
+          className="p-1.5 text-text-secondary/40 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all shrink-0 outline-none cursor-pointer"
           title="Eliminar pista"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       )}
-      <a 
-        href={`/api/files/${track.newFileId || track.originalFileId}?download=true`}
-        target="_blank"
-        rel="noopener noreferrer"
-        download
-        onClick={(e) => e.stopPropagation()}
-        className="p-1.5 text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none"
+      <button 
+        type="button"
+        onClick={(e) => { 
+          e.preventDefault(); 
+          e.stopPropagation(); 
+          triggerFileDownload(track.newFileId || track.originalFileId, track.title); 
+        }}
+        className="p-1.5 text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none cursor-pointer"
         title="Descargar audio"
       >
         <Download className="w-3.5 h-3.5" />
-      </a>
+      </button>
       <a 
         href={`https://drive.google.com/file/d/${track.newFileId || track.originalFileId}/view`}
         target="_blank"
@@ -297,7 +304,11 @@ export function PortalReleasePlayer({
         )}
         
         <div className="flex items-center gap-4 mb-4">
-          <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shadow-lg shadow-accent/10 shrink-0 group">
+          <div 
+            onClick={() => setIsPlaying(prev => !prev)}
+            className="relative w-16 h-16 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shadow-lg shadow-accent/10 shrink-0 group cursor-pointer"
+            title={isPlaying ? "Pausar" : "Reproducir"}
+          >
             {release.coverArtId ? (
               <img src={getCoverArtUrl(release.coverArtId, 300)} alt="Cover" className="w-full h-full object-cover" />
             ) : (
@@ -316,33 +327,41 @@ export function PortalReleasePlayer({
                   disabled={isUploadingCover}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   title="Cambiar Portada"
+                  onClick={(e) => e.stopPropagation()}
                 />
               </>
             )}
           </div>
-          <div className="flex-1 min-w-0">
+          <div 
+            onClick={() => setIsPlaying(prev => !prev)}
+            className="flex-1 min-w-0 cursor-pointer select-none"
+            title={isPlaying ? "Pausar" : "Reproducir"}
+          >
             <p className="text-[10px] text-accent font-bold uppercase tracking-widest mb-1">Escucha Exclusiva</p>
-            <h4 className="font-bold text-text-primary truncate">{currentTrack?.title || release.title}</h4>
+            <h4 className="font-bold text-text-primary truncate hover:text-accent transition-colors">{currentTrack?.title || release.title}</h4>
             <p className="text-xs text-text-secondary mt-0.5">
               Pista {currentTrackIndex + 1} de {tracks.length}
             </p>
           </div>
           {currentTrack && (
             <div className="flex items-center gap-1.5 shrink-0">
-              <a
-                href={`/api/files/${currentTrack.newFileId || currentTrack.originalFileId}?download=true`}
-                target="_blank"
-                rel="noopener noreferrer"
-                download
-                className="h-8 px-2.5 rounded-lg bg-surface/70 hover:bg-accent hover:text-white border border-border/60 text-text-secondary text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  triggerFileDownload(currentTrack.newFileId || currentTrack.originalFileId, currentTrack.title);
+                }}
+                className="h-8 px-2.5 rounded-lg bg-surface/70 hover:bg-accent hover:text-white border border-border/60 text-text-secondary text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Descargar esta canción"
               >
                 <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Descargar</span>
-              </a>
+              </button>
               <a
                 href={`https://drive.google.com/file/d/${currentTrack.newFileId || currentTrack.originalFileId}/view`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
                 className="w-8 h-8 rounded-lg bg-surface/70 hover:bg-surface border border-border/60 text-text-secondary hover:text-text-primary inline-flex items-center justify-center transition-colors"
                 title="Abrir en Google Drive"
               >

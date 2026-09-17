@@ -19,7 +19,7 @@ import { PortalReleasePlayer } from '@/components/releases/PortalReleasePlayer';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
-import { cn, getCoverArtUrl, formatRelativeTime } from '@/lib/utils';
+import { cn, getCoverArtUrl, formatRelativeTime, triggerFileDownload } from '@/lib/utils';
 
 const TOOL_ICONS: Record<string, React.ElementType> = { Download, RefreshCw, Scissors, Tags, Activity, Layers };
 
@@ -127,6 +127,23 @@ export default function PortalPage() {
     });
   };
 
+  const handleDownloadRelease = (release: any) => {
+    const tracks = release?.tracks || [];
+    if (tracks.length === 0) {
+      toast.error('No hay canciones para descargar');
+      return;
+    }
+    toast.success(tracks.length === 1 ? `Descargando ${tracks[0].title || release.title}...` : `Descargando ${tracks.length} canciones...`);
+    tracks.forEach((track: any, idx: number) => {
+      const fileId = track.newFileId || track.originalFileId;
+      if (fileId) {
+        setTimeout(() => {
+          triggerFileDownload(fileId, track.title);
+        }, idx * 600);
+      }
+    });
+  };
+
   // ─── States ─────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -186,14 +203,17 @@ export default function PortalPage() {
     return (
       <div className={cn('group flex items-center gap-3 px-3 md:px-4 py-2.5 transition-colors', active ? 'bg-accent/5' : 'hover:bg-surface/60')}>
         {audio ? (
-          <button type="button" onClick={() => play(file)} className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all', active ? 'bg-accent text-white shadow-md shadow-accent/30' : 'bg-violet-500/10 text-violet-400 hover:bg-accent hover:text-white')} aria-label={playing ? 'Pausar' : 'Reproducir'}>
+          <button type="button" onClick={() => play(file)} className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer', active ? 'bg-accent text-white shadow-md shadow-accent/30' : 'bg-violet-500/10 text-violet-400 hover:bg-accent hover:text-white')} aria-label={playing ? 'Pausar' : 'Reproducir'}>
             {playing ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current translate-x-px" />}
           </button>
         ) : (
           <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', cls)}><Icon className="w-5 h-5" /></span>
         )}
-        <div className="flex-1 min-w-0">
-          <p className={cn('text-sm font-medium truncate', active ? 'text-accent' : 'text-text-primary')} title={file.name}>{audio ? stripExt(file.name) : file.name}</p>
+        <div 
+          onClick={audio ? () => play(file) : undefined}
+          className={cn('flex-1 min-w-0 select-none', audio && 'cursor-pointer')}
+        >
+          <p className={cn('text-sm font-medium truncate transition-colors', active ? 'text-accent font-semibold' : 'text-text-primary', audio && 'hover:text-accent')} title={file.name}>{audio ? stripExt(file.name) : file.name}</p>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-secondary">
             {date && <span>{formatRelativeTime(date.toISOString())}</span>}
             {file.size && <span>· {formatSize(file.size)}</span>}
@@ -210,7 +230,19 @@ export default function PortalPage() {
           {locked ? (
             <span className="w-9 h-9 rounded-lg flex items-center justify-center text-warning" title="Descarga disponible cuando el pago esté completado"><Lock className="w-4 h-4" /></span>
           ) : (
-            <a href={`/api/files/${file.id}?download=true`} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface" title="Descargar" aria-label="Descargar"><Download className="w-4 h-4" /></a>
+            <button 
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                triggerFileDownload(file.id, file.name);
+              }}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface cursor-pointer" 
+              title="Descargar" 
+              aria-label="Descargar"
+            >
+              <Download className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>
@@ -376,17 +408,38 @@ export default function PortalPage() {
               return (
                 <div key={r.id}>
                   <div className="flex items-center gap-3 px-4 md:px-5 py-3 hover:bg-surface/40 transition-colors">
-                    <div className="w-11 h-11 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
+                    <div 
+                      onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
+                      className="w-11 h-11 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0 cursor-pointer"
+                    >
                       {r.coverArtId ? (
                         <img src={getCoverArtUrl(r.coverArtId, 160)} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <Disc className="w-5 h-5 text-accent/50" />
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-text-primary truncate">{r.title}</p>
+                    <div 
+                      onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
+                      className="flex-1 min-w-0 cursor-pointer select-none"
+                    >
+                      <p className="text-sm font-semibold text-text-primary truncate hover:text-accent transition-colors">{r.title}</p>
                       <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones · Escucha exclusiva</p>
                     </div>
+                    {r.tracks && r.tracks.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDownloadRelease(r);
+                        }}
+                        className="h-8 px-2.5 md:px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 bg-surface border border-border/80 text-text-secondary hover:text-accent hover:border-accent/40 transition-all shrink-0 cursor-pointer"
+                        title={r.tracks.length === 1 ? "Descargar audio" : "Descargar canciones"}
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Descargar</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
@@ -403,7 +456,7 @@ export default function PortalPage() {
                         </>
                       ) : (
                         <>
-                          <Play className="w-3.5 h-3.5 fill-current" /> Abrir preview
+                          <ChevronDown className="w-3.5 h-3.5" /> Abrir preview
                         </>
                       )}
                     </button>
@@ -589,19 +642,40 @@ export default function PortalPage() {
                   return (
                     <div key={r.id} className="rounded-2xl border border-border bg-surface-elevated overflow-hidden transition-all shadow-sm">
                       <div className="flex items-center gap-3.5 p-3.5 md:p-4">
-                        <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0">
+                        <div 
+                          onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
+                          className="w-12 h-12 md:w-14 md:h-14 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0 cursor-pointer"
+                        >
                           {r.coverArtId ? (
                             <img src={getCoverArtUrl(r.coverArtId, 200)} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <Disc className="w-6 h-6 text-accent/50" />
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm md:text-base font-bold text-text-primary truncate">{r.title}</h3>
+                        <div 
+                          onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
+                          className="flex-1 min-w-0 cursor-pointer select-none"
+                        >
+                          <h3 className="text-sm md:text-base font-bold text-text-primary truncate hover:text-accent transition-colors">{r.title}</h3>
                           <p className="text-xs text-text-secondary mt-0.5">
                             {r.tracks?.length || 0} canciones · Escucha exclusiva
                           </p>
                         </div>
+                        {r.tracks && r.tracks.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDownloadRelease(r);
+                            }}
+                            className="h-9 px-3 md:px-3.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 bg-surface border border-border text-text-secondary hover:text-accent hover:border-accent/40 transition-all shrink-0 cursor-pointer"
+                            title={r.tracks.length === 1 ? "Descargar audio" : "Descargar canciones"}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Descargar</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
@@ -618,7 +692,7 @@ export default function PortalPage() {
                             </>
                           ) : (
                             <>
-                              <Play className="w-3.5 h-3.5 fill-current" /> Abrir preview
+                              <ChevronDown className="w-3.5 h-3.5" /> Abrir preview
                             </>
                           )}
                         </button>

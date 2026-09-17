@@ -79,21 +79,91 @@ export async function GET(req: Request) {
       } catch (e) {}
     }
 
-    // Primary: Multi-engine API system
+    // Primary: yt-dlp native bestaudio (best quality — single encode step)
+    // Fallback: multi-engine SaveTube API (re-encoded, lower quality)
     if (videoId) {
+      // Try native yt-dlp first: downloads the raw YouTube stream (opus/m4a)
+      // and converts once with FFmpeg. This gives the maximum possible quality
+      // and avoids the double-transcoding "fake 320k" problem of SaveTube.
+      let nativeSuccess = false;
       try {
-        const result = await downloadWithEngines(videoId);
-        return new NextResponse(result.buffer as any, {
-          headers: {
-            'Content-Type': 'audio/mpeg',
-            'Content-Length': result.buffer.length.toString(),
-            'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
-          },
-        });
+        const { ytdlpPath, ffmpegPath } = await ensureBinaries();
+        const cookieArgs = await buildCookieArgs();
+        const tempId = `get_native_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
+        const nodePath = process.execPath || 'node';
+
+        const ytdlpArgs = [
+          '--no-warnings',
+          '--no-playlist',
+          '--no-check-certificates',
+          '--geo-bypass',
+          '--js-runtimes',
+          `node:${nodePath}`,
+          ...cookieArgs,
+          '-f',
+          'bestaudio[ext=opus]/bestaudio[ext=m4a]/bestaudio/best',
+          '-x',
+          '--audio-format',
+          'mp3',
+          '--audio-quality',
+          '0',
+          '--ffmpeg-location',
+          ffmpegPath,
+          '--output',
+          outputTemplate,
+          `https://www.youtube.com/watch?v=${videoId}`,
+        ];
+
+        const proxyUrl = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.YTDL_PROXY;
+        if (proxyUrl) ytdlpArgs.push('--proxy', proxyUrl);
+
+        await execFileAsync(ytdlpPath, ytdlpArgs, { timeout: 120000 });
+
+        const expectedMp3 = path.join(os.tmpdir(), `${tempId}.mp3`);
+        let foundFile = fs.existsSync(expectedMp3) ? expectedMp3 : null;
+
+        if (!foundFile) {
+          const AUDIO_EXTS = ['.mp3', '.m4a', '.webm', '.opus', '.aac', '.ogg', '.wav', '.flac'];
+          const dirFiles = fs.readdirSync(os.tmpdir());
+          const match = dirFiles.find(f => f.startsWith(tempId) && AUDIO_EXTS.some(ext => f.endsWith(ext)));
+          if (match) foundFile = path.join(os.tmpdir(), match);
+        }
+
+        if (foundFile && fs.existsSync(foundFile)) {
+          const buffer = await fs.promises.readFile(foundFile);
+          try { await fs.promises.unlink(foundFile); } catch (e) {}
+
+          nativeSuccess = true;
+          return new NextResponse(buffer as any, {
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': buffer.length.toString(),
+              'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
+            },
+          });
+        }
       } catch (e: any) {
-        console.warn('[ytdl/direct] Multi-engine failed in GET:', e?.message);
+        console.warn('[ytdl/get] yt-dlp native failed, falling back to SaveTube:', e?.message);
+      }
+
+      // Fallback: SaveTube engine (re-encoded — still functional if yt-dlp is blocked)
+      if (!nativeSuccess) {
+        try {
+          const result = await downloadWithEngines(videoId);
+          return new NextResponse(result.buffer as any, {
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': result.buffer.length.toString(),
+              'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
+            },
+          });
+        } catch (e: any) {
+          console.warn('[ytdl/direct] Multi-engine failed in GET:', e?.message);
+        }
       }
     }
+
 
     // Fallback: yt-dlp binary (for other URLs)
     const target = rawUrl;
