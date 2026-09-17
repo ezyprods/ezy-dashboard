@@ -10,7 +10,7 @@ import { PROJECT_TYPE_LABELS, STATUS_CONFIG } from '@/lib/constants';
 import { useProjects } from '@/lib/hooks/useProjects';
 import { FolderStatusPicker } from '@/components/projects/FolderStatusPicker';
 import { CustomSortModal } from '@/components/projects/CustomSortModal';
-import { DriveExplorer } from '@/components/artists/DriveExplorer';
+import { FileExplorer } from '@/components/explorer/FileExplorer';
 import { ArtistPortalTab } from '@/components/artists/ArtistPortalTab';
 import { NewProjectModal } from '@/components/projects/NewProjectModal';
 import { getProjectTypeIcon } from '@/lib/utils';
@@ -409,7 +409,11 @@ export default function ArtistDetailPage() {
 
       {/* Tab Content: Files (Drive Explorer) */}
       {activeTab === 'files' && (
-        <DriveExplorer rootFolderId={artist?.driveFolderId || artistId} rootName={artist?.name || 'Archivos'} artistEmail={artist?.email} artistId={artistId} />
+        <FileExplorer
+          rootId={artist?.driveFolderId || artistId}
+          rootName={artist?.name || 'Archivos'}
+          scope={{ type: 'artist', artistId, artistEmail: artist?.email || undefined }}
+        />
       )}
 
       {/* Tab Content: Portal */}

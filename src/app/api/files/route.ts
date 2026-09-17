@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       'releases'
     ];
 
-    const FIELDS = 'nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties)';
+    const FIELDS = 'nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties, thumbnailLink, starred, shared, folderColorRgb, fileExtension, description, imageMediaMetadata(width, height), videoMediaMetadata(width, height, durationMillis), lastModifyingUser(displayName))';
 
     // Lists every child of a folder, following pagination (folders with >1000 items were truncated)
     const listChildren = async (folderId: string) => {
@@ -103,7 +103,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ items: allItems });
     }
 
-    const validItems = processItems(await listChildren(parentId), parentId).map(({ parentFolderId, ...rest }) => rest);
+    const validItems = processItems(await listChildren(parentId), parentId);
 
     return NextResponse.json({ items: validItems });
   } catch (error: any) {
@@ -270,6 +270,13 @@ export async function DELETE(request: Request) {
     }
 
     const drive = getDriveService();
+
+    // Permanent deletion is only used from the explorer's trash view (items already in the trash)
+    if (searchParams.get('permanent') === 'true') {
+      await drive.files.delete({ fileId, supportsAllDrives: true });
+      return NextResponse.json({ success: true, permanent: true });
+    }
+
     // Use update to move to trash instead of permanent delete
     await drive.files.update({ 
       fileId,
@@ -289,7 +296,7 @@ export async function DELETE(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { fileId, name, newParentId, oldParentId, trashed } = body;
+    const { fileId, name, newParentId, oldParentId, trashed, starred, folderColorRgb, description } = body;
 
     if (!fileId) {
       return NextResponse.json({ error: 'Missing fileId' }, { status: 400 });
@@ -308,6 +315,18 @@ export async function PUT(request: Request) {
     
     if (trashed !== undefined) {
       updateParams.requestBody.trashed = Boolean(trashed);
+    }
+
+    if (starred !== undefined) {
+      updateParams.requestBody.starred = Boolean(starred);
+    }
+
+    if (typeof folderColorRgb === 'string' && /^#[0-9a-fA-F]{6}$/.test(folderColorRgb)) {
+      updateParams.requestBody.folderColorRgb = folderColorRgb;
+    }
+
+    if (typeof description === 'string') {
+      updateParams.requestBody.description = description;
     }
 
     if (newParentId) {
@@ -332,6 +351,7 @@ export async function PUT(request: Request) {
       }
     }
 
+    updateParams.fields = 'id, name, parents, trashed, starred, folderColorRgb, modifiedTime';
     const res = await drive.files.update(updateParams);
     return NextResponse.json({ success: true, file: res.data });
   } catch (error: any) {

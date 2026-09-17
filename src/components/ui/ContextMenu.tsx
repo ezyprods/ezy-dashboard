@@ -43,6 +43,25 @@ import {
   CreditCard,
   MessageSquare,
   Settings,
+  Star,
+  StarOff,
+  Info,
+  Palette,
+  HardDrive,
+  CopyPlus,
+  Send,
+  Check,
+  RefreshCw,
+  ArrowUpDown,
+  LayoutGrid,
+  List,
+  Timer,
+  Keyboard,
+  Mail,
+  X,
+  PanelRight,
+  ListChecks,
+  AudioWaveform,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -90,6 +109,25 @@ const ICON_MAP: Record<string, LucideIcon> = {
   CreditCard,
   MessageSquare,
   Settings,
+  Star,
+  StarOff,
+  Info,
+  Palette,
+  HardDrive,
+  CopyPlus,
+  Send,
+  Check,
+  RefreshCw,
+  ArrowUpDown,
+  LayoutGrid,
+  List,
+  Timer,
+  Keyboard,
+  Mail,
+  X,
+  PanelRight,
+  ListChecks,
+  AudioWaveform,
   LinkIcon: Link,
 };
 
@@ -193,11 +231,11 @@ function useIOSLongPressContextMenu() {
   }, []);
 }
 
-function MenuIcon({ name, className }: { name?: string; className?: string }) {
+function MenuIcon({ name, className, color }: { name?: string; className?: string; color?: string }) {
   if (!name) return null;
   const Icon = ICON_MAP[name];
   if (!Icon) return null;
-  return <Icon className={cn("w-3.5 h-3.5 shrink-0", className)} />;
+  return <Icon className={cn("w-3.5 h-3.5 shrink-0", className)} style={color ? { color } : undefined} />;
 }
 
 export function GlobalContextMenu() {
@@ -360,7 +398,8 @@ export function GlobalContextMenu() {
         hideMenu();
       }
     };
-    const handleScroll = () => {
+    const handleScroll = (e: Event) => {
+      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
       if (!isMobile) hideMenu();
     };
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') hideMenu(); };
@@ -405,24 +444,33 @@ export function GlobalContextMenu() {
               if (item.separator) {
                 return <div key={`sep-${i}`} className="my-2 border-t border-border/40" />;
               }
+              if (item.heading) {
+                return (
+                  <div key={`head-${i}`} className="px-4 pt-1 pb-2 text-xs font-semibold text-text-secondary truncate">
+                    {item.heading}
+                  </div>
+                );
+              }
               return (
                 <button
                   key={i}
+                  disabled={item.disabled}
                   onClick={() => {
                     if (item.action) item.action();
                     hideMenu();
                   }}
                   role="menuitem"
                   className={cn(
-                    'w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors duration-100 text-left active:bg-surface',
+                    'w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors duration-100 text-left active:bg-surface disabled:opacity-40 disabled:pointer-events-none',
                     item.variant === 'danger'
                       ? 'text-error hover:bg-error/10'
                       : 'text-text-primary hover:bg-accent/10 hover:text-accent-light',
                     item.className
                   )}
                 >
-                  <MenuIcon name={item.icon} className={cn('w-[18px] h-[18px]', item.iconClassName)} />
-                  <span className="truncate">{item.label}</span>
+                  <MenuIcon name={item.icon} className={cn('w-[18px] h-[18px]', item.iconClassName)} color={item.iconColor} />
+                  <span className="truncate flex-1">{item.label}</span>
+                  {item.checked && <Check className="w-4 h-4 text-accent shrink-0" />}
                 </button>
               );
             })}
@@ -443,7 +491,7 @@ export function GlobalContextMenu() {
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-[9999] min-w-[200px] py-1.5 rounded-xl border border-border/60 bg-surface-elevated/90 backdrop-blur-xl shadow-2xl shadow-black/40 animate-menu-in"
+      className="fixed z-[9999] min-w-[200px] max-h-[calc(100dvh-16px)] overflow-y-auto overscroll-contain py-1.5 rounded-xl border border-border/60 bg-surface-elevated/90 backdrop-blur-xl shadow-2xl shadow-black/40 animate-menu-in"
       style={{ top: position.y, left: position.x }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -451,23 +499,33 @@ export function GlobalContextMenu() {
         if (item.separator) {
           return <div key={`sep-${i}`} className="my-1 border-t border-border/40" />;
         }
+        if (item.heading) {
+          return (
+            <div key={`head-${i}`} className="px-3 pt-1 pb-1.5 text-[11px] font-semibold text-text-secondary truncate max-w-[280px]">
+              {item.heading}
+            </div>
+          );
+        }
         return (
           <button
             key={i}
+            disabled={item.disabled}
             onClick={() => {
               if (item.action) item.action();
               hideMenu();
             }}
             className={cn(
-              'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors duration-100 text-left',
+              'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors duration-100 text-left disabled:opacity-40 disabled:pointer-events-none',
               item.variant === 'danger'
                 ? 'text-error hover:bg-error/10'
                 : 'text-text-primary hover:bg-accent/10 hover:text-accent-light',
               item.className
             )}
           >
-            <MenuIcon name={item.icon} className={item.iconClassName} />
-            {item.label}
+            <MenuIcon name={item.icon} className={item.iconClassName} color={item.iconColor} />
+            <span className="flex-1 whitespace-nowrap">{item.label}</span>
+            {item.checked && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
+            {item.shortcut && <kbd className="ml-4 text-[10px] font-sans text-text-secondary/80 tracking-wide">{item.shortcut}</kbd>}
           </button>
         );
       })}

@@ -10,6 +10,15 @@ export interface MenuItem {
   separator?: boolean;
   className?: string;
   iconClassName?: string;
+  /** Inline color for the icon (e.g. folder color swatches) */
+  iconColor?: string;
+  /** Keyboard shortcut hint shown on the right (desktop only) */
+  shortcut?: string;
+  /** Non-interactive title row (e.g. the file name the menu acts on) */
+  heading?: string;
+  disabled?: boolean;
+  /** Shows a check mark (for option lists such as sort order) */
+  checked?: boolean;
 }
 
 interface MenuState {

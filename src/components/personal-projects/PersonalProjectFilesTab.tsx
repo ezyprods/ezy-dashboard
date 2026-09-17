@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { DriveExplorer } from '@/components/artists/DriveExplorer';
+import { FileExplorer } from '@/components/explorer/FileExplorer';
 import type { PersonalProject } from '@/types';
 
 interface PersonalProjectFilesTabProps {
@@ -14,9 +14,10 @@ export function PersonalProjectFilesTab({
 }: PersonalProjectFilesTabProps) {
   return (
     <div className="w-full">
-      <DriveExplorer
-        rootFolderId={project.id}
+      <FileExplorer
+        rootId={project.id}
         rootName={project.title}
+        scope={{ type: 'personal', projectId: project.id }}
       />
     </div>
   );

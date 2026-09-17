@@ -14,6 +14,8 @@ interface DeleteModalProps {
   onDeleted: (deletedIds?: string[]) => void;
   onExpirationChanged?: (fileId: string, newExpiration: number | null) => void;
   currentExpiration?: number | null;
+  /** Which tab to open on (defaults to "schedule" when the file already has an expiration) */
+  initialMode?: 'now' | 'schedule';
 }
 
 export function DeleteModal({
@@ -25,10 +27,11 @@ export function DeleteModal({
   onDeleted,
   onExpirationChanged,
   currentExpiration,
+  initialMode,
 }: DeleteModalProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
-  const [scheduleMode, setScheduleMode] = useState<boolean>(!!currentExpiration);
+  const [scheduleMode, setScheduleMode] = useState<boolean>(initialMode ? initialMode === 'schedule' : !!currentExpiration);
   const [customMode, setCustomMode] = useState(false);
   const deleteBtnRef = useRef<HTMLButtonElement>(null);
   
