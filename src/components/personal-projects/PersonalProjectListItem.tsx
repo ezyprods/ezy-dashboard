@@ -1,6 +1,7 @@
 'use client';
 
 import { isFileDrag, useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
+import { extractDroppedFiles } from '@/components/upload/fileIntake';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
@@ -196,17 +197,18 @@ export function PersonalProjectListItem({
     e.stopPropagation();
     setIsDragOver(false);
 
-    const files = Array.from(e.dataTransfer.files || []);
-    if (files.length === 0) return;
-    const single = files.length === 1 ? files[0] : null;
-    const isAudio = !!single && (single.type.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg|aiff?)$/i.test(single.name));
-    if (single && isAudio && onReplaceAudio) {
-      // One audio file: replace the project's main bounce (with undo)
-      onReplaceAudio(project, single);
-    } else {
-      // Several files or other types: Smart Upload into this project
-      openSmartUpload({ files, targetType: 'personal', personalProjectId: project.id });
-    }
+    extractDroppedFiles(e.dataTransfer).then(({ files }) => {
+      if (files.length === 0) return;
+      const single = files.length === 1 ? files[0] : null;
+      const isAudio = !!single && (single.type.startsWith('audio/') || /\.(mp3|wav|flac|m4a|ogg|aiff?)$/i.test(single.name));
+      if (single && isAudio && onReplaceAudio) {
+        // One audio file: replace the project's main bounce (with undo)
+        onReplaceAudio(project, single);
+      } else {
+        // Several files, folders or other types: Smart Upload into this project
+        openSmartUpload({ files, targetType: 'personal', personalProjectId: project.id });
+      }
+    });
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

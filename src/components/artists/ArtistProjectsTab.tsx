@@ -13,6 +13,7 @@ import { PROJECT_TYPE_LABELS } from '@/lib/constants';
 import { customConfirm, customPrompt } from '@/lib/dialog';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
 import { isFileDrag, useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
+import { extractDroppedFiles } from '@/components/upload/fileIntake';
 import { useIndex, loadIndex } from '@/components/explorer/driveStore';
 import { formatBytes } from '@/components/explorer/fileKinds';
 import { usePreference } from '@/components/explorer/explorerUtils';
@@ -197,7 +198,9 @@ export function ArtistProjectsTab({ artistId, artistName, projects, isLoading, m
       if (!isFileDrag(e)) return;
       e.preventDefault();
       setDropId(null);
-      upload(project, Array.from(e.dataTransfer.files));
+      extractDroppedFiles(e.dataTransfer).then(({ files }) => {
+        if (files.length) upload(project, files);
+      });
     },
   });
 

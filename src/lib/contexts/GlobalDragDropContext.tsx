@@ -7,9 +7,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
  *
  * - Anything that accepts files itself (explorer folders, artist cards, project cards, tool drop zones…)
  *   handles the `drop` event and calls `preventDefault()`.
- * - Every other drop falls back to the *page drop context*: each page can describe what a drop "anywhere"
+ * - Every other drop falls back to the *page drop context*: each page describes what a drop "anywhere"
  *   means there (upload to this artist, to this personal project, to the folder being viewed…) through
  *   `useDropContext`. Without a registered context the drop opens the Smart Upload in auto-detect mode.
+ * - Dropping again (or from another place) never opens a second dialog: the files are queued as a new
+ *   *batch* of the open upload session, keeping their own destination.
  */
 
 export interface UploadRequest {
@@ -24,6 +26,16 @@ export interface UploadRequest {
   folderName?: string;
   /** Called after the upload finished (successfully or not) so the page can refresh. */
   onFinished?: () => void;
+}
+
+/** A group of files dropped together, with the destination of that particular drop. */
+export interface UploadBatch extends UploadRequest {
+  id: number;
+}
+
+export interface UploadSession {
+  id: number;
+  batches: UploadBatch[];
 }
 
 export interface DropContextInfo {
@@ -42,8 +54,11 @@ export interface DropContextInfo {
 
 interface GlobalDragDropContextValue {
   isDraggingFiles: boolean;
-  uploadRequest: (UploadRequest & { key: number }) | null;
+  /** The open upload session (null when the Smart Upload is closed) */
+  uploadSession: UploadSession | null;
+  isUploadOpen: boolean;
   dropContext: DropContextInfo | null;
+  /** Opens the Smart Upload, or adds the files to the one already open. */
   openSmartUpload: (request: UploadRequest) => void;
   closeSmartUpload: () => void;
   registerDropContext: (info: DropContextInfo) => () => void;
@@ -57,7 +72,8 @@ const noop = () => {};
 
 const GlobalDragDropContext = createContext<GlobalDragDropContextValue>({
   isDraggingFiles: false,
-  uploadRequest: null,
+  uploadSession: null,
+  isUploadOpen: false,
   dropContext: null,
   openSmartUpload: noop,
   closeSmartUpload: noop,
@@ -92,7 +108,7 @@ export function useDropContext(info: DropContextInfo | null) {
 
 export function GlobalDragDropProvider({ children }: { children: React.ReactNode }) {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
-  const [uploadRequest, setUploadRequest] = useState<(UploadRequest & { key: number }) | null>(null);
+  const [uploadSession, setUploadSession] = useState<UploadSession | null>(null);
   const [contexts, setContexts] = useState<{ id: number; info: DropContextInfo }[]>([]);
   const dragDepth = useRef(0);
   const seq = useRef(0);
@@ -142,10 +158,15 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
   const openSmartUpload = useCallback((request: UploadRequest) => {
     dragDepth.current = 0;
     setIsDraggingFiles(false);
-    setUploadRequest({ ...request, key: ++seq.current });
+    setUploadSession(prev => {
+      const batch: UploadBatch = { ...request, id: ++seq.current };
+      // Already open → the files join the same dialog as a new batch
+      if (prev) return { ...prev, batches: [...prev.batches, batch] };
+      return { id: ++seq.current, batches: [batch] };
+    });
   }, []);
 
-  const closeSmartUpload = useCallback(() => setUploadRequest(null), []);
+  const closeSmartUpload = useCallback(() => setUploadSession(null), []);
 
   const registerDropContext = useCallback((info: DropContextInfo) => {
     const id = ++seq.current;
@@ -166,14 +187,15 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
 
   const value = useMemo(() => ({
     isDraggingFiles,
-    uploadRequest,
+    uploadSession,
+    isUploadOpen: !!uploadSession,
     dropContext,
     openSmartUpload,
     closeSmartUpload,
     registerDropContext,
     triggerUploadForArtist,
     triggerUploadForPersonalProject,
-  }), [isDraggingFiles, uploadRequest, dropContext, openSmartUpload, closeSmartUpload, registerDropContext, triggerUploadForArtist, triggerUploadForPersonalProject]);
+  }), [isDraggingFiles, uploadSession, dropContext, openSmartUpload, closeSmartUpload, registerDropContext, triggerUploadForArtist, triggerUploadForPersonalProject]);
 
   return <GlobalDragDropContext.Provider value={value}>{children}</GlobalDragDropContext.Provider>;
 }

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
+import { extractDroppedFiles, filesFromInput } from '@/components/upload/fileIntake';
 import { customConfirm, customPrompt } from '@/lib/dialog';
 import {
   addToTrash, apiCopy, apiCreateFolder, apiDeleteForever, apiSetExpiration, apiShareWith, apiTrash, apiUpdate,
@@ -816,7 +817,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
   }, [folderId]);
 
   const onFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = filesFromInput(e.target.files);
     e.target.value = '';
     if (files.length) openUpload(files, uploadTargetRef.current);
   }, [openUpload]);
@@ -1090,8 +1091,8 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     },
     onDrop: (e: React.DragEvent) => {
       const internal = dragIdsRef.current;
-      const files = Array.from(e.dataTransfer.files || []);
-      if (!internal && files.length === 0) return;
+      const hasFiles = (e.dataTransfer.files?.length || 0) > 0 || Array.from(e.dataTransfer.types || []).includes('Files');
+      if (!internal && !hasFiles) return;
       e.preventDefault();
       e.stopPropagation();
       clearSpring();
@@ -1102,7 +1103,10 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
         const items = internal.map(id => findItem(id)).filter(Boolean) as DriveItem[];
         performMove(items, targetFolderId);
       } else {
-        openUpload(files, targetFolderId);
+        // Folders are expanded (and their structure preserved) before the Smart Upload opens
+        extractDroppedFiles(e.dataTransfer).then(({ files }) => {
+          if (files.length) openUpload(files, targetFolderId);
+        });
       }
     },
   }), [view, folderId, openFolderById, performMove, openUpload]);
@@ -1122,10 +1126,11 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     onDrop: (e: React.DragEvent) => {
       setFileDragOver(false);
       if (dragIdsRef.current) return;
-      const files = Array.from(e.dataTransfer.files || []);
-      if (files.length === 0 || view !== 'folder') return;
+      if (!Array.from(e.dataTransfer.types || []).includes('Files') || view !== 'folder') return;
       e.preventDefault();
-      openUpload(files, folderId);
+      extractDroppedFiles(e.dataTransfer).then(({ files }) => {
+        if (files.length) openUpload(files, folderId);
+      });
     },
   }), [view, trimmedQuery, fileDragOver, folderId, openUpload]);
 

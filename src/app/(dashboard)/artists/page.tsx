@@ -13,6 +13,7 @@ import { EditArtistModal } from '@/components/artists/EditArtistModal';
 import { ArtistAvatar } from '@/components/ui/ArtistAvatar';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
 import { isFileDrag, useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
+import { extractDroppedFiles } from '@/components/upload/fileIntake';
 import { customConfirm } from '@/lib/dialog';
 import { copyText, usePreference } from '@/components/explorer/explorerUtils';
 import { normalizeForSearch } from '@/components/explorer/fileKinds';
@@ -103,7 +104,9 @@ export default function ArtistsPage() {
       if (!isFileDrag(e)) return;
       e.preventDefault();
       setDropId(null);
-      openSmartUpload({ files: Array.from(e.dataTransfer.files), targetType: 'artist', artistId: artist.id });
+      extractDroppedFiles(e.dataTransfer).then(({ files }) => {
+        if (files.length) openSmartUpload({ files, targetType: 'artist', artistId: artist.id });
+      });
     },
   });
 

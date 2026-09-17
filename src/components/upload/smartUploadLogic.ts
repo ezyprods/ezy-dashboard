@@ -6,10 +6,22 @@ import { getFolder } from '@/components/explorer/driveStore';
 import { getExtension, stripExtension } from '@/components/explorer/fileKinds';
 import type { DriveItem, Crumb } from '@/components/explorer/types';
 import type { Artist } from '@/types';
+import { relativePathOf } from './fileIntake';
 
 export type UploadRole = 'bounce' | 'mix' | 'master' | 'stem' | 'cover' | 'other';
 export type UploadKind = 'audio' | 'image' | 'video' | 'other';
 export type UploadStatus = 'pending' | 'uploading' | 'done' | 'error' | 'cancelled';
+
+/** Where a group of files goes. Per-file overrides use the same shape. */
+export interface Destination {
+  targetType: 'artist' | 'personal';
+  artistId: string;
+  /** Project folder inside the artist ('' = automatic: bounces → Bounces, rest → artist root) */
+  projectId: string;
+  personalProjectId: string;
+  /** Exact folder chosen by the user (or preselected by the page); overrides the automatic routing */
+  lockedFolder: Crumb | null;
+}
 
 export interface UploadItem {
   id: string;
@@ -23,8 +35,10 @@ export interface UploadItem {
   bpm: number | null;
   key: string | null;
   analyzing: boolean;
-  /** Manual destination for this file only */
-  folderOverride: Crumb | null;
+  /** Subfolders coming from a dropped folder, e.g. ["Stems", "Vocals"] */
+  subPath: string[];
+  /** Destination just for this file (falls back to the shared one) */
+  dest: Destination | null;
   replaceMode: 'replace' | 'new';
   status: UploadStatus;
   progress: number;
@@ -35,20 +49,13 @@ export interface UploadItem {
   replaced?: boolean;
 }
 
-export interface Destination {
-  targetType: 'artist' | 'personal';
-  artistId: string;
-  /** Project folder inside the artist ('' = automatic: bounces → Bounces, rest → artist root) */
-  projectId: string;
-  personalProjectId: string;
-  /** Exact folder chosen by the user (or preselected by the page); overrides the automatic routing */
-  lockedFolder: Crumb | null;
-}
-
 export interface Plan {
-  folderId?: string;
-  /** Folder that will be created on upload */
-  create?: { name: string; parentId: string };
+  /** Existing destination folder (before the dropped-folder subpath) */
+  baseFolderId?: string;
+  /** Folder that has to be created first */
+  baseCreate?: { name: string; parentId: string };
+  /** Subfolders to create/reuse below the base */
+  subPath: string[];
   label: string;
   error?: string;
 }
@@ -56,6 +63,7 @@ export interface Plan {
 const AUDIO_EXT = /\.(wav|mp3|aif|aiff|flac|m4a|aac|ogg|opus|wma)$/i;
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|svg|bmp|tiff?)$/i;
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
+const PROJECT_FILE_EXT = /\.(flp|als|alp|logicx|ptx|cpr|rpp|song|zip|rar|7z)$/i;
 
 /** Artist-root folders that are not projects */
 export const NON_PROJECT_FOLDERS = /^(images|releases|bounces?|documents|contracts|stems|01_legal_y_contratos|02_diseño_y_media|03_lanzamientos_y_proyectos|02_bounces_y_grabaciones)$/i;
@@ -86,7 +94,7 @@ export function detectKind(file: File): UploadKind {
 }
 
 export function detectRole(file: File, kind: UploadKind): UploadRole {
-  const n = file.name.toLowerCase();
+  const n = `${relativePathOf(file)}/${file.name}`.toLowerCase();
   if (kind === 'audio') {
     if (/master/.test(n)) return 'master';
     if (/\bmix\b|mezcla|_mix|mix_|mixdown/.test(n)) return 'mix';
@@ -118,12 +126,15 @@ export function suggestBaseName(item: Pick<UploadItem, 'file' | 'kind' | 'role' 
   return original;
 }
 
-export function makeItem(file: File, targetType: Destination['targetType']): UploadItem {
+let itemSeq = 0;
+
+export function makeItem(file: File, targetType: Destination['targetType'], dest: Destination | null = null): UploadItem {
   const kind = detectKind(file);
   const role = detectRole(file, kind);
   const parsed = kind === 'audio' ? parseAudioFilename(file.name) : null;
+  const relative = relativePathOf(file);
   const base = {
-    id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    id: `u${++itemSeq}-${Math.random().toString(36).slice(2, 7)}`,
     file,
     kind,
     role,
@@ -136,7 +147,8 @@ export function makeItem(file: File, targetType: Destination['targetType']): Upl
     baseName: suggestBaseName(base, targetType),
     nameEdited: false,
     analyzing: kind === 'audio' && (!parsed?.bpm || !parsed?.key),
-    folderOverride: null,
+    subPath: relative ? relative.split('/').filter(Boolean) : [],
+    dest,
     replaceMode: 'replace',
     status: 'pending',
     progress: 0,
@@ -148,7 +160,7 @@ export function detectArtist(files: File[], artists: Artist[]): string {
   const sorted = sortArtistsByRecent(artists);
   const votes = new Map<string, number>();
   for (const file of files) {
-    const normalized = getNormalizedBaseName(file.name);
+    const normalized = getNormalizedBaseName(`${relativePathOf(file)} ${file.name}`);
     const squashed = normalized.replace(/\s+/g, '');
     let match = sorted.find(a => {
       const n = getNormalizedBaseName(a.name);
@@ -183,7 +195,8 @@ function projectKey(name: string): string {
   ).replace(/\s+/g, '');
 }
 
-export function detectProject(files: File[], artistId: string, artistName?: string): string {
+/** Project folder that matches a file name (or the folder it was dropped from). */
+export function detectProjectForFile(file: File, artistId: string, artistName?: string): string {
   const projects = projectFoldersOf(artistId);
   if (projects.length === 0) return '';
   const artistKey = artistName ? getNormalizedBaseName(artistName).replace(/\s+/g, '') : '';
@@ -191,53 +204,78 @@ export function detectProject(files: File[], artistId: string, artistName?: stri
     .map(p => ({ project: p, key: projectKey(p.name) }))
     .filter(p => p.key.length >= 4 && p.key !== artistKey);
 
+  let fileKey = getNormalizedBaseName(`${relativePathOf(file)} ${stripExtension(file.name)}`).replace(/\s+/g, '');
+  if (artistKey) fileKey = fileKey.replace(artistKey, '');
+  const contained = keyed.filter(p => fileKey.includes(p.key)).sort((a, b) => b.key.length - a.key.length)[0];
+  if (contained) return contained.project.id;
+
+  const fuzzy = findBestMatch(stripExtension(file.name), projects, p => p.name.replace(/^\s*\d{1,3}\s*[-_.)]\s*/, ''), 0.8);
+  return fuzzy ? fuzzy.id : '';
+}
+
+/** Project shared by most of the files (used for the shared destination). */
+export function detectProject(files: File[], artistId: string, artistName?: string): string {
+  const votes = new Map<string, number>();
   for (const file of files) {
-    let fileKey = getNormalizedBaseName(stripExtension(file.name)).replace(/\s+/g, '');
-    if (artistKey) fileKey = fileKey.replace(artistKey, '');
-    // Longest project name contained in the file name wins ("Fuego" vs "Fuego Lento")
-    const contained = keyed.filter(p => fileKey.includes(p.key)).sort((a, b) => b.key.length - a.key.length)[0];
-    if (contained) return contained.project.id;
-    const fuzzy = findBestMatch(stripExtension(file.name), projects, p => p.name.replace(/^\s*\d{1,3}\s*[-_.)]\s*/, ''), 0.8);
-    if (fuzzy) return fuzzy.id;
+    const id = detectProjectForFile(file, artistId, artistName);
+    if (id) votes.set(id, (votes.get(id) || 0) + 1);
   }
-  return '';
+  let best = '';
+  let bestVotes = 0;
+  for (const [id, n] of votes) if (n > bestVotes) { best = id; bestVotes = n; }
+  return best;
 }
 
 function findSub(parentId: string, pattern: RegExp): DriveItem | undefined {
-  const folders = getFolder(parentId).items.filter(i => i.isFolder);
-  return folders.find(f => pattern.test(f.name.trim()));
+  return getFolder(parentId).items.filter(i => i.isFolder).find(f => pattern.test(f.name.trim()));
+}
+
+export function effectiveDest(item: UploadItem, shared: Destination): Destination {
+  return item.dest || shared;
+}
+
+export interface DestinationNames {
+  artistName?: string;
+  personalName?: string;
+  projectName?: string;
 }
 
 /** Computes where a file will be stored (using the explorer's folder cache). */
-export function planDestination(
-  item: UploadItem,
-  dest: Destination,
-  names: { artistName?: string; personalName?: string; projectName?: string },
-): Plan {
-  if (item.folderOverride) return { folderId: item.folderOverride.id, label: item.folderOverride.name };
-  if (dest.lockedFolder) return { folderId: dest.lockedFolder.id, label: dest.lockedFolder.name };
+export function planDestination(item: UploadItem, dest: Destination, names: DestinationNames): Plan {
+  const subPath = item.subPath;
+  const withSub = (plan: Omit<Plan, 'subPath' | 'label'> & { label: string }): Plan => ({
+    ...plan,
+    subPath,
+    label: subPath.length ? `${plan.label} / ${subPath.join(' / ')}` : plan.label,
+  });
+
+  if (dest.lockedFolder) return withSub({ baseFolderId: dest.lockedFolder.id, label: dest.lockedFolder.name });
 
   if (dest.targetType === 'personal') {
     const pid = dest.personalProjectId;
-    if (!pid) return { label: '', error: 'Elige un proyecto personal' };
+    if (!pid) return { subPath, label: '', error: 'Elige un proyecto personal' };
     const root = names.personalName || 'Proyecto';
     if (item.kind === 'audio') {
       if (item.role === 'stem') {
         const sub = findSub(pid, /stem|pista|^02_/i);
-        return sub ? { folderId: sub.id, label: `${root} / ${sub.name}` } : { create: { name: '02_Stems_y_Pistas', parentId: pid }, label: `${root} / 02_Stems_y_Pistas` };
+        return sub
+          ? withSub({ baseFolderId: sub.id, label: `${root} / ${sub.name}` })
+          : withSub({ baseCreate: { name: '02_Stems_y_Pistas', parentId: pid }, label: `${root} / 02_Stems_y_Pistas` });
       }
       const sub = findSub(pid, /bounce|demo|^01_/i);
-      return sub ? { folderId: sub.id, label: `${root} / ${sub.name}` } : { create: { name: '01_Bounces_y_Demos', parentId: pid }, label: `${root} / 01_Bounces_y_Demos` };
+      return sub
+        ? withSub({ baseFolderId: sub.id, label: `${root} / ${sub.name}` })
+        : withSub({ baseCreate: { name: '01_Bounces_y_Demos', parentId: pid }, label: `${root} / 01_Bounces_y_Demos` });
     }
-    if (/\.(flp|als|alp|logicx|ptx|cpr|rpp|song|zip|rar)$/i.test(item.file.name)) {
+    if (PROJECT_FILE_EXT.test(item.file.name)) {
       const sub = findSub(pid, /backup|sesion|sesión|^03_/i);
-      if (sub) return { folderId: sub.id, label: `${root} / ${sub.name}` };
+      if (sub) return withSub({ baseFolderId: sub.id, label: `${root} / ${sub.name}` });
     }
-    return { folderId: pid, label: root };
+    return withSub({ baseFolderId: pid, label: root });
   }
 
   const aid = dest.artistId;
-  if (!aid) return { label: '', error: 'Elige un artista' };
+  if (!aid) return { subPath, label: '', error: 'Elige un artista' };
   const artistName = names.artistName || 'Artista';
 
   if (dest.projectId) {
@@ -249,21 +287,27 @@ export function planDestination(
       stem: /stem|pista/i,
       bounce: /bounce/i,
     };
-    const pattern = item.kind === 'audio' ? patterns[item.role] : undefined;
+    // A dropped folder keeps its own structure: don't also route by type
+    const pattern = item.kind === 'audio' && subPath.length === 0 ? patterns[item.role] : undefined;
     const sub = pattern ? findSub(dest.projectId, pattern) : undefined;
-    return sub ? { folderId: sub.id, label: `${base} / ${sub.name}` } : { folderId: dest.projectId, label: base };
+    return sub
+      ? withSub({ baseFolderId: sub.id, label: `${base} / ${sub.name}` })
+      : withSub({ baseFolderId: dest.projectId, label: base });
   }
 
-  if (item.kind === 'audio' && item.role === 'bounce') {
+  if (item.kind === 'audio' && item.role === 'bounce' && subPath.length === 0) {
     const bounces = findSub(aid, /^bounces?$/i) || findSub(aid, /bounce/i);
-    return bounces ? { folderId: bounces.id, label: `${artistName} / ${bounces.name}` } : { create: { name: 'Bounces', parentId: aid }, label: `${artistName} / Bounces` };
+    return bounces
+      ? withSub({ baseFolderId: bounces.id, label: `${artistName} / ${bounces.name}` })
+      : withSub({ baseCreate: { name: 'Bounces', parentId: aid }, label: `${artistName} / Bounces` });
   }
-  return { folderId: aid, label: artistName };
+  return withSub({ baseFolderId: aid, label: artistName });
 }
 
 /** Existing audio file with the same name in the destination (masters & mixes replace it by default). */
 export function findReplaceCandidate(item: UploadItem, plan: Plan): DriveItem | null {
-  if (!plan.folderId || item.kind !== 'audio' || (item.role !== 'master' && item.role !== 'mix')) return null;
+  if (!plan.baseFolderId || plan.subPath.length > 0) return null;
+  if (item.kind !== 'audio' || (item.role !== 'master' && item.role !== 'mix')) return null;
   const target = `${item.baseName}${item.ext}`.toLowerCase();
-  return getFolder(plan.folderId).items.find(i => !i.isFolder && i.name.toLowerCase() === target) || null;
+  return getFolder(plan.baseFolderId).items.find(i => !i.isFolder && i.name.toLowerCase() === target) || null;
 }
