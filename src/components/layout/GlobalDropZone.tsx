@@ -21,7 +21,7 @@ function defaultContext(pathname: string): DropContextInfo {
     return { mode: 'auto', label: 'Suelta sobre un artista', hint: 'O en cualquier otra parte para detectar el artista automáticamente' };
   }
   if (pathname === '/personal-projects') {
-    return { mode: 'personal', label: 'Suelta sobre un proyecto', hint: 'O en cualquier otra parte para elegir el proyecto personal' };
+    return { mode: 'library', label: 'Subir a Proyectos personales', hint: 'Suéltalo sobre una carpeta para elegir el destino exacto' };
   }
   return { mode: 'auto', label: 'Suelta para subir', hint: 'La Subida inteligente detecta el artista, el proyecto y el tipo de archivo' };
 }
@@ -52,10 +52,9 @@ export function GlobalDropZone() {
         if (files.length === 0) return;
         openSmartUpload({
           files,
-          targetType: ctx.mode === 'personal' ? 'personal' : ctx.mode === 'artist' ? 'artist' : undefined,
+          targetType: ctx.mode === 'library' ? 'library' : ctx.mode === 'artist' ? 'artist' : undefined,
           artistId: ctx.artistId,
           projectId: ctx.projectId,
-          personalProjectId: ctx.personalProjectId,
           folderId: ctx.folderId,
           folderName: ctx.folderName,
           onFinished: ctx.onFinished,

@@ -3,10 +3,12 @@
 import React, { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Play, Pause, MoreVertical, Star, Users, Check, FolderOpen, AlertCircle, RefreshCw, UploadCloud, SearchX,
-  ArrowUp, ArrowDown, Loader2,
+  ArrowUp, ArrowDown, Loader2, Send, FolderPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
+import { useArtists } from '@/lib/hooks/useArtists';
+import { AssignedView, SendsView } from '@/components/library/LibraryViews';
 import { useExplorer, VIEW_LABEL } from './useExplorerController';
 import {
   bpmTone, formatBytes, formatDuration, formatShortDate, KIND_LABEL, KindIcon, kindStyle, sizedThumbnail,
@@ -109,10 +111,37 @@ function AudioBadges({ item }: { item: DriveItem }) {
   );
 }
 
+/** Library only: which artists can see this item in their portal. */
+function SentBadge({ item, compact }: { item: DriveItem; compact?: boolean }) {
+  const ex = useExplorer();
+  const { artists } = useArtists();
+  const info = ex.isLibrary ? ex.sentInfo(item) : null;
+  if (!info) return null;
+  const names = info.artistIds.map(id => artists.find(a => a.id === id)?.name).filter(Boolean) as string[];
+  const title = `${info.inherited ? 'Dentro de una carpeta enviada a' : 'Enviado a'}: ${names.join(', ') || `${info.artistIds.length} artistas`}`;
+  return (
+    <button
+      type="button"
+      onClick={e => { e.stopPropagation(); ex.setView('sends'); }}
+      onDoubleClick={e => e.stopPropagation()}
+      className={cn(
+        'shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-md text-[10px] font-bold border transition-colors',
+        info.inherited ? 'text-sky-400/80 border-sky-500/15 bg-sky-500/5' : 'text-sky-400 border-sky-500/25 bg-sky-500/10 hover:bg-sky-500/20',
+      )}
+      title={title}
+      aria-label={title}
+    >
+      <Send className="w-3 h-3" />
+      {compact ? info.artistIds.length : names.length === 1 ? names[0] : `${info.artistIds.length} artistas`}
+    </button>
+  );
+}
+
 function StatusIcons({ item }: { item: DriveItem }) {
   const ex = useExplorer();
   return (
     <>
+      <SentBadge item={item} />
       {item.starred && <Star className="w-3.5 h-3.5 shrink-0 text-amber-400 fill-amber-400" aria-label="Destacado" />}
       {item.shared && <Users className="w-3.5 h-3.5 shrink-0 text-text-secondary" aria-label="Compartido" />}
       {item.expiresAt && (
@@ -358,6 +387,7 @@ const GridCard = memo(function GridCard({ item }: { item: DriveItem }) {
           )}
         </div>
         {ex.showLocation && <p className="text-[10px] text-text-secondary/80 truncate mt-0.5">en {ex.locationOf(item)}</p>}
+        {ex.isLibrary && <div className="mt-1.5 empty:hidden flex"><SentBadge item={item} compact /></div>}
       </div>
     </div>
   );
@@ -409,7 +439,26 @@ function EmptyState() {
     scheduled: ['Nada programado', 'Los archivos con autodestrucción aparecerán aquí con su cuenta atrás.'],
     trash: ['La papelera está vacía', 'Lo que elimines se puede restaurar desde aquí.'],
   };
-  const [title, text] = messages[ex.view];
+  if (ex.isLibrary && ex.view === 'folder' && ex.folderId === ex.rootId && ex.typeFilter === 'all') {
+    return (
+      <div className="flex flex-col items-center justify-center text-center py-16 px-6">
+        <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mb-3">
+          <FolderPlus className="w-7 h-7 text-accent" />
+        </div>
+        <p className="text-sm font-semibold text-text-primary">Tu biblioteca de beats está vacía</p>
+        <p className="text-xs text-text-secondary mt-1 max-w-sm">Organízala como quieras: carpetas por año, por estilo, packs… Arrastra aquí tus beats o carpetas enteras (se respeta su estructura).</p>
+        <div className="flex flex-wrap justify-center gap-2 mt-4">
+          <button type="button" onClick={() => ex.createFolder()} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-border text-sm font-semibold hover:bg-surface transition-colors">
+            <FolderPlus className="w-4 h-4" /> Nueva carpeta
+          </button>
+          <button type="button" onClick={() => ex.pickFiles()} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition-colors">
+            <UploadCloud className="w-4 h-4" /> Subir beats
+          </button>
+        </div>
+      </div>
+    );
+  }
+  const [title, text] = messages[ex.view] || ['', ''];
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 px-6">
       <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mb-3">
@@ -480,6 +529,9 @@ export function ItemsView() {
     e.preventDefault();
     ex.showBackgroundMenu(e.clientX, e.clientY);
   };
+
+  if (ex.view === 'sends') return <SendsView />;
+  if (ex.view === 'assigned') return <AssignedView />;
 
   if (ex.error && ex.visibleItems.length === 0) {
     return (

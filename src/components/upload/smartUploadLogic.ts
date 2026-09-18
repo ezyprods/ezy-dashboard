@@ -14,11 +14,11 @@ export type UploadStatus = 'pending' | 'uploading' | 'done' | 'error' | 'cancell
 
 /** Where a group of files goes. Per-file overrides use the same shape. */
 export interface Destination {
-  targetType: 'artist' | 'personal';
+  /** 'library' = the beat library (Proyectos personales) */
+  targetType: 'artist' | 'library';
   artistId: string;
   /** Project folder inside the artist ('' = automatic: bounces → Bounces, rest → artist root) */
   projectId: string;
-  personalProjectId: string;
   /** Exact folder chosen by the user (or preselected by the page); overrides the automatic routing */
   lockedFolder: Crumb | null;
 }
@@ -63,7 +63,6 @@ export interface Plan {
 const AUDIO_EXT = /\.(wav|mp3|aif|aiff|flac|m4a|aac|ogg|opus|wma)$/i;
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|heic|heif|svg|bmp|tiff?)$/i;
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
-const PROJECT_FILE_EXT = /\.(flp|als|alp|logicx|ptx|cpr|rpp|song|zip|rar|7z)$/i;
 
 /** Artist-root folders that are not projects */
 export const NON_PROJECT_FOLDERS = /^(images|releases|bounces?|documents|contracts|stems|01_legal_y_contratos|02_diseño_y_media|03_lanzamientos_y_proyectos|02_bounces_y_grabaciones)$/i;
@@ -114,7 +113,7 @@ function todayStamp() {
 /** Suggested file name (without extension) for the current role and target. */
 export function suggestBaseName(item: Pick<UploadItem, 'file' | 'kind' | 'role' | 'bpm' | 'key'>, targetType: Destination['targetType']): string {
   const original = stripExtension(item.file.name);
-  if (targetType === 'personal' && item.kind === 'audio') {
+  if (targetType === 'library' && item.kind === 'audio') {
     const parsed = parseAudioFilename(item.file.name);
     return stripExtension(formatProducerFilename(item.file.name, parsed.cleanTitle, item.bpm ?? parsed.bpm, item.key ?? parsed.key));
   }
@@ -236,8 +235,9 @@ export function effectiveDest(item: UploadItem, shared: Destination): Destinatio
 
 export interface DestinationNames {
   artistName?: string;
-  personalName?: string;
   projectName?: string;
+  libraryRootId?: string;
+  libraryName?: string;
 }
 
 /** Computes where a file will be stored (using the explorer's folder cache). */
@@ -251,27 +251,10 @@ export function planDestination(item: UploadItem, dest: Destination, names: Dest
 
   if (dest.lockedFolder) return withSub({ baseFolderId: dest.lockedFolder.id, label: dest.lockedFolder.name });
 
-  if (dest.targetType === 'personal') {
-    const pid = dest.personalProjectId;
-    if (!pid) return { subPath, label: '', error: 'Elige un proyecto personal' };
-    const root = names.personalName || 'Proyecto';
-    if (item.kind === 'audio') {
-      if (item.role === 'stem') {
-        const sub = findSub(pid, /stem|pista|^02_/i);
-        return sub
-          ? withSub({ baseFolderId: sub.id, label: `${root} / ${sub.name}` })
-          : withSub({ baseCreate: { name: '02_Stems_y_Pistas', parentId: pid }, label: `${root} / 02_Stems_y_Pistas` });
-      }
-      const sub = findSub(pid, /bounce|demo|^01_/i);
-      return sub
-        ? withSub({ baseFolderId: sub.id, label: `${root} / ${sub.name}` })
-        : withSub({ baseCreate: { name: '01_Bounces_y_Demos', parentId: pid }, label: `${root} / 01_Bounces_y_Demos` });
-    }
-    if (PROJECT_FILE_EXT.test(item.file.name)) {
-      const sub = findSub(pid, /backup|sesion|sesión|^03_/i);
-      if (sub) return withSub({ baseFolderId: sub.id, label: `${root} / ${sub.name}` });
-    }
-    return withSub({ baseFolderId: pid, label: root });
+  // The library has no automatic routing: the user organises it with free folders
+  if (dest.targetType === 'library') {
+    if (!names.libraryRootId) return { subPath, label: '', error: 'Cargando la biblioteca…' };
+    return withSub({ baseFolderId: names.libraryRootId, label: names.libraryName || 'Proyectos personales' });
   }
 
   const aid = dest.artistId;

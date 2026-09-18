@@ -7,7 +7,7 @@ import {
   Loader2, Music, CheckCircle2, Circle, CreditCard, AlertCircle, Sparkles, Disc, Play, Pause,
   ChevronRight, Lock, Download, ExternalLink, Clock, TrendingUp, ListMusic, Eye, Wrench, RefreshCw, Search, X,
   FolderOpen, Home, Files, FileText, FileImage, Film, FolderArchive, File as FileIcon, ChevronDown, ChevronUp,
-  Scissors, Tags, Activity, Layers, Table2,
+  Scissors, Tags, Activity, Layers, Table2, Music2,
 } from 'lucide-react';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
 import { AudioConverter } from '@/components/tools/AudioConverter';
@@ -23,7 +23,7 @@ import { cn, getCoverArtUrl, formatRelativeTime, triggerFileDownload } from '@/l
 
 const TOOL_ICONS: Record<string, React.ElementType> = { Download, RefreshCw, Scissors, Tags, Activity, Layers };
 
-type Section = 'home' | 'files' | 'releases' | 'tools';
+type Section = 'home' | 'files' | 'releases' | 'tools' | 'beats';
 type FileFilter = 'all' | 'audio' | 'other';
 
 const AUDIO_RE = /\.(wav|mp3|m4a|flac|aiff?|ogg|opus|aac)$/i;
@@ -64,6 +64,13 @@ export default function PortalPage() {
   const [openReleaseId, setOpenReleaseId] = useState<string | null>(null);
   const [activeToolId, setActiveToolId] = useState<PortalToolId>('downloader');
   const [expandedMatrix, setExpandedMatrix] = useState<string | null>(null);
+  const [beatQuery, setBeatQuery] = useState('');
+
+  // Deep link from the producer's messages: /portal/<id>?tab=beats
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'beats' || tab === 'files' || tab === 'releases' || tab === 'tools') setSection(tab);
+  }, []);
 
   const fetchPortal = useCallback(async (silent = false) => {
     if (silent) setIsRefreshing(true);
@@ -173,6 +180,8 @@ export default function PortalPage() {
 
   const weekAgo = Date.now() - 7 * 86_400_000;
   const newThisWeek = allFiles.filter(f => (f.effectiveDate || 0) > weekAgo).length;
+  const beatSends: any[] = data.beatSends || [];
+  const beatCount = beatSends.reduce((s, b) => s + b.beats.length, 0);
   const sharedMatrices: any[] = data.sharedMatrices || [];
   const activeMatrices = sharedMatrices.filter(m => m.stats?.total > 0 && m.stats.done < m.stats.total);
   const avgProgress = activeMatrices.length ? Math.round(activeMatrices.reduce((s, m) => s + m.stats.percent, 0) / activeMatrices.length) : null;
@@ -180,6 +189,7 @@ export default function PortalPage() {
   const navItems: { key: Section; label: string; icon: React.ElementType; show: boolean }[] = [
     { key: 'home', label: 'Inicio', icon: Home, show: true },
     { key: 'files', label: 'Archivos', icon: Files, show: !!moduleOf('bounces') },
+    { key: 'beats', label: 'Beats', icon: Music2, show: beatCount > 0 },
     { key: 'releases', label: 'Previews', icon: ListMusic, show: !!moduleOf('releases') && data.releases?.length > 0 },
     { key: 'tools', label: 'Herramientas', icon: Wrench, show: toolsEnabled },
   ];
@@ -249,10 +259,75 @@ export default function PortalPage() {
     );
   };
 
+  const BeatRow = ({ beat, send }: { beat: any; send: any }) => {
+    const audio = isAudio(beat);
+    const active = currentTrack?.id === beat.id;
+    const playing = active && isPlaying;
+    const { Icon, cls } = fileIcon(beat);
+    const playBeat = () => playTrack({
+      id: beat.id,
+      name: stripExt(beat.name),
+      url: `/api/audio/${beat.id}`,
+      artistName: data?.producerName,
+      bpm: beat.bpm,
+      musicalKey: beat.key,
+      pathSegments: [{ name: 'Beats' }, { name: send.title }],
+    });
+    return (
+      <div className={cn('group flex items-center gap-3 px-3 md:px-4 py-2.5 transition-colors', active ? 'bg-accent/5' : 'hover:bg-surface/60')}>
+        {audio ? (
+          <button type="button" onClick={playBeat} className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer', active ? 'bg-accent text-white shadow-md shadow-accent/30' : 'bg-violet-500/10 text-violet-400 hover:bg-accent hover:text-white')} aria-label={playing ? 'Pausar' : 'Reproducir'}>
+            {playing ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current translate-x-px" />}
+          </button>
+        ) : (
+          <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', cls)}><Icon className="w-5 h-5" /></span>
+        )}
+        <div onClick={audio ? playBeat : undefined} className={cn('flex-1 min-w-0 select-none', audio && 'cursor-pointer')}>
+          <p className={cn('text-sm font-medium truncate', active ? 'text-accent font-semibold' : 'text-text-primary')} title={beat.name}>{audio ? stripExt(beat.name) : beat.name}</p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-secondary">
+            {beat.bpm && <span className="font-mono font-bold text-amber-400">{beat.bpm} BPM</span>}
+            {beat.key && <span className="font-mono font-bold text-violet-400">{beat.key}</span>}
+            {beat.path && <span className="truncate max-w-[220px]">{beat.path}</span>}
+            {!audio && beat.size && <span>{formatSize(beat.size)}</span>}
+          </div>
+        </div>
+        {send.allowDownload && (
+          <button
+            type="button"
+            onClick={e => { e.preventDefault(); e.stopPropagation(); triggerFileDownload(beat.id, beat.name); }}
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface cursor-pointer shrink-0"
+            title="Descargar"
+            aria-label="Descargar"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const statusIcon = (status: string) => status === 'done' ? <CheckCircle2 className="w-3.5 h-3.5 text-success" /> : status === 'in_progress' ? <Clock className="w-3.5 h-3.5 text-accent" /> : status === 'review' ? <Eye className="w-3.5 h-3.5 text-warning" /> : <Circle className="w-3.5 h-3.5 text-text-secondary/50" />;
   const statusLabel: Record<string, string> = { todo: 'Pendiente', in_progress: 'En progreso', review: 'Revisión', done: 'Hecho' };
 
   const renderHomeModule = (mod: any) => {
+    if (mod.type === 'beats') {
+      if (beatCount === 0) return null;
+      const latest = beatSends[0];
+      return (
+        <section key={mod.id} className="rounded-2xl border border-accent/30 bg-surface-elevated overflow-hidden">
+          <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60 bg-accent/5">
+            <Music2 className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Beats para ti'}</h2>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-accent text-white">{beatCount}</span>
+            <button type="button" onClick={() => { setSection('beats'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5">Ver todos <ChevronRight className="w-3.5 h-3.5" /></button>
+          </div>
+          <div className="px-4 md:px-5 pt-3 text-xs text-text-secondary">
+            Último envío: <b className="text-text-primary">{latest.title}</b> · {formatRelativeTime(latest.sentAt)}
+          </div>
+          <div className="divide-y divide-border/40 mt-1">{latest.beats.slice(0, 5).map((b: any) => <BeatRow key={b.id} beat={b} send={latest} />)}</div>
+        </section>
+      );
+    }
     if (mod.type === 'bounces') {
       const latest = allFiles.slice(0, 8);
       return (
@@ -620,6 +695,49 @@ export default function PortalPage() {
                 <div className="divide-y divide-border/40">{visibleFiles.map((f: any) => <FileRow key={f.id} file={f} showProject={projectId === 'all'} />)}</div>
               )}
             </section>
+          </div>
+        )}
+
+        {section === 'beats' && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="rounded-2xl border border-border bg-surface-elevated p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center shrink-0">
+                  <Music2 className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base font-bold text-text-primary">Beats para ti</h2>
+                  <p className="text-xs text-text-secondary">{beatCount} beat{beatCount === 1 ? '' : 's'} seleccionado{beatCount === 1 ? '' : 's'} por {data.producerName || 'tu productor'}. Si alguno te encaja, díselo.</p>
+                </div>
+              </div>
+              <div className="relative sm:w-64">
+                <Search className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+                <input value={beatQuery} onChange={e => setBeatQuery(e.target.value)} placeholder="Buscar beats…" className="w-full h-10 bg-surface border border-border rounded-xl pl-9 pr-8 text-sm focus:outline-none focus:border-accent" />
+                {beatQuery && <button type="button" onClick={() => setBeatQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-text-secondary" aria-label="Borrar"><X className="w-4 h-4" /></button>}
+              </div>
+            </div>
+
+            {(() => {
+              const q = beatQuery.trim().toLowerCase();
+              const matches = (b: any) => !q || `${b.name} ${b.path} ${b.bpm || ''} ${b.key || ''}`.toLowerCase().includes(q);
+              const visible = beatSends.map(s => ({ ...s, beats: s.beats.filter(matches) })).filter(s => s.beats.length > 0);
+              if (visible.length === 0) {
+                return <p className="text-sm text-text-secondary text-center py-16">{q ? 'Ningún beat coincide con la búsqueda' : 'Todavía no hay beats para ti.'}</p>;
+              }
+              return visible.map(send => (
+                <section key={send.id} className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
+                  <div className="px-4 md:px-5 py-3 border-b border-border/60">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-accent shrink-0" />
+                      <h3 className="text-sm font-bold text-text-primary flex-1 truncate">{send.title}</h3>
+                      <span className="text-[11px] text-text-secondary shrink-0">{send.beats.length} · {formatRelativeTime(send.sentAt)}</span>
+                    </div>
+                    {send.note && <p className="text-xs text-text-secondary mt-1.5 whitespace-pre-line">{send.note}</p>}
+                  </div>
+                  <div className="divide-y divide-border/40">{send.beats.map((b: any) => <BeatRow key={b.id} beat={b} send={send} />)}</div>
+                </section>
+              ));
+            })()}
           </div>
         )}
 

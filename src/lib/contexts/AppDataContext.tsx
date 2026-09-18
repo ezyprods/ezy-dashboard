@@ -4,8 +4,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type { 
   Artist, 
   CreateArtistInput, 
-  PersonalProject, 
-  CreatePersonalProjectInput, 
   Payment
 } from '@/types';
 
@@ -49,17 +47,6 @@ interface AppDataContextType {
   createArtist: (data: CreateArtistInput) => Promise<{ success: boolean; artist?: Artist; error?: string }>;
   updateArtist: (id: string, data: Partial<CreateArtistInput>) => Promise<{ success: boolean; artist?: Artist; error?: string }>;
   deleteArtistFromState: (id: string) => void;
-
-  // Personal Projects
-  personalProjects: PersonalProject[];
-  personalProjectsLoading: boolean;
-  personalProjectsError: string | null;
-  fetchPersonalProjects: (force?: boolean) => Promise<PersonalProject[]>;
-  createPersonalProject: (input: CreatePersonalProjectInput) => Promise<PersonalProject>;
-  updatePersonalProject: (id: string, updates: Partial<PersonalProject>) => Promise<PersonalProject>;
-  replacePersonalProjectAudio: (id: string, file: File) => Promise<PersonalProject>;
-  deletePersonalProject: (id: string) => Promise<void>;
-  clonePersonalProjectToArtist: (id: string, artistId: string, customTitle?: string, projectType?: string) => Promise<any>;
 
   // Matrices
   matrices: any[];
@@ -123,12 +110,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [matricesError, setMatricesError] = useState<string | null>(null);
   const matricesLoadedRef = useRef(false);
 
-  // 4. Personal Projects State
-  const [personalProjects, setPersonalProjects] = useState<PersonalProject[]>([]);
-  const [personalProjectsLoading, setPersonalProjectsLoading] = useState(true);
-  const [personalProjectsError, setPersonalProjectsError] = useState<string | null>(null);
-  const personalProjectsLoadedRef = useRef(false);
-
   // 5. Payments State
   const [payments, setPayments] = useState<Payment[]>([]);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
@@ -150,8 +131,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   // Latest data snapshot, so the fetchers below can stay referentially stable
   // (they used to change on every data update, re-running effects that depend on them).
-  const dataRef = useRef({ artists, pulseData, matrices, completedMatrices, personalProjects, payments, recentFiles, calendarEvents });
-  dataRef.current = { artists, pulseData, matrices, completedMatrices, personalProjects, payments, recentFiles, calendarEvents };
+  const dataRef = useRef({ artists, pulseData, matrices, completedMatrices, payments, recentFiles, calendarEvents });
+  dataRef.current = { artists, pulseData, matrices, completedMatrices, payments, recentFiles, calendarEvents };
 
   // ==========================================
   // FETCHERS (With in-flight deduplication)
@@ -270,43 +251,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     return promise;
   }, []);
 
-  // --- Fetch Personal Projects ---
-  const fetchPersonalProjects = useCallback(async (force = false): Promise<PersonalProject[]> => {
-    if (!force && personalProjectsLoadedRef.current) {
-      return dataRef.current.personalProjects;
-    }
-    if (inFlightRef.current['personalProjects']) {
-      return inFlightRef.current['personalProjects'];
-    }
-
-    setPersonalProjectsLoading(true);
-    const promise = (async () => {
-      try {
-        const res = await fetch('/api/personal-projects');
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || 'Error al cargar los proyectos personales');
-        }
-        const data = await res.json();
-        const list: PersonalProject[] = data.projects || [];
-        setPersonalProjects(list);
-        personalProjectsLoadedRef.current = true;
-        setPersonalProjectsError(null);
-        return list;
-      } catch (err: any) {
-        console.error('usePersonalProjects error:', err);
-        setPersonalProjectsError(err.message || 'Error de conexión');
-        return [];
-      } finally {
-        setPersonalProjectsLoading(false);
-        delete inFlightRef.current['personalProjects'];
-      }
-    })();
-
-    inFlightRef.current['personalProjects'] = promise;
-    return promise;
-  }, []);
-
   // --- Fetch Payments ---
   const fetchPayments = useCallback(async (force = false): Promise<Payment[]> => {
     if (!force && paymentsLoadedRef.current) {
@@ -418,14 +362,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       fetchPulse(force),
       fetchArtists(force),
       fetchMatrices(force),
-      fetchPersonalProjects(force),
       fetchPayments(force),
       fetchRecentFiles(force),
       fetchCalendar(force),
     ]).then(() => {
       setIsInitialWarmed(true);
     });
-  }, [fetchPulse, fetchArtists, fetchMatrices, fetchPersonalProjects, fetchPayments, fetchRecentFiles, fetchCalendar]);
+  }, [fetchPulse, fetchArtists, fetchMatrices, fetchPayments, fetchRecentFiles, fetchCalendar]);
 
   useEffect(() => {
     prefetchAll(false);
@@ -506,102 +449,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
-  // --- Personal Project Mutations ---
-  const createPersonalProject = useCallback(async (input: CreatePersonalProjectInput): Promise<PersonalProject> => {
-    const res = await fetch('/api/personal-projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al crear el proyecto personal');
-    }
-
-    const data = await res.json();
-    const newProj: PersonalProject = data.project;
-    setPersonalProjects(prev => [newProj, ...prev.filter(p => p.id !== newProj.id)]);
-    return newProj;
-  }, []);
-
-  const updatePersonalProject = useCallback(async (id: string, updates: Partial<PersonalProject>): Promise<PersonalProject> => {
-    const res = await fetch(`/api/personal-projects/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al actualizar el proyecto');
-    }
-
-    const data = await res.json();
-    const updatedProj: PersonalProject = data.project;
-    setPersonalProjects(prev => prev.map(p => (p.id === id ? updatedProj : p)));
-    return updatedProj;
-  }, []);
-
-  const replacePersonalProjectAudio = useCallback(async (id: string, file: File): Promise<PersonalProject> => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const res = await fetch(`/api/personal-projects/${id}/replace-audio`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al sustituir el archivo de audio');
-    }
-
-    const data = await res.json();
-    const updatedProj: PersonalProject = data.project;
-    setPersonalProjects(prev => prev.map(p => (p.id === id ? updatedProj : p)));
-    return updatedProj;
-  }, []);
-
-  const deletePersonalProject = useCallback(async (id: string): Promise<void> => {
-    const res = await fetch(`/api/personal-projects/${id}`, {
-      method: 'DELETE',
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al eliminar el proyecto');
-    }
-
-    setPersonalProjects(prev => prev.filter(p => p.id !== id));
-  }, []);
-
-  const clonePersonalProjectToArtist = useCallback(async (
-    id: string, 
-    artistId: string, 
-    customTitle?: string, 
-    projectType: string = 'single'
-  ) => {
-    const res = await fetch(`/api/personal-projects/${id}/clone-to-artist`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ artistId, projectTitle: customTitle, projectType }),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Error al ceder el proyecto al artista');
-    }
-
-    const data = await res.json();
-    if (data.project) {
-      setPersonalProjects(prev => prev.map(p => (p.id === id ? data.project : p)));
-    }
-    // Also re-sync artists/matrices if needed
-    fetchArtists(true);
-    return data;
-  }, [fetchArtists]);
-
   // --- Payment Mutations ---
   const createPayment = useCallback(async (data: Partial<Payment>) => {
     try {
@@ -657,17 +504,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     updateArtist,
     deleteArtistFromState,
 
-    // Personal Projects
-    personalProjects,
-    personalProjectsLoading,
-    personalProjectsError,
-    fetchPersonalProjects,
-    createPersonalProject,
-    updatePersonalProject,
-    replacePersonalProjectAudio,
-    deletePersonalProject,
-    clonePersonalProjectToArtist,
-
     // Matrices
     matrices,
     completedMatrices,
@@ -714,15 +550,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     createArtist,
     updateArtist,
     deleteArtistFromState,
-    personalProjects,
-    personalProjectsLoading,
-    personalProjectsError,
-    fetchPersonalProjects,
-    createPersonalProject,
-    updatePersonalProject,
-    replacePersonalProjectAudio,
-    deletePersonalProject,
-    clonePersonalProjectToArtist,
     matrices,
     completedMatrices,
     matricesLoading,

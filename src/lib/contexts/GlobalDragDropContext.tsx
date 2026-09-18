@@ -8,7 +8,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
  * - Anything that accepts files itself (explorer folders, artist cards, project cards, tool drop zones…)
  *   handles the `drop` event and calls `preventDefault()`.
  * - Every other drop falls back to the *page drop context*: each page describes what a drop "anywhere"
- *   means there (upload to this artist, to this personal project, to the folder being viewed…) through
+ *   means there (upload to this artist, to the beat library, to the folder being viewed…) through
  *   `useDropContext`. Without a registered context the drop opens the Smart Upload in auto-detect mode.
  * - Dropping again (or from another place) never opens a second dialog: the files are queued as a new
  *   *batch* of the open upload session, keeping their own destination.
@@ -16,11 +16,10 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 
 export interface UploadRequest {
   files: File[];
-  targetType?: 'artist' | 'personal';
+  targetType?: 'artist' | 'library';
   artistId?: string;
   /** Project folder of the artist (files are routed inside it by type) */
   projectId?: string;
-  personalProjectId?: string;
   /** Explicit destination folder. When omitted, Smart Upload routes files automatically. */
   folderId?: string;
   folderName?: string;
@@ -40,13 +39,12 @@ export interface UploadSession {
 
 export interface DropContextInfo {
   /** 'disabled' turns the global fallback off (pages with their own drop zones, e.g. tools). */
-  mode: 'auto' | 'artist' | 'personal' | 'disabled';
+  mode: 'auto' | 'artist' | 'library' | 'disabled';
   /** Short text shown while dragging, e.g. "Subir a Aaron Bzn". */
   label?: string;
   hint?: string;
   artistId?: string;
   projectId?: string;
-  personalProjectId?: string;
   folderId?: string;
   folderName?: string;
   onFinished?: () => void;
@@ -64,8 +62,6 @@ interface GlobalDragDropContextValue {
   registerDropContext: (info: DropContextInfo) => () => void;
   /** @deprecated use openSmartUpload */
   triggerUploadForArtist: (files: File[], artistId: string, folderId?: string) => void;
-  /** @deprecated use openSmartUpload */
-  triggerUploadForPersonalProject: (files: File[], projectId: string, folderId?: string) => void;
 }
 
 const noop = () => {};
@@ -79,7 +75,6 @@ const GlobalDragDropContext = createContext<GlobalDragDropContextValue>({
   closeSmartUpload: noop,
   registerDropContext: () => noop,
   triggerUploadForArtist: noop,
-  triggerUploadForPersonalProject: noop,
 });
 
 export const useGlobalDragDrop = () => useContext(GlobalDragDropContext);
@@ -178,10 +173,6 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
     openSmartUpload({ files, targetType: 'artist', artistId: artistId || undefined, folderId });
   }, [openSmartUpload]);
 
-  const triggerUploadForPersonalProject = useCallback((files: File[], projectId: string, folderId?: string) => {
-    openSmartUpload({ files, targetType: 'personal', personalProjectId: projectId || undefined, folderId });
-  }, [openSmartUpload]);
-
   // The most recently registered (deepest) context wins
   const dropContext = contexts.length ? contexts[contexts.length - 1].info : null;
 
@@ -194,8 +185,7 @@ export function GlobalDragDropProvider({ children }: { children: React.ReactNode
     closeSmartUpload,
     registerDropContext,
     triggerUploadForArtist,
-    triggerUploadForPersonalProject,
-  }), [isDraggingFiles, uploadSession, dropContext, openSmartUpload, closeSmartUpload, registerDropContext, triggerUploadForArtist, triggerUploadForPersonalProject]);
+  }), [isDraggingFiles, uploadSession, dropContext, openSmartUpload, closeSmartUpload, registerDropContext, triggerUploadForArtist]);
 
   return <GlobalDragDropContext.Provider value={value}>{children}</GlobalDragDropContext.Provider>;
 }

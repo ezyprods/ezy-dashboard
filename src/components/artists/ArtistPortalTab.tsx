@@ -21,6 +21,7 @@ const MODULE_INFO: Record<string, { label: string; description: string; emoji: s
   releases: { label: 'Previews y lanzamientos', description: 'Reproductor de los lanzamientos marcados como públicos', emoji: '💿' },
   tasks: { label: 'Estado del trabajo', description: 'Progreso de las matrices compartidas y tareas del proyecto', emoji: '✅' },
   finances: { label: 'Resumen financiero', description: 'Presupuesto, pagado y pendiente', emoji: '💶' },
+  beats: { label: 'Beats para ti', description: 'Los beats que le envías desde Proyectos personales (desaparecen al asignarlos)', emoji: '🎹' },
 };
 
 interface PortalTabProps {

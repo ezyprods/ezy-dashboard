@@ -1,6 +1,6 @@
 export interface PortalModule {
   id: string;
-  type: 'projects' | 'finances' | 'bounces' | 'tasks' | 'releases' | 'custom_text' | 'custom_link';
+  type: 'projects' | 'finances' | 'bounces' | 'tasks' | 'releases' | 'beats' | 'custom_text' | 'custom_link';
   title?: string;
   isVisible: boolean;
   order: number;

@@ -27,35 +27,9 @@ export async function GET(request: Request) {
       pageSize: 20,
     }).catch(() => ({ data: { files: [] } }));
 
-    // Search personal projects
-    const personalProjectsPromise = (async () => {
-      try {
-        const { getPersonalProjectsDb } = await import('@/lib/personalProjects');
-        const { projects } = await getPersonalProjectsDb();
-        return projects
-          .filter(p => 
-            p.title.toLowerCase().includes(q) || 
-            p.category.toLowerCase().includes(q) ||
-            p.tags?.some(t => t.toLowerCase().includes(q))
-          )
-          .slice(0, 5)
-          .map(p => ({
-            id: p.id,
-            title: p.title,
-            category: p.category,
-            bpm: p.bpm,
-            key: p.key,
-            status: p.status,
-          }));
-      } catch {
-        return [];
-      }
-    })();
-
-    const [artistFolders, driveSearchRes, matchedPersonalProjects] = await Promise.all([
-      artistFoldersPromise, 
+    const [artistFolders, driveSearchRes] = await Promise.all([
+      artistFoldersPromise,
       driveSearchPromise,
-      personalProjectsPromise
     ]);
 
     // Filter artists
@@ -115,12 +89,11 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       artists: matchedArtists,
-      personalProjects: matchedPersonalProjects,
       audioFiles,
       otherFiles,
     });
   } catch (error: any) {
     console.error('Search API error:', error);
-    return NextResponse.json({ artists: [], personalProjects: [], audioFiles: [], otherFiles: [], error: error.message }, { status: 500 });
+    return NextResponse.json({ artists: [], audioFiles: [], otherFiles: [], error: error.message }, { status: 500 });
   }
 }

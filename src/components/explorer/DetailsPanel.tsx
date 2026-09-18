@@ -3,10 +3,13 @@
 import React from 'react';
 import {
   Download, HardDrive, Share2, Link as LinkIcon, Edit3, ArrowRightLeft, Trash2, Star, Timer, Scissors, Eye,
-  FolderOpen, Play, Pause, X, Mail, RotateCcw, UploadCloud, FolderPlus, CopyPlus, Undo2,
+  FolderOpen, Play, Pause, X, Mail, RotateCcw, UploadCloud, FolderPlus, CopyPlus, Undo2, Send, UserCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
+import { ArtistAvatar } from '@/components/ui/ArtistAvatar';
+import { useArtists } from '@/lib/hooks/useArtists';
+import { findItem } from './driveStore';
 import { useExplorer, VIEW_LABEL } from './useExplorerController';
 import {
   bpmTone, formatBytes, formatDuration, formatLongDate, KIND_LABEL, KindIcon, kindStyle,
@@ -36,6 +39,48 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex items-start justify-between gap-4 py-2 border-b border-border/40 last:border-b-0">
       <span className="text-xs text-text-secondary shrink-0">{label}</span>
       <span className="text-xs text-text-primary text-right min-w-0 break-words">{children}</span>
+    </div>
+  );
+}
+
+/** Library: send / assign buttons and who can already hear these items. */
+function BeatActions({ items }: { items: DriveItem[] }) {
+  const ex = useExplorer();
+  const { artists } = useArtists();
+  const ids = new Set<string>();
+  let inherited = false;
+  for (const item of items) {
+    const info = ex.sentInfo(item);
+    info?.artistIds.forEach(id => ids.add(id));
+    if (info?.inherited) inherited = true;
+  }
+  const receivers = artists.filter(a => ids.has(a.id));
+
+  return (
+    <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-3 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => ex.openSendDialog(items)} className="h-10 rounded-xl bg-accent text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-accent/90">
+          <Send className="w-4 h-4" /> Enviar
+        </button>
+        <button type="button" onClick={() => ex.setAssignDialog(items)} className="h-10 rounded-xl border border-border bg-surface-elevated text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-surface">
+          <UserCheck className="w-4 h-4" /> Asignar
+        </button>
+      </div>
+      {receivers.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-[11px] text-text-secondary">{inherited && items.length === 1 ? 'Dentro de una carpeta enviada a:' : 'Lo ven en su portal:'}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {receivers.map(a => (
+              <span key={a.id} className="h-7 pl-1 pr-2 rounded-full bg-surface-elevated border border-border/60 text-[11px] font-medium text-text-primary inline-flex items-center gap-1.5">
+                <ArtistAvatar name={a.name} photoUrl={a.photoUrl} size="sm" className="w-5 h-5 text-[8px]" />
+                <span className="max-w-[110px] truncate">{a.name}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-[11px] text-text-secondary leading-relaxed">Aún no lo has enviado. Al asignarlo se mueve a la carpeta Beats del artista y desaparece de aquí.</p>
+      )}
     </div>
   );
 }
@@ -140,6 +185,7 @@ function SingleItemDetails({ item }: { item: DriveItem }) {
             : <Action icon={Timer} label="Autoborrar" active={!!item.expiresAt} onClick={() => ex.setDeleteDialog([item])} />}
         </div>
       )}
+      {!inTrash && ex.isLibrary && <BeatActions items={[item]} />}
       {!inTrash && ex.artistEmail && (
         <button type="button" onClick={() => ex.shareWithArtist([item])} className="w-full h-10 rounded-xl border border-border/60 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface flex items-center justify-center gap-2">
           <Mail className="w-4 h-4" /> Compartir con el artista
@@ -190,6 +236,7 @@ function MultiDetails({ items }: { items: DriveItem[] }) {
           ))}
         </div>
       </div>
+      {!inTrash && ex.isLibrary && <BeatActions items={items} />}
       {inTrash ? (
         <div className="grid grid-cols-2 gap-2">
           <Action icon={RotateCcw} label="Restaurar" onClick={() => ex.restoreItems(items)} />
@@ -251,6 +298,10 @@ function FolderSummary() {
           <Action icon={FolderPlus} label="Nueva carpeta" onClick={() => ex.createFolder()} />
         </div>
       )}
+      {ex.isLibrary && ex.view === 'folder' && ex.folderId !== ex.rootId && (() => {
+        const folder = findItem(ex.folderId);
+        return folder ? <BeatActions items={[folder]} /> : null;
+      })()}
       <p className="text-[11px] text-text-secondary text-center leading-relaxed px-2">
         Selecciona un elemento para ver sus detalles. {ex.canHover ? 'Clic derecho para todas las acciones.' : 'Mantén pulsado para ver todas las acciones.'}
       </p>

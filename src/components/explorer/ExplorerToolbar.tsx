@@ -125,6 +125,7 @@ export function ExplorerToolbar() {
   };
 
   const canGoUp = ex.view !== 'folder' || ex.crumbs.length > 1;
+  const customView = ex.view === 'sends' || ex.view === 'assigned';
 
   return (
     <div className="border-b border-border/60 bg-surface-elevated">
@@ -221,7 +222,7 @@ export function ExplorerToolbar() {
           ) : null}
         </div>
 
-        <div className="hidden md:flex flex-1 min-w-0 items-center gap-1.5 overflow-x-auto scrollbar-hide" data-no-swipe>
+        <div className={cn('hidden flex-1 min-w-0 items-center gap-1.5 overflow-x-auto scrollbar-hide', !customView && 'md:flex')} data-no-swipe>
           {FILTERS.map(f => (
             <button
               key={f.id}
@@ -239,7 +240,7 @@ export function ExplorerToolbar() {
           ))}
         </div>
 
-        <div className="flex items-center gap-0.5 shrink-0 md:ml-auto">
+        <div className={cn('items-center gap-0.5 shrink-0 md:ml-auto', customView ? 'hidden' : 'flex')}>
           <button
             type="button"
             className={cn(iconBtn, 'inline-flex md:hidden relative', ex.typeFilter !== 'all' && 'text-accent bg-accent/10')}

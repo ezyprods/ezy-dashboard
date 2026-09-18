@@ -18,12 +18,15 @@ import {
   normalizeItem, sortItems, stripExtension, FOLDER_COLORS,
 } from './fileKinds';
 import { canNativeShare, copyText, downloadFiles, isMac, nativeShare, useMediaQuery, usePreference } from './explorerUtils';
+import { apiAssign, apiUndoAssignment, loadLibrary, useLibrary } from '@/components/library/libraryStore';
+import type { BeatAssignment, BeatSend } from '@/types';
 import {
   FOLDER_MIME, type Crumb, type DriveItem, type ExplorerScope, type ExplorerView, type SortDir, type SortField,
   type TypeFilter, type ViewMode,
 } from './types';
 
-export const VIEWS: ExplorerView[] = ['folder', 'recent', 'audio', 'starred', 'scheduled', 'trash'];
+export const VIEWS: ExplorerView[] = ['folder', 'recent', 'audio', 'starred', 'scheduled', 'trash', 'sends', 'assigned'];
+const LIBRARY_VIEWS: ExplorerView[] = ['sends', 'assigned'];
 
 export const VIEW_LABEL: Record<ExplorerView, string> = {
   folder: 'Archivos',
@@ -32,6 +35,8 @@ export const VIEW_LABEL: Record<ExplorerView, string> = {
   starred: 'Destacados',
   scheduled: 'Eliminación programada',
   trash: 'Papelera',
+  sends: 'Envíos',
+  assigned: 'Asignados',
 };
 
 export const INTERNAL_DRAG_TYPE = 'application/x-ezy-drive-items';
@@ -54,6 +59,8 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
   const searchParams = useSearchParams();
   const { showMenu } = useContextMenu();
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
+  const isLibrary = scope.type === 'library';
+  const library = useLibrary(isLibrary);
 
   // ─── Layout & preferences ────────────────────────────────────────────────
   const isXL = useMediaQuery('(min-width: 1280px)');
@@ -70,7 +77,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
 
   // ─── URL state (browser back/forward walks the folder history) ──────────
   const urlView = searchParams.get('view') as ExplorerView | null;
-  const view: ExplorerView = urlView && VIEWS.includes(urlView) ? urlView : 'folder';
+  const view: ExplorerView = urlView && VIEWS.includes(urlView) && (isLibrary || !LIBRARY_VIEWS.includes(urlView)) ? urlView : 'folder';
   const folderId = (view === 'folder' && searchParams.get('folderId')) || rootId;
   const urlHighlight = searchParams.get('fileId') || searchParams.get('highlight');
 
@@ -169,11 +176,12 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
   // the personal project's "01_Bounces_y_Demos".
   const rootEntry = useFolder(rootId);
   const bouncesFolder = useMemo(() => {
+    if (isLibrary) return null;
     const folders = rootEntry.items.filter(i => i.isFolder);
     return folders.find(f => /^bounces?$/i.test(f.name.trim()))
       || folders.find(f => /bounce/i.test(f.name))
       || null;
-  }, [rootEntry.items]);
+  }, [rootEntry.items, isLibrary]);
   const starredFolders = useMemo(
     () => index.items.filter(i => i.isFolder && i.starred).sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true })),
     [index.items],
@@ -218,6 +226,9 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
         loading = indexLoading;
         err = index.status === 'error' && !indexHasData ? index.error : undefined;
         location = true;
+        break;
+      case 'sends':
+      case 'assigned':
         break;
       case 'trash':
         base = trash.items;
@@ -392,7 +403,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
 
   const folderHref = useCallback((id: string) => {
     if (scope.type === 'artist') return `/artists/${scope.artistId}?tab=files${id !== rootId ? `&folderId=${id}` : ''}`;
-    return `/personal-projects/${scope.projectId}?tab=files${id !== rootId ? `&folderId=${id}` : ''}`;
+    return `/personal-projects${id !== rootId ? `?folderId=${id}` : ''}`;
   }, [scope, rootId]);
 
   const openFolder = useCallback((target: Pick<DriveItem, 'id' | 'name' | 'parentId'> | Crumb, highlight?: string) => {
@@ -430,7 +441,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     if (rootEntry.status !== 'ready') {
       await loadFolder(rootId, { force: true });
     }
-    const name = scope.type === 'personal' ? '01_Bounces_y_Demos' : 'Bounces';
+    const name = 'Bounces';
     const ok = await customConfirm(
       `Todavía no existe la carpeta "${name}" en ${rootName}. La Subida inteligente guarda ahí los bounces. ¿Quieres crearla ahora?`,
       'Crear carpeta de bounces',
@@ -444,7 +455,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     } catch (err: any) {
       toast.error(`No se pudo crear la carpeta: ${err.message}`);
     }
-  }, [bouncesFolder, rootEntry.status, rootId, rootName, scope.type, openFolder]);
+  }, [bouncesFolder, rootEntry.status, rootId, rootName, openFolder]);
 
   const revealInFolder = useCallback((item: DriveItem) => {
     if (!item.parentId) return;
@@ -458,7 +469,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
       return;
     }
     const parentPath = (item.parentId && getKnownPath(item.parentId, rootId, rootName)) || [{ id: rootId, name: rootName }];
-    const base = scope.type === 'artist' ? [{ name: 'Artistas', url: '/artists' }] : [{ name: 'Proyectos personales', url: '/personal-projects' }];
+    const base = scope.type === 'artist' ? [{ name: 'Artistas', url: '/artists' }] : [];
     playTrack({
       id: item.id,
       name: stripExtension(item.name),
@@ -797,11 +808,10 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     const targetName = targetFolderId === rootId ? rootName : (findItem(targetFolderId)?.name || currentFolderName);
     openSmartUpload({
       files,
-      targetType: scope.type,
+      targetType: scope.type === 'artist' ? 'artist' : 'library',
       artistId: scope.type === 'artist' ? scope.artistId : undefined,
-      personalProjectId: scope.type === 'personal' ? scope.projectId : undefined,
-      // At the root the Smart Upload routes files automatically (bounces → Bounces, projects…);
-      // inside a folder everything goes exactly where the user is.
+      // At an artist's root the Smart Upload routes files automatically (bounces → Bounces, projects…);
+      // inside a folder (and anywhere in the library) everything goes exactly where the user is.
       folderId: targetFolderId === rootId ? undefined : targetFolderId,
       folderName: targetFolderId === rootId ? undefined : targetName,
       onFinished: () => {
@@ -826,7 +836,100 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     if (view === 'trash') loadTrash(rootId, { force: true });
     else if (view === 'folder' && !trimmedQuery) loadFolder(folderId, { force: true });
     loadIndex(rootId, { force: true });
-  }, [view, rootId, folderId, trimmedQuery]);
+    if (isLibrary) loadLibrary({ force: true });
+  }, [view, rootId, folderId, trimmedQuery, isLibrary]);
+
+  // ─── Beat library: sends & assignments ───────────────────────────────────
+  const [sendDialog, setSendDialog] = useState<{ items: DriveItem[]; mergeIntoId?: string } | null>(null);
+  const [editSend, setEditSend] = useState<BeatSend | null>(null);
+  const [assignDialog, setAssignDialog] = useState<DriveItem[] | null>(null);
+
+  /** Items sent directly: id → artists and sends */
+  const directSends = useMemo(() => {
+    const map = new Map<string, { artistIds: Set<string>; sendIds: Set<string> }>();
+    if (!isLibrary) return map;
+    for (const send of library.sends) {
+      for (const id of send.itemIds) {
+        if (!map.has(id)) map.set(id, { artistIds: new Set(), sendIds: new Set() });
+        const entry = map.get(id)!;
+        send.artistIds.forEach(a => entry.artistIds.add(a));
+        entry.sendIds.add(send.id);
+      }
+    }
+    return map;
+  }, [isLibrary, library.sends]);
+
+  const indexById = useMemo(() => new Map(index.items.map(i => [i.id, i])), [index.items]);
+
+  /** Artists that can see this item in their portal (sent directly or inside a sent folder). */
+  const sentInfo = useCallback((item: Pick<DriveItem, 'id' | 'parentId'>) => {
+    if (directSends.size === 0) return null;
+    const artistIds = new Set<string>();
+    const sendIds = new Set<string>();
+    let inherited = false;
+    let current: Pick<DriveItem, 'id' | 'parentId'> | undefined = item;
+    let guard = 0;
+    while (current && current.id !== rootId && guard++ < 40) {
+      const hit = directSends.get(current.id);
+      if (hit) {
+        hit.artistIds.forEach(a => artistIds.add(a));
+        hit.sendIds.forEach(sid => sendIds.add(sid));
+        if (current !== item) inherited = true;
+      }
+      const parentId: string | null = current.parentId;
+      current = parentId ? (indexById.get(parentId) || findItem(parentId)) : undefined;
+    }
+    return artistIds.size ? { artistIds: Array.from(artistIds), sendIds: Array.from(sendIds), inherited } : null;
+  }, [directSends, indexById, rootId]);
+
+  const openSendDialog = useCallback((items: DriveItem[], mergeIntoId?: string) => {
+    if (items.length === 0 && !mergeIntoId) return;
+    setSendDialog({ items, mergeIntoId });
+  }, []);
+
+  const undoAssignments = useCallback(async (assignments: BeatAssignment[]) => {
+    const failures = await runPool(assignments, 3, a => apiUndoAssignment(a.id));
+    const folders = new Set(assignments.map(a => a.fromFolderId));
+    folders.forEach(id => loadFolder(id, { force: true }));
+    loadIndex(rootId, { force: true });
+    if (failures.length) throw failures[0].error;
+  }, [rootId]);
+
+  const assignTo = useCallback(async (items: DriveItem[], artist: { id: string; name: string }) => {
+    if (items.length === 0) return false;
+    const originals = items.map(i => ({ ...i }));
+    // Something inside a selected folder travels with that folder
+    const parentOf = new Map(originals.map(i => [i.id, originals.find(o => o.id !== i.id && o.isFolder && isInside(i.parentId || '', o.id, rootId))?.id]));
+    removeItems(originals.map(i => i.id));
+    setSelectedIds([]);
+    const t = toast.loading(originals.length === 1 ? `Asignando "${originals[0].name}"…` : `Asignando ${originals.length} beats…`);
+    try {
+      const { assignments, failed } = await apiAssign(originals.map(i => i.id), artist.id);
+      const assignedIds = new Set(assignments.map(a => a.fileId));
+      const notMoved = originals.filter(i => !assignedIds.has(i.id) && !assignedIds.has(parentOf.get(i.id) || ''));
+      if (notMoved.length) insertItems(notMoved, rootId);
+      toast.dismiss(t);
+      if (failed.length) toast.error(`No se pudieron asignar: ${failed.join(', ')}`);
+      if (assignments.length === 0) return false;
+      const label = assignments.length === 1 ? `"${assignments[0].fileName}"` : `${assignments.length} beats`;
+      const entry = { label: 'asignar', run: () => undoAssignments(assignments) };
+      notify(`${label} asignado${assignments.length > 1 ? 's' : ''} a ${artist.name} · ya está en su carpeta Beats`, entry);
+      loadFolder(assignments[0].toFolderId, { force: true });
+      return true;
+    } catch (err: any) {
+      insertItems(originals, rootId);
+      toast.error(`No se pudo asignar: ${err.message}`, { id: t });
+      return false;
+    }
+  }, [rootId, notify, undoAssignments]);
+
+  // Keep the sends in sync when coming back to the tab
+  useEffect(() => {
+    if (!isLibrary) return;
+    const onVisible = () => { if (document.visibilityState === 'visible') loadLibrary({ force: true }); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [isLibrary]);
 
   // ─── Menus ───────────────────────────────────────────────────────────────
   const showColorMenu = useCallback((x: number, y: number, items: DriveItem[]) => {
@@ -881,6 +984,12 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
       menu.push({ separator: true });
     }
 
+    if (isLibrary) {
+      menu.push({ label: 'Enviar a artistas…', icon: 'Send', action: () => openSendDialog(targets) });
+      menu.push({ label: targets.length > 1 ? `Asignar ${targets.length} a un artista…` : 'Asignar a un artista…', icon: 'UserCheck', action: () => setAssignDialog(targets) });
+      menu.push({ separator: true });
+    }
+
     menu.push({
       label: files.length === targets.length && targets.length > 1 ? `Descargar ${targets.length} archivos` : allFolders ? 'Descargar contenido' : 'Descargar',
       icon: 'Download',
@@ -891,7 +1000,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
 
     if (single) menu.push({ label: 'Compartir y permisos…', icon: 'Share2', action: () => setShareItem(single) });
     if (artistEmail) menu.push({ label: 'Compartir con el artista', icon: 'Mail', action: () => shareWithArtist(targets) });
-    if (single && canNativeShare()) menu.push({ label: 'Enviar enlace…', icon: 'Send', action: () => shareNative(single) });
+    if (single && canNativeShare()) menu.push({ label: 'Enviar enlace…', icon: 'Share2', action: () => shareNative(single) });
     menu.push({ label: targets.length > 1 ? 'Copiar enlaces' : 'Copiar enlace', icon: 'Link', action: () => copyLinks(targets) });
     if (single && !single.isFolder) menu.push({ label: 'Copiar enlace de descarga', icon: 'Copy', action: () => copyDownloadLink(single) });
     menu.push({ separator: true });
@@ -917,7 +1026,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     }
     menu.push({ label: 'Mover a la papelera', icon: 'Trash2', variant: 'danger', shortcut: 'Supr', action: () => trashItems(targets) });
     return menu;
-  }, [view, trimmedQuery, currentTrack?.id, isPlaying, artistEmail, canHover, selectionMode, preview, restoreItems, deleteForever, openFolder, play, revealInFolder, download, openInDrive, shareWithArtist, shareNative, copyLinks, copyDownloadLink, startRename, performCopy, toggleStar, showColorMenu, openDetails, cancelSchedule, trashItems]);
+  }, [view, trimmedQuery, currentTrack?.id, isPlaying, artistEmail, canHover, selectionMode, isLibrary, openSendDialog, preview, restoreItems, deleteForever, openFolder, play, revealInFolder, download, openInDrive, shareWithArtist, shareNative, copyLinks, copyDownloadLink, startRename, performCopy, toggleStar, showColorMenu, openDetails, cancelSchedule, trashItems]);
 
   const showItemMenu = useCallback((x: number, y: number, item: DriveItem) => {
     let targets: DriveItem[];
@@ -981,6 +1090,10 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
       { label: 'Seleccionar todo', icon: 'ListChecks', shortcut: canHover ? `${mod}A` : undefined, disabled: visibleItems.length === 0, action: () => { if (!canHover) setSelectionMode(true); selectAll(); } },
       { label: viewMode === 'list' ? 'Ver como cuadrícula' : 'Ver como lista', icon: viewMode === 'list' ? 'LayoutGrid' : 'List', action: () => setViewMode(viewMode === 'list' ? 'grid' : 'list') },
       { label: 'Ordenar…', icon: 'ArrowUpDown', action: () => setTimeout(() => showSortMenu(x, y), 0) },
+      ...(isLibrary && folderItem && folderId !== rootId ? [
+        { separator: true },
+        { label: 'Enviar esta carpeta a artistas…', icon: 'Send', action: () => openSendDialog([folderItem]) },
+      ] : []),
       ...(folderItem ? [
         { separator: true },
         { label: 'Abrir carpeta en Google Drive', icon: 'HardDrive', action: () => openInDrive(folderItem) },
@@ -989,7 +1102,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
       ] : []),
       ...(canHover ? [{ separator: true }, { label: 'Atajos de teclado', icon: 'Keyboard', shortcut: '?', action: () => setShortcutsOpen(true) }] : []),
     ]);
-  }, [view, showMenu, refresh, selectAll, visibleItems.length, trash.items, deleteForever, folderId, currentFolderName, createFolder, pickFiles, viewMode, setViewMode, showSortMenu, openInDrive, copyLinks, canHover]);
+  }, [view, showMenu, refresh, selectAll, visibleItems.length, trash.items, deleteForever, folderId, currentFolderName, createFolder, pickFiles, viewMode, setViewMode, showSortMenu, openInDrive, copyLinks, canHover, isLibrary, rootId, openSendDialog]);
 
   // ─── Pointer interactions on items ───────────────────────────────────────
   const pointerTypeRef = useRef<string>('mouse');
@@ -1280,7 +1393,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
 
   return {
     // identity
-    rootId, rootName, scope, artistEmail,
+    rootId, rootName, scope, artistEmail, isLibrary,
     // layout
     isXL, isLg, canHover, viewMode, setViewMode, sidebarCollapsed, setSidebarCollapsed,
     inspectorVisible, setInspectorVisible, drawerOpen, setDrawerOpen,
@@ -1302,6 +1415,9 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     deleteForever, toggleStar, setFolderColor, cancelSchedule, createFolder, download, openInDrive, copyLinks,
     copyDownloadLink, shareNative, shareWithArtist, openUpload, pickFiles, onFileInputChange, refresh,
     undoLast, notify,
+    // beat library
+    library, sentInfo, sendDialog, setSendDialog, openSendDialog, editSend, setEditSend, assignDialog, setAssignDialog,
+    assignTo, undoAssignments,
     // menus
     showItemMenu, showBackgroundMenu, showSortMenu, showColorMenu, buildItemMenu,
     // interactions

@@ -62,6 +62,8 @@ import {
   PanelRight,
   ListChecks,
   AudioWaveform,
+  UserCheck,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -128,6 +130,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   PanelRight,
   ListChecks,
   AudioWaveform,
+  UserCheck,
+  UserPlus,
   LinkIcon: Link,
 };
 

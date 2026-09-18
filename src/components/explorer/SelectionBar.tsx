@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Download, ArrowRightLeft, Trash2, MoreHorizontal, Star, RotateCcw, ListChecks, Share2 } from 'lucide-react';
+import { X, Download, ArrowRightLeft, Trash2, MoreHorizontal, Star, RotateCcw, ListChecks, Share2, Send, UserCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useContextMenu } from '@/lib/contexts/ContextMenuContext';
 import { useExplorer } from './useExplorerController';
@@ -74,10 +74,16 @@ export function SelectionBar({ hasPlayer }: { hasPlayer: boolean }) {
           </>
         ) : (
           <div className="flex items-center flex-1 justify-around sm:justify-start">
+            {ex.isLibrary && (
+              <>
+                <BarButton icon={Send} label="Enviar" onClick={() => ex.openSendDialog(items)} />
+                <BarButton icon={UserCheck} label="Asignar" onClick={() => ex.setAssignDialog(items)} />
+              </>
+            )}
             <BarButton icon={Download} label="Descargar" onClick={() => ex.download(items)} />
-            {single
+            {!ex.isLibrary && (single
               ? <BarButton icon={Share2} label="Compartir" onClick={() => ex.setShareItem(single)} />
-              : <BarButton icon={Star} label={items.every(i => i.starred) ? 'Quitar' : 'Destacar'} onClick={() => ex.toggleStar(items)} />}
+              : <BarButton icon={Star} label={items.every(i => i.starred) ? 'Quitar' : 'Destacar'} onClick={() => ex.toggleStar(items)} />)}
             <BarButton icon={ArrowRightLeft} label="Mover" onClick={() => ex.setMoveDialog({ items, mode: 'move' })} />
             <BarButton icon={Trash2} label="Eliminar" danger onClick={() => ex.trashItems(items)} />
             <BarButton

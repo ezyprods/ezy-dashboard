@@ -49,9 +49,10 @@ export interface Crumb {
 /** Where the explorer lives: decides how uploads are routed and which extra actions exist. */
 export type ExplorerScope =
   | { type: 'artist'; artistId: string; artistEmail?: string }
-  | { type: 'personal'; projectId: string };
+  | { type: 'library' };
 
-export type ExplorerView = 'folder' | 'recent' | 'audio' | 'starred' | 'scheduled' | 'trash';
+/** `sends` and `assigned` only exist in the beat library. */
+export type ExplorerView = 'folder' | 'recent' | 'audio' | 'starred' | 'scheduled' | 'trash' | 'sends' | 'assigned';
 
 export type TypeFilter = 'all' | 'folder' | 'audio' | 'image' | 'video' | 'document' | 'project' | 'other';
 

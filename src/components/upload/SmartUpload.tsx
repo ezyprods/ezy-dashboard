@@ -12,17 +12,17 @@ import {
 import { cn, getWhatsAppUrl, formatPhoneNumber } from '@/lib/utils';
 import { customPrompt } from '@/lib/dialog';
 import { useArtists } from '@/lib/hooks/useArtists';
-import { usePersonalProjects } from '@/lib/hooks/usePersonalProjects';
+import { getLibraryState, useLibrary } from '@/components/library/libraryStore';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
 import { detectAudioFeatures, getShortKey } from '@/lib/utils/audio';
 import { uploadFileToDrive } from '@/lib/driveUpload';
-import { apiCreateFolder, getFolder, insertItems, loadFolder, loadIndex, useStoreVersion } from '@/components/explorer/driveStore';
+import { apiCreateFolder, findItem, getFolder, insertItems, loadFolder, loadIndex, useStoreVersion } from '@/components/explorer/driveStore';
 import { bpmTone, formatBytes, normalizeItem } from '@/components/explorer/fileKinds';
 import { FOLDER_MIME } from '@/components/explorer/types';
 import { copyText } from '@/components/explorer/explorerUtils';
 import { FolderPicker } from './FolderPicker';
-import { ArtistPicker, PersonalProjectPicker } from './EntityPickers';
+import { ArtistPicker } from './EntityPickers';
 import { extractDroppedFiles, fileKey, filesFromInput } from './fileIntake';
 import {
   detectArtist, detectProject, detectProjectForFile, effectiveDest, EXPIRATION_OPTIONS, findReplaceCandidate, makeItem,
@@ -53,25 +53,26 @@ const emptyDestination = (targetType: Destination['targetType'] = 'artist'): Des
   targetType,
   artistId: '',
   projectId: '',
-  personalProjectId: '',
   lockedFolder: null,
 });
 
+/** Root folder a destination lives in (artist folder or the beat library). */
+const rootOf = (d: Destination) => (d.targetType === 'artist' ? d.artistId : getLibraryState().rootId);
+
 function destFromBatch(batch: UploadBatch, fallback: Destination['targetType']): Destination | null {
-  const hasTarget = !!(batch.artistId || batch.personalProjectId || batch.folderId || batch.projectId);
+  const hasTarget = !!(batch.artistId || batch.folderId || batch.projectId || batch.targetType === 'library');
   if (!hasTarget) return null;
   return {
-    targetType: batch.targetType || (batch.personalProjectId ? 'personal' : fallback),
+    targetType: batch.targetType || fallback,
     artistId: batch.artistId || '',
     projectId: batch.projectId || '',
-    personalProjectId: batch.personalProjectId || '',
     lockedFolder: batch.folderId ? { id: batch.folderId, name: batch.folderName || 'Carpeta seleccionada' } : null,
   };
 }
 
 const sameDestination = (a: Destination, b: Destination) =>
   a.targetType === b.targetType && a.artistId === b.artistId && a.projectId === b.projectId
-  && a.personalProjectId === b.personalProjectId && (a.lockedFolder?.id || '') === (b.lockedFolder?.id || '');
+  && (a.lockedFolder?.id || '') === (b.lockedFolder?.id || '');
 
 export interface SmartUploadProps {
   session: UploadSession;
@@ -81,7 +82,7 @@ export interface SmartUploadProps {
 export function SmartUpload({ session, onClose }: SmartUploadProps) {
   const router = useRouter();
   const { artists, updateArtist } = useArtists();
-  const { projects: personalProjects, createProject: createPersonalProject, updateProject: updatePersonalProject } = usePersonalProjects();
+  const library = useLibrary();
   const { playTrack } = useAudioControls();
   const { showMenu } = useContextMenu();
   const storeVersion = useStoreVersion(); // re-plan destinations when folder listings arrive
@@ -119,15 +120,15 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
   expireRef.current = expire;
 
   const artist = artists.find(a => a.id === shared.artistId);
-  const personal = personalProjects.find(p => p.id === shared.personalProjectId);
   const projectFolders = shared.targetType === 'artist' && shared.artistId ? projectFoldersOf(shared.artistId) : [];
-  const sharedRoot = shared.targetType === 'artist' ? shared.artistId : shared.personalProjectId;
+  const sharedRoot = shared.targetType === 'artist' ? shared.artistId : library.rootId;
 
   const namesFor = useCallback((d: Destination): DestinationNames => ({
     artistName: artists.find(a => a.id === d.artistId)?.name,
-    personalName: personalProjects.find(p => p.id === d.personalProjectId)?.title,
     projectName: d.projectId ? getFolder(d.artistId).items.find(i => i.id === d.projectId)?.name : undefined,
-  }), [artists, personalProjects]);
+    libraryRootId: library.rootId,
+    libraryName: library.rootName,
+  }), [artists, library.rootId, library.rootName]);
 
 
   // ─── Queueing files ─────────────────────────────────────────────────────
@@ -153,7 +154,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
       const batchDest = destFromBatch(batch, sharedRef.current.targetType);
       const isFirst = consumedBatches.current.size === 1;
       const current = sharedRef.current;
-      const sharedIsEmpty = !current.artistId && !current.personalProjectId && !current.lockedFolder;
+      const sharedIsEmpty = !current.artistId && current.targetType !== 'library' && !current.lockedFolder;
 
       if (isFirst && batchDest) {
         setShared(batchDest);
@@ -221,14 +222,14 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
     const dests = [shared, ...items.map(i => i.dest).filter(Boolean) as Destination[]];
     const seen = new Set<string>();
     for (const d of dests) {
-      for (const id of [d.artistId, d.projectId, d.personalProjectId, d.lockedFolder?.id]) {
+      for (const id of [d.artistId, d.projectId, d.targetType === 'library' ? library.rootId : '', d.lockedFolder?.id]) {
         if (id && !seen.has(id)) {
           seen.add(id);
           loadFolder(id);
         }
       }
     }
-  }, [shared, items]);
+  }, [shared, items, library.rootId]);
 
   const artistRootReady = shared.artistId ? getFolder(shared.artistId).status === 'ready' : false;
   const projectDetectionDone = useRef('');
@@ -275,10 +276,11 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
     const locked = shared.lockedFolder;
     if (!locked || locked.name !== 'Carpeta seleccionada') return;
     const known = (locked.id === shared.artistId && artist?.name)
-      || (locked.id === shared.personalProjectId && personal?.title)
+      || (locked.id === library.rootId && library.rootName)
+      || findItem(locked.id)?.name
       || undefined;
     if (known) setShared(d => ({ ...d, lockedFolder: { id: locked.id, name: known } }));
-  }, [shared.lockedFolder, shared.artistId, shared.personalProjectId, artist, personal]);
+  }, [shared.lockedFolder, shared.artistId, artist, library.rootId, library.rootName, storeVersion]);
 
   // ─── Item helpers ───────────────────────────────────────────────────────
   const updateItems = (ids: string[], patch: Partial<UploadItem> | ((item: UploadItem) => Partial<UploadItem>)) => {
@@ -306,7 +308,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
   };
 
   const changeSharedTarget = (targetType: Destination['targetType']) => {
-    setShared(d => ({ ...emptyDestination(targetType), artistId: targetType === 'artist' ? d.artistId : '', personalProjectId: targetType === 'personal' ? d.personalProjectId : '' }));
+    setShared(d => ({ ...emptyDestination(targetType), artistId: targetType === 'artist' ? d.artistId : '' }));
     autoRouted.current = new Set();
     projectDetectionDone.current = '';
     setItems(prev => prev.map(i => (i.dest ? i : (i.nameEdited ? i : { ...i, baseName: suggestBaseName(i, targetType) }))));
@@ -367,13 +369,13 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
 
   const uploadOne = useCallback(async (item: UploadItem) => {
     const dest = effectiveDest(item, sharedRef.current);
-    const rootIdForStore = dest.targetType === 'artist' ? dest.artistId : dest.personalProjectId;
+    const rootIdForStore = rootOf(dest);
     const ctrl = new AbortController();
     controllers.current.set(item.id, ctrl);
     setItems(prev => prev.map(p => (p.id === item.id ? { ...p, status: 'uploading', progress: 0, error: undefined } : p)));
     try {
       // Refresh the listings the routing depends on
-      for (const id of [dest.artistId, dest.projectId, dest.personalProjectId, dest.lockedFolder?.id]) {
+      for (const id of [dest.artistId, dest.projectId, dest.targetType === 'library' ? rootIdForStore : '', dest.lockedFolder?.id]) {
         if (id) await loadFolder(id);
       }
       const plan = planDestination(item, dest, namesFor(dest));
@@ -408,15 +410,6 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
         }).catch(() => {});
       }
 
-      if (dest.targetType === 'personal' && dest.personalProjectId && item.kind === 'audio') {
-        updatePersonalProject(dest.personalProjectId, {
-          latestBounceFileId: result.id,
-          latestBounceName: name,
-          ...(item.bpm ? { bpm: item.bpm } : {}),
-          ...(item.key ? { key: getShortKey(item.key) } : {}),
-        }).catch(() => {});
-      }
-
       if (dest.targetType === 'artist' && dest.artistId) {
         try { localStorage.setItem(`accessed_${dest.artistId}`, Date.now().toString()); } catch {}
       }
@@ -441,7 +434,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
     } finally {
       controllers.current.delete(item.id);
     }
-  }, [namesFor, updatePersonalProject, ensureFolderChain]);
+  }, [namesFor, ensureFolderChain]);
 
   /** Starts as many pending uploads as the concurrency allows (also for files added mid-upload). */
   const pumpUploads = useCallback(() => {
@@ -492,10 +485,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
     if (!allFinished || finishedRef.current) return;
     finishedRef.current = true;
     window.dispatchEvent(new CustomEvent('recentfiles:refresh'));
-    const roots = new Set(items.filter(i => i.status === 'done').map(i => {
-      const d = effectiveDest(i, sharedRef.current);
-      return d.targetType === 'artist' ? d.artistId : d.personalProjectId;
-    }).filter(Boolean));
+    const roots = new Set(items.filter(i => i.status === 'done').map(i => rootOf(effectiveDest(i, sharedRef.current))).filter(Boolean));
     roots.forEach(root => loadIndex(root, { force: true }));
     session.batches.forEach(b => b.onFinished?.());
 
@@ -559,7 +549,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
   const folderHref = (item: UploadItem, folderId: string) => {
     const d = effectiveDest(item, sharedRef.current);
     if (d.targetType === 'artist') return `/artists/${d.artistId}?tab=files${folderId !== d.artistId ? `&folderId=${folderId}` : ''}`;
-    return `/personal-projects/${d.personalProjectId}?tab=files${folderId !== d.personalProjectId ? `&folderId=${folderId}` : ''}`;
+    return `/personal-projects${folderId !== rootOf(d) ? `?folderId=${folderId}` : ''}`;
   };
 
   if (typeof document === 'undefined') return null;
@@ -755,8 +745,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
   const dialogRootId = destEditorFor
     ? (() => {
       const first = pending.find(i => i.id === destEditorFor[0]);
-      const d = first ? effectiveDest(first, shared) : shared;
-      return d.targetType === 'artist' ? d.artistId : d.personalProjectId;
+      return rootOf(first ? effectiveDest(first, shared) : shared);
     })()
     : sharedRoot;
 
@@ -808,7 +797,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">Destino general</h3>
                 <div className="flex p-0.5 rounded-xl bg-surface border border-border/70">
-                  {(['artist', 'personal'] as const).map(t => (
+                  {(['artist', 'library'] as const).map(t => (
                     <button
                       key={t}
                       type="button"
@@ -816,7 +805,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                       className={cn('h-8 px-3 rounded-lg text-xs font-semibold transition-colors inline-flex items-center gap-1.5', shared.targetType === t ? 'bg-surface-elevated text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary')}
                     >
                       {t === 'artist' ? <User className="w-3.5 h-3.5" /> : <Music className="w-3.5 h-3.5" />}
-                      {t === 'artist' ? 'Artista' : 'Proyecto personal'}
+                      {t === 'artist' ? 'Artista' : 'Proyectos personales'}
                     </button>
                   ))}
                 </div>
@@ -893,45 +882,19 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                     </div>
                   </>
                 ) : (
-                  <>
-                    <div className="space-y-1.5 min-w-0">
-                      <label className="text-xs font-medium text-text-secondary">Proyecto personal</label>
-                      <PersonalProjectPicker
-                        projects={personalProjects}
-                        value={shared.personalProjectId}
-                        highlight
-                        onChange={id => setShared(d => ({ ...d, personalProjectId: id, lockedFolder: null }))}
-                        onCreate={async ({ title, category }) => {
-                          const first = pending.find(i => i.kind === 'audio');
-                          const now = new Date();
-                          const created = await createPersonalProject({
-                            title,
-                            category,
-                            year: now.getFullYear(),
-                            month: now.getMonth() + 1,
-                            bpm: first?.bpm || undefined,
-                            key: first?.key ? getShortKey(first.key) : undefined,
-                            status: 'idea',
-                          });
-                          toast.success(`Proyecto "${title}" creado`);
-                          return created;
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1.5 min-w-0">
-                      <label className="text-xs font-medium text-text-secondary">Carpeta</label>
-                      <button
-                        type="button"
-                        disabled={!shared.personalProjectId}
-                        onClick={() => (shared.lockedFolder ? setShared(d => ({ ...d, lockedFolder: null })) : setFolderPickerFor({ ids: 'shared', rootId: shared.personalProjectId, rootName: personal?.title || 'Proyecto' }))}
-                        className="w-full h-11 flex items-center gap-2 px-3 rounded-xl border border-border bg-surface hover:border-accent/50 text-left disabled:opacity-50"
-                      >
-                        <FolderInput className="w-4 h-4 text-text-secondary shrink-0" />
-                        <span className="flex-1 truncate text-sm text-text-primary">{shared.lockedFolder ? shared.lockedFolder.name : 'Automática según el tipo'}</span>
-                        <span className="text-[11px] font-semibold text-accent shrink-0">{shared.lockedFolder ? 'Quitar' : 'Elegir'}</span>
-                      </button>
-                    </div>
-                  </>
+                  <div className="space-y-1.5 min-w-0 md:col-span-2">
+                    <label className="text-xs font-medium text-text-secondary">Carpeta de la biblioteca</label>
+                    <button
+                      type="button"
+                      disabled={!library.rootId}
+                      onClick={() => setFolderPickerFor({ ids: 'shared', rootId: library.rootId, rootName: library.rootName })}
+                      className="w-full h-11 flex items-center gap-2 px-3 rounded-xl border border-border bg-surface hover:border-accent/50 text-left disabled:opacity-50"
+                    >
+                      <FolderInput className="w-4 h-4 text-text-secondary shrink-0" />
+                      <span className="flex-1 truncate text-sm text-text-primary">{shared.lockedFolder ? shared.lockedFolder.name : `${library.rootName} (raíz)`}</span>
+                      <span className="text-[11px] font-semibold text-accent shrink-0">Cambiar</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1291,7 +1254,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
           items={pending}
           shared={shared}
           artists={artists}
-          personalProjects={personalProjects}
+          library={{ rootId: library.rootId, rootName: library.rootName }}
           onClose={() => setDestEditorFor(null)}
           onApply={(ids, dest) => {
             updateItems(ids, { dest });
@@ -1323,13 +1286,13 @@ function ToggleChip({ active, icon: Icon, label, onClick }: { active: boolean; i
 
 /** Destination editor for one file, a selection or a whole group. */
 function DestinationEditor({
-  ids, items, shared, artists, personalProjects, onClose, onApply, onPickFolder,
+  ids, items, shared, artists, library, onClose, onApply, onPickFolder,
 }: {
   ids: string[];
   items: UploadItem[];
   shared: Destination;
   artists: any[];
-  personalProjects: any[];
+  library: { rootId: string; rootName: string };
   onClose: () => void;
   onApply: (ids: string[], dest: Destination | null) => void;
   onPickFolder: (rootId: string, rootName: string, ids: string[]) => void;
@@ -1340,12 +1303,10 @@ function DestinationEditor({
 
   useEffect(() => {
     if (dest.artistId) loadFolder(dest.artistId);
-    if (dest.personalProjectId) loadFolder(dest.personalProjectId);
-  }, [dest.artistId, dest.personalProjectId]);
+  }, [dest.artistId]);
 
   const projectFolders = dest.targetType === 'artist' && dest.artistId ? projectFoldersOf(dest.artistId) : [];
   const artist = artists.find(a => a.id === dest.artistId);
-  const personal = personalProjects.find(p => p.id === dest.personalProjectId);
   const count = ids.length;
 
   return (
@@ -1362,10 +1323,10 @@ function DestinationEditor({
         </div>
 
         <div className="flex p-0.5 rounded-xl bg-surface border border-border/70">
-          {(['artist', 'personal'] as const).map(t => (
+          {(['artist', 'library'] as const).map(t => (
             <button key={t} type="button" onClick={() => setDest(d => ({ ...d, targetType: t, lockedFolder: null }))} className={cn('flex-1 h-9 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5', dest.targetType === t ? 'bg-surface-elevated text-text-primary shadow-sm' : 'text-text-secondary')}>
               {t === 'artist' ? <User className="w-3.5 h-3.5" /> : <Music className="w-3.5 h-3.5" />}
-              {t === 'artist' ? 'Artista' : 'Proyecto personal'}
+              {t === 'artist' ? 'Artista' : 'Proyectos personales'}
             </button>
           ))}
         </div>
@@ -1396,25 +1357,16 @@ function DestinationEditor({
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            <PersonalProjectPicker
-              projects={personalProjects}
-              value={dest.personalProjectId}
-              highlight
-              onChange={id => setDest(d => ({ ...d, personalProjectId: id, lockedFolder: null }))}
-              onCreate={async () => { throw new Error('no-op'); }}
-            />
-            <button
-              type="button"
-              disabled={!dest.personalProjectId}
-              onClick={() => (dest.lockedFolder ? setDest(d => ({ ...d, lockedFolder: null })) : onPickFolder(dest.personalProjectId, personal?.title || 'Proyecto', ids))}
-              className="w-full h-11 flex items-center gap-2 px-3 rounded-xl border border-border bg-surface text-left disabled:opacity-50"
-            >
-              <FolderInput className="w-4 h-4 text-text-secondary shrink-0" />
-              <span className="flex-1 truncate text-sm">{dest.lockedFolder ? dest.lockedFolder.name : 'Automática según el tipo'}</span>
-              <span className="text-[11px] font-semibold text-accent">{dest.lockedFolder ? 'Quitar' : 'Elegir'}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={!library.rootId}
+            onClick={() => onPickFolder(library.rootId, library.rootName, ids)}
+            className="w-full h-11 flex items-center gap-2 px-3 rounded-xl border border-border bg-surface text-left disabled:opacity-50"
+          >
+            <FolderInput className="w-4 h-4 text-text-secondary shrink-0" />
+            <span className="flex-1 truncate text-sm">{dest.lockedFolder ? dest.lockedFolder.name : `${library.rootName} (raíz)`}</span>
+            <span className="text-[11px] font-semibold text-accent">Elegir carpeta</span>
+          </button>
         )}
 
         <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
@@ -1425,7 +1377,7 @@ function DestinationEditor({
           <button
             type="button"
             onClick={() => onApply(ids, dest)}
-            disabled={dest.targetType === 'artist' ? !dest.artistId : !dest.personalProjectId}
+            disabled={dest.targetType === 'artist' ? !dest.artistId : !library.rootId}
             className="h-11 sm:h-10 px-5 rounded-xl bg-accent text-white text-sm font-semibold disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             <Check className="w-4 h-4" /> Aplicar{count > 1 ? ` a ${count}` : ''}

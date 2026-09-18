@@ -5,6 +5,7 @@ export const fetchCache = 'force-no-store';
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, getDriveService, listFolders, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+import { getPortalBeatSends } from '@/lib/beatLibrary';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
@@ -21,6 +22,7 @@ const DEFAULT_MODULES = [
   { id: 'releases', type: 'releases', isVisible: true, order: 1, title: 'Previews y lanzamientos' },
   { id: 'finances', type: 'finances', isVisible: false, order: 2, title: 'Resumen financiero' },
   { id: 'tasks', type: 'tasks', isVisible: true, order: 3, title: 'Estado del trabajo' },
+  { id: 'beats', type: 'beats', isVisible: true, order: -1, title: 'Beats para ti' },
 ];
 
 const FIELDS = 'nextPageToken, files(id, name, mimeType, webViewLink, createdTime, modifiedTime, size, appProperties, thumbnailLink, parents)';
@@ -53,12 +55,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const drive = getDriveService();
 
-    const [artistConfig, storedPortalConfig, matricesData, feedbackData, allPayments] = await Promise.all([
+    const [artistConfig, storedPortalConfig, matricesData, feedbackData, allPayments, beatSends] = await Promise.all([
       findAndReadJsonFile<any>('artist_config.json', id),
       findAndReadJsonFile<any>('portal_config.json', id).catch(() => null),
       findAndReadJsonFile<any>('matrices.json', id).catch(() => null),
       findAndReadJsonFile<any>('portal_feedback.json', id).catch(() => null),
       findAndReadJsonFile<any[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null),
+      getPortalBeatSends(id).catch(err => {
+        console.error('Portal beats error:', err);
+        return [];
+      }),
     ]);
 
     if (!artistConfig) {
@@ -69,7 +75,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!Array.isArray(portalConfig.modules)) portalConfig.modules = [...DEFAULT_MODULES];
     const existingTypes = new Set(portalConfig.modules.map((m: any) => m.type));
     for (const def of DEFAULT_MODULES) {
-      if (!existingTypes.has(def.type)) portalConfig.modules.push({ ...def, order: portalConfig.modules.length });
+      // Beats sent by the producer are the most actionable block: it starts at the top
+      if (!existingTypes.has(def.type)) portalConfig.modules.push({ ...def, order: def.type === 'beats' ? -1 : portalConfig.modules.length });
     }
     const hiddenProjectIds = new Set<string>(Array.isArray(portalConfig.hiddenProjectIds) ? portalConfig.hiddenProjectIds : []);
 
@@ -184,6 +191,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       };
     }));
 
+    // The artist's "Beats" folder only makes sense once something has been assigned
+    const visibleProjects = projectsData.filter(p => p.files.length > 0 || !/^beats?$/i.test(p.title));
+    projectsData.length = 0;
+    projectsData.push(...visibleProjects);
+
     projectsData.sort((a, b) => {
       if ((a.status === 'archived') !== (b.status === 'archived')) return a.status === 'archived' ? 1 : -1;
       return (b.lastActivity || 0) - (a.lastActivity || 0);
@@ -292,6 +304,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     // The producer-only fields never reach the artist
     const { hiddenProjectIds: _hidden, ...publicConfig } = portalConfig;
+    const beatsModule = portalConfig.modules.find((m: any) => m.type === 'beats');
 
     const response = NextResponse.json({
       artist: { id: artistConfig.id || id, name: artistConfig.name, photo: artistConfig.photo, photoUrl: artistConfig.photoUrl },
@@ -302,6 +315,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       releases,
       finances: { totalBudget, totalPaid, pendingPayment },
       sharedMatrices,
+      beatSends: beatsModule?.isVisible === false ? [] : beatSends,
       feedback: (feedbackData?.feedback || []).filter((f: any) => !f.fromProducer || f.visibleToArtist !== false).slice(0, 50),
       config: publicConfig,
     });

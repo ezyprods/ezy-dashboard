@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { UploadCloud, X, Clock, AudioWaveform, Star, Timer, Trash2, FolderOpen, Disc3 } from 'lucide-react';
+import { UploadCloud, X, Clock, AudioWaveform, Star, Timer, Trash2, FolderOpen, Disc3, Send, UserCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { Modal } from '@/components/ui/Modal';
@@ -21,6 +21,8 @@ import { PreviewModal } from './PreviewModal';
 import { MoveDialog } from './MoveDialog';
 import { SelectionBar } from './SelectionBar';
 import { ShortcutsDialog } from './ShortcutsDialog';
+import { SendBeatsModal } from '@/components/library/SendBeatsModal';
+import { AssignBeatModal } from '@/components/library/AssignBeatModal';
 import type { ExplorerView } from './types';
 
 const MOBILE_VIEWS: { view: ExplorerView; label: string; icon: React.ElementType }[] = [
@@ -52,19 +54,40 @@ function ViewChips() {
           {label}
         </button>
       ))}
-      <button
-        type="button"
-        onClick={ex.openBounces}
-        className={cn(
-          'inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors',
-          ex.view === 'folder' && ex.bouncesFolder && ex.crumbs.some(c => c.id === ex.bouncesFolder!.id)
-            ? 'bg-text-primary text-surface-elevated'
-            : 'bg-surface text-text-secondary border border-border/60',
-        )}
-      >
-        <Disc3 className="w-3.5 h-3.5" />
-        Bounces
-      </button>
+      {ex.isLibrary ? (
+        ([
+          { view: 'sends' as const, icon: Send, count: ex.library.sends.length },
+          { view: 'assigned' as const, icon: UserCheck, count: ex.library.assignments.length },
+        ]).map(({ view, icon: Icon, count }) => (
+          <button
+            key={view}
+            type="button"
+            onClick={() => ex.setView(view)}
+            className={cn(
+              'inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors',
+              ex.view === view ? 'bg-text-primary text-surface-elevated' : 'bg-surface text-text-secondary border border-border/60',
+            )}
+          >
+            <Icon className="w-3.5 h-3.5" />
+            {VIEW_LABEL[view]}
+            {count > 0 && <span className={cn('text-[10px] px-1.5 rounded-full', ex.view === view ? 'bg-surface-elevated/20' : 'bg-surface-elevated')}>{count}</span>}
+          </button>
+        ))
+      ) : (
+        <button
+          type="button"
+          onClick={ex.openBounces}
+          className={cn(
+            'inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors',
+            ex.view === 'folder' && ex.bouncesFolder && ex.crumbs.some(c => c.id === ex.bouncesFolder!.id)
+              ? 'bg-text-primary text-surface-elevated'
+              : 'bg-surface text-text-secondary border border-border/60',
+          )}
+        >
+          <Disc3 className="w-3.5 h-3.5" />
+          Bounces
+        </button>
+      )}
       {MOBILE_VIEWS.slice(1).map(({ view, label, icon: Icon }) => {
         const active = ex.view === view;
         const count = view === 'scheduled' ? ex.counts.scheduled : view === 'starred' ? ex.counts.starred : 0;
@@ -189,6 +212,16 @@ function ExplorerModals() {
         />,
       )}
 
+      {ex.sendDialog && (
+        <SendBeatsModal items={ex.sendDialog.items} mergeIntoId={ex.sendDialog.mergeIntoId} onClose={() => ex.setSendDialog(null)} />
+      )}
+      {ex.editSend && (
+        <SendBeatsModal items={[]} editSend={ex.editSend} onClose={() => ex.setEditSend(null)} />
+      )}
+      {ex.assignDialog && (
+        <AssignBeatModal items={ex.assignDialog} onClose={() => ex.setAssignDialog(null)} />
+      )}
+
       {ex.miniDawItem && (
         <DAWErrorBoundary onClose={() => ex.setMiniDawItem(null)}>
           <MiniDAWModal fileId={ex.miniDawItem.id} fileName={ex.miniDawItem.name} onClose={() => ex.setMiniDawItem(null)} />
@@ -308,7 +341,7 @@ function ExplorerLayout({ stickyTop }: { stickyTop: number }) {
 }
 
 /**
- * Google Drive file explorer used inside every artist profile (and personal projects).
+ * Google Drive file explorer used inside every artist profile and in the beat library (Proyectos personales).
  * Desktop: sidebar (quick views + folder tree) · list/grid · details inspector.
  * Tablet: folders in a drawer, details in a sheet. Phone: single column, tap to open,
  * long-press or "⋮" for actions, selection mode with a floating action bar.
