@@ -65,13 +65,38 @@ export async function GET(
         // Safe to continue if permission already exists
       }
 
-      const downloadUrl = meta.webContentLink || `https://drive.google.com/uc?export=download&id=${fileId}`;
-      const res = NextResponse.redirect(downloadUrl, { status: 307 });
+      const forceProxy = request.nextUrl.searchParams.get('proxy') === 'true';
+
+      // Direct streaming & download: redirect directly to Google's CDN to save 100% of Fast Origin Transfer
+      if (!forceProxy) {
+        const directUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+        const res = NextResponse.redirect(directUrl, { status: 307 });
+        res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+        res.headers.set('Access-Control-Allow-Origin', '*');
+        return res;
+      }
+    }
+
+    // 3. Direct streaming for inline view if not proxy
+    const forceProxy = request.nextUrl.searchParams.get('proxy') === 'true';
+    if (!forceProxy) {
+      try {
+        const drive = getDriveService();
+        await drive.permissions.create({
+          fileId,
+          requestBody: { role: 'reader', type: 'anyone' },
+          supportsAllDrives: true,
+        });
+      } catch (e) {}
+
+      const directUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+      const res = NextResponse.redirect(directUrl, { status: 307 });
       res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+      res.headers.set('Access-Control-Allow-Origin', '*');
       return res;
     }
 
-    // 3. Stream binary/media file with Range support (fallback for inline audio/etc.)
+    // 4. Stream binary/media file with Range support (fallback if ?proxy=true)
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
@@ -106,8 +131,8 @@ export async function GET(
     const disposition = inline ? 'inline' : 'attachment';
     const safeName = meta.name ? encodeURIComponent(meta.name) : 'archivo';
     responseHeaders.set('Content-Disposition', `${disposition}; filename*=UTF-8''${safeName}`);
-    // Content can be overwritten in place (same fileId), so keep this short and private
-    responseHeaders.set('Cache-Control', 'private, max-age=300');
+    responseHeaders.set('Cache-Control', 'public, max-age=86400');
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
 
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,

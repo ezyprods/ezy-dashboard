@@ -45,10 +45,13 @@ export async function resolveFfmpegPath(): Promise<string> {
   } catch {
     // fall through
   }
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require('ffmpeg-static') || 'ffmpeg';
-  } catch {
-    return 'ffmpeg';
+  if (os.platform() === 'win32') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require('ffmpeg-static') || 'ffmpeg';
+    } catch {
+      return 'ffmpeg';
+    }
   }
+  return 'ffmpeg';
 }

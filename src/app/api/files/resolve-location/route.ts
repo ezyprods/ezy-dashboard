@@ -18,17 +18,19 @@ export async function GET(request: NextRequest) {
 
     const drive = getDriveService();
 
-    // 1. Load artists database
+    // 1. Load artists database (optional local development fallback)
     let artistsDb: any = { artists: [] };
-    try {
-      const dbPath = path.join(process.cwd(), 'ezy_artists_db.json');
-      if (fs.existsSync(dbPath)) {
-        const raw = fs.readFileSync(dbPath, 'utf8');
-        const parsed = JSON.parse(raw);
-        artistsDb = Array.isArray(parsed) ? { artists: parsed } : (parsed.artists ? parsed : { artists: [] });
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const dbPath = path.join(process.cwd(), 'ezy_artists_db.json');
+        if (fs.existsSync(dbPath)) {
+          const raw = fs.readFileSync(dbPath, 'utf8');
+          const parsed = JSON.parse(raw);
+          artistsDb = Array.isArray(parsed) ? { artists: parsed } : (parsed.artists ? parsed : { artists: [] });
+        }
+      } catch (e) {
+        console.warn("Failed to load artists DB from disk:", e);
       }
-    } catch (e) {
-      console.warn("Failed to load artists DB from disk:", e);
     }
 
     const folderToArtist = new Map<string, any>();

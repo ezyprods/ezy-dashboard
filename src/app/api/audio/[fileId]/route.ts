@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
+import { getDriveService } from '@/lib/drive';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,35 +27,34 @@ export async function GET(
       return res;
     }
 
-    const accessToken = await getGoogleAccessToken();
+    const forceProxy = request.nextUrl.searchParams.get('proxy') === 'true';
 
-    // Versioned URLs: the audio bytes are cached for a long time (browser + CDN), so the cache key
-    // must change whenever the file content changes in Drive (e.g. a master overwritten in place).
-    // Un-versioned requests get a tiny, non-cacheable redirect to `?v=<modifiedTime>`.
-    const version = request.nextUrl.searchParams.get('v');
-    if (!version) {
+    // DIRECT STREAMING OPTIMIZATION:
+    // By default, redirect to Google Drive's high-speed usercontent download/stream endpoint.
+    // This endpoint supports HTTP 206 Partial Content (Range: bytes), delivers full CORS
+    // (Access-Control-Allow-Origin: *), and streams at Google CDN speeds directly to the client.
+    // Result: 0 bytes of Fast Origin Transfer on Vercel and minimal Serverless CPU/Memory usage.
+    if (!forceProxy) {
       try {
-        const metaRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${fileId}?fields=modifiedTime,md5Checksum&supportsAllDrives=true`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        if (metaRes.ok) {
-          const meta = await metaRes.json();
-          const v = meta.md5Checksum || meta.modifiedTime;
-          if (v) {
-            const target = new URL(request.nextUrl.toString());
-            target.searchParams.set('v', String(v));
-            const res = NextResponse.redirect(target, { status: 307 });
-            res.headers.set('Cache-Control', 'no-store');
-            return res;
-          }
-        }
-      } catch (metaErr) {
-        // If metadata cannot be read we fall back to streaming the file directly (uncached)
-        console.warn(`[audio] Could not read metadata for ${fileId}:`, metaErr);
+        const drive = getDriveService();
+        await drive.permissions.create({
+          fileId,
+          requestBody: { role: 'reader', type: 'anyone' },
+          supportsAllDrives: true,
+        });
+      } catch {
+        // Continue if permission already exists
       }
+
+      const directStreamUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+      const res = NextResponse.redirect(directStreamUrl, { status: 307 });
+      res.headers.set('Cache-Control', LONG_CACHE);
+      res.headers.set('Access-Control-Allow-Origin', '*');
+      return res;
     }
 
+    // Fallback: Stream directly through Serverless Function if ?proxy=true
+    const accessToken = await getGoogleAccessToken();
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
@@ -65,9 +65,7 @@ export async function GET(
 
     const gDriveRes = await fetch(
       `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
-      {
-        headers: fetchHeaders,
-      }
+      { headers: fetchHeaders }
     );
 
     if (!gDriveRes.ok) {
@@ -79,8 +77,6 @@ export async function GET(
     }
 
     const contentType = gDriveRes.headers.get('content-type') || 'audio/mpeg';
-
-    // If requested file is an image (cover art fallback), redirect directly to Google thumbnail CDN
     if (contentType.startsWith('image/')) {
       gDriveRes.body?.cancel().catch(() => {});
       const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
@@ -97,9 +93,8 @@ export async function GET(
     responseHeaders.set('Accept-Ranges', 'bytes');
     if (contentRange) responseHeaders.set('Content-Range', contentRange);
     if (contentLength) responseHeaders.set('Content-Length', contentLength);
-
-    // Cache audio chunks in the browser and edge only when the URL is versioned
-    responseHeaders.set('Cache-Control', version ? LONG_CACHE : 'private, max-age=60');
+    responseHeaders.set('Cache-Control', 'public, max-age=86400');
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
 
     return new NextResponse(gDriveRes.body, {
       status: gDriveRes.status,
@@ -107,6 +102,13 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('API /audio/[fileId] error:', error);
+    try {
+      const { fileId } = await params;
+      if (fileId) {
+        const directUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+        return NextResponse.redirect(directUrl, { status: 307 });
+      }
+    } catch {}
     return new NextResponse(error?.message || 'Error streaming audio', {
       status: 500,
       headers: { 'Cache-Control': 'no-store' },

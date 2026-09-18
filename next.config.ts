@@ -4,12 +4,21 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     '@vreden/youtube_scraper',
     'ffmpeg-static',
-    'ffprobe-static',
-    'yt-dlp-exec',
     'music-tempo',
     'meyda',
     'node-id3',
   ],
+  outputFileTracingExcludes: {
+    '*': [
+      'node_modules/ffmpeg-static/**',
+      'node_modules/puppeteer/**',
+      'node_modules/puppeteer-core/**',
+      '.git/**',
+      'scripts/**',
+      'bin/**',
+      '*.md',
+    ],
+  },
   async headers() {
     return [
       {

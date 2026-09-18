@@ -3,7 +3,6 @@ import path from 'path';
 import os from 'os';
 import https from 'https';
 import zlib from 'zlib';
-import ffmpegStatic from 'ffmpeg-static';
 
 const YTDLP_LINUX_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux';
 const FFMPEG_LINUX_GZ_URL = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-linux-x64.gz';
@@ -77,12 +76,7 @@ export async function ensureBinaries(): Promise<{ ytdlpPath: string; ffmpegPath:
     let ytdlpPath: string;
     if (isWin) {
       const localExe = path.join(tmpDir, 'yt-dlp-test.exe');
-      if (fs.existsSync(localExe)) {
-        ytdlpPath = localExe;
-      } else {
-        const winBinary = path.join(process.cwd(), 'bin', 'yt-dlp.exe');
-        ytdlpPath = fs.existsSync(winBinary) ? winBinary : 'yt-dlp';
-      }
+      ytdlpPath = fs.existsSync(localExe) ? localExe : 'yt-dlp';
     } else {
       const tmpYtdlp = path.join(tmpDir, `yt-dlp-${CACHE_STAMP}`);
       if (!fs.existsSync(tmpYtdlp) || fs.statSync(tmpYtdlp).size < 1000000) {
@@ -96,7 +90,13 @@ export async function ensureBinaries(): Promise<{ ytdlpPath: string; ffmpegPath:
     // 2. Prepare FFmpeg binary
     let ffmpegPath: string;
     if (isWin) {
-      ffmpegPath = (ffmpegStatic as string) || 'ffmpeg';
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const st = require('ffmpeg-static');
+        ffmpegPath = (st as string) || 'ffmpeg';
+      } catch {
+        ffmpegPath = 'ffmpeg';
+      }
     } else {
       const tmpFfmpeg = path.join(tmpDir, 'ffmpeg_bin');
       if (!fs.existsSync(tmpFfmpeg) || fs.statSync(tmpFfmpeg).size < 10000000) {
