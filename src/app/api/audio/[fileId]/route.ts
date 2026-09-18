@@ -27,33 +27,8 @@ export async function GET(
       return res;
     }
 
-    const forceProxy = request.nextUrl.searchParams.get('proxy') === 'true';
-
-    // DIRECT STREAMING OPTIMIZATION:
-    // By default, redirect to Google Drive's high-speed usercontent download/stream endpoint.
-    // This endpoint supports HTTP 206 Partial Content (Range: bytes), delivers full CORS
-    // (Access-Control-Allow-Origin: *), and streams at Google CDN speeds directly to the client.
-    // Result: 0 bytes of Fast Origin Transfer on Vercel and minimal Serverless CPU/Memory usage.
-    if (!forceProxy) {
-      try {
-        const drive = getDriveService();
-        await drive.permissions.create({
-          fileId,
-          requestBody: { role: 'writer', type: 'anyone' },
-          supportsAllDrives: true,
-        });
-      } catch {
-        // Continue if permission already exists
-      }
-
-      const directStreamUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
-      const res = NextResponse.redirect(directStreamUrl, { status: 307 });
-      res.headers.set('Cache-Control', LONG_CACHE);
-      res.headers.set('Access-Control-Allow-Origin', '*');
-      return res;
-    }
-
-    // Fallback: Stream directly through Serverless Function if ?proxy=true
+    // Stream directly through Google Drive API with HTTP 206 Partial Content (Range: bytes)
+    // This provides instant playback, full scrubbing, and prevents browser ORB (Opaque Response Blocking).
     const accessToken = await getGoogleAccessToken();
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {

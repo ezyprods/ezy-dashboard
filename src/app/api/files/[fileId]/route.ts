@@ -77,22 +77,11 @@ export async function GET(
       }
     }
 
-    // 3. Direct streaming for inline view if not proxy
-    const forceProxy = request.nextUrl.searchParams.get('proxy') === 'true';
-    if (!forceProxy) {
-      try {
-        const drive = getDriveService();
-        await drive.permissions.create({
-          fileId,
-          requestBody: { role: 'writer', type: 'anyone' },
-          supportsAllDrives: true,
-        });
-      } catch (e) {}
-
-      const directUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
-      const res = NextResponse.redirect(directUrl, { status: 307 });
-      res.headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
-      res.headers.set('Access-Control-Allow-Origin', '*');
+    // 3. For inline images, redirect to thumbnail CDN
+    if (meta.mimeType?.startsWith('image/')) {
+      const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`;
+      const res = NextResponse.redirect(imgUrl, { status: 307 });
+      res.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800');
       return res;
     }
 
