@@ -232,7 +232,7 @@ export function FolderExplorerModal({
         action: () => {
           const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
           const link = item.webViewLink || (isFolder ? `https://drive.google.com/drive/folders/${item.id}` : `https://drive.google.com/file/d/${item.id}/view`);
-          copyTextAndEnsurePublic(link, item.id, 'Enlace copiado', 'writer');
+          copyTextAndEnsurePublic(link, item.id, 'Enlace copiado', 'reader');
         }
       },
       {

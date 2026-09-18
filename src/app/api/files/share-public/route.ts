@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const rawIds = body?.fileIds || body?.fileId;
-    const role = body?.role === 'reader' ? 'reader' : 'writer';
+    const role = body?.role === 'writer' ? 'writer' : 'reader';
 
     if (!rawIds) {
       return NextResponse.json({ error: 'Missing fileIds or fileId parameter' }, { status: 400 });

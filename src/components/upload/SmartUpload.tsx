@@ -645,7 +645,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                             onClick={() => {
                               const link = expire.enabled ? `${window.location.origin}/api/files/${item.resultId}?download=true` : `https://drive.google.com/file/d/${item.resultId}/view`;
                               const msg = expire.enabled ? 'Enlace de descarga copiado' : 'Enlace copiado';
-                              copyTextAndEnsurePublic(link, item.resultId!, msg, 'writer');
+                              copyTextAndEnsurePublic(link, item.resultId!, msg, 'reader');
                             }}
                             className="w-8 h-8 flex items-center justify-center rounded-lg text-text-secondary hover:text-accent hover:bg-surface"
                             aria-label="Copiar enlace"

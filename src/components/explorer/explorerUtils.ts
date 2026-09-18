@@ -59,10 +59,10 @@ export async function copyText(text: string, successMessage = 'Copiado al portap
 }
 
 /**
- * Solicita en segundo plano que Google Drive active permisos de editor público
+ * Solicita en segundo plano que Google Drive active permisos de lectura pública
  * para los elementos indicados (archivos o carpetas).
  */
-export async function ensurePublic(fileIds: string | string[], role: 'writer' | 'reader' = 'writer') {
+export async function ensurePublic(fileIds: string | string[], role: 'writer' | 'reader' = 'reader') {
   const ids = (Array.isArray(fileIds) ? fileIds : [fileIds]).filter(Boolean);
   if (ids.length === 0) return;
   try {
@@ -78,14 +78,14 @@ export async function ensurePublic(fileIds: string | string[], role: 'writer' | 
 
 /**
  * Copia el enlace al portapapeles de forma inmediata y activa en segundo plano
- * el permiso de edición público (role: 'writer', type: 'anyone') en Google Drive
- * para que cualquier persona que reciba el enlace pueda entrar y editar sin pedir acceso.
+ * el permiso de lectura pública (role: 'reader', type: 'anyone') en Google Drive
+ * para que cualquier persona que reciba el enlace pueda entrar y leer todo sin pedir acceso.
  */
 export async function copyTextAndEnsurePublic(
   text: string,
   fileIds: string | string[],
   successMessage = 'Enlace copiado',
-  role: 'writer' | 'reader' = 'writer'
+  role: 'writer' | 'reader' = 'reader'
 ) {
   // 1. Inmediato para feedback instantáneo al usuario
   await copyText(text, successMessage);

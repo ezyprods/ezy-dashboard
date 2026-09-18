@@ -308,7 +308,7 @@ export function GlobalContextMenu() {
       icon: 'Link',
       action: () => {
         const url = `https://drive.google.com/file/d/${fileId}/view`;
-        copyTextAndEnsurePublic(url, fileId, 'Enlace copiado', 'writer');
+        copyTextAndEnsurePublic(url, fileId, 'Enlace copiado', 'reader');
       },
     },
   ], [playTrack]);

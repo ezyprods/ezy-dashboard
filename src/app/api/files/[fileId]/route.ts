@@ -58,7 +58,7 @@ export async function GET(
         const drive = getDriveService();
         await drive.permissions.create({
           fileId,
-          requestBody: { role: 'writer', type: 'anyone' },
+          requestBody: { role: 'reader', type: 'anyone' },
           supportsAllDrives: true,
         });
       } catch (e) {

@@ -246,7 +246,7 @@ export async function POST(request: Request) {
     if (response.data.id) {
       await drive.permissions.create({
         fileId: response.data.id,
-        requestBody: { role: 'writer', type: 'anyone' }
+        requestBody: { role: 'reader', type: 'anyone' }
       }).catch(console.error);
     }
 

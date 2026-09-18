@@ -61,15 +61,15 @@ export async function createFolder(name: string, parentId: string = DRIVE_ROOT_F
     throw new Error(`Failed to create folder: ${name}`);
   }
 
-  // Activa acceso público de editor por defecto para que quien tenga el enlace pueda acceder y colaborar directamente
+  // Activa acceso público de lectura por defecto para que quien tenga el enlace pueda acceder directamente
   try {
     await drive.permissions.create({
       fileId: response.data.id,
-      requestBody: { role: 'writer', type: 'anyone' },
+      requestBody: { role: 'reader', type: 'anyone' },
       supportsAllDrives: true,
     });
   } catch (permErr: any) {
-    console.warn(`[createFolder] Notice: Could not set default anyone writer permission for folder ${response.data.id}:`, permErr?.message);
+    console.warn(`[createFolder] Notice: Could not set default anyone reader permission for folder ${response.data.id}:`, permErr?.message);
   }
 
   return response.data.id;
@@ -476,12 +476,12 @@ export async function revokePermission(fileId: string, permissionId: string): Pr
 }
 
 /**
- * Asegura que uno o más archivos/carpetas tengan acceso público directo como editores (role: 'writer', type: 'anyone')
+ * Asegura que uno o más archivos/carpetas tengan acceso público directo como lectores (role: 'reader', type: 'anyone')
  * sin requerir inicio de sesión ni solicitud de permisos.
  */
 export async function makeFilesPublic(
   fileIds: string[],
-  role: 'writer' | 'reader' = 'writer'
+  role: 'writer' | 'reader' = 'reader'
 ): Promise<{ success: boolean; updated: string[]; errors: any[] }> {
   const drive = getDriveService();
   const updated: string[] = [];

@@ -114,7 +114,7 @@ export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, web
 
   const handleCopyLink = () => {
     if (webViewLink) {
-      copyTextAndEnsurePublic(webViewLink, fileId, 'Enlace copiado al portapapeles', 'writer');
+      copyTextAndEnsurePublic(webViewLink, fileId, 'Enlace copiado al portapapeles', 'reader');
       setTimeout(fetchPermissions, 1200);
     }
   };

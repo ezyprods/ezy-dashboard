@@ -775,15 +775,15 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     if (items.length === 0) return;
     const text = items.map(driveUrl).join('\n');
     const msg = items.length === 1 ? 'Enlace copiado' : `${items.length} enlaces copiados`;
-    copyTextAndEnsurePublic(text, items.map(i => i.id), msg, 'writer');
+    copyTextAndEnsurePublic(text, items.map(i => i.id), msg, 'reader');
   }, []);
 
   const copyDownloadLink = useCallback((item: DriveItem) => {
-    copyTextAndEnsurePublic(`${window.location.origin}/api/files/${item.id}?download=true`, item.id, 'Enlace de descarga directa copiado', 'writer');
+    copyTextAndEnsurePublic(`${window.location.origin}/api/files/${item.id}?download=true`, item.id, 'Enlace de descarga directa copiado', 'reader');
   }, []);
 
   const shareNative = useCallback(async (item: DriveItem) => {
-    ensurePublic(item.id, 'writer');
+    ensurePublic(item.id, 'reader');
     const ok = await nativeShare(item.name, driveUrl(item));
     if (!ok) copyLinks([item]);
   }, [copyLinks]);
@@ -1159,7 +1159,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     const ids = selectedSet.has(item.id) ? selectedIds : [item.id];
     if (!selectedSet.has(item.id)) selectOnly(item.id);
     dragIdsRef.current = ids;
-    ensurePublic(ids, 'writer');
+    ensurePublic(ids, 'reader');
     e.dataTransfer.effectAllowed = 'copyMove';
     e.dataTransfer.setData(INTERNAL_DRAG_TYPE, JSON.stringify(ids));
     if (ids.length === 1 && !item.isFolder) {
