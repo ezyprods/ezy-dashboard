@@ -17,7 +17,7 @@ import {
   driveUrl, formatBytes, getExtension, getKind, isHiddenItem, KIND_LABEL, matchesQuery, matchesTypeFilter,
   normalizeItem, sortItems, stripExtension, FOLDER_COLORS,
 } from './fileKinds';
-import { canNativeShare, copyText, downloadFiles, isMac, nativeShare, useMediaQuery, usePreference } from './explorerUtils';
+import { canNativeShare, copyText, copyTextAndEnsurePublic, ensurePublic, downloadFiles, isMac, nativeShare, useMediaQuery, usePreference } from './explorerUtils';
 import { apiAssign, apiUndoAssignment, loadLibrary, useLibrary } from '@/components/library/libraryStore';
 import type { BeatAssignment, BeatSend } from '@/types';
 import {
@@ -773,14 +773,17 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
 
   const copyLinks = useCallback((items: DriveItem[]) => {
     if (items.length === 0) return;
-    copyText(items.map(driveUrl).join('\n'), items.length === 1 ? 'Enlace copiado' : `${items.length} enlaces copiados`);
+    const text = items.map(driveUrl).join('\n');
+    const msg = items.length === 1 ? 'Enlace copiado' : `${items.length} enlaces copiados`;
+    copyTextAndEnsurePublic(text, items.map(i => i.id), msg, 'writer');
   }, []);
 
   const copyDownloadLink = useCallback((item: DriveItem) => {
-    copyText(`${window.location.origin}/api/files/${item.id}?download=true`, 'Enlace de descarga directa copiado');
+    copyTextAndEnsurePublic(`${window.location.origin}/api/files/${item.id}?download=true`, item.id, 'Enlace de descarga directa copiado', 'writer');
   }, []);
 
   const shareNative = useCallback(async (item: DriveItem) => {
+    ensurePublic(item.id, 'writer');
     const ok = await nativeShare(item.name, driveUrl(item));
     if (!ok) copyLinks([item]);
   }, [copyLinks]);
@@ -1156,6 +1159,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     const ids = selectedSet.has(item.id) ? selectedIds : [item.id];
     if (!selectedSet.has(item.id)) selectOnly(item.id);
     dragIdsRef.current = ids;
+    ensurePublic(ids, 'writer');
     e.dataTransfer.effectAllowed = 'copyMove';
     e.dataTransfer.setData(INTERNAL_DRAG_TYPE, JSON.stringify(ids));
     if (ids.length === 1 && !item.isFolder) {

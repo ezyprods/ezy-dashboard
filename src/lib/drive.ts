@@ -61,6 +61,17 @@ export async function createFolder(name: string, parentId: string = DRIVE_ROOT_F
     throw new Error(`Failed to create folder: ${name}`);
   }
 
+  // Activa acceso público de editor por defecto para que quien tenga el enlace pueda acceder y colaborar directamente
+  try {
+    await drive.permissions.create({
+      fileId: response.data.id,
+      requestBody: { role: 'writer', type: 'anyone' },
+      supportsAllDrives: true,
+    });
+  } catch (permErr: any) {
+    console.warn(`[createFolder] Notice: Could not set default anyone writer permission for folder ${response.data.id}:`, permErr?.message);
+  }
+
   return response.data.id;
 }
 
@@ -417,13 +428,39 @@ export async function shareFile(fileId: string, role: string, type: string, emai
     requestBody.emailAddress = emailAddress;
   }
   
-  const response = await drive.permissions.create({
-    fileId,
-    requestBody,
-    sendNotificationEmail: !!emailAddress, // Enviar email si es a un usuario
-    supportsAllDrives: true,
-  });
-  return response.data;
+  try {
+    const response = await drive.permissions.create({
+      fileId,
+      requestBody,
+      sendNotificationEmail: !!emailAddress, // Enviar email si es a un usuario
+      supportsAllDrives: true,
+    });
+    return response.data;
+  } catch (err: any) {
+    // Si ya existe un permiso para 'anyone', actualizarlo en lugar de fallar
+    if (type === 'anyone') {
+      try {
+        const list = await drive.permissions.list({
+          fileId,
+          fields: 'permissions(id, type, role)',
+          supportsAllDrives: true,
+        });
+        const existing = list.data.permissions?.find(p => p.type === 'anyone');
+        if (existing && existing.id) {
+          const updateRes = await drive.permissions.update({
+            fileId,
+            permissionId: existing.id,
+            requestBody: { role },
+            supportsAllDrives: true,
+          });
+          return updateRes.data;
+        }
+      } catch (updateErr: any) {
+        console.warn(`[shareFile] Failed to update existing anyone permission:`, updateErr?.message);
+      }
+    }
+    throw err;
+  }
 }
 
 /**
@@ -436,4 +473,56 @@ export async function revokePermission(fileId: string, permissionId: string): Pr
     permissionId,
     supportsAllDrives: true,
   });
+}
+
+/**
+ * Asegura que uno o más archivos/carpetas tengan acceso público directo como editores (role: 'writer', type: 'anyone')
+ * sin requerir inicio de sesión ni solicitud de permisos.
+ */
+export async function makeFilesPublic(
+  fileIds: string[],
+  role: 'writer' | 'reader' = 'writer'
+): Promise<{ success: boolean; updated: string[]; errors: any[] }> {
+  const drive = getDriveService();
+  const updated: string[] = [];
+  const errors: any[] = [];
+
+  const uniqueIds = Array.from(new Set(fileIds.filter(Boolean)));
+
+  await Promise.all(
+    uniqueIds.map(async (fileId) => {
+      try {
+        const list = await drive.permissions.list({
+          fileId,
+          fields: 'permissions(id, type, role)',
+          supportsAllDrives: true,
+        });
+        const perms = list.data.permissions || [];
+        const existingAnyone = perms.find((p) => p.type === 'anyone');
+
+        if (existingAnyone) {
+          if (existingAnyone.role !== role) {
+            await drive.permissions.update({
+              fileId,
+              permissionId: existingAnyone.id!,
+              requestBody: { role },
+              supportsAllDrives: true,
+            });
+          }
+        } else {
+          await drive.permissions.create({
+            fileId,
+            requestBody: { role, type: 'anyone' },
+            supportsAllDrives: true,
+          });
+        }
+        updated.push(fileId);
+      } catch (err: any) {
+        console.warn(`[drive.makeFilesPublic] Error setting permissions on ${fileId}:`, err?.message || err);
+        errors.push({ fileId, error: err?.message || 'Unknown error' });
+      }
+    })
+  );
+
+  return { success: errors.length === 0, updated, errors };
 }

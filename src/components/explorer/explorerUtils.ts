@@ -58,6 +58,41 @@ export async function copyText(text: string, successMessage = 'Copiado al portap
   toast.success(successMessage);
 }
 
+/**
+ * Solicita en segundo plano que Google Drive active permisos de editor público
+ * para los elementos indicados (archivos o carpetas).
+ */
+export async function ensurePublic(fileIds: string | string[], role: 'writer' | 'reader' = 'writer') {
+  const ids = (Array.isArray(fileIds) ? fileIds : [fileIds]).filter(Boolean);
+  if (ids.length === 0) return;
+  try {
+    await fetch('/api/files/share-public', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileIds: ids, role }),
+    });
+  } catch (err) {
+    console.warn('[ensurePublic] Failed to update permissions:', err);
+  }
+}
+
+/**
+ * Copia el enlace al portapapeles de forma inmediata y activa en segundo plano
+ * el permiso de edición público (role: 'writer', type: 'anyone') en Google Drive
+ * para que cualquier persona que reciba el enlace pueda entrar y editar sin pedir acceso.
+ */
+export async function copyTextAndEnsurePublic(
+  text: string,
+  fileIds: string | string[],
+  successMessage = 'Enlace copiado',
+  role: 'writer' | 'reader' = 'writer'
+) {
+  // 1. Inmediato para feedback instantáneo al usuario
+  await copyText(text, successMessage);
+  // 2. Activación en segundo plano (fire-and-forget)
+  ensurePublic(fileIds, role);
+}
+
 const LARGE_FILE = 95 * 1024 * 1024;
 
 function downloadUrl(id: string) {

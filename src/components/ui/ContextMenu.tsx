@@ -69,6 +69,7 @@ import {
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
 import { useAudio } from '@/lib/contexts/AudioContext';
 import { cn } from '@/lib/utils';
+import { copyTextAndEnsurePublic } from '@/components/explorer/explorerUtils';
 
 // Map of icon name strings → Lucide icon components
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -307,7 +308,7 @@ export function GlobalContextMenu() {
       icon: 'Link',
       action: () => {
         const url = `https://drive.google.com/file/d/${fileId}/view`;
-        navigator.clipboard.writeText(url).catch(() => {});
+        copyTextAndEnsurePublic(url, fileId, 'Enlace copiado', 'writer');
       },
     },
   ], [playTrack]);

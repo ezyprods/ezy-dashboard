@@ -20,7 +20,7 @@ import { uploadFileToDrive } from '@/lib/driveUpload';
 import { apiCreateFolder, findItem, getFolder, insertItems, loadFolder, loadIndex, useStoreVersion } from '@/components/explorer/driveStore';
 import { bpmTone, formatBytes, normalizeItem } from '@/components/explorer/fileKinds';
 import { FOLDER_MIME } from '@/components/explorer/types';
-import { copyText } from '@/components/explorer/explorerUtils';
+import { copyText, copyTextAndEnsurePublic } from '@/components/explorer/explorerUtils';
 import { FolderPicker } from './FolderPicker';
 import { ArtistPicker } from './EntityPickers';
 import { extractDroppedFiles, fileKey, filesFromInput } from './fileIntake';
@@ -642,7 +642,11 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                           )}
                           <button
                             type="button"
-                            onClick={() => copyText(expire.enabled ? `${window.location.origin}/api/files/${item.resultId}?download=true` : `https://drive.google.com/file/d/${item.resultId}/view`, expire.enabled ? 'Enlace de descarga copiado' : 'Enlace copiado')}
+                            onClick={() => {
+                              const link = expire.enabled ? `${window.location.origin}/api/files/${item.resultId}?download=true` : `https://drive.google.com/file/d/${item.resultId}/view`;
+                              const msg = expire.enabled ? 'Enlace de descarga copiado' : 'Enlace copiado';
+                              copyTextAndEnsurePublic(link, item.resultId!, msg, 'writer');
+                            }}
                             className="w-8 h-8 flex items-center justify-center rounded-lg text-text-secondary hover:text-accent hover:bg-surface"
                             aria-label="Copiar enlace"
                             title={expire.enabled ? 'Copiar enlace de descarga' : 'Copiar enlace'}

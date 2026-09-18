@@ -18,6 +18,7 @@ import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
 import { DAWErrorBoundary } from '@/components/projects/DAWErrorBoundary';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { customAlert } from '@/lib/dialog';
+import { copyTextAndEnsurePublic } from '@/components/explorer/explorerUtils';
 
 interface DriveItem {
   id: string;
@@ -229,9 +230,9 @@ export function FolderExplorerModal({
         label: 'Copiar enlace',
         icon: 'LinkIcon',
         action: () => {
-          const link = item.webViewLink || `${window.location.origin}/api/files/${item.id}?inline=true`;
-          navigator.clipboard.writeText(link);
-          customAlert('Enlace copiado al portapapeles');
+          const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+          const link = item.webViewLink || (isFolder ? `https://drive.google.com/drive/folders/${item.id}` : `https://drive.google.com/file/d/${item.id}/view`);
+          copyTextAndEnsurePublic(link, item.id, 'Enlace copiado', 'writer');
         }
       },
       {

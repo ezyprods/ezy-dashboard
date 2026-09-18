@@ -5,6 +5,7 @@ import { Loader2, Users, Link as LinkIcon, Shield, Globe, User, X, Trash2, Clock
 import { Button } from '@/components/ui/Button';
 import { customAlert } from '@/lib/dialog';
 import { DrivePermission } from '@/types/file';
+import { copyTextAndEnsurePublic } from '@/components/explorer/explorerUtils';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -113,8 +114,8 @@ export function ShareModal({ isOpen, onClose, fileId, fileName, webViewLink, web
 
   const handleCopyLink = () => {
     if (webViewLink) {
-      navigator.clipboard.writeText(webViewLink);
-      customAlert('Enlace copiado al portapapeles');
+      copyTextAndEnsurePublic(webViewLink, fileId, 'Enlace copiado al portapapeles', 'writer');
+      setTimeout(fetchPermissions, 1200);
     }
   };
 
