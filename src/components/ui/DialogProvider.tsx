@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { setDialogListener, DialogOptions } from '@/lib/dialog';
 import { X } from 'lucide-react';
 import { Button } from './Button';
@@ -8,6 +8,7 @@ import { Input } from './Input';
 export function DialogProvider() {
   const [options, setOptions] = useState<DialogOptions | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleDialogEvent = (e: Event) => {
@@ -22,6 +23,25 @@ export function DialogProvider() {
     window.addEventListener('custom-dialog', handleDialogEvent);
     return () => window.removeEventListener('custom-dialog', handleDialogEvent);
   }, []);
+
+  // Seleccionar automáticamente todo el texto por defecto al abrir un prompt para que al escribir se sobrescriba
+  useEffect(() => {
+    if (options?.type === 'prompt') {
+      const selectAll = () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      };
+
+      const raf = requestAnimationFrame(selectAll);
+      const timer = setTimeout(selectAll, 40);
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+      };
+    }
+  }, [options]);
 
   const handleConfirm = useCallback(() => {
     if (options?.onConfirm) {
@@ -79,9 +99,11 @@ export function DialogProvider() {
         {options.type === 'prompt' && (
           <div className="mb-6">
             <Input 
+              ref={inputRef}
               autoFocus
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onFocus={(e) => e.target.select()}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleConfirm();
                 if (e.key === 'Escape') handleCancel();
