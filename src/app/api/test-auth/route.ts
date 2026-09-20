@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
+import { auth as googleAuth, drive as driveApi } from '@googleapis/drive';
 import { getDriveAuthClient, listFolders } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 
@@ -19,7 +19,7 @@ export async function GET() {
   let foldersCount = -1;
 
   try {
-    const oauth2Client = new google.auth.OAuth2(
+    const oauth2Client = new googleAuth.OAuth2(
       clientId,
       process.env.GOOGLE_CLIENT_SECRET,
       process.env.BETTER_AUTH_URL + '/api/auth/callback/google'
@@ -28,7 +28,7 @@ export async function GET() {
       oauth2Client.setCredentials({ refresh_token: activeToken });
     }
 
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const drive = driveApi({ version: 'v3', auth: oauth2Client });
     const res = await drive.files.list({
       pageSize: 1,
       fields: 'files(id, name)',

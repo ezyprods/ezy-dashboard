@@ -70,7 +70,7 @@ export async function ensureBinaries(): Promise<{ ytdlpPath: string; ffmpegPath:
 
   binaryInitPromise = (async () => {
     const isWin = os.platform() === 'win32';
-    const tmpDir = os.tmpdir();
+    const tmpDir = /* turbopackIgnore: true */ os.tmpdir();
 
     // 1. Prepare yt-dlp binary
     let ytdlpPath: string;

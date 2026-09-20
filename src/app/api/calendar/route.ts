@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
-import { getCalendarAuthClient } from '@/lib/drive';
+import { calendar as calendarApi } from '@googleapis/calendar';
+import { getCalendarAuthClient } from '@/lib/calendarAuth';
 
 const TIME_ZONE = 'Europe/Madrid';
 
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     }
 
     const auth = getCalendarAuthClient();
-    const calendar = google.calendar({ version: 'v3', auth });
+    const calendar = calendarApi({ version: 'v3', auth });
 
     const items: any[] = [];
     let pageToken: string | undefined = undefined;
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     }
 
     const auth = getCalendarAuthClient();
-    const calendar = google.calendar({ version: 'v3', auth });
+    const calendar = calendarApi({ version: 'v3', auth });
 
     const response = await calendar.events.insert({
       calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',

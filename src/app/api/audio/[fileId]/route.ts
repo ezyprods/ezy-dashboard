@@ -1,12 +1,31 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
-import { getDriveService } from '@/lib/drive';
+import {
+  directDriveUrl,
+  ensureLinkReadable,
+  getDriveMediaMeta,
+  isDirectPlayable,
+} from '@/lib/driveDirectLink';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const LONG_CACHE = 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800';
 
+/**
+ * Audio delivery.
+ *
+ * Default path: a 307 to Google's CDN, so the audio bytes never pass through
+ * the Vercel function and cost 0 Fast Origin Transfer. Streaming them through
+ * here is what blew past the 10 GB/month free-tier budget, and the CDN can't
+ * rescue it — Vercel refuses to cache any request carrying a `Range` header,
+ * which every `<audio>` element sends.
+ *
+ * The redirect is only emitted once the file is confirmed link-readable;
+ * otherwise Google answers with an `application/binary` interstitial that
+ * Chrome blocks via ORB. Anything not confirmed playable-and-public falls back
+ * to the original proxy, so playback never breaks — it just costs bandwidth.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
@@ -17,8 +36,8 @@ export async function GET(
       return new NextResponse('File ID is required', { status: 400 });
     }
 
-    // If browser request is for an image (e.g. <img> tag with Accept: image/* or ?type=image),
-    // redirect immediately to Google's thumbnail CDN — 0 backend bandwidth, 0 function duration!
+    // Image requests (<img> tags, Accept: image/*) go to Google's thumbnail CDN —
+    // 0 backend bandwidth, 0 function duration.
     const acceptHeader = request.headers.get('accept') || '';
     if (acceptHeader.includes('image/') || request.nextUrl.searchParams.get('type') === 'image') {
       const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
@@ -27,9 +46,34 @@ export async function GET(
       return res;
     }
 
-    // Stream directly through Google Drive API with HTTP 206 Partial Content (Range: bytes)
-    // This provides instant playback, full scrubbing, and prevents browser ORB (Opaque Response Blocking).
     const accessToken = await getGoogleAccessToken();
+    const forceProxy = request.nextUrl.searchParams.get('proxy') === 'true';
+
+    let meta = null;
+    if (!forceProxy) {
+      meta = await getDriveMediaMeta(fileId, accessToken).catch(() => null);
+
+      if (meta && meta.mimeType.startsWith('image/')) {
+        const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+        const res = NextResponse.redirect(imgUrl, { status: 307 });
+        res.headers.set('Cache-Control', LONG_CACHE);
+        return res;
+      }
+
+      // ZERO-ORIGIN-TRANSFER PATH
+      if (meta && isDirectPlayable(meta.mimeType)) {
+        const readable = await ensureLinkReadable(fileId, accessToken, meta);
+        if (readable) {
+          const res = NextResponse.redirect(directDriveUrl(fileId), { status: 307 });
+          res.headers.set('Cache-Control', LONG_CACHE);
+          res.headers.set('Access-Control-Allow-Origin', '*');
+          return res;
+        }
+      }
+    }
+
+    // FALLBACK: proxy with HTTP 206 Partial Content, for files whose mime type
+    // would trip ORB on a direct link, or when the permission grant failed.
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
@@ -51,7 +95,7 @@ export async function GET(
       });
     }
 
-    const contentType = gDriveRes.headers.get('content-type') || 'audio/mpeg';
+    const contentType = gDriveRes.headers.get('content-type') || meta?.mimeType || 'audio/mpeg';
     if (contentType.startsWith('image/')) {
       gDriveRes.body?.cancel().catch(() => {});
       const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
@@ -80,8 +124,7 @@ export async function GET(
     try {
       const { fileId } = await params;
       if (fileId) {
-        const directUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
-        return NextResponse.redirect(directUrl, { status: 307 });
+        return NextResponse.redirect(directDriveUrl(fileId), { status: 307 });
       }
     } catch {}
     return new NextResponse(error?.message || 'Error streaming audio', {

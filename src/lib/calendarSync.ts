@@ -1,5 +1,5 @@
-import { google } from 'googleapis';
-import { getCalendarAuthClient } from '@/lib/drive';
+import { calendar as calendarApi } from '@googleapis/calendar';
+import { getCalendarAuthClient } from '@/lib/calendarAuth';
 
 const STATUS_LABELS: Record<string, string> = {
   done: '✅ Hecho',
@@ -35,7 +35,7 @@ function collectCells(grid: any) {
 export async function syncProductionGridToGoogleCalendar(title: string, newGrid: any, oldGrid: any) {
   try {
     const auth = getCalendarAuthClient();
-    const calendar = google.calendar({ version: 'v3', auth });
+    const calendar = calendarApi({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
 
     const newCellsMap = collectCells(newGrid);

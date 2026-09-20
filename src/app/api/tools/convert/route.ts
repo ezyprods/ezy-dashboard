@@ -56,7 +56,10 @@ export async function POST(req: NextRequest) {
       ffmpegPath = binaries.ffmpegPath;
     } catch {
       try {
-        ffmpegPath = require('ffmpeg-static') || 'ffmpeg';
+        // Ignore comments keep the bundler from tracing the 80 MB binary (and,
+        // with it, the whole project) into this function bundle.
+        const mod: any = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ 'ffmpeg-static');
+        ffmpegPath = (mod?.default || mod) as string;
       } catch {
         ffmpegPath = 'ffmpeg';
       }

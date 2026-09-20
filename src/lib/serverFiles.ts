@@ -22,7 +22,9 @@ export function contentDisposition(fileName: string, type: 'attachment' | 'inlin
 
 /** Temporary working directory for audio tools (created on demand). */
 export function getToolsTempDir(): string {
-  const dir = path.join(os.tmpdir(), 'ezy_audio_tools');
+  // turbopackIgnore keeps the tracer from treating this runtime-only temp
+  // path as a reason to bundle the whole project into every tools route.
+  const dir = path.join(/* turbopackIgnore: true */ os.tmpdir(), 'ezy_audio_tools');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -47,8 +49,13 @@ export async function resolveFfmpegPath(): Promise<string> {
   }
   if (os.platform() === 'win32') {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('ffmpeg-static') || 'ffmpeg';
+      // Local Windows dev only — Vercel downloads a Linux static build at runtime.
+      // The ignore comments keep the bundler from resolving `ffmpeg-static` at
+      // build time: tracing it dragged the entire project into this route's
+      // function bundle ("Encountered unexpected file in NFT list"), which is
+      // pure Functions Storage we pay for in every region.
+      const mod: any = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ 'ffmpeg-static');
+      return (mod?.default || mod) as string;
     } catch {
       return 'ffmpeg';
     }

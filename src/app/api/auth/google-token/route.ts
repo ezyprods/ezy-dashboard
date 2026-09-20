@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
+import { auth as googleAuth } from '@googleapis/drive';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   // Pass state through the OAuth flow to remember the type
   const state = searchParams.get('state') || type;
 
-  const oauth2Client = new google.auth.OAuth2(
+  const oauth2Client = new googleAuth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.BETTER_AUTH_URL + '/api/auth/google-token'

@@ -1,11 +1,11 @@
-import { google } from 'googleapis';
+import { auth as driveAuth, drive as driveApi } from '@googleapis/drive';
 import { DRIVE_ROOT_FOLDER_ID } from './constants';
 import { getFileType } from './utils';
 import type { DriveFile, FileType } from '@/types';
 
 // Cliente de Google Auth para Drive
 export const getDriveAuthClient = () => {
-  const oauth2Client = new google.auth.OAuth2(
+  const oauth2Client = new driveAuth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.BETTER_AUTH_URL + '/api/auth/callback/google'
@@ -19,24 +19,11 @@ export const getDriveAuthClient = () => {
   return oauth2Client;
 };
 
-// Cliente de Google Auth para Calendar
-export const getCalendarAuthClient = () => {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.BETTER_AUTH_URL + '/api/auth/callback/google'
-  );
-
-  const token = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN;
-  if (token) {
-    oauth2Client.setCredentials({ refresh_token: token });
-  }
-
-  return oauth2Client;
-};
+// El cliente de Calendar vive ahora en `lib/calendarAuth.ts`, para que las
+// rutas de calendario no arrastren el cliente de Drive a su bundle.
 
 export const getDriveService = () => {
-  return google.drive({ version: 'v3', auth: getDriveAuthClient() });
+  return driveApi({ version: 'v3', auth: getDriveAuthClient() });
 };
 
 /**
