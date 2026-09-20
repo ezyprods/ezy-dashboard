@@ -30,8 +30,9 @@ function ArtistRow({ artist, selected, hint, onClick }: { artist: Artist; select
 }
 
 /**
- * Hands beats to one artist: they are moved (not copied) into `<artist>/Beats`, so they disappear
- * from the library and from every other artist's portal at once. Undo is available from the toast.
+ * Reserves beats for one artist without moving anything: the file stays exactly where it is in
+ * the library, just marked as assigned, so it stops appearing in what other artists browse.
+ * Undo is available from the toast (and from the beat's own details).
  */
 export function AssignBeatModal({ items, onClose }: { items: DriveItem[]; onClose: () => void }) {
   const ex = useExplorer();
@@ -46,6 +47,11 @@ export function AssignBeatModal({ items, onClose }: { items: DriveItem[]; onClos
     items.forEach(i => ex.sentInfo(i)?.artistIds.forEach(a => ids.add(a)));
     return sortArtistsByRecent(artists.filter(a => ids.has(a.id)));
   }, [items, ex, artists]);
+
+  const alreadyAssigned = useMemo(
+    () => items.map(i => ex.assignedInfo(i)).filter((a): a is NonNullable<typeof a> => !!a),
+    [items, ex],
+  );
 
   const q = normalizeForSearch(query.trim());
   const others = useMemo(
@@ -66,7 +72,7 @@ export function AssignBeatModal({ items, onClose }: { items: DriveItem[]; onClos
   const single = items.length === 1 ? items[0] : null;
 
   return (
-    <Modal isOpen onClose={onClose} title={single ? 'Asignar beat' : `Asignar ${items.length} elementos`} description="Se mueve a la carpeta Beats del artista y deja de estar disponible para los demás." className="md:max-w-xl">
+    <Modal isOpen onClose={onClose} title={single ? 'Asignar beat' : `Asignar ${items.length} elementos`} description="No se mueve nada: solo deja de aparecer en lo que compartes con los demás." className="md:max-w-xl">
       <div className="space-y-4">
         <div className="flex flex-wrap gap-1.5">
           {items.slice(0, 8).map(item => (
@@ -77,6 +83,14 @@ export function AssignBeatModal({ items, onClose }: { items: DriveItem[]; onClos
           ))}
           {items.length > 8 && <span className="h-8 px-2 text-xs text-text-secondary inline-flex items-center">y {items.length - 8} más</span>}
         </div>
+
+        {alreadyAssigned.length > 0 && (
+          <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-3 py-2.5 text-xs text-text-primary">
+            {single
+              ? <>{alreadyAssigned[0].inherited ? 'Carpeta ya asignada a ' : 'Ya asignado a '}<b>{alreadyAssigned[0].artistName}</b> — al confirmar se reasigna.</>
+              : <>{alreadyAssigned.length} de estos elementos ya están asignados a otro artista — al confirmar se reasignan.</>}
+          </div>
+        )}
 
         <div className="relative">
           <Search className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -101,7 +115,7 @@ export function AssignBeatModal({ items, onClose }: { items: DriveItem[]; onClos
           <div className="rounded-xl bg-accent/10 border border-accent/20 px-3 py-2.5 text-xs text-text-primary flex items-center gap-2 animate-fade-in">
             <UserCheck className="w-4 h-4 text-accent shrink-0" />
             <span className="min-w-0 flex-1">
-              {single ? <b className="break-all">{single.name}</b> : <b>{items.length} elementos</b>} <ArrowRight className="inline w-3 h-3 mx-0.5" /> {artist.name} / Beats
+              {single ? <b className="break-all">{single.name}</b> : <b>{items.length} elementos</b>} <ArrowRight className="inline w-3 h-3 mx-0.5" /> reservado para <b>{artist.name}</b>
             </span>
           </div>
         )}

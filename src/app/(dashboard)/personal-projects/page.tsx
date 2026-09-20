@@ -54,9 +54,6 @@ export default function PersonalProjectsPage() {
             </span>
             <div className="min-w-0">
               <h1 className="text-2xl md:text-3xl font-black text-text-primary tracking-tight">Proyectos personales</h1>
-              <p className="text-xs md:text-sm text-text-secondary mt-1 max-w-xl">
-                Tu biblioteca de beats. Organízala en carpetas libres, envía beats o carpetas enteras a muchos artistas sin duplicar nada y asígnalos en un clic.
-              </p>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2 lg:w-[360px] shrink-0">
@@ -74,7 +71,6 @@ export default function PersonalProjectsPage() {
           >
             <UploadCloud className="w-4 h-4" /> Subir beats
           </button>
-          <p className="hidden md:block text-xs text-text-secondary">Clic derecho sobre cualquier beat o carpeta → <b>Enviar a artistas</b> o <b>Asignar a un artista</b>.</p>
         </div>
       </section>
 

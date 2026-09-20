@@ -16,7 +16,11 @@ export interface BeatSend {
   updatedAt: string;
 }
 
-/** A beat handed to an artist: moved out of the library into `<artist>/Beats`. */
+/**
+ * A beat handed to an artist. The file never moves — it stays exactly where it was in the
+ * library — this only records who it's reserved for, which hides it from every send's portal
+ * view (so it stops appearing to artists browsing the shared catalog).
+ */
 export interface BeatAssignment {
   id: string;
   fileId: string;
@@ -24,11 +28,10 @@ export interface BeatAssignment {
   isFolder: boolean;
   artistId: string;
   artistName: string;
-  fromFolderId: string;
-  fromPath: string;
-  toFolderId: string;
-  /** Sends that referenced this item directly (restored on undo) */
-  removedFromSendIds: string[];
+  /** Parent folder id in the library, for revealing the beat in place */
+  folderId: string;
+  /** Display path inside the library, e.g. "2026 / Trap" */
+  path: string;
   assignedAt: string;
 }
 

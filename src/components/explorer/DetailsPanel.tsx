@@ -43,10 +43,15 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-/** Library: send / assign buttons and who can already hear these items. */
+/** Library: send / assign buttons, who this is assigned to (if anyone) and who can see it. */
 function BeatActions({ items }: { items: DriveItem[] }) {
   const ex = useExplorer();
   const { artists } = useArtists();
+
+  const single = items.length === 1 ? items[0] : null;
+  const singleAssigned = single ? ex.assignedInfo(single) : null;
+  const fullAssignment = singleAssigned ? ex.library.assignments.find(a => a.id === singleAssigned.assignmentId) : null;
+
   const ids = new Set<string>();
   let inherited = false;
   for (const item of items) {
@@ -58,15 +63,32 @@ function BeatActions({ items }: { items: DriveItem[] }) {
 
   return (
     <div className="rounded-2xl border border-sky-500/20 bg-sky-500/5 p-3 space-y-3">
+      {singleAssigned && (
+        <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/25 px-3 py-2.5 flex items-center gap-2">
+          <UserCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="flex-1 min-w-0 text-xs text-text-primary truncate">
+            {singleAssigned.inherited ? 'Carpeta asignada a ' : 'Asignado a '}<b>{singleAssigned.artistName}</b>
+          </span>
+          {fullAssignment && (
+            <button
+              type="button"
+              onClick={() => ex.undoAssignments([fullAssignment]).catch(() => {})}
+              className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 shrink-0"
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <button type="button" onClick={() => ex.openSendDialog(items)} className="h-10 rounded-xl bg-accent text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-accent/90">
           <Send className="w-4 h-4" /> Enviar
         </button>
         <button type="button" onClick={() => ex.setAssignDialog(items)} className="h-10 rounded-xl border border-border bg-surface-elevated text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-surface">
-          <UserCheck className="w-4 h-4" /> Asignar
+          <UserCheck className="w-4 h-4" /> {singleAssigned ? 'Reasignar' : 'Asignar'}
         </button>
       </div>
-      {receivers.length > 0 ? (
+      {receivers.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-[11px] text-text-secondary">{inherited && items.length === 1 ? 'Dentro de una carpeta enviada a:' : 'Lo ven en su portal:'}</p>
           <div className="flex flex-wrap gap-1.5">
@@ -78,8 +100,6 @@ function BeatActions({ items }: { items: DriveItem[] }) {
             ))}
           </div>
         </div>
-      ) : (
-        <p className="text-[11px] text-text-secondary leading-relaxed">Aún no lo has enviado. Al asignarlo se mueve a la carpeta Beats del artista y desaparece de aquí.</p>
       )}
     </div>
   );
@@ -302,9 +322,6 @@ function FolderSummary() {
         const folder = findItem(ex.folderId);
         return folder ? <BeatActions items={[folder]} /> : null;
       })()}
-      <p className="text-[11px] text-text-secondary text-center leading-relaxed px-2">
-        Selecciona un elemento para ver sus detalles. {ex.canHover ? 'Clic derecho para todas las acciones.' : 'Mantén pulsado para ver todas las acciones.'}
-      </p>
     </div>
   );
 }

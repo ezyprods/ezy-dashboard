@@ -885,46 +885,57 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     return artistIds.size ? { artistIds: Array.from(artistIds), sendIds: Array.from(sendIds), inherited } : null;
   }, [directSends, indexById, rootId]);
 
+  /** Assignment map by fileId (files and folders — a folder's own assignment reserves everything inside it). */
+  const directAssignments = useMemo(() => {
+    const map = new Map<string, BeatAssignment>();
+    if (!isLibrary) return map;
+    for (const a of library.assignments) map.set(a.fileId, a);
+    return map;
+  }, [isLibrary, library.assignments]);
+
+  /** Who this item (or its closest assigned ancestor folder) is reserved for, if anyone. */
+  const assignedInfo = useCallback((item: Pick<DriveItem, 'id' | 'parentId'>) => {
+    if (directAssignments.size === 0) return null;
+    let current: Pick<DriveItem, 'id' | 'parentId'> | undefined = item;
+    let guard = 0;
+    while (current && current.id !== rootId && guard++ < 40) {
+      const hit = directAssignments.get(current.id);
+      if (hit) return { assignmentId: hit.id, artistId: hit.artistId, artistName: hit.artistName, inherited: current !== item };
+      const parentId: string | null = current.parentId;
+      current = parentId ? (indexById.get(parentId) || findItem(parentId)) : undefined;
+    }
+    return null;
+  }, [directAssignments, indexById, rootId]);
+
   const openSendDialog = useCallback((items: DriveItem[], mergeIntoId?: string) => {
     if (items.length === 0 && !mergeIntoId) return;
     setSendDialog({ items, mergeIntoId });
   }, []);
 
+  /** Assigning never touches Drive (the file stays exactly where it is), so undo is just dropping the record. */
   const undoAssignments = useCallback(async (assignments: BeatAssignment[]) => {
     const failures = await runPool(assignments, 3, a => apiUndoAssignment(a.id));
-    const folders = new Set(assignments.map(a => a.fromFolderId));
-    folders.forEach(id => loadFolder(id, { force: true }));
-    loadIndex(rootId, { force: true });
     if (failures.length) throw failures[0].error;
-  }, [rootId]);
+  }, []);
 
   const assignTo = useCallback(async (items: DriveItem[], artist: { id: string; name: string }) => {
     if (items.length === 0) return false;
-    const originals = items.map(i => ({ ...i }));
-    // Something inside a selected folder travels with that folder
-    const parentOf = new Map(originals.map(i => [i.id, originals.find(o => o.id !== i.id && o.isFolder && isInside(i.parentId || '', o.id, rootId))?.id]));
-    removeItems(originals.map(i => i.id));
-    setSelectedIds([]);
-    const t = toast.loading(originals.length === 1 ? `Asignando "${originals[0].name}"…` : `Asignando ${originals.length} beats…`);
+    const t = toast.loading(items.length === 1 ? `Asignando "${items[0].name}"…` : `Asignando ${items.length} elementos…`);
     try {
-      const { assignments, failed } = await apiAssign(originals.map(i => i.id), artist.id);
-      const assignedIds = new Set(assignments.map(a => a.fileId));
-      const notMoved = originals.filter(i => !assignedIds.has(i.id) && !assignedIds.has(parentOf.get(i.id) || ''));
-      if (notMoved.length) insertItems(notMoved, rootId);
+      const { assignments } = await apiAssign(items.map(i => i.id), artist.id);
       toast.dismiss(t);
-      if (failed.length) toast.error(`No se pudieron asignar: ${failed.join(', ')}`);
       if (assignments.length === 0) return false;
-      const label = assignments.length === 1 ? `"${assignments[0].fileName}"` : `${assignments.length} beats`;
-      const entry = { label: 'asignar', run: () => undoAssignments(assignments) };
-      notify(`${label} asignado${assignments.length > 1 ? 's' : ''} a ${artist.name} · ya está en su carpeta Beats`, entry);
-      loadFolder(assignments[0].toFolderId, { force: true });
+      const label = assignments.length === 1 ? `"${assignments[0].fileName}"` : `${assignments.length} elementos`;
+      notify(`${label} asignado${assignments.length > 1 ? 's' : ''} a ${artist.name} · ya no aparece en lo que compartes con los demás`, {
+        label: 'asignar',
+        run: () => undoAssignments(assignments),
+      });
       return true;
     } catch (err: any) {
-      insertItems(originals, rootId);
       toast.error(`No se pudo asignar: ${err.message}`, { id: t });
       return false;
     }
-  }, [rootId, notify, undoAssignments]);
+  }, [notify, undoAssignments]);
 
   // Keep the sends in sync when coming back to the tab
   useEffect(() => {
@@ -977,19 +988,12 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
       } else if (single.kind === 'audio') {
         const playing = currentTrack?.id === single.id && isPlaying;
         menu.push({ label: playing ? 'Pausar' : 'Reproducir', icon: 'Play', shortcut: 'Espacio', action: () => play(single) });
-        menu.push({ label: 'Editar en Mini-DAW', icon: 'Scissors', action: () => setMiniDawItem(single) });
       } else {
         menu.push({ label: 'Vista previa', icon: 'Eye', shortcut: 'Espacio', action: () => preview(single) });
       }
       if (view !== 'folder' || trimmedQuery) {
         menu.push({ label: 'Mostrar en su carpeta', icon: 'FolderInput', action: () => revealInFolder(single) });
       }
-      menu.push({ separator: true });
-    }
-
-    if (isLibrary) {
-      menu.push({ label: 'Enviar a artistas…', icon: 'Send', action: () => openSendDialog(targets) });
-      menu.push({ label: targets.length > 1 ? `Asignar ${targets.length} a un artista…` : 'Asignar a un artista…', icon: 'UserCheck', action: () => setAssignDialog(targets) });
       menu.push({ separator: true });
     }
 
@@ -1001,22 +1005,39 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     if (single) menu.push({ label: 'Abrir en Google Drive', icon: 'HardDrive', action: () => openInDrive(single) });
     menu.push({ separator: true });
 
-    if (single) menu.push({ label: 'Compartir y permisos…', icon: 'Share2', action: () => setShareItem(single) });
-    if (artistEmail) menu.push({ label: 'Compartir con el artista', icon: 'Mail', action: () => shareWithArtist(targets) });
-    if (single && canNativeShare()) menu.push({ label: 'Enviar enlace…', icon: 'Share2', action: () => shareNative(single) });
-    menu.push({ label: targets.length > 1 ? 'Copiar enlaces' : 'Copiar enlace', icon: 'Link', action: () => copyLinks(targets) });
-    if (single && !single.isFolder) menu.push({ label: 'Copiar enlace de descarga', icon: 'Copy', action: () => copyDownloadLink(single) });
-    menu.push({ separator: true });
-
-    if (single) menu.push({ label: 'Renombrar', icon: 'Edit3', shortcut: 'F2', action: () => startRename(single) });
-    menu.push({ label: 'Mover a…', icon: 'ArrowRightLeft', action: () => setMoveDialog({ items: targets, mode: 'move' }) });
-    if (files.length === targets.length) {
-      menu.push({ label: files.length > 1 ? 'Duplicar archivos' : 'Hacer una copia', icon: 'CopyPlus', action: () => performCopy(targets) });
-      menu.push({ label: 'Copiar a…', icon: 'FolderInput', action: () => setMoveDialog({ items: targets, mode: 'copy' }) });
+    // Compartir ▸ everything about visibility/links: library sends & assignment, Drive sharing, links
+    const shareSubmenu: MenuItem[] = [];
+    if (isLibrary) {
+      shareSubmenu.push({ label: 'Enviar a artistas…', icon: 'Send', action: () => openSendDialog(targets) });
+      shareSubmenu.push({ label: targets.length > 1 ? `Asignar ${targets.length} a un artista…` : 'Asignar a un artista…', icon: 'UserCheck', action: () => setAssignDialog(targets) });
+      shareSubmenu.push({ separator: true });
     }
+    if (single) shareSubmenu.push({ label: 'Compartir y permisos…', icon: 'Share2', action: () => setShareItem(single) });
+    if (artistEmail) shareSubmenu.push({ label: 'Compartir con el artista', icon: 'Mail', action: () => shareWithArtist(targets) });
+    if (single && canNativeShare()) shareSubmenu.push({ label: 'Enviar enlace…', icon: 'Share2', action: () => shareNative(single) });
+    shareSubmenu.push({ label: targets.length > 1 ? 'Copiar enlaces' : 'Copiar enlace', icon: 'Link', action: () => copyLinks(targets) });
+    if (single && !single.isFolder) shareSubmenu.push({ label: 'Copiar enlace de descarga', icon: 'Copy', action: () => copyDownloadLink(single) });
+    menu.push({ label: 'Compartir', icon: 'Share2', submenu: shareSubmenu });
+
+    // Editar ▸ single-item only (Mini-DAW, rename)
+    if (single) {
+      const editSubmenu: MenuItem[] = [];
+      if (single.kind === 'audio') editSubmenu.push({ label: 'Editar en Mini-DAW', icon: 'Scissors', action: () => setMiniDawItem(single) });
+      editSubmenu.push({ label: 'Renombrar', icon: 'Edit3', shortcut: 'F2', action: () => startRename(single) });
+      menu.push({ label: 'Editar', icon: 'Edit3', submenu: editSubmenu });
+    }
+
+    // Organizar ▸ move, copy, folder color
+    const organizeSubmenu: MenuItem[] = [{ label: 'Mover a…', icon: 'ArrowRightLeft', action: () => setMoveDialog({ items: targets, mode: 'move' }) }];
+    if (files.length === targets.length) {
+      organizeSubmenu.push({ label: files.length > 1 ? 'Duplicar archivos' : 'Hacer una copia', icon: 'CopyPlus', action: () => performCopy(targets) });
+      organizeSubmenu.push({ label: 'Copiar a…', icon: 'FolderInput', action: () => setMoveDialog({ items: targets, mode: 'copy' }) });
+    }
+    if (allFolders) organizeSubmenu.push({ label: 'Color de carpeta…', icon: 'Palette', action: () => setTimeout(() => showColorMenu(pos.x, pos.y, targets), 0) });
+    menu.push({ label: 'Organizar', icon: 'ArrowRightLeft', submenu: organizeSubmenu });
+
     const allStarred = targets.every(t => t.starred);
     menu.push({ label: allStarred ? 'Quitar de destacados' : 'Añadir a destacados', icon: allStarred ? 'StarOff' : 'Star', action: () => toggleStar(targets) });
-    if (allFolders) menu.push({ label: 'Color de carpeta…', icon: 'Palette', action: () => setTimeout(() => showColorMenu(pos.x, pos.y, targets), 0) });
     if (single) menu.push({ label: 'Detalles', icon: 'Info', shortcut: `${mod}I`, action: () => openDetails(single) });
     menu.push({ separator: true });
 
@@ -1420,7 +1441,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     copyDownloadLink, shareNative, shareWithArtist, openUpload, pickFiles, onFileInputChange, refresh,
     undoLast, notify,
     // beat library
-    library, sentInfo, sendDialog, setSendDialog, openSendDialog, editSend, setEditSend, assignDialog, setAssignDialog,
+    library, sentInfo, assignedInfo, sendDialog, setSendDialog, openSendDialog, editSend, setEditSend, assignDialog, setAssignDialog,
     assignTo, undoAssignments,
     // menus
     showItemMenu, showBackgroundMenu, showSortMenu, showColorMenu, buildItemMenu,

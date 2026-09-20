@@ -19,6 +19,8 @@ export interface MenuItem {
   disabled?: boolean;
   /** Shows a check mark (for option lists such as sort order) */
   checked?: boolean;
+  /** Nested items shown in a flyout (desktop, on hover/click) or a sub-screen (phone sheet). Mutually exclusive with `action`. */
+  submenu?: MenuItem[];
 }
 
 interface MenuState {

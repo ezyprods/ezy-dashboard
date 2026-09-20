@@ -103,14 +103,13 @@ export async function apiRestoreSend(send: BeatSend): Promise<void> {
   if (created.send.title !== send.title) await apiUpdateSend(created.send.id, { title: send.title });
 }
 
-export async function apiAssign(itemIds: string[], artistId: string): Promise<{ assignments: BeatAssignment[]; failed: string[] }> {
+export async function apiAssign(itemIds: string[], artistId: string): Promise<{ assignments: BeatAssignment[] }> {
   const data = await readJson(await fetch('/api/library/assignments', json('POST', { itemIds, artistId })));
   set({ sends: data.sends, assignments: data.allAssignments });
   return data;
 }
 
-export async function apiUndoAssignment(id: string): Promise<{ restoredTo: string }> {
+export async function apiUndoAssignment(id: string): Promise<void> {
   const data = await readJson(await fetch(`/api/library/assignments/${id}`, json('DELETE')));
   set({ sends: data.sends, assignments: data.allAssignments });
-  return data;
 }

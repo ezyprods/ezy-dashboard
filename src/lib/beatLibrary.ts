@@ -6,7 +6,6 @@ import type { ArtistConfig, BeatAssignment, BeatLibraryDb, BeatSend, PortalBeat,
 export const LIBRARY_DB_FILE = 'beat_library.json';
 export const LIBRARY_DISPLAY_NAME = 'Proyectos personales';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
-const ARTIST_BEATS_FOLDER = 'Beats';
 
 export interface LibraryNode {
   id: string;
@@ -138,8 +137,12 @@ export function pathOf(id: string, index: Map<string, LibraryNode>, rootId: stri
 
 // ─── Sends ───────────────────────────────────────────────────────────────────
 
-/** Files currently inside the sent items. Items that left the library (assigned, trashed) simply vanish. */
-export function resolveSendBeats(send: BeatSend, index: Map<string, LibraryNode>): PortalBeat[] {
+/**
+ * Files currently inside the sent items, minus anything already assigned to an artist (assigned
+ * beats are reserved and stop appearing in every send's portal view, though they stay untouched
+ * in the library). Items that left the library entirely (trashed) simply vanish.
+ */
+export function resolveSendBeats(send: BeatSend, index: Map<string, LibraryNode>, assignedIds: ReadonlySet<string> = new Set()): PortalBeat[] {
   const children = new Map<string, LibraryNode[]>();
   for (const node of index.values()) {
     if (!children.has(node.parentId)) children.set(node.parentId, []);
@@ -161,12 +164,14 @@ export function resolveSendBeats(send: BeatSend, index: Map<string, LibraryNode>
   const walk = (folder: LibraryNode, path: string, depth: number) => {
     if (depth > 12) return;
     for (const child of children.get(folder.id) || []) {
+      if (assignedIds.has(child.id)) continue;
       if (child.isFolder) walk(child, path ? `${path} / ${child.name}` : child.name, depth + 1);
       else if (!beats.has(child.id)) beats.set(child.id, toBeat(child, path));
     }
   };
 
   for (const id of send.itemIds) {
+    if (assignedIds.has(id)) continue;
     const node = index.get(id);
     if (!node) continue;
     if (node.isFolder) walk(node, node.name, 0);
@@ -181,6 +186,7 @@ export async function getPortalBeatSends(artistId: string): Promise<PortalBeatSe
   const sends = db.sends.filter(s => s.artistIds.includes(artistId));
   if (sends.length === 0) return [];
   const index = await indexLibrary(rootId);
+  const assignedIds = new Set(db.assignments.map(a => a.fileId));
   // A beat reachable from several sends is listed once, in the most recent one
   const seen = new Set<string>();
   return sends
@@ -190,7 +196,7 @@ export async function getPortalBeatSends(artistId: string): Promise<PortalBeatSe
       note: send.note,
       sentAt: send.updatedAt || send.createdAt,
       allowDownload: send.allowDownload !== false,
-      beats: resolveSendBeats(send, index),
+      beats: resolveSendBeats(send, index, assignedIds),
     }))
     .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())
     .map(send => {
@@ -202,6 +208,9 @@ export async function getPortalBeatSends(artistId: string): Promise<PortalBeatSe
 }
 
 // ─── Assignments ─────────────────────────────────────────────────────────────
+// Assigning a beat never touches Drive: it only records who it's reserved for, so it can keep
+// living wherever the producer organised it (year / style / pack…) while disappearing from what
+// artists browse. Undoing an assignment is therefore instant — just dropping the record.
 
 async function artistName(artistId: string): Promise<string> {
   const db = await findAndReadJsonFile<ArtistConfig[]>('ezy_artists_db.json', DRIVE_ROOT_FOLDER_ID).catch(() => null);
@@ -211,33 +220,19 @@ async function artistName(artistId: string): Promise<string> {
   return res.data.name || 'Artista';
 }
 
-async function ensureArtistBeatsFolder(artistId: string): Promise<string> {
-  const drive = getDriveService();
-  const artist = await drive.files.get({ fileId: artistId, fields: 'id, mimeType, trashed, parents', supportsAllDrives: true }).catch(() => null);
-  if (!artist?.data || artist.data.mimeType !== FOLDER_MIME || artist.data.trashed) {
+async function assertArtistExists(artistId: string): Promise<void> {
+  const res = await getDriveService().files.get({ fileId: artistId, fields: 'id, mimeType, trashed', supportsAllDrives: true }).catch(() => null);
+  if (!res?.data || res.data.mimeType !== FOLDER_MIME || res.data.trashed) {
     throw new LibraryError('El artista no existe o su carpeta está en la papelera', 404);
   }
-  const folders = await listFolders(artistId);
-  const existing = folders.find(f => /^beats?$/i.test((f.name || '').trim()));
-  return existing?.id || createFolder(ARTIST_BEATS_FOLDER, artistId);
-}
-
-async function moveItem(fileId: string, fromParentId: string, toParentId: string) {
-  await getDriveService().files.update({
-    fileId,
-    addParents: toParentId,
-    removeParents: fromParentId,
-    supportsAllDrives: true,
-    fields: 'id',
-  });
 }
 
 export async function assignToArtist(itemIds: string[], artistId: string) {
   const rootId = await getLibraryRootId();
-  const [index, beatsFolderId, name] = await Promise.all([indexLibrary(rootId), ensureArtistBeatsFolder(artistId), artistName(artistId)]);
+  const [index, name] = await Promise.all([indexLibrary(rootId), assertArtistExists(artistId).then(() => artistName(artistId))]);
 
   const nodes = Array.from(new Set(itemIds)).map(id => index.get(id)).filter(Boolean) as LibraryNode[];
-  // A folder and something inside it: moving the folder already takes the rest along
+  // A folder and something inside it: the folder assignment already reserves everything inside it
   const selected = new Set(nodes.map(n => n.id));
   const isUnderSelected = (node: LibraryNode) => {
     let parent = index.get(node.parentId);
@@ -251,79 +246,33 @@ export async function assignToArtist(itemIds: string[], artistId: string) {
   const targets = nodes.filter(n => !isUnderSelected(n));
   if (targets.length === 0) throw new LibraryError('Esos elementos ya no están en la biblioteca', 404);
 
-  const moved: LibraryNode[] = [];
-  const failed: string[] = [];
-  await Promise.all(targets.map(async node => {
-    try {
-      await moveItem(node.id, node.parentId, beatsFolderId);
-      moved.push(node);
-    } catch {
-      failed.push(node.name);
-    }
-  }));
-
   const now = new Date().toISOString();
   const { db, result } = await updateLibraryDb(rootId, db => {
-    const created: BeatAssignment[] = moved.map(node => {
-      const removedFromSendIds: string[] = [];
-      for (const send of db.sends) {
-        if (send.itemIds.includes(node.id)) {
-          send.itemIds = send.itemIds.filter(id => id !== node.id);
-          removedFromSendIds.push(send.id);
-        }
-      }
-      return {
-        id: newId('asg'),
-        fileId: node.id,
-        fileName: node.name,
-        isFolder: node.isFolder,
-        artistId,
-        artistName: name,
-        fromFolderId: node.parentId,
-        fromPath: node.parentId === rootId ? '' : pathOf(node.parentId, index, rootId),
-        toFolderId: beatsFolderId,
-        removedFromSendIds,
-        assignedAt: now,
-      };
-    });
-    db.assignments = [...created, ...db.assignments];
+    const created: BeatAssignment[] = targets.map(node => ({
+      id: newId('asg'),
+      fileId: node.id,
+      fileName: node.name,
+      isFolder: node.isFolder,
+      artistId,
+      artistName: name,
+      folderId: node.parentId,
+      path: node.parentId === rootId ? '' : pathOf(node.parentId, index, rootId),
+      assignedAt: now,
+    }));
+    // Reassigning replaces any earlier assignment of the same file (one active owner at a time)
+    const targetIds = new Set(created.map(c => c.fileId));
+    db.assignments = [...created, ...db.assignments.filter(a => !targetIds.has(a.fileId))];
     return created;
   });
 
-  return { assignments: result, failed, db, rootId };
+  return { assignments: result, db, rootId };
 }
 
 export async function undoAssignment(assignmentId: string) {
   const rootId = await getLibraryRootId();
-  const drive = getDriveService();
-  const db = await readLibraryDb(rootId);
-  const assignment = db.assignments.find(a => a.id === assignmentId);
-  if (!assignment) throw new LibraryError('Esa asignación ya no existe', 404);
-
-  const [file, origin] = await Promise.all([
-    drive.files.get({ fileId: assignment.fileId, fields: 'id, parents, trashed', supportsAllDrives: true }).catch(() => null),
-    drive.files.get({ fileId: assignment.fromFolderId, fields: 'id, trashed', supportsAllDrives: true }).catch(() => null),
-  ]);
-  if (!file?.data || file.data.trashed) throw new LibraryError('El beat ya no existe (¿se eliminó de la carpeta del artista?)', 410);
-
-  const target = origin?.data && !origin.data.trashed ? assignment.fromFolderId : rootId;
-  const currentParents = (file.data.parents || []).join(',');
-  await drive.files.update({
-    fileId: assignment.fileId,
-    addParents: target,
-    removeParents: currentParents || undefined,
-    supportsAllDrives: true,
-    fields: 'id',
-  });
-
-  const updated = await updateLibraryDb(rootId, db => {
+  const { db } = await updateLibraryDb(rootId, db => {
+    if (!db.assignments.some(a => a.id === assignmentId)) throw new LibraryError('Esa asignación ya no existe', 404);
     db.assignments = db.assignments.filter(a => a.id !== assignmentId);
-    for (const send of db.sends) {
-      if (assignment.removedFromSendIds.includes(send.id) && !send.itemIds.includes(assignment.fileId)) {
-        send.itemIds = [...send.itemIds, assignment.fileId];
-      }
-    }
   });
-
-  return { db: updated.db, restoredTo: target, rootId };
+  return { db, rootId };
 }

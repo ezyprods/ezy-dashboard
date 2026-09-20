@@ -38,7 +38,7 @@ function HowItWorks() {
   const steps = [
     { icon: FolderPlus, title: 'Organiza a tu manera', text: 'Crea carpetas libres: por año, por estilo, por pack… Sube tus beats donde quieras.' },
     { icon: Send, title: 'Envía sin duplicar', text: 'Selecciona beats o carpetas enteras → “Enviar a artistas”. No se copia nada: cada artista los ve en su portal.' },
-    { icon: UserCheck, title: 'Asigna en un clic', text: '¿A alguien le encaja uno? “Asignar” lo mueve a su carpeta Beats y desaparece para todos los demás.' },
+    { icon: UserCheck, title: 'Asigna en un clic', text: '¿A alguien le encaja uno? “Asignar” lo reserva para él: no se mueve, pero desaparece de lo que ven los demás.' },
   ];
   return (
     <div className="p-4 md:p-8">
@@ -228,17 +228,17 @@ function AssignmentRow({ assignment, artist }: { assignment: BeatAssignment; art
       id: assignment.fileId,
       name: stripExtension(assignment.fileName),
       url: `/api/audio/${assignment.fileId}`,
-      pathSegments: [{ name: 'Artistas', url: '/artists' }, { name: assignment.artistName, url: `/artists/${assignment.artistId}` }, { name: 'Beats' }, { name: stripExtension(assignment.fileName) }],
+      pathSegments: [{ name: 'Proyectos personales', url: '/personal-projects' }, ...(assignment.path ? [{ name: assignment.path }] : []), { name: stripExtension(assignment.fileName) }],
     });
   };
 
   const undo = async () => {
-    const ok = await customConfirm(`“${assignment.fileName}” saldrá de la carpeta Beats de ${assignment.artistName} y volverá a ${assignment.fromPath || 'la raíz de la biblioteca'}.`, 'Deshacer asignación');
+    const ok = await customConfirm(`“${assignment.fileName}” dejará de estar asignado a ${assignment.artistName} y volverá a aparecer en lo que compartas con los demás. El archivo no se mueve.`, 'Quitar asignación');
     if (!ok) return;
     setUndoing(true);
     try {
       await ex.undoAssignments([assignment]);
-      toast.success(`“${assignment.fileName}” vuelve a estar disponible`);
+      toast.success(`“${assignment.fileName}” ya no está asignado`);
     } catch (err: any) {
       toast.error(`No se pudo deshacer: ${err.message}`);
     } finally {
@@ -258,18 +258,18 @@ function AssignmentRow({ assignment, artist }: { assignment: BeatAssignment; art
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-text-primary truncate" title={assignment.fileName}>{assignment.fileName}</p>
         <p className="text-[11px] text-text-secondary truncate flex items-center gap-1">
-          <span className="truncate">{assignment.fromPath || 'Raíz'}</span>
+          <span className="truncate">{assignment.path || 'Raíz'}</span>
           <ArrowRight className="w-3 h-3 shrink-0" />
-          <span className="font-semibold text-text-primary truncate">{assignment.artistName} / Beats</span>
+          <span className="font-semibold text-text-primary truncate">{assignment.artistName}</span>
           <span className="shrink-0">· {formatRelativeTime(assignment.assignedAt)}</span>
         </p>
       </div>
       {artist && <ArtistAvatar name={artist.name} photoUrl={artist.photoUrl} size="sm" className="w-7 h-7 hidden sm:flex" />}
-      <Link href={`/artists/${assignment.artistId}?tab=files&folderId=${assignment.toFolderId}&fileId=${assignment.fileId}`} className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 text-text-secondary hover:text-text-primary hover:bg-surface shrink-0" title="Ver en la carpeta del artista">
+      <Link href={ex.folderHref(assignment.folderId)} className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 text-text-secondary hover:text-text-primary hover:bg-surface shrink-0" title="Ver en la biblioteca">
         <ExternalLink className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Ver</span>
       </Link>
-      <button type="button" onClick={undo} disabled={undoing} className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg border border-border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-surface shrink-0 disabled:opacity-50" title="Devolver a la biblioteca">
-        <Undo2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Deshacer</span>
+      <button type="button" onClick={undo} disabled={undoing} className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-lg border border-border text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-surface shrink-0 disabled:opacity-50" title="Quitar asignación">
+        <Undo2 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Quitar</span>
       </button>
     </div>
   );
@@ -285,14 +285,14 @@ export function AssignedView() {
   const q = normalizeForSearch(ex.query.trim());
   const visible = assignments.filter(a =>
     (!artistFilter || a.artistId === artistFilter)
-    && (!q || normalizeForSearch(`${a.fileName} ${a.artistName} ${a.fromPath}`).includes(q)));
+    && (!q || normalizeForSearch(`${a.fileName} ${a.artistName} ${a.path}`).includes(q)));
 
   if (assignments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center text-center py-16 px-6">
         <div className="w-14 h-14 rounded-2xl bg-accent/10 flex items-center justify-center mb-3"><Music2 className="w-7 h-7 text-accent" /></div>
         <p className="text-sm font-semibold text-text-primary">Aún no has asignado beats</p>
-        <p className="text-xs text-text-secondary mt-1 max-w-sm">Clic derecho sobre un beat → “Asignar a un artista”. Se mueve a su carpeta Beats y aquí queda el historial para deshacerlo si hace falta.</p>
+        <p className="text-xs text-text-secondary mt-1 max-w-sm">Clic derecho sobre un beat → “Asignar a un artista”. No se mueve de sitio, solo deja de verse en lo que compartes con los demás, y aquí queda el historial para deshacerlo.</p>
       </div>
     );
   }

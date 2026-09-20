@@ -64,6 +64,8 @@ import {
   AudioWaveform,
   UserCheck,
   UserPlus,
+  ChevronRight,
+  ChevronLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
@@ -248,8 +250,53 @@ export function GlobalContextMenu() {
   const { playTrack } = useAudio();
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
+  const submenuRef = useRef<HTMLDivElement>(null);
 
   useIOSLongPressContextMenu();
+
+  // ─── Submenus (desktop flyout, phone sub-screen) ─────────────────────────
+  const [openSubmenu, setOpenSubmenu] = React.useState<{ index: number; items: MenuItem[]; label?: string; anchor: DOMRect } | null>(null);
+  const [submenuPos, setSubmenuPos] = React.useState({ x: 0, y: 0 });
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sheetStack, setSheetStack] = React.useState<{ items: MenuItem[]; label?: string }[]>([]);
+
+  const cancelSubmenuClose = useCallback(() => {
+    if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; }
+  }, []);
+  const scheduleSubmenuClose = useCallback(() => {
+    cancelSubmenuClose();
+    closeTimer.current = setTimeout(() => setOpenSubmenu(null), 200);
+  }, [cancelSubmenuClose]);
+  const handleRowEnter = useCallback((index: number, item: MenuItem, anchor: DOMRect) => {
+    cancelSubmenuClose();
+    if (item.submenu) setOpenSubmenu(prev => (prev?.index === index ? prev : { index, items: item.submenu!, label: item.label, anchor }));
+    else scheduleSubmenuClose();
+  }, [cancelSubmenuClose, scheduleSubmenuClose]);
+
+  // A freshly opened menu (new items array) always starts collapsed
+  useEffect(() => {
+    setOpenSubmenu(null);
+    setSheetStack([]);
+  }, [menuState.items]);
+
+  // Position the flyout: to the right of its row, flipped to the left / clamped to the bottom if it wouldn't fit
+  useEffect(() => {
+    if (!openSubmenu) return;
+    const measure = () => {
+      const rect = submenuRef.current?.getBoundingClientRect();
+      const w = rect?.width ?? 220;
+      const h = rect?.height ?? openSubmenu.items.length * 34 + 16;
+      let x = openSubmenu.anchor.right - 4;
+      if (x + w > window.innerWidth) x = openSubmenu.anchor.left - w + 4;
+      let y = openSubmenu.anchor.top - 6;
+      if (y + h > window.innerHeight) y = window.innerHeight - h - 8;
+      setSubmenuPos({ x: Math.max(8, x), y: Math.max(8, y) });
+    };
+    measure();
+    // Re-measure once the panel has actually painted (its real height may differ from the estimate)
+    const raf = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(raf);
+  }, [openSubmenu]);
 
   // Build default actions
   const getDefaultItems = useCallback((): MenuItem[] => [
@@ -399,15 +446,21 @@ export function GlobalContextMenu() {
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
       const target = 'touches' in e ? e.touches[0]?.target : e.target;
-      if (menuRef.current && target && !menuRef.current.contains(target as Node)) {
-        hideMenu();
-      }
+      if (!target) return;
+      const insideMain = menuRef.current?.contains(target as Node);
+      const insideSubmenu = submenuRef.current?.contains(target as Node);
+      if (!insideMain && !insideSubmenu) hideMenu();
     };
     const handleScroll = (e: Event) => {
-      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
+      if (e.target instanceof Node && (menuRef.current?.contains(e.target) || submenuRef.current?.contains(e.target))) return;
       if (!isMobile) hideMenu();
     };
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') hideMenu(); };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (openSubmenu) setOpenSubmenu(null);
+      else if (sheetStack.length) setSheetStack(s => s.slice(0, -1));
+      else hideMenu();
+    };
 
     // On phones the sheet's own backdrop closes it on tap. Closing on touchstart instead would
     // remove the overlay before the tap ends, and the tap would then "fall through" and activate
@@ -425,13 +478,16 @@ export function GlobalContextMenu() {
       document.removeEventListener('scroll', handleScroll, { capture: true });
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [menuState.visible, hideMenu, isMobile]);
+  }, [menuState.visible, hideMenu, isMobile, openSubmenu, sheetStack.length]);
 
   if (!menuState.visible || typeof document === 'undefined') return null;
 
   if (isMobile) {
+    const activeSheet = sheetStack[sheetStack.length - 1];
+    const currentItems = activeSheet ? activeSheet.items : menuState.items;
+
     return createPortal(
-      <div 
+      <div
         className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm flex flex-col justify-end animate-fade-in"
         onClick={hideMenu}
       >
@@ -444,8 +500,17 @@ export function GlobalContextMenu() {
           {/* Drag Pill */}
           <div className="w-10 h-1.5 bg-border rounded-full mx-auto mb-3 shrink-0" />
 
+          {activeSheet && (
+            <button
+              onClick={() => setSheetStack(s => s.slice(0, -1))}
+              className="w-full min-h-[44px] flex items-center gap-2 px-2 pb-2 text-[13px] font-semibold text-text-secondary text-left shrink-0"
+            >
+              <ChevronLeft className="w-4 h-4" /> {activeSheet.label || 'Atrás'}
+            </button>
+          )}
+
           <div className="space-y-0.5 overflow-y-auto overscroll-contain min-h-0">
-            {menuState.items.map((item, i) => {
+            {currentItems.map((item, i) => {
               if (item.separator) {
                 return <div key={`sep-${i}`} className="my-2 border-t border-border/40" />;
               }
@@ -461,10 +526,12 @@ export function GlobalContextMenu() {
                   key={i}
                   disabled={item.disabled}
                   onClick={() => {
+                    if (item.submenu) { setSheetStack(s => [...s, { items: item.submenu!, label: item.label }]); return; }
                     if (item.action) item.action();
                     hideMenu();
                   }}
                   role="menuitem"
+                  aria-haspopup={item.submenu ? 'menu' : undefined}
                   className={cn(
                     'w-full min-h-[48px] flex items-center gap-3 px-4 py-3 rounded-xl text-[15px] font-medium transition-colors duration-100 text-left active:bg-surface disabled:opacity-40 disabled:pointer-events-none',
                     item.variant === 'danger'
@@ -476,6 +543,7 @@ export function GlobalContextMenu() {
                   <MenuIcon name={item.icon} className={cn('w-[18px] h-[18px]', item.iconClassName)} color={item.iconColor} />
                   <span className="truncate flex-1">{item.label}</span>
                   {item.checked && <Check className="w-4 h-4 text-accent shrink-0" />}
+                  {item.submenu && <ChevronRight className="w-4 h-4 text-text-secondary/70 shrink-0" />}
                 </button>
               );
             })}
@@ -493,48 +561,76 @@ export function GlobalContextMenu() {
     );
   }
 
+  const renderDesktopRow = (item: MenuItem, i: number, isSubLevel: boolean) => {
+    if (item.separator) {
+      return <div key={`sep-${i}`} className="my-1 border-t border-border/40" />;
+    }
+    if (item.heading) {
+      return (
+        <div key={`head-${i}`} className="px-3 pt-1 pb-1.5 text-[11px] font-semibold text-text-secondary truncate max-w-[280px]">
+          {item.heading}
+        </div>
+      );
+    }
+    const active = isSubLevel ? false : openSubmenu?.index === i;
+    return (
+      <button
+        key={i}
+        disabled={item.disabled}
+        onMouseEnter={(e) => { if (!isSubLevel) handleRowEnter(i, item, e.currentTarget.getBoundingClientRect()); }}
+        onClick={(e) => {
+          if (item.submenu) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setOpenSubmenu(prev => (prev?.index === i ? null : { index: i, items: item.submenu!, label: item.label, anchor: rect }));
+            return;
+          }
+          if (item.action) item.action();
+          hideMenu();
+        }}
+        aria-haspopup={item.submenu ? 'menu' : undefined}
+        aria-expanded={item.submenu ? active : undefined}
+        className={cn(
+          'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors duration-100 text-left disabled:opacity-40 disabled:pointer-events-none',
+          item.variant === 'danger'
+            ? 'text-error hover:bg-error/10'
+            : 'text-text-primary hover:bg-accent/10 hover:text-accent-light',
+          active && 'bg-accent/10 text-accent-light',
+          item.className
+        )}
+      >
+        <MenuIcon name={item.icon} className={item.iconClassName} color={item.iconColor} />
+        <span className="flex-1 whitespace-nowrap">{item.label}</span>
+        {item.checked && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
+        {item.shortcut && <kbd className="ml-4 text-[10px] font-sans text-text-secondary/80 tracking-wide">{item.shortcut}</kbd>}
+        {item.submenu && <ChevronRight className="w-3.5 h-3.5 text-text-secondary/70 shrink-0 -mr-1" />}
+      </button>
+    );
+  };
+
   return createPortal(
-    <div
-      ref={menuRef}
-      className="fixed z-[9999] min-w-[200px] max-h-[calc(100dvh-16px)] overflow-y-auto overscroll-contain py-1.5 rounded-xl border border-border/60 bg-surface-elevated/90 backdrop-blur-xl shadow-2xl shadow-black/40 animate-menu-in"
-      style={{ top: position.y, left: position.x }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {menuState.items.map((item, i) => {
-        if (item.separator) {
-          return <div key={`sep-${i}`} className="my-1 border-t border-border/40" />;
-        }
-        if (item.heading) {
-          return (
-            <div key={`head-${i}`} className="px-3 pt-1 pb-1.5 text-[11px] font-semibold text-text-secondary truncate max-w-[280px]">
-              {item.heading}
-            </div>
-          );
-        }
-        return (
-          <button
-            key={i}
-            disabled={item.disabled}
-            onClick={() => {
-              if (item.action) item.action();
-              hideMenu();
-            }}
-            className={cn(
-              'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors duration-100 text-left disabled:opacity-40 disabled:pointer-events-none',
-              item.variant === 'danger'
-                ? 'text-error hover:bg-error/10'
-                : 'text-text-primary hover:bg-accent/10 hover:text-accent-light',
-              item.className
-            )}
-          >
-            <MenuIcon name={item.icon} className={item.iconClassName} color={item.iconColor} />
-            <span className="flex-1 whitespace-nowrap">{item.label}</span>
-            {item.checked && <Check className="w-3.5 h-3.5 text-accent shrink-0" />}
-            {item.shortcut && <kbd className="ml-4 text-[10px] font-sans text-text-secondary/80 tracking-wide">{item.shortcut}</kbd>}
-          </button>
-        );
-      })}
-    </div>,
+    <>
+      <div
+        ref={menuRef}
+        className="fixed z-[9999] min-w-[200px] max-h-[calc(100dvh-16px)] overflow-y-auto overscroll-contain py-1.5 rounded-xl border border-border/60 bg-surface-elevated/90 backdrop-blur-xl shadow-2xl shadow-black/40 animate-menu-in"
+        style={{ top: position.y, left: position.x }}
+        onContextMenu={(e) => e.preventDefault()}
+        onMouseLeave={scheduleSubmenuClose}
+      >
+        {menuState.items.map((item, i) => renderDesktopRow(item, i, false))}
+      </div>
+      {openSubmenu && (
+        <div
+          ref={submenuRef}
+          className="fixed z-[10000] min-w-[200px] max-h-[calc(100dvh-16px)] overflow-y-auto overscroll-contain py-1.5 rounded-xl border border-border/60 bg-surface-elevated/95 backdrop-blur-xl shadow-2xl shadow-black/40 animate-menu-in"
+          style={{ top: submenuPos.y, left: submenuPos.x }}
+          onContextMenu={(e) => e.preventDefault()}
+          onMouseEnter={cancelSubmenuClose}
+          onMouseLeave={scheduleSubmenuClose}
+        >
+          {openSubmenu.items.map((item, i) => renderDesktopRow(item, i, true))}
+        </div>
+      )}
+    </>,
     document.body
   );
 }

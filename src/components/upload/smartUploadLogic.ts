@@ -1,7 +1,7 @@
 'use client';
 
 import { findBestMatch, getNormalizedBaseName, sortArtistsByRecent } from '@/lib/utils';
-import { formatProducerFilename, parseAudioFilename } from '@/lib/utils/audio';
+import { parseAudioFilename } from '@/lib/utils/audio';
 import { getFolder } from '@/components/explorer/driveStore';
 import { getExtension, stripExtension } from '@/components/explorer/fileKinds';
 import type { DriveItem, Crumb } from '@/components/explorer/types';
@@ -113,10 +113,9 @@ function todayStamp() {
 /** Suggested file name (without extension) for the current role and target. */
 export function suggestBaseName(item: Pick<UploadItem, 'file' | 'kind' | 'role' | 'bpm' | 'key'>, targetType: Destination['targetType']): string {
   const original = stripExtension(item.file.name);
-  if (targetType === 'library' && item.kind === 'audio') {
-    const parsed = parseAudioFilename(item.file.name);
-    return stripExtension(formatProducerFilename(item.file.name, parsed.cleanTitle, item.bpm ?? parsed.bpm, item.key ?? parsed.key));
-  }
+  // The library keeps the exact name the file was dragged in with (BPM/key are still detected
+  // and stored for filtering/badges, just not injected into the visible filename).
+  if (targetType === 'library') return original;
   if (targetType === 'artist' && item.role === 'bounce') {
     // Bounces carry the upload date so the artist portal can order versions
     const clean = original.replace(/\s*\[\d{2}-\d{2}-\d{4}\]\s*$/, '').trim();

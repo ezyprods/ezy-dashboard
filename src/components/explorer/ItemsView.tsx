@@ -3,7 +3,7 @@
 import React, { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Play, Pause, MoreVertical, Star, Users, Check, FolderOpen, AlertCircle, RefreshCw, UploadCloud, SearchX,
-  ArrowUp, ArrowDown, Loader2, Send, FolderPlus,
+  ArrowUp, ArrowDown, Loader2, Send, FolderPlus, UserCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
@@ -111,11 +111,34 @@ function AudioBadges({ item }: { item: DriveItem }) {
   );
 }
 
-/** Library only: which artists can see this item in their portal. */
+/** Library only: shows who a beat is reserved for, or (failing that) who can see it in their portal. */
 function SentBadge({ item, compact }: { item: DriveItem; compact?: boolean }) {
   const ex = useExplorer();
   const { artists } = useArtists();
-  const info = ex.isLibrary ? ex.sentInfo(item) : null;
+  if (!ex.isLibrary) return null;
+
+  const assigned = ex.assignedInfo(item);
+  if (assigned) {
+    const title = `${assigned.inherited ? 'Dentro de una carpeta asignada a' : 'Asignado a'} ${assigned.artistName}`;
+    return (
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); ex.setView('assigned'); }}
+        onDoubleClick={e => e.stopPropagation()}
+        className={cn(
+          'shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded-md text-[10px] font-bold border transition-colors',
+          assigned.inherited ? 'text-emerald-400/80 border-emerald-500/15 bg-emerald-500/5' : 'text-emerald-400 border-emerald-500/25 bg-emerald-500/10 hover:bg-emerald-500/20',
+        )}
+        title={title}
+        aria-label={title}
+      >
+        <UserCheck className="w-3 h-3" />
+        {compact ? '' : assigned.artistName}
+      </button>
+    );
+  }
+
+  const info = ex.sentInfo(item);
   if (!info) return null;
   const names = info.artistIds.map(id => artists.find(a => a.id === id)?.name).filter(Boolean) as string[];
   const title = `${info.inherited ? 'Dentro de una carpeta enviada a' : 'Enviado a'}: ${names.join(', ') || `${info.artistIds.length} artistas`}`;
