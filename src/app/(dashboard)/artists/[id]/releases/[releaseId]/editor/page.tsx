@@ -1,4 +1,5 @@
 'use client';
+import { audioSrc } from '@/lib/audioUrl';
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -225,7 +226,7 @@ export default function ReleaseEditorPage() {
         try {
           setConversionState({ active: true, progress: 0, trackTitle: `Descargando: ${track.title}` });
 
-          const response = await fetch(`/api/audio/${track.originalFileId}`);
+          const response = await fetch(audioSrc(track.originalFileId));
           if (!response.ok) throw new Error('No se pudo descargar ' + track.title);
           const blob = await response.blob();
 
@@ -408,13 +409,13 @@ export default function ReleaseEditorPage() {
   }
   const nextTrack = nextTrackIndex !== -1 ? release?.tracks?.[nextTrackIndex] : null;
 
-  const currentTrackUrl = currentTrack ? `/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}` : null;
-  const nextTrackUrl = nextTrack ? `/api/audio/${nextTrack.previewFileId || nextTrack.newFileId}` : null;
+  const currentTrackUrl = currentTrack ? audioSrc(currentTrack.previewFileId || currentTrack.newFileId) : null;
+  const nextTrackUrl = nextTrack ? audioSrc(nextTrack.previewFileId || nextTrack.newFileId) : null;
   
   const preloadUrls = preloadIndices
     .map(idx => release?.tracks?.[idx])
     .filter(t => t != null)
-    .map(t => `/api/audio/${t!.previewFileId || t!.newFileId}`);
+    .map(t => audioSrc(t!.previewFileId || t!.newFileId));
 
   const {
     isPlaying,

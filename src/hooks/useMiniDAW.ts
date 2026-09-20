@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { audioSrc } from '@/lib/audioUrl';
 
 export type DAWStatus =
   | 'idle'
@@ -145,7 +146,7 @@ export function useMiniDAW(): UseMiniDAWReturn {
         return;
       }
 
-      const response = await fetch(`/api/audio/${fileId}`, {
+      const response = await fetch(audioSrc(fileId), {
         signal: controller.signal,
       });
 

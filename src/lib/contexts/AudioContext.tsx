@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from 'react';
+import { audioSrc } from '@/lib/audioUrl';
 
 export interface AudioTrack {
   id: string;
@@ -127,13 +128,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       setCurrentTrack(track);
       setIsLoading(true);
 
-      let finalUrl = track.url;
-      // Guarantee reliable streaming endpoint
-      if (!finalUrl || (finalUrl.includes('drive.google.com') || finalUrl.includes('googleusercontent.com')) && track.id) {
-        finalUrl = `/api/audio/${track.id}`;
-      } else if (track.id && !finalUrl.startsWith('/api/audio/')) {
-        finalUrl = `/api/audio/${track.id}`;
-      }
+      // Every call site hands us some form of URL, but playback must always go
+      // through our own streaming endpoint: a direct Drive link cannot be played
+      // by a browser (Drive sends Cross-Origin-Resource-Policy: same-site).
+      // Normalising here means the ~25 places that call playTrack() don't each
+      // have to get it right.
+      const finalUrl = track.id ? audioSrc(track.id) : track.url;
 
       audioRef.current.src = finalUrl;
       audioRef.current.load();

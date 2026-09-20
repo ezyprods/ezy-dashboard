@@ -1,4 +1,5 @@
 'use client';
+import { audioSrc } from '@/lib/audioUrl';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Pause, Play, Download, Trash2, Edit3, FolderInput, ExternalLink, MessageSquare, X, Loader2, Lock, Scissors } from 'lucide-react';
@@ -315,7 +316,7 @@ export function WaveformPlayer({
   };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
-    const fileUrl = `${window.location.origin}/api/audio/${activeId}`;
+    const fileUrl = `${window.location.origin}${audioSrc(activeId)}`;
     const safeName = activeName.replace(/[^a-z0-9_.\-\[\] ]/gi, '_');
     
     // Standard format for dragging out of the browser to OS/WhatsApp

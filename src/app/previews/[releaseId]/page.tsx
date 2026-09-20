@@ -1,4 +1,5 @@
 'use client';
+import { audioSrc } from '@/lib/audioUrl';
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
@@ -95,13 +96,13 @@ export default function PublicPreviewPage() {
   }
   const nextTrack = nextTrackIndex !== -1 ? release?.tracks?.[nextTrackIndex] : null;
 
-  const currentTrackUrl = currentTrack ? `/api/audio/${currentTrack.previewFileId || currentTrack.newFileId}` : null;
-  const nextTrackUrl = nextTrack ? `/api/audio/${nextTrack.previewFileId || nextTrack.newFileId}` : null;
+  const currentTrackUrl = currentTrack ? audioSrc(currentTrack.previewFileId || currentTrack.newFileId) : null;
+  const nextTrackUrl = nextTrack ? audioSrc(nextTrack.previewFileId || nextTrack.newFileId) : null;
   
   const preloadUrls = preloadIndices
     .map(idx => release?.tracks?.[idx])
     .filter(t => t != null)
-    .map(t => `/api/audio/${t!.previewFileId || t!.newFileId}`);
+    .map(t => audioSrc(t!.previewFileId || t!.newFileId));
 
   const {
     isPlaying,

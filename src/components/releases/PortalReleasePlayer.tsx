@@ -1,4 +1,5 @@
 'use client';
+import { audioSrc } from '@/lib/audioUrl';
 
 import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipForward, SkipBack, Disc, GripVertical, Trash2, Plus, Image as ImageIcon, Loader2, ExternalLink, Download } from 'lucide-react';
@@ -288,7 +289,7 @@ export function PortalReleasePlayer({
       {currentTrack && (
         <audio
           ref={audioRef}
-          src={`/api/audio/${currentTrack.newFileId}`}
+          src={audioSrc(currentTrack.newFileId)}
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleTrackEnd}
           onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
