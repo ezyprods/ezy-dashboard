@@ -1,11 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
-import {
-  directDriveUrl,
-  ensureLinkReadable,
-  getDriveMediaMeta,
-  isDirectPlayable,
-} from '@/lib/driveDirectLink';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -15,16 +9,32 @@ const LONG_CACHE = 'public, max-age=86400, s-maxage=604800, stale-while-revalida
 /**
  * Audio delivery.
  *
- * Default path: a 307 to Google's CDN, so the audio bytes never pass through
- * the Vercel function and cost 0 Fast Origin Transfer. Streaming them through
- * here is what blew past the 10 GB/month free-tier budget, and the CDN can't
- * rescue it — Vercel refuses to cache any request carrying a `Range` header,
- * which every `<audio>` element sends.
+ * DO NOT try to save Fast Origin Transfer by redirecting the browser to Google.
+ * It cannot work, and it has now broken playback twice. Measured in a real
+ * browser (Sept 2026), every Google host answers a media element with
+ * `MEDIA_ELEMENT_ERROR: Format error`:
  *
- * The redirect is only emitted once the file is confirmed link-readable;
- * otherwise Google answers with an `application/binary` interstitial that
- * Chrome blocks via ORB. Anything not confirmed playable-and-public falls back
- * to the original proxy, so playback never breaks — it just costs bandwidth.
+ *   drive.usercontent.google.com/download?...&confirm=t   blocked
+ *   drive.usercontent.google.com/uc?id=...                403 + HTML
+ *   lh3.googleusercontent.com/d/<id>                      blocked
+ *   drive.google.com/uc?export=view                       blocked
+ *   docs.google.com/uc?export=download                    blocked
+ *   www.googleapis.com/drive/v3/files/<id>?alt=media      blocked
+ *
+ * The bytes and headers look perfect from Node (`206`, `audio/mpeg`,
+ * `Access-Control-Allow-Origin: *`) which is exactly what makes this trap so
+ * convincing — but Drive also sends `Cross-Origin-Resource-Policy: same-site`,
+ * and browsers refuse a cross-site no-cors subresource on that basis. Asking
+ * for it in CORS mode instead fails too: Google drops the CORS header for
+ * browser requests ("No 'Access-Control-Allow-Origin' header is present").
+ *
+ * This is deliberate on Google's part — Drive is not a media CDN — and it
+ * applies to ANY site, not just ours: the same test fails from a plain page
+ * with no COEP/COOP headers at all. So it is not something our headers can fix.
+ *
+ * Downloads are different and DO still redirect (see /api/files/[fileId]):
+ * a download is a top-level navigation, not a subresource, so CORP never
+ * applies to it. That optimisation is safe and stays.
  */
 export async function GET(
   request: NextRequest,
@@ -36,8 +46,8 @@ export async function GET(
       return new NextResponse('File ID is required', { status: 400 });
     }
 
-    // Image requests (<img> tags, Accept: image/*) go to Google's thumbnail CDN —
-    // 0 backend bandwidth, 0 function duration.
+    // Images still redirect: the thumbnail host is CORP-permissive, so this
+    // costs 0 bytes of origin transfer and keeps working.
     const acceptHeader = request.headers.get('accept') || '';
     if (acceptHeader.includes('image/') || request.nextUrl.searchParams.get('type') === 'image') {
       const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
@@ -46,34 +56,10 @@ export async function GET(
       return res;
     }
 
+    // Stream through the function with HTTP 206 Partial Content so seeking and
+    // scrubbing work. `max-age` lets the browser reuse what it already has, so
+    // replaying a track on the same device costs nothing.
     const accessToken = await getGoogleAccessToken();
-    const forceProxy = request.nextUrl.searchParams.get('proxy') === 'true';
-
-    let meta = null;
-    if (!forceProxy) {
-      meta = await getDriveMediaMeta(fileId, accessToken).catch(() => null);
-
-      if (meta && meta.mimeType.startsWith('image/')) {
-        const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
-        const res = NextResponse.redirect(imgUrl, { status: 307 });
-        res.headers.set('Cache-Control', LONG_CACHE);
-        return res;
-      }
-
-      // ZERO-ORIGIN-TRANSFER PATH
-      if (meta && isDirectPlayable(meta.mimeType)) {
-        const readable = await ensureLinkReadable(fileId, accessToken, meta);
-        if (readable) {
-          const res = NextResponse.redirect(directDriveUrl(fileId), { status: 307 });
-          res.headers.set('Cache-Control', LONG_CACHE);
-          res.headers.set('Access-Control-Allow-Origin', '*');
-          return res;
-        }
-      }
-    }
-
-    // FALLBACK: proxy with HTTP 206 Partial Content, for files whose mime type
-    // would trip ORB on a direct link, or when the permission grant failed.
     const range = request.headers.get('range');
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
@@ -95,7 +81,7 @@ export async function GET(
       });
     }
 
-    const contentType = gDriveRes.headers.get('content-type') || meta?.mimeType || 'audio/mpeg';
+    const contentType = gDriveRes.headers.get('content-type') || 'audio/mpeg';
     if (contentType.startsWith('image/')) {
       gDriveRes.body?.cancel().catch(() => {});
       const imgUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
@@ -121,12 +107,6 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('API /audio/[fileId] error:', error);
-    try {
-      const { fileId } = await params;
-      if (fileId) {
-        return NextResponse.redirect(directDriveUrl(fileId), { status: 307 });
-      }
-    } catch {}
     return new NextResponse(error?.message || 'Error streaming audio', {
       status: 500,
       headers: { 'Cache-Control': 'no-store' },
