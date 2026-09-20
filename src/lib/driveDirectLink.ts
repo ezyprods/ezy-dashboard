@@ -48,9 +48,18 @@ export function isDirectPlayable(mimeType?: string | null): boolean {
   return !!mimeType && /^(audio|video)\//i.test(mimeType);
 }
 
-/** Google CDN URL. Only ever hand this out for a link-readable file. */
+/**
+ * Google CDN URL for direct audio streaming.
+ * Only ever hand this out for a link-readable (anyone=reader) file.
+ *
+ * We use the /uc?id= path WITHOUT &export=download because the download variant
+ * triggers Google's virus-scan interstitial HTML page for any file larger than
+ * ~25 MB — the <audio> element then receives HTML instead of audio bytes and
+ * silently fails to play.  The /uc endpoint serves raw bytes with the file's
+ * real Content-Type and Access-Control-Allow-Origin: * for public files.
+ */
 export function directDriveUrl(fileId: string): string {
-  return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t`;
+  return `https://drive.usercontent.google.com/uc?id=${fileId}`;
 }
 
 export async function getDriveMediaMeta(
