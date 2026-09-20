@@ -10,34 +10,27 @@ const nextConfig: NextConfig = {
   ],
   // Vercel bills "Functions Storage" as the size of every function bundle in
   // every region it deploys to, so anything traced into a route is paid for
-  // dozens of times over. These are either downloaded at runtime (the ffmpeg /
-  // yt-dlp binaries), browser-only (onnxruntime/ffmpeg.wasm run in the client
-  // via WebGPU/WASM), or pure tooling that never executes on the server.
+  // dozens of times over.
+  //
+  // Keep this list CONSERVATIVE. A broader set of excludes (build tooling,
+  // `**/*.d.ts`, `**/*.map`...) was tried and took down every serverless
+  // function in production with a 500 while the static pages kept serving —
+  // the bundles were missing something the runtime needed. The real win came
+  // from dropping `googleapis` (203 MB) for `@googleapis/drive`, not from
+  // these globs, so don't trade uptime for a few more megabytes here.
+  //
+  // Everything below is only ever used at build time or in the browser:
+  // the ffmpeg/yt-dlp binaries are downloaded at runtime on Vercel, and
+  // onnxruntime/ffmpeg.wasm run client-side via WebGPU/WASM.
   outputFileTracingExcludes: {
     '*': [
       'node_modules/ffmpeg-static/**',
       'node_modules/puppeteer/**',
       'node_modules/puppeteer-core/**',
-      'node_modules/@puppeteer/**',
-      'node_modules/chromium-bidi/**',
       'node_modules/onnxruntime-web/**',
-      'node_modules/onnxruntime-common/**',
       'node_modules/demucs-web/**',
       'node_modules/@ffmpeg/**',
-      'node_modules/typescript/**',
-      'node_modules/@swc/**',
-      'node_modules/@esbuild/**',
-      'node_modules/esbuild/**',
-      'node_modules/terser/**',
-      'node_modules/eslint/**',
-      'node_modules/@typescript-eslint/**',
-      'node_modules/prettier/**',
-      'node_modules/lightningcss*/**',
-      'node_modules/**/*.map',
-      'node_modules/**/*.md',
-      'node_modules/**/*.d.ts',
       '.git/**',
-      '.next/cache/**',
       'scratch/**',
       'scripts/**',
       'bin/**',
