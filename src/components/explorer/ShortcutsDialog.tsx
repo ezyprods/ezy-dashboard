@@ -41,6 +41,7 @@ export function ShortcutsDialog() {
         [[mod, 'I'], 'Detalles'],
         [['Arrastrar'], 'Mover a otra carpeta (también al árbol y a la ruta)'],
         [['Clic derecho'], 'Todas las acciones'],
+        [['C'], 'Nueva carpeta (en menú contextual)'],
       ],
     },
   ];

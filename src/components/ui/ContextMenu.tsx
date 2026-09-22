@@ -245,6 +245,62 @@ function MenuIcon({ name, className, color }: { name?: string; className?: strin
   return <Icon className={cn("w-3.5 h-3.5 shrink-0", className)} style={color ? { color } : undefined} />;
 }
 
+function matchesShortcut(item: MenuItem, e: KeyboardEvent): boolean {
+  if (item.disabled || item.separator || item.heading) return false;
+
+  const keyLower = e.key.toLowerCase();
+  const code = e.code;
+  const mod = e.ctrlKey || e.metaKey;
+  const isAlt = e.altKey;
+  const isShift = e.shiftKey;
+
+  // 1. Explicit single-key hotkey (e.g. hotkey: 'c')
+  if (item.hotkey && !mod && !isAlt) {
+    if (item.hotkey.toLowerCase() === keyLower || (item.hotkey.toLowerCase() === 'c' && code === 'KeyC')) {
+      return true;
+    }
+  }
+
+  // 2. Windows 10 style mnemonic: pressing 'c' / 'C' activates "Nueva carpeta"
+  if (!mod && !isAlt && (keyLower === 'c' || code === 'KeyC')) {
+    if (item.label?.toLowerCase() === 'nueva carpeta') return true;
+  }
+
+  // 3. Match item.shortcut
+  if (item.shortcut) {
+    const s = item.shortcut.trim();
+    const sLower = s.toLowerCase();
+
+    // Single character shortcut without Ctrl/Alt/Meta, e.g. 'C', '?'
+    if (s.length === 1) {
+      if (!mod && !isAlt) {
+        if (s === '?') return e.key === '?';
+        return sLower === keyLower || (sLower === 'c' && code === 'KeyC');
+      }
+      return false;
+    }
+
+    // Common named keys without modifiers
+    if (!mod && !isAlt && !isShift) {
+      if ((s === 'Intro' || s === 'Enter') && e.key === 'Enter') return true;
+      if ((s === 'Espacio' || s === 'Space') && e.key === ' ') return true;
+      if (s === 'F2' && e.key === 'F2') return true;
+      if ((s === 'Supr' || s === 'Delete' || s === 'Del') && (e.key === 'Delete' || e.key === 'Del')) return true;
+      if (s === 'Backspace' && e.key === 'Backspace') return true;
+    }
+
+    // Modifiers (e.g. Ctrl+A, ⌘A, Ctrl+I, ⌘I)
+    if (mod && !isAlt) {
+      const sNorm = sLower.replace(/\s+/g, '');
+      if (sNorm.endsWith(`+${keyLower}`) || sNorm.endsWith(`⌘${keyLower}`) || (sNorm.length === 2 && sNorm.endsWith(keyLower))) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 export function GlobalContextMenu() {
   const { menuState, hideMenu, showMenu } = useContextMenu();
   const { playTrack } = useAudio();
@@ -456,10 +512,40 @@ export function GlobalContextMenu() {
       if (!isMobile) hideMenu();
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (openSubmenu) setOpenSubmenu(null);
-      else if (sheetStack.length) setSheetStack(s => s.slice(0, -1));
-      else hideMenu();
+      if (isEditableTarget(e.target)) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (openSubmenu) setOpenSubmenu(null);
+        else if (sheetStack.length) setSheetStack(s => s.slice(0, -1));
+        else hideMenu();
+        return;
+      }
+
+      const activeItems = isMobile
+        ? (sheetStack[sheetStack.length - 1]?.items ?? menuState.items)
+        : (openSubmenu?.items ?? menuState.items);
+
+      const targetItem = activeItems.find(item => matchesShortcut(item, e));
+
+      if (targetItem) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (targetItem.submenu) {
+          if (isMobile) {
+            setSheetStack(s => [...s, { items: targetItem.submenu!, label: targetItem.label }]);
+          } else {
+            const idx = activeItems.indexOf(targetItem);
+            const rowEl = menuRef.current?.querySelectorAll('button[role="menuitem"]')[idx] as HTMLElement | undefined;
+            const rect = rowEl?.getBoundingClientRect() ?? new DOMRect(position.x, position.y, 200, 34);
+            setOpenSubmenu({ index: idx, items: targetItem.submenu, label: targetItem.label, anchor: rect });
+          }
+        } else if (targetItem.action) {
+          hideMenu();
+          targetItem.action();
+        }
+      }
     };
 
     // On phones the sheet's own backdrop closes it on tap. Closing on touchstart instead would
@@ -470,15 +556,15 @@ export function GlobalContextMenu() {
       document.addEventListener('touchstart', handlePointerDown as any);
     }
     document.addEventListener('scroll', handleScroll, { capture: true });
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, { capture: true });
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown as any);
       document.removeEventListener('touchstart', handlePointerDown as any);
       document.removeEventListener('scroll', handleScroll, { capture: true });
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, { capture: true });
     };
-  }, [menuState.visible, hideMenu, isMobile, openSubmenu, sheetStack.length]);
+  }, [menuState.visible, menuState.items, hideMenu, isMobile, openSubmenu, sheetStack, position.x, position.y]);
 
   if (!menuState.visible || typeof document === 'undefined') return null;
 

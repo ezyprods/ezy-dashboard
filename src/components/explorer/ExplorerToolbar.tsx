@@ -115,7 +115,7 @@ export function ExplorerToolbar() {
     showMenu(rect.right - 210, rect.bottom + 6, [
       { heading: `Nuevo en ${ex.currentFolderName}` },
       { label: 'Subir archivos', icon: 'UploadCloud', action: () => ex.pickFiles() },
-      { label: 'Nueva carpeta', icon: 'FolderPlus', action: () => ex.createFolder() },
+      { label: 'Nueva carpeta', icon: 'FolderPlus', shortcut: ex.canHover ? 'C' : undefined, hotkey: 'c', action: () => ex.createFolder() },
     ]);
   };
 

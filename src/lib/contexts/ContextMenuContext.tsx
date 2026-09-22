@@ -14,6 +14,8 @@ export interface MenuItem {
   iconColor?: string;
   /** Keyboard shortcut hint shown on the right (desktop only) */
   shortcut?: string;
+  /** Keyboard accelerator key (e.g. 'c' for new folder) */
+  hotkey?: string;
   /** Non-interactive title row (e.g. the file name the menu acts on) */
   heading?: string;
   disabled?: boolean;

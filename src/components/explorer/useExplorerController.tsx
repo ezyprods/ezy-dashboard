@@ -1105,7 +1105,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     showMenu(x, y, [
       { heading: currentFolderName },
       ...(view === 'folder' ? [
-        { label: 'Nueva carpeta', icon: 'FolderPlus', action: () => createFolder() },
+        { label: 'Nueva carpeta', icon: 'FolderPlus', shortcut: canHover ? 'C' : undefined, hotkey: 'c', action: () => createFolder() },
         { label: 'Subir archivos', icon: 'UploadCloud', action: () => pickFiles() },
         { separator: true },
       ] : []),
