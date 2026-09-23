@@ -1023,7 +1023,7 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
     if (single) {
       const editSubmenu: MenuItem[] = [];
       if (single.kind === 'audio') editSubmenu.push({ label: 'Editar en Mini-DAW', icon: 'Scissors', action: () => setMiniDawItem(single) });
-      editSubmenu.push({ label: 'Renombrar', icon: 'Edit3', shortcut: 'F2', action: () => startRename(single) });
+      editSubmenu.push({ label: 'Renombrar', icon: 'Edit3', shortcut: canHover ? 'R' : undefined, hotkey: 'r', action: () => startRename(single) });
       menu.push({ label: 'Editar', icon: 'Edit3', submenu: editSubmenu });
     }
 

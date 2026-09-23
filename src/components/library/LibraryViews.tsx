@@ -123,7 +123,7 @@ function SendCard({ send, artistsById }: { send: BeatSend; artistsById: Map<stri
     const r = e.currentTarget.getBoundingClientRect();
     showMenu(r.right - 230, r.bottom + 6, [
       { heading: send.title },
-      { label: 'Renombrar', icon: 'Edit3', action: rename },
+      { label: 'Renombrar', icon: 'Edit3', shortcut: 'R', hotkey: 'r', action: rename },
       { label: 'Editar envío…', icon: 'Pencil', action: () => ex.setEditSend(send) },
       { label: 'Copiar enlaces de todos', icon: 'Copy', action: () => copyText(recipients.map(a => `${a.name}: ${portalBeatsUrl(a.id)}`).join('\n'), 'Enlaces copiados') },
       { label: send.allowDownload ? 'Permitir solo escuchar' : 'Permitir descargas', icon: 'Download', action: () => apiUpdateSend(send.id, { allowDownload: !send.allowDownload }).catch(err => toast.error(err.message)) },

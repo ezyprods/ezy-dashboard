@@ -254,9 +254,10 @@ function matchesShortcut(item: MenuItem, e: KeyboardEvent): boolean {
   const isAlt = e.altKey;
   const isShift = e.shiftKey;
 
-  // 1. Explicit single-key hotkey (e.g. hotkey: 'c')
+  // 1. Explicit single-key hotkey (e.g. hotkey: 'c', hotkey: 'r')
   if (item.hotkey && !mod && !isAlt) {
-    if (item.hotkey.toLowerCase() === keyLower || (item.hotkey.toLowerCase() === 'c' && code === 'KeyC')) {
+    const hk = item.hotkey.toLowerCase();
+    if (hk === keyLower || (hk === 'c' && code === 'KeyC') || (hk === 'r' && code === 'KeyR')) {
       return true;
     }
   }
@@ -266,16 +267,21 @@ function matchesShortcut(item: MenuItem, e: KeyboardEvent): boolean {
     if (item.label?.toLowerCase() === 'nueva carpeta') return true;
   }
 
-  // 3. Match item.shortcut
+  // 3. Mnemonic for Renombrar: pressing 'r' / 'R' activates "Renombrar"
+  if (!mod && !isAlt && (keyLower === 'r' || code === 'KeyR')) {
+    if (item.label?.toLowerCase() === 'renombrar') return true;
+  }
+
+  // 4. Match item.shortcut
   if (item.shortcut) {
     const s = item.shortcut.trim();
     const sLower = s.toLowerCase();
 
-    // Single character shortcut without Ctrl/Alt/Meta, e.g. 'C', '?'
+    // Single character shortcut without Ctrl/Alt/Meta, e.g. 'C', 'R', '?'
     if (s.length === 1) {
       if (!mod && !isAlt) {
         if (s === '?') return e.key === '?';
-        return sLower === keyLower || (sLower === 'c' && code === 'KeyC');
+        return sLower === keyLower || (sLower === 'c' && code === 'KeyC') || (sLower === 'r' && code === 'KeyR');
       }
       return false;
     }
@@ -299,6 +305,21 @@ function matchesShortcut(item: MenuItem, e: KeyboardEvent): boolean {
   }
 
   return false;
+}
+
+function findItemByShortcut(items: MenuItem[], e: KeyboardEvent): MenuItem | null {
+  // 1. Direct match at current active level
+  for (const item of items) {
+    if (matchesShortcut(item, e)) return item;
+  }
+  // 2. Search inside submenus so actions like 'Renombrar' (nested in 'Editar') can be triggered directly
+  for (const item of items) {
+    if (item.submenu) {
+      const match = findItemByShortcut(item.submenu, e);
+      if (match) return match;
+    }
+  }
+  return null;
 }
 
 export function GlobalContextMenu() {
@@ -527,7 +548,7 @@ export function GlobalContextMenu() {
         ? (sheetStack[sheetStack.length - 1]?.items ?? menuState.items)
         : (openSubmenu?.items ?? menuState.items);
 
-      const targetItem = activeItems.find(item => matchesShortcut(item, e));
+      const targetItem = findItemByShortcut(activeItems, e);
 
       if (targetItem) {
         e.preventDefault();
