@@ -28,7 +28,7 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
       ref={setNodeRef}
       style={style}
       onClick={() => playTrack(index)}
-      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-all text-left group bg-surface cursor-pointer select-none ${
+      className={`w-full flex items-center gap-2 sm:gap-3 px-2.5 py-3 sm:p-2.5 rounded-xl border transition-all text-left group bg-surface cursor-pointer select-none ${
         isCurrent
           ? 'border-accent/30 bg-accent/8 text-text-primary shadow-sm'
           : 'border-transparent text-text-secondary hover:border-border/60 hover:text-text-primary hover:bg-surface-elevated/30'
@@ -59,7 +59,7 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
             </span>
           )}
         </div>
-        <span className={`text-xs font-semibold flex-1 truncate ${isCurrent ? 'text-text-primary' : ''}`}>
+        <span className={`text-sm sm:text-xs font-semibold flex-1 truncate ${isCurrent ? 'text-text-primary' : ''}`}>
           {track.title}
         </span>
       </div>
@@ -68,7 +68,7 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
         <button 
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(track.id); }}
-          className="p-1.5 text-text-secondary/40 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all shrink-0 outline-none cursor-pointer"
+          className="p-2 sm:p-1.5 text-text-secondary/40 hover:text-red-400 hover:bg-red-400/10 rounded-md transition-all shrink-0 outline-none cursor-pointer"
           title="Eliminar pista"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -81,7 +81,7 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
           e.stopPropagation(); 
           triggerFileDownload(track.newFileId || track.originalFileId, track.title); 
         }}
-        className="p-1.5 text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none cursor-pointer"
+        className="p-2 sm:p-1.5 text-text-secondary/60 sm:text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none cursor-pointer"
         title="Descargar audio"
       >
         <Download className="w-3.5 h-3.5" />
@@ -91,7 +91,7 @@ function SortableTrackItem({ track, index, isPlaying, currentTrackIndex, playTra
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="p-1.5 text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none"
+        className="hidden sm:block p-1.5 text-text-secondary/40 hover:text-accent hover:bg-surface-elevated rounded-md transition-all shrink-0 outline-none"
         title="Abrir en Google Drive"
       >
         <ExternalLink className="w-3.5 h-3.5" />
@@ -297,14 +297,14 @@ export function PortalReleasePlayer({
       )}
 
       {/* Current playing card */}
-      <div className="bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 rounded-2xl p-5 relative">
+      <div className="bg-gradient-to-br from-accent/10 to-accent/5 border border-accent/20 rounded-2xl p-4 sm:p-5 relative">
         {isSaving && (
           <div className="absolute top-4 right-4 flex items-center gap-1.5 text-xs text-text-secondary bg-surface/50 px-2 py-1 rounded-full border border-border/50 backdrop-blur-sm">
             <Loader2 className="w-3 h-3 animate-spin text-accent" /> Guardando...
           </div>
         )}
         
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-3 sm:gap-4 mb-4">
           <div 
             onClick={() => setIsPlaying(prev => !prev)}
             className="relative w-16 h-16 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shadow-lg shadow-accent/10 shrink-0 group cursor-pointer"
@@ -353,7 +353,7 @@ export function PortalReleasePlayer({
                   e.stopPropagation();
                   triggerFileDownload(currentTrack.newFileId || currentTrack.originalFileId, currentTrack.title);
                 }}
-                className="h-8 px-2.5 rounded-lg bg-surface/70 hover:bg-accent hover:text-white border border-border/60 text-text-secondary text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="h-10 w-10 justify-center sm:h-8 sm:w-auto sm:px-2.5 rounded-lg bg-surface/70 hover:bg-accent hover:text-white border border-border/60 text-text-secondary text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Descargar esta canción"
               >
                 <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Descargar</span>
@@ -363,7 +363,7 @@ export function PortalReleasePlayer({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="w-8 h-8 rounded-lg bg-surface/70 hover:bg-surface border border-border/60 text-text-secondary hover:text-text-primary inline-flex items-center justify-center transition-colors"
+                className="hidden sm:inline-flex w-8 h-8 rounded-lg bg-surface/70 hover:bg-surface border border-border/60 text-text-secondary hover:text-text-primary items-center justify-center transition-colors"
                 title="Abrir en Google Drive"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
@@ -373,16 +373,15 @@ export function PortalReleasePlayer({
         </div>
 
         {/* Progress */}
-        <div
-          className="h-1.5 bg-surface-elevated rounded-full mb-2 cursor-pointer overflow-hidden relative"
-          onClick={seekTo}
-        >
-          <div
-            className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-100"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="py-2 -my-2 mb-0 cursor-pointer" onClick={seekTo}>
+          <div className="h-1.5 bg-surface-elevated rounded-full overflow-hidden relative">
+            <div
+              className="h-full bg-gradient-to-r from-accent to-accent-light rounded-full transition-all duration-100"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
-        <div className="flex justify-between text-[10px] font-mono text-text-secondary mb-4">
+        <div className="flex justify-between text-[10px] font-mono text-text-secondary mt-2 mb-4">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
         </div>
@@ -391,19 +390,19 @@ export function PortalReleasePlayer({
         <div className="flex items-center justify-center gap-5">
           <button
             onClick={() => currentTrackIndex > 0 && playTrack(currentTrackIndex - 1)}
-            className={`p-2 rounded-full transition-colors ${currentTrackIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-surface-elevated text-text-secondary hover:text-text-primary'}`}
+            className={`p-3 sm:p-2 rounded-full transition-colors ${currentTrackIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-surface-elevated text-text-secondary hover:text-text-primary'}`}
           >
             <SkipBack className="w-5 h-5" />
           </button>
           <button
             onClick={() => setIsPlaying(prev => !prev)}
-            className="w-12 h-12 bg-accent hover:bg-accent/90 text-text-primary rounded-full flex items-center justify-center shadow-lg shadow-accent/30 transition-all hover:scale-105 active:scale-95"
+            className="w-14 h-14 sm:w-12 sm:h-12 bg-accent hover:bg-accent/90 text-text-primary rounded-full flex items-center justify-center shadow-lg shadow-accent/30 transition-all hover:scale-105 active:scale-95"
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
           </button>
           <button
             onClick={() => currentTrackIndex < tracks.length - 1 && playTrack(currentTrackIndex + 1)}
-            className={`p-2 rounded-full transition-colors ${currentTrackIndex === tracks.length - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-surface-elevated text-text-secondary hover:text-text-primary'}`}
+            className={`p-3 sm:p-2 rounded-full transition-colors ${currentTrackIndex === tracks.length - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-surface-elevated text-text-secondary hover:text-text-primary'}`}
           >
             <SkipForward className="w-5 h-5" />
           </button>

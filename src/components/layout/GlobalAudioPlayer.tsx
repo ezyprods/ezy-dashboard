@@ -109,7 +109,17 @@ export function GlobalAudioPlayer() {
   // Public pages (artist portal, release previews) have no bottom tab bar, and must not expose
   // producer-only actions: sharing could change Drive permissions and bypass the portal paywall.
   const isPublicRoute = pathname.startsWith('/portal') || pathname.startsWith('/previews');
-  const hasMobileNav = DASHBOARD_PREFIXES.some((p) => pathname.startsWith(p));
+  // Public pages can opt into a bottom tab bar by setting <html data-bottom-nav> (the artist portal does)
+  const [hasPageNav, setHasPageNav] = useState(false);
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setHasPageNav(root.hasAttribute('data-bottom-nav'));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ['data-bottom-nav'] });
+    return () => observer.disconnect();
+  }, []);
+  const hasMobileNav = hasPageNav || DASHBOARD_PREFIXES.some((p) => pathname.startsWith(p));
 
   // Latest values for the Media Session handlers (registered once per track)
   const stateRef = useRef({ isPlaying, currentTime, duration, togglePlay, seek, closePlayer });

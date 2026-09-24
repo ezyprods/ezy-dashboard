@@ -48,6 +48,26 @@ function fileIcon(file: any) {
   return { Icon: FileIcon, cls: 'text-text-secondary bg-surface' };
 }
 
+/** While mounted, tells the global audio player to sit above the portal's mobile tab bar. */
+function BottomNavFlag() {
+  useEffect(() => {
+    document.documentElement.setAttribute('data-bottom-nav', '');
+    return () => document.documentElement.removeAttribute('data-bottom-nav');
+  }, []);
+  return null;
+}
+
+type DateGroup = 'today' | 'week' | 'month' | 'older';
+const DATE_GROUP_LABEL: Record<DateGroup, string> = { today: 'Hoy', week: 'Esta semana', month: 'Este mes', older: 'Anteriores' };
+function dateGroup(ts?: number): DateGroup {
+  if (!ts) return 'older';
+  const startOfToday = new Date().setHours(0, 0, 0, 0);
+  if (ts >= startOfToday) return 'today';
+  if (ts >= startOfToday - 6 * 86_400_000) return 'week';
+  if (ts >= startOfToday - 30 * 86_400_000) return 'month';
+  return 'older';
+}
+
 export default function PortalPage() {
   const params = useParams();
   const artistId = params.id as string;
@@ -194,24 +214,33 @@ export default function PortalPage() {
     { key: 'tools', label: 'Herramientas', icon: Wrench, show: toolsEnabled },
   ];
 
+  const visibleNav = navItems.filter(n => n.show);
+  const showBottomNav = visibleNav.length > 1;
+
+  const goTo = (key: Section) => {
+    setSection(key);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const openProjectFiles = (id: string) => {
     setProjectId(id);
     setQuery('');
     setFilter('all');
-    setSection('files');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    goTo('files');
   };
 
   // ─── Pieces ─────────────────────────────────────────────────────────────
-  const FileRow = ({ file, showProject }: { file: any; showProject?: boolean }) => {
+  const FileRow = ({ file, showProject, className }: { file: any; showProject?: boolean; className?: string }) => {
     const audio = isAudio(file);
     const active = currentTrack?.id === file.id;
     const playing = active && isPlaying;
     const locked = isLocked(file);
     const { Icon, cls } = fileIcon(file);
     const date = file.effectiveDate ? new Date(file.effectiveDate) : null;
+    const openPreview = () => window.open(`/api/files/${file.id}?inline=true`, '_blank', 'noopener,noreferrer');
+    const onRowClick = audio ? () => play(file) : !locked ? openPreview : undefined;
     return (
-      <div className={cn('group flex items-center gap-3 px-3 md:px-4 py-2.5 transition-colors', active ? 'bg-accent/5' : 'hover:bg-surface/60')}>
+      <div className={cn('group flex items-center gap-3 px-3 md:px-4 py-3 md:py-2.5 transition-colors', active ? 'bg-accent/5' : 'hover:bg-surface/60 active:bg-surface/60', className)}>
         {audio ? (
           <button type="button" onClick={() => play(file)} className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer', active ? 'bg-accent text-white shadow-md shadow-accent/30' : 'bg-violet-500/10 text-violet-400 hover:bg-accent hover:text-white')} aria-label={playing ? 'Pausar' : 'Reproducir'}>
             {playing ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current translate-x-px" />}
@@ -219,17 +248,17 @@ export default function PortalPage() {
         ) : (
           <span className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', cls)}><Icon className="w-5 h-5" /></span>
         )}
-        <div 
-          onClick={audio ? () => play(file) : undefined}
-          className={cn('flex-1 min-w-0 select-none', audio && 'cursor-pointer')}
+        <div
+          onClick={onRowClick}
+          className={cn('flex-1 min-w-0 select-none', onRowClick && 'cursor-pointer')}
         >
           <p className={cn('text-sm font-medium truncate transition-colors', active ? 'text-accent font-semibold' : 'text-text-primary', audio && 'hover:text-accent')} title={file.name}>{audio ? stripExt(file.name) : file.name}</p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-secondary">
-            {date && <span>{formatRelativeTime(date.toISOString())}</span>}
-            {file.size && <span>· {formatSize(file.size)}</span>}
-            {file.bpm && <span className="font-mono font-bold text-amber-400">{file.bpm} BPM</span>}
-            {file.key && <span className="font-mono font-bold text-violet-400">{file.key}</span>}
-            {showProject && file.parentFolderName && <span className="truncate max-w-[180px]">· {file.parentFolderName}</span>}
+          <div className="flex items-center gap-x-2 text-[11px] text-text-secondary min-w-0 overflow-hidden whitespace-nowrap md:flex-wrap md:gap-y-0.5 md:whitespace-normal mt-0.5 md:mt-0">
+            {date && <span className="shrink-0">{formatRelativeTime(date.toISOString())}</span>}
+            {file.size && <span className="hidden md:inline">· {formatSize(file.size)}</span>}
+            {file.bpm && <span className="font-mono font-bold text-amber-400 shrink-0">{file.bpm} BPM</span>}
+            {file.key && <span className="font-mono font-bold text-violet-400 shrink-0">{file.key}</span>}
+            {showProject && file.parentFolderName && <span className="truncate min-w-0 md:max-w-[180px]">· {file.parentFolderName}</span>}
             {file.expiresAt && <RealtimeCountdown expiresAt={file.expiresAt} />}
           </div>
         </div>
@@ -238,7 +267,7 @@ export default function PortalPage() {
             <a href={`/api/files/${file.id}?inline=true`} target="_blank" rel="noopener noreferrer" className="hidden sm:flex w-9 h-9 rounded-lg items-center justify-center text-text-secondary hover:text-accent hover:bg-surface" title="Ver" aria-label="Ver"><Eye className="w-4 h-4" /></a>
           )}
           {locked ? (
-            <span className="w-9 h-9 rounded-lg flex items-center justify-center text-warning" title="Descarga disponible cuando el pago esté completado"><Lock className="w-4 h-4" /></span>
+            <span className="w-10 h-10 md:w-9 md:h-9 rounded-lg flex items-center justify-center text-warning" title="Descarga disponible cuando el pago esté completado"><Lock className="w-4 h-4" /></span>
           ) : (
             <button 
               type="button"
@@ -247,7 +276,7 @@ export default function PortalPage() {
                 e.stopPropagation();
                 triggerFileDownload(file.id, file.name);
               }}
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface cursor-pointer" 
+              className="w-10 h-10 md:w-9 md:h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface active:bg-surface cursor-pointer"
               title="Descargar" 
               aria-label="Descargar"
             >
@@ -274,7 +303,7 @@ export default function PortalPage() {
       pathSegments: [{ name: 'Beats' }, { name: send.title }],
     });
     return (
-      <div className={cn('group flex items-center gap-3 px-3 md:px-4 py-2.5 transition-colors', active ? 'bg-accent/5' : 'hover:bg-surface/60')}>
+      <div className={cn('group flex items-center gap-3 px-3 md:px-4 py-3 md:py-2.5 transition-colors', active ? 'bg-accent/5' : 'hover:bg-surface/60 active:bg-surface/60')}>
         {audio ? (
           <button type="button" onClick={playBeat} className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer', active ? 'bg-accent text-white shadow-md shadow-accent/30' : 'bg-violet-500/10 text-violet-400 hover:bg-accent hover:text-white')} aria-label={playing ? 'Pausar' : 'Reproducir'}>
             {playing ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current translate-x-px" />}
@@ -284,10 +313,10 @@ export default function PortalPage() {
         )}
         <div onClick={audio ? playBeat : undefined} className={cn('flex-1 min-w-0 select-none', audio && 'cursor-pointer')}>
           <p className={cn('text-sm font-medium truncate', active ? 'text-accent font-semibold' : 'text-text-primary')} title={beat.name}>{audio ? stripExt(beat.name) : beat.name}</p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-secondary">
-            {beat.bpm && <span className="font-mono font-bold text-amber-400">{beat.bpm} BPM</span>}
-            {beat.key && <span className="font-mono font-bold text-violet-400">{beat.key}</span>}
-            {beat.path && <span className="truncate max-w-[220px]">{beat.path}</span>}
+          <div className="flex items-center gap-x-2 text-[11px] text-text-secondary min-w-0 overflow-hidden whitespace-nowrap md:flex-wrap md:gap-y-0.5 md:whitespace-normal mt-0.5 md:mt-0">
+            {beat.bpm && <span className="font-mono font-bold text-amber-400 shrink-0">{beat.bpm} BPM</span>}
+            {beat.key && <span className="font-mono font-bold text-violet-400 shrink-0">{beat.key}</span>}
+            {beat.path && <span className="truncate min-w-0 md:max-w-[220px]">{beat.path}</span>}
             {!audio && beat.size && <span>{formatSize(beat.size)}</span>}
           </div>
         </div>
@@ -295,7 +324,7 @@ export default function PortalPage() {
           <button
             type="button"
             onClick={e => { e.preventDefault(); e.stopPropagation(); triggerFileDownload(beat.id, beat.name); }}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface cursor-pointer shrink-0"
+            className="w-10 h-10 md:w-9 md:h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface active:bg-surface cursor-pointer shrink-0"
             title="Descargar"
             aria-label="Descargar"
           >
@@ -319,12 +348,15 @@ export default function PortalPage() {
             <Music2 className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Beats para ti'}</h2>
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-accent text-white">{beatCount}</span>
-            <button type="button" onClick={() => { setSection('beats'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5">Ver todos <ChevronRight className="w-3.5 h-3.5" /></button>
+            <button type="button" onClick={() => goTo('beats')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5">Ver todos <ChevronRight className="w-3.5 h-3.5" /></button>
           </div>
           <div className="px-4 md:px-5 pt-3 text-xs text-text-secondary">
             Último envío: <b className="text-text-primary">{latest.title}</b> · {formatRelativeTime(latest.sentAt)}
           </div>
           <div className="divide-y divide-border/40 mt-1">{latest.beats.slice(0, 5).map((b: any) => <BeatRow key={b.id} beat={b} send={latest} />)}</div>
+          {beatCount > 5 && (
+            <button type="button" onClick={() => goTo('beats')} className="md:hidden w-full h-12 border-t border-border/60 text-xs font-semibold text-accent">Ver los {beatCount} beats</button>
+          )}
         </section>
       );
     }
@@ -337,13 +369,40 @@ export default function PortalPage() {
             <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Últimas mezclas y archivos'}</h2>
             <button type="button" onClick={() => openProjectFiles('all')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5">Ver todo <ChevronRight className="w-3.5 h-3.5" /></button>
           </div>
+          {/* Phone: projects first, as a swipeable row */}
+          {realProjects.length > 0 && (
+            <div className="md:hidden border-b border-border/60 py-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-text-secondary mb-2 px-4">Proyectos</p>
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory px-4 scroll-px-4">
+                {projects.filter(p => p.id !== 'all').map(p => (
+                  <button key={p.id} type="button" onClick={() => openProjectFiles(p.id)} className="snap-start shrink-0 w-[62%] max-w-[240px] text-left rounded-xl border border-border bg-surface/40 active:bg-surface p-3">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-accent shrink-0" />
+                      <span className="text-sm font-semibold text-text-primary truncate flex-1">{p.title}</span>
+                      {p.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-success shrink-0" />}
+                    </div>
+                    <p className="text-[11px] text-text-secondary mt-1 truncate">{p.files.length} archivo{p.files.length === 1 ? '' : 's'}{p.lastActivity ? ` · ${formatRelativeTime(new Date(p.lastActivity).toISOString())}` : ''}</p>
+                    {typeof p.progress === 'number' && (
+                      <div className="mt-2 h-1.5 rounded-full bg-surface overflow-hidden"><div className="h-full bg-accent rounded-full" style={{ width: `${p.progress}%` }} /></div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {latest.length === 0 ? (
             <p className="text-sm text-text-secondary text-center py-10">Todavía no hay archivos. Tu productor los subirá aquí.</p>
           ) : (
-            <div className="divide-y divide-border/40">{latest.map(f => <FileRow key={f.id} file={f} showProject />)}</div>
+            <>
+              <p className="md:hidden text-[11px] font-bold uppercase tracking-widest text-text-secondary px-4 pt-3 pb-1">Lo último</p>
+              <div className="divide-y divide-border/40">{latest.map((f, i) => <FileRow key={f.id} file={f} showProject className={i >= 5 ? 'hidden md:flex' : undefined} />)}</div>
+              {allFiles.length > 5 && (
+                <button type="button" onClick={() => openProjectFiles('all')} className="md:hidden w-full h-12 border-t border-border/60 text-xs font-semibold text-accent">Ver los {allFiles.length} archivos</button>
+              )}
+            </>
           )}
           {realProjects.length > 0 && (
-            <div className="border-t border-border/60 p-3 md:p-4">
+            <div className="hidden md:block border-t border-border/60 p-3 md:p-4">
               <p className="text-[11px] font-bold uppercase tracking-widest text-text-secondary mb-2 px-1">Proyectos</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {projects.filter(p => p.id !== 'all').map(p => (
@@ -473,7 +532,7 @@ export default function PortalPage() {
           <div className="flex items-center gap-2 px-4 md:px-5 h-14 border-b border-border/60">
             <Disc className="w-4 h-4 text-accent" />
             <h2 className="text-sm font-bold flex-1 truncate">{mod.title || 'Previews y lanzamientos'}</h2>
-            <button type="button" onClick={() => setSection('releases')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5 hover:underline">
+            <button type="button" onClick={() => goTo('releases')} className="text-xs font-semibold text-accent inline-flex items-center gap-0.5 hover:underline">
               Ver todo <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -498,7 +557,7 @@ export default function PortalPage() {
                       className="flex-1 min-w-0 cursor-pointer select-none"
                     >
                       <p className="text-sm font-semibold text-text-primary truncate hover:text-accent transition-colors">{r.title}</p>
-                      <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones · Escucha exclusiva</p>
+                      <p className="text-[11px] text-text-secondary">{r.tracks?.length || 0} canciones<span className="hidden sm:inline"> · Escucha exclusiva</span></p>
                     </div>
                     {r.tracks && r.tracks.length > 0 && (
                       <button
@@ -508,7 +567,7 @@ export default function PortalPage() {
                           e.stopPropagation();
                           handleDownloadRelease(r);
                         }}
-                        className="h-8 px-2.5 md:px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 bg-surface border border-border/80 text-text-secondary hover:text-accent hover:border-accent/40 transition-all shrink-0 cursor-pointer"
+                        className="h-10 w-10 sm:h-8 sm:w-auto justify-center sm:px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 bg-surface border border-border/80 text-text-secondary hover:text-accent hover:border-accent/40 transition-all shrink-0 cursor-pointer"
                         title={r.tracks.length === 1 ? "Descargar audio" : "Descargar canciones"}
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -519,7 +578,7 @@ export default function PortalPage() {
                       type="button"
                       onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
                       className={cn(
-                        "h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all shrink-0 cursor-pointer",
+                        "h-10 w-10 sm:h-8 sm:w-auto justify-center sm:px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all shrink-0 cursor-pointer",
                         isOpen
                           ? "bg-surface border border-border text-text-secondary hover:text-text-primary"
                           : "bg-accent/10 hover:bg-accent text-accent hover:text-white"
@@ -527,17 +586,17 @@ export default function PortalPage() {
                     >
                       {isOpen ? (
                         <>
-                          <ChevronUp className="w-3.5 h-3.5" /> Cerrar
+                          <ChevronUp className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Cerrar</span>
                         </>
                       ) : (
                         <>
-                          <ChevronDown className="w-3.5 h-3.5" /> Abrir preview
+                          <ChevronDown className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Abrir preview</span>
                         </>
                       )}
                     </button>
                   </div>
                   {isOpen && (
-                    <div className="p-4 md:p-5 border-t border-border/60 bg-surface/20 animate-fade-in">
+                    <div className="p-3 md:p-5 border-t border-border/60 bg-surface/20 animate-fade-in">
                       <PortalReleasePlayer
                         release={r}
                         allowArtistEdit={moduleOf('releases')?.config?.allowArtistEdit}
@@ -586,8 +645,8 @@ export default function PortalPage() {
 
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden bg-accent/15 border border-accent/25 flex items-center justify-center shrink-0">
+        <div className="max-w-6xl mx-auto px-4 h-14 md:h-16 flex items-center gap-3">
+          <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl overflow-hidden bg-accent/15 border border-accent/25 flex items-center justify-center shrink-0">
             {data.artist.photoUrl ? <img src={data.artist.photoUrl} alt="" className="w-full h-full object-cover" /> : <span className="text-sm font-black text-accent">{(data.artist.name || '?').slice(0, 2).toUpperCase()}</span>}
           </div>
           <div className="min-w-0 flex-1">
@@ -595,7 +654,7 @@ export default function PortalPage() {
             <h1 className="text-base font-bold leading-tight truncate">{data.artist.name}</h1>
           </div>
           <nav className="hidden md:flex items-center gap-1 bg-surface-elevated rounded-xl p-1 border border-border/60">
-            {navItems.filter(n => n.show).map(({ key, label, icon: Icon }) => (
+            {visibleNav.map(({ key, label, icon: Icon }) => (
               <button key={key} type="button" onClick={() => setSection(key)} className={cn('h-9 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors', section === key ? 'bg-accent text-white shadow-sm' : 'text-text-secondary hover:text-text-primary')}>
                 <Icon className="w-4 h-4" /> {label}
               </button>
@@ -605,32 +664,54 @@ export default function PortalPage() {
             <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
           </button>
         </div>
-        {/* Mobile nav */}
-        <nav className="md:hidden flex items-center gap-1 px-3 pb-2 overflow-x-auto scrollbar-hide">
-          {navItems.filter(n => n.show).map(({ key, label, icon: Icon }) => (
-            <button key={key} type="button" onClick={() => setSection(key)} className={cn('h-9 px-3 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shrink-0', section === key ? 'bg-accent text-white' : 'bg-surface-elevated text-text-secondary border border-border/60')}>
-              <Icon className="w-4 h-4" /> {label}
-            </button>
-          ))}
-        </nav>
       </header>
 
-      <main className={cn('relative max-w-6xl mx-auto px-4 py-6 md:py-8 space-y-4', currentTrack ? 'pb-40' : 'pb-24')}>
+      {/* Mobile tab bar */}
+      {showBottomNav && (
+        <>
+          <BottomNavFlag />
+          <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-surface-elevated/95 backdrop-blur-xl border-t border-border pb-[env(safe-area-inset-bottom)] px-safe shadow-[0_-10px_40px_rgba(0,0,0,0.1)]" aria-label="Secciones">
+            <div className="flex items-stretch justify-around h-[64px] px-1">
+              {visibleNav.map(({ key, label, icon: Icon }) => {
+                const active = section === key;
+                const badge = key === 'beats' ? beatCount : 0;
+                return (
+                  <button key={key} type="button" onClick={() => goTo(key)} aria-current={active ? 'page' : undefined} className={cn('flex flex-col items-center justify-center flex-1 min-w-0 gap-0.5 active:scale-95 transition-transform select-none', active ? 'text-accent' : 'text-text-secondary')}>
+                    <span className={cn('relative px-3 py-1 rounded-xl transition-colors', active && 'bg-accent/15')}>
+                      <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.4 : 2} />
+                      {badge > 0 && !active && <span className="absolute -top-0.5 right-1 min-w-4 h-4 px-1 rounded-full bg-accent text-white text-[9px] font-bold flex items-center justify-center">{badge}</span>}
+                    </span>
+                    <span className={cn('text-[10.5px] leading-tight truncate max-w-full px-0.5', active ? 'font-bold' : 'font-medium opacity-80')}>{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </>
+      )}
+
+      <main className={cn(
+        'relative max-w-6xl mx-auto px-4 pt-4 md:pt-8 space-y-4',
+        currentTrack ? 'md:pb-40' : 'md:pb-24',
+        showBottomNav
+          ? (currentTrack ? 'pb-[calc(env(safe-area-inset-bottom)+10rem)]' : 'pb-[calc(env(safe-area-inset-bottom)+6rem)]')
+          : (currentTrack ? 'pb-[calc(env(safe-area-inset-bottom)+6rem)]' : 'pb-[calc(env(safe-area-inset-bottom)+2rem)]'),
+      )}>
         {section === 'home' && (
           <div className="space-y-4 animate-fade-in">
-            <section className="relative overflow-hidden rounded-2xl border border-border bg-surface-elevated p-5 md:p-6">
+            <section className="relative overflow-hidden rounded-2xl border border-border bg-surface-elevated p-4 md:p-6">
               <div className="absolute -top-20 -right-10 w-64 h-64 rounded-full bg-accent/15 blur-[80px] pointer-events-none" />
-              <p className="relative text-2xl md:text-3xl font-black tracking-tight">Hola, {data.artist.name} 👋</p>
+              <p className="relative text-xl md:text-3xl font-black tracking-tight">Hola, {data.artist.name} 👋</p>
               {data.welcomeMessage ? (
-                <p className="relative text-sm text-text-secondary mt-2 whitespace-pre-line max-w-2xl">{data.welcomeMessage}</p>
+                <p className="relative text-[13px] md:text-sm text-text-secondary mt-1.5 md:mt-2 whitespace-pre-line max-w-2xl">{data.welcomeMessage}</p>
               ) : (
-                <p className="relative text-sm text-text-secondary mt-2">Aquí tienes tus archivos, el estado del trabajo y todo lo que comparte contigo {data.producerName || 'tu productor'}.</p>
+                <p className="relative text-[13px] md:text-sm text-text-secondary mt-1.5 md:mt-2">Aquí tienes tus archivos, el estado del trabajo y todo lo que comparte contigo {data.producerName || 'tu productor'}.</p>
               )}
-              <div className="relative grid grid-cols-2 md:grid-cols-4 gap-2 mt-5">
-                <div className="rounded-xl bg-surface border border-border p-3"><p className="text-xl font-black">{realProjects.filter(p => p.status !== 'archived').length}</p><p className="text-[11px] text-text-secondary">Proyectos</p></div>
-                <div className="rounded-xl bg-surface border border-border p-3"><p className="text-xl font-black">{allFiles.length}</p><p className="text-[11px] text-text-secondary">Archivos</p></div>
-                <div className="rounded-xl bg-surface border border-border p-3"><p className={cn('text-xl font-black', newThisWeek > 0 && 'text-accent')}>{newThisWeek}</p><p className="text-[11px] text-text-secondary">Nuevos esta semana</p></div>
-                <div className="rounded-xl bg-surface border border-border p-3"><p className="text-xl font-black">{avgProgress === null ? '—' : `${avgProgress}%`}</p><p className="text-[11px] text-text-secondary">Progreso</p></div>
+              <div className="relative grid grid-cols-4 gap-1.5 md:gap-2 mt-4 md:mt-5">
+                <div className="rounded-xl bg-surface border border-border px-2 py-2.5 md:p-3 text-center md:text-left"><p className="text-lg md:text-xl font-black">{realProjects.filter(p => p.status !== 'archived').length}</p><p className="text-[10px] md:text-[11px] text-text-secondary truncate">Proyectos</p></div>
+                <div className="rounded-xl bg-surface border border-border px-2 py-2.5 md:p-3 text-center md:text-left"><p className="text-lg md:text-xl font-black">{allFiles.length}</p><p className="text-[10px] md:text-[11px] text-text-secondary truncate">Archivos</p></div>
+                <div className="rounded-xl bg-surface border border-border px-2 py-2.5 md:p-3 text-center md:text-left"><p className={cn('text-lg md:text-xl font-black', newThisWeek > 0 && 'text-accent')}>{newThisWeek}</p><p className="text-[10px] md:text-[11px] text-text-secondary truncate"><span className="md:hidden">Nuevos</span><span className="hidden md:inline">Nuevos esta semana</span></p></div>
+                <div className="rounded-xl bg-surface border border-border px-2 py-2.5 md:p-3 text-center md:text-left"><p className="text-lg md:text-xl font-black">{avgProgress === null ? '—' : `${avgProgress}%`}</p><p className="text-[10px] md:text-[11px] text-text-secondary truncate">Progreso</p></div>
               </div>
               {pending > 0 && realProjects.some(p => p.requirePaymentForDownload) && (
                 <p className="relative mt-4 text-xs text-warning flex items-center gap-2 rounded-xl bg-warning/10 border border-warning/25 px-3 py-2">
@@ -645,12 +726,18 @@ export default function PortalPage() {
 
         {section === 'files' && (
           <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-4 items-start animate-fade-in">
-            <aside className="lg:sticky lg:top-24 rounded-2xl border border-border bg-surface-elevated p-2">
-              <div className="lg:hidden relative">
-                <select value={projectId} onChange={e => setProjectId(e.target.value)} className="w-full h-11 appearance-none bg-surface border border-border rounded-xl pl-3 pr-9 text-sm font-semibold focus:outline-none">
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.title} ({p.files.length})</option>)}
-                </select>
-                <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary" />
+            <aside className="lg:sticky lg:top-24 lg:rounded-2xl lg:border lg:border-border lg:bg-surface-elevated lg:p-2 min-w-0">
+              <div className="lg:hidden -mx-4 flex gap-2 overflow-x-auto scrollbar-hide px-4 scroll-px-4">
+                {projects.map(p => {
+                  const active = projectId === p.id;
+                  return (
+                    <button key={p.id} type="button" onClick={() => setProjectId(p.id)} className={cn('h-10 pl-3 pr-2.5 rounded-xl text-[13px] font-semibold inline-flex items-center gap-2 shrink-0 border transition-colors max-w-[70vw]', active ? 'bg-accent text-white border-accent' : 'bg-surface-elevated text-text-secondary border-border active:bg-surface')}>
+                      {p.id === 'all' ? <Files className="w-4 h-4 shrink-0" /> : p.id === 'general' ? <Disc className="w-4 h-4 shrink-0" /> : <FolderOpen className="w-4 h-4 shrink-0" />}
+                      <span className="truncate">{p.title}</span>
+                      <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md', active ? 'bg-white/20' : 'bg-surface')}>{p.files.length}</span>
+                    </button>
+                  );
+                })}
               </div>
               <div className="hidden lg:block space-y-0.5">
                 {projects.map(p => (
@@ -666,7 +753,10 @@ export default function PortalPage() {
             <section className="rounded-2xl border border-border bg-surface-elevated overflow-hidden">
               <div className="p-3 md:p-4 border-b border-border/60 space-y-3">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold flex-1 truncate">{currentProject?.title}</h2>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-base font-bold truncate">{currentProject?.title}</h2>
+                    <p className="md:hidden text-[11px] text-text-secondary">{visibleFiles.length} archivo{visibleFiles.length === 1 ? '' : 's'}</p>
+                  </div>
                   {currentProject?.requirePaymentForDownload && pending > 0 && <span className="text-[11px] text-warning inline-flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Descargas bloqueadas</span>}
                   {currentProject?.driveUrl && !(currentProject.requirePaymentForDownload && pending > 0) && (
                     <a href={currentProject.driveUrl} target="_blank" rel="noopener noreferrer" className="h-9 px-3 rounded-xl border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-surface" title="Abre la carpeta en Google Drive para descargarla completa">
@@ -674,15 +764,15 @@ export default function PortalPage() {
                     </a>
                   )}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="relative flex-1">
+                <div className="flex gap-2">
+                  <div className="relative flex-1 min-w-0">
                     <Search className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar archivos…" className="w-full h-10 bg-surface border border-border rounded-xl pl-9 pr-8 text-sm focus:outline-none focus:border-accent" />
+                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar…" className="w-full h-10 bg-surface border border-border rounded-xl pl-9 pr-8 text-sm focus:outline-none focus:border-accent" />
                     {query && <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-text-secondary" aria-label="Borrar"><X className="w-4 h-4" /></button>}
                   </div>
                   <div className="flex p-0.5 rounded-xl bg-surface border border-border h-10 shrink-0">
                     {(['all', 'audio', 'other'] as FileFilter[]).map(f => (
-                      <button key={f} type="button" onClick={() => setFilter(f)} className={cn('px-3 rounded-lg text-xs font-semibold', filter === f ? 'bg-surface-elevated text-text-primary shadow-sm' : 'text-text-secondary')}>
+                      <button key={f} type="button" onClick={() => setFilter(f)} className={cn('px-2.5 sm:px-3 rounded-lg text-xs font-semibold', filter === f ? 'bg-surface-elevated text-text-primary shadow-sm' : 'text-text-secondary')}>
                         {f === 'all' ? 'Todo' : f === 'audio' ? 'Audios' : 'Otros'}
                       </button>
                     ))}
@@ -692,7 +782,19 @@ export default function PortalPage() {
               {visibleFiles.length === 0 ? (
                 <p className="text-sm text-text-secondary text-center py-14">{query || filter !== 'all' ? 'No hay archivos que coincidan' : 'Este proyecto todavía no tiene archivos'}</p>
               ) : (
-                <div className="divide-y divide-border/40">{visibleFiles.map((f: any) => <FileRow key={f.id} file={f} showProject={projectId === 'all'} />)}</div>
+                <div className="divide-y divide-border/40">
+                  {visibleFiles.map((f: any, i: number) => {
+                    // Phone only: split the (newest-first) list into "Hoy / Esta semana / …"
+                    const group = dateGroup(f.effectiveDate);
+                    const showHeader = i === 0 || dateGroup(visibleFiles[i - 1].effectiveDate) !== group;
+                    return (
+                      <div key={f.id}>
+                        {showHeader && <p className="md:hidden px-3 pt-3 pb-1 text-[11px] font-bold uppercase tracking-widest text-text-secondary bg-surface/30">{DATE_GROUP_LABEL[group]}</p>}
+                        <FileRow file={f} showProject={projectId === 'all'} />
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </section>
           </div>
@@ -759,7 +861,7 @@ export default function PortalPage() {
                   const isOpen = openReleaseId === r.id;
                   return (
                     <div key={r.id} className="rounded-2xl border border-border bg-surface-elevated overflow-hidden transition-all shadow-sm">
-                      <div className="flex items-center gap-3.5 p-3.5 md:p-4">
+                      <div className="flex items-center gap-3 md:gap-3.5 p-3 md:p-4">
                         <div 
                           onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
                           className="w-12 h-12 md:w-14 md:h-14 rounded-xl overflow-hidden bg-surface border border-border flex items-center justify-center shrink-0 cursor-pointer"
@@ -776,7 +878,7 @@ export default function PortalPage() {
                         >
                           <h3 className="text-sm md:text-base font-bold text-text-primary truncate hover:text-accent transition-colors">{r.title}</h3>
                           <p className="text-xs text-text-secondary mt-0.5">
-                            {r.tracks?.length || 0} canciones · Escucha exclusiva
+                            {r.tracks?.length || 0} canciones<span className="hidden sm:inline"> · Escucha exclusiva</span>
                           </p>
                         </div>
                         {r.tracks && r.tracks.length > 0 && (
@@ -787,7 +889,7 @@ export default function PortalPage() {
                               e.stopPropagation();
                               handleDownloadRelease(r);
                             }}
-                            className="h-9 px-3 md:px-3.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 bg-surface border border-border text-text-secondary hover:text-accent hover:border-accent/40 transition-all shrink-0 cursor-pointer"
+                            className="h-10 w-10 sm:h-9 sm:w-auto justify-center sm:px-3.5 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 bg-surface border border-border text-text-secondary hover:text-accent hover:border-accent/40 transition-all shrink-0 cursor-pointer"
                             title={r.tracks.length === 1 ? "Descargar audio" : "Descargar canciones"}
                           >
                             <Download className="w-3.5 h-3.5" />
@@ -798,7 +900,7 @@ export default function PortalPage() {
                           type="button"
                           onClick={() => setOpenReleaseId(isOpen ? null : r.id)}
                           className={cn(
-                            "h-9 px-3.5 md:px-4 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 transition-all cursor-pointer",
+                            "h-10 w-10 sm:h-9 sm:w-auto justify-center sm:px-3.5 md:px-4 rounded-xl text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 transition-all cursor-pointer",
                             isOpen
                               ? "bg-surface border border-border text-text-secondary hover:text-text-primary"
                               : "bg-accent text-white shadow-md shadow-accent/25 hover:bg-accent/90"
@@ -806,18 +908,18 @@ export default function PortalPage() {
                         >
                           {isOpen ? (
                             <>
-                              <ChevronUp className="w-3.5 h-3.5" /> Cerrar preview
+                              <ChevronUp className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Cerrar preview</span>
                             </>
                           ) : (
                             <>
-                              <ChevronDown className="w-3.5 h-3.5" /> Abrir preview
+                              <ChevronDown className="w-4 h-4 sm:w-3.5 sm:h-3.5" /> <span className="hidden sm:inline">Abrir preview</span>
                             </>
                           )}
                         </button>
                       </div>
 
                       {isOpen && (
-                        <div className="border-t border-border/60 p-4 md:p-6 bg-surface/30 animate-fade-in">
+                        <div className="border-t border-border/60 p-3 md:p-6 bg-surface/30 animate-fade-in">
                           <PortalReleasePlayer
                             release={r}
                             allowArtistEdit={moduleOf('releases')?.config?.allowArtistEdit}
