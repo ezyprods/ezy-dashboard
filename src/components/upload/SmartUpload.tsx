@@ -26,6 +26,7 @@ import { ArtistPicker } from './EntityPickers';
 import { extractDroppedFiles, fileKey, filesFromInput } from './fileIntake';
 import {
   detectArtist, detectProject, detectProjectForFile, effectiveDest, EXPIRATION_OPTIONS, findReplaceCandidate, makeItem,
+  versionedBaseName,
   planDestination, projectFoldersOf, ROLE_LABEL, suggestBaseName,
   type Destination, type DestinationNames, type Plan, type UploadItem, type UploadRole,
 } from './smartUploadLogic';
@@ -104,6 +105,8 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
 
   const controllers = useRef(new Map<string, AbortController>());
   const createdFolders = useRef(new Map<string, Promise<string>>());
+  /** Names already claimed per folder by this upload, so parallel files get distinct versions */
+  const claimedNames = useRef(new Map<string, string[]>());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const consumedBatches = useRef<Set<number>>(new Set());
@@ -331,6 +334,22 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
     return Array.from(map.entries()).map(([key, value]) => ({ key, ...value }));
   }, [pending, plans]);
 
+  /** Final name each pending file will get when its name is already taken (preview of the auto-versioning) */
+  const versionPreview = useMemo(() => {
+    const out = new Map<string, string>();
+    const claimed = new Map<string, string[]>();
+    for (const item of pending) {
+      const plan = plans.get(item.id)!;
+      if (!plan.baseFolderId || plan.subPath.length > 0) continue;
+      const folderClaims = claimed.get(plan.baseFolderId) || [];
+      const replacing = item.replaceMode === 'replace' && findReplaceCandidate(item, plan);
+      const versioned = replacing ? null : versionedBaseName(item, plan, folderClaims);
+      if (versioned) out.set(item.id, versioned);
+      claimed.set(plan.baseFolderId, [...folderClaims, `${versioned || item.baseName.trim()}${item.ext}`]);
+    }
+    return out;
+  }, [pending, plans]);
+
   const planErrors = groups.filter(g => g.error);
   const totalBytes = pending.reduce((s, i) => s + i.file.size, 0);
   const canUpload = pending.length > 0 && planErrors.length === 0 && pending.every(i => i.baseName.trim());
@@ -387,7 +406,13 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
         ? findReplaceCandidate(item, { ...plan, baseFolderId: folder.id, subPath: [] })
         : null;
 
-      const name = `${item.baseName.trim()}${item.ext}`;
+      // A name that already exists becomes the next numbered version instead of a duplicate
+      const claimed = claimedNames.current.get(folder.id) || [];
+      const baseName = replaceCandidate
+        ? item.baseName.trim()
+        : versionedBaseName(item, { ...plan, baseFolderId: folder.id, subPath: [] }, claimed) || item.baseName.trim();
+      const name = `${baseName}${item.ext}`;
+      claimedNames.current.set(folder.id, [...claimed, name]);
       const appProperties: Record<string, string> = {};
       if (item.bpm) appProperties.bpm = String(item.bpm);
       if (item.key) appProperties.key = item.key;
@@ -424,7 +449,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
       }, folder.id)], rootIdForStore);
 
       setItems(prev => prev.map(p => (p.id === item.id ? {
-        ...p, status: 'done', progress: 100, resultId: result.id, resultFolderId: folder.id, resultFolderName: folder.label, replaced: !!replaceCandidate,
+        ...p, baseName, status: 'done', progress: 100, resultId: result.id, resultFolderId: folder.id, resultFolderName: folder.label, replaced: !!replaceCandidate,
       } : p)));
     } catch (err: any) {
       const cancelled = err?.name === 'AbortError';
@@ -964,6 +989,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                           const Icon = KIND_ICON[item.kind];
                           const plan = plans.get(item.id)!;
                           const replace = findReplaceCandidate(item, plan);
+                          const versioned = versionPreview.get(item.id);
                           const expanded = expandedId === item.id;
                           const isSelected = selected.has(item.id);
                           return (
@@ -1031,17 +1057,22 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                                 </button>
                               </div>
 
-                              {replace && (
+                              {(replace || versioned) && (
                                 <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg bg-warning/10 border border-warning/25 px-2.5 py-1.5 text-[11px]">
                                   <RotateCcw className="w-3.5 h-3.5 text-warning shrink-0" />
-                                  <span className="flex-1 min-w-0 truncate text-text-primary">Ya existe «{replace.name}»</span>
-                                  <div className="flex rounded-md bg-surface p-0.5 shrink-0">
+                                  <span className="flex-1 min-w-0 truncate text-text-primary" title={versioned ? `Se subirá como ${versioned}${item.ext}` : undefined}>
+                                    Ya existe «{replace?.name || `${item.baseName.trim()}${item.ext}`}»
+                                    {versioned
+                                      ? <> → se subirá como <b className="font-semibold">«{versioned}{item.ext}»</b></>
+                                      : ' → se reemplazará'}
+                                  </span>
+                                  {replace && <div className="flex rounded-md bg-surface p-0.5 shrink-0">
                                     {(['replace', 'new'] as const).map(m => (
                                       <button key={m} type="button" onClick={() => updateItems([item.id], { replaceMode: m })} className={cn('px-2 h-6 rounded text-[11px] font-semibold', item.replaceMode === m ? 'bg-surface-elevated text-text-primary shadow-sm' : 'text-text-secondary')}>
-                                        {m === 'replace' ? 'Reemplazar' : 'Nueva copia'}
+                                        {m === 'replace' ? 'Reemplazar' : 'Nueva versión'}
                                       </button>
                                     ))}
-                                  </div>
+                                  </div>}
                                 </div>
                               )}
 

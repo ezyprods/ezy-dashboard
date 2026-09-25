@@ -147,7 +147,7 @@ export function makeItem(file: File, targetType: Destination['targetType'], dest
     analyzing: kind === 'audio' && (!parsed?.bpm || !parsed?.key),
     subPath: relative ? relative.split('/').filter(Boolean) : [],
     dest,
-    replaceMode: 'replace',
+    replaceMode: 'new',
     status: 'pending',
     progress: 0,
   };
@@ -286,10 +286,41 @@ export function planDestination(item: UploadItem, dest: Destination, names: Dest
   return withSub({ baseFolderId: aid, label: artistName });
 }
 
-/** Existing audio file with the same name in the destination (masters & mixes replace it by default). */
+/** Existing file with the same name in the destination (uploaded as a new version by default). */
 export function findReplaceCandidate(item: UploadItem, plan: Plan): DriveItem | null {
   if (!plan.baseFolderId || plan.subPath.length > 0) return null;
-  if (item.kind !== 'audio' || (item.role !== 'master' && item.role !== 'mix')) return null;
-  const target = `${item.baseName}${item.ext}`.toLowerCase();
+  const target = `${item.baseName.trim()}${item.ext}`.toLowerCase();
   return getFolder(plan.baseFolderId).items.find(i => !i.isFolder && i.name.toLowerCase() === target) || null;
+}
+
+const VERSION_SUFFIX = /_(\d{1,3})$/;
+
+/** Next free numbered version: "Song_6" with "Song_6" taken → "Song_7"; "Song" taken → "Song_2". */
+export function nextVersionBaseName(baseName: string, ext: string, taken: string[]): string {
+  const trimmed = baseName.trim();
+  const stem = trimmed.replace(VERSION_SUFFIX, '');
+  const stemLower = stem.toLowerCase();
+  const extLower = ext.toLowerCase();
+  let max = Number(trimmed.match(VERSION_SUFFIX)?.[1] || 1);
+  for (const name of taken) {
+    const lower = name.toLowerCase();
+    if (!lower.endsWith(extLower)) continue;
+    const base = lower.slice(0, lower.length - extLower.length);
+    if (base === stemLower) continue;
+    const n = base.startsWith(stemLower) ? base.slice(stemLower.length).match(/^_(\d{1,3})$/) : null;
+    if (n) max = Math.max(max, Number(n[1]));
+  }
+  return `${stem}_${max + 1}`;
+}
+
+/**
+ * Name to use when the file would clash with one already in the destination folder
+ * (or claimed by another file of the same upload); null when the name is free.
+ */
+export function versionedBaseName(item: UploadItem, plan: Plan, claimed: string[] = []): string | null {
+  if (!plan.baseFolderId || plan.subPath.length > 0) return null;
+  const taken = [...getFolder(plan.baseFolderId).items.filter(i => !i.isFolder).map(i => i.name), ...claimed];
+  const target = `${item.baseName.trim()}${item.ext}`.toLowerCase();
+  if (!taken.some(n => n.toLowerCase() === target)) return null;
+  return nextVersionBaseName(item.baseName, item.ext, taken);
 }
