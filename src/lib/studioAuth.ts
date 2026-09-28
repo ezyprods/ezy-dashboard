@@ -61,13 +61,42 @@ export function verifyStudioToken(token: string | undefined): boolean {
   return safeEqual(signature, sign(issuedAt, config));
 }
 
-export function studioCookieOptions(request: NextRequest) {
+export function studioCookieOptions(request: NextRequest, maxAge: number = STUDIO_MAX_AGE_SECONDS) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
     // Secure on HTTPS (Vercel) but still usable over plain HTTP on localhost
     secure: request.nextUrl.protocol === 'https:',
     path: '/',
-    maxAge: STUDIO_MAX_AGE_SECONDS,
+    maxAge,
   };
+}
+
+/**
+ * Artist portals can offer some tools (downloader, converter…) whose API routes are private.
+ * Opening a portal with tools enabled hands out a short-lived httpOnly pass `<issuedAt>.<tools>.<hmac>`
+ * listing the tools the producer allowed, and src/proxy.ts accepts it for those tools' routes only.
+ */
+export const PORTAL_TOOLS_COOKIE = 'ezy_portal_tools';
+export const PORTAL_TOOLS_MAX_AGE_SECONDS = 24 * 60 * 60;
+
+function signPortalTools(issuedAt: string, tools: string, secret: string): string {
+  return createHmac('sha256', secret).update(`portal-tools:${issuedAt}:${tools}`).digest('base64url');
+}
+
+export function createPortalToolsToken(tools: readonly string[]): string | null {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret || tools.length === 0) return null;
+  const issuedAt = Date.now().toString();
+  const list = tools.join(',');
+  return `${issuedAt}.${list}.${signPortalTools(issuedAt, list, secret)}`;
+}
+
+export function verifyPortalToolsToken(token: string | undefined, tool: string): boolean {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret || !token) return false;
+  const [issuedAt, list, signature, ...rest] = token.split('.');
+  if (rest.length > 0 || !list || !signature || !/^\d+$/.test(issuedAt)) return false;
+  if (Date.now() - Number(issuedAt) > PORTAL_TOOLS_MAX_AGE_SECONDS * 1000) return false;
+  return safeEqual(signature, signPortalTools(issuedAt, list, secret)) && list.split(',').includes(tool);
 }

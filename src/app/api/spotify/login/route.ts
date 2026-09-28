@@ -13,7 +13,7 @@ import {
  *
  * The redirect URI must match one registered in the Spotify app exactly. By
  * default it is the site origin (e.g. https://ezyprods-dashboard.vercel.app),
- * which is what's registered; src/proxy.ts forwards that landing to
+ * which is what's registered; src/app/page.tsx forwards that landing to
  * /api/spotify/callback. SPOTIFY_REDIRECT_URI overrides it if needed.
  */
 export async function GET(req: Request) {

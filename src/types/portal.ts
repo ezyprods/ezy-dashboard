@@ -78,6 +78,13 @@ export const PORTAL_TOOLS: PortalToolMeta[] = [
   },
 ];
 
+/** Tools an artist can use in their portal (also what the portal tools pass grants, see studioAuth). */
+export function enabledPortalTools(config: Pick<PortalConfig, 'enableTools' | 'allowedTools'> | null | undefined): PortalToolId[] {
+  if (!config?.enableTools) return [];
+  const all = PORTAL_TOOLS.map(t => t.id);
+  return Array.isArray(config.allowedTools) ? config.allowedTools.filter(id => all.includes(id)) : all;
+}
+
 export interface PortalConfig {
   artistId: string;
   token: string;

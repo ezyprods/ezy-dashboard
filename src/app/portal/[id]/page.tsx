@@ -18,7 +18,7 @@ import { StemsSplitter } from '@/components/tools/StemsSplitter';
 import { PortalReleasePlayer } from '@/components/releases/PortalReleasePlayer';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
-import { PORTAL_TOOLS, type PortalToolId } from '@/types/portal';
+import { PORTAL_TOOLS, enabledPortalTools, type PortalToolId } from '@/types/portal';
 import { cn, getCoverArtUrl, formatRelativeTime, triggerFileDownload } from '@/lib/utils';
 
 const TOOL_ICONS: Record<string, React.ElementType> = { Download, RefreshCw, Scissors, Tags, Activity, Layers };
@@ -117,8 +117,8 @@ export default function PortalPage() {
   const config = data?.config || {};
   const modules: any[] = useMemo(() => (config.modules || []).filter((m: any) => m.isVisible !== false).sort((a: any, b: any) => a.order - b.order), [config.modules]);
   const moduleOf = (type: string) => modules.find(m => m.type === type);
-  const allowedTools: PortalToolId[] = Array.isArray(config.allowedTools) ? config.allowedTools : (config.enableTools ? PORTAL_TOOLS.map(t => t.id) : []);
-  const toolsEnabled = !!config.enableTools && allowedTools.length > 0;
+  const allowedTools = useMemo(() => enabledPortalTools(config), [config.enableTools, config.allowedTools]);
+  const toolsEnabled = allowedTools.length > 0;
 
   useEffect(() => {
     if (allowedTools.length && !allowedTools.includes(activeToolId)) setActiveToolId(allowedTools[0]);

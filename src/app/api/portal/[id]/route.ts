@@ -2,10 +2,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { findAndReadJsonFile, getDriveService, listFolders, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 import { getPortalBeatSends } from '@/lib/beatLibrary';
+import { PORTAL_TOOLS_COOKIE, PORTAL_TOOLS_MAX_AGE_SECONDS, createPortalToolsToken, studioCookieOptions } from '@/lib/studioAuth';
+import { enabledPortalTools } from '@/types/portal';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
@@ -50,7 +52,7 @@ function matrixStats(matrix: any) {
   return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
 }
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const drive = getDriveService();
@@ -320,6 +322,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       config: publicConfig,
     });
     response.headers.set('Cache-Control', 'no-store, max-age=0');
+
+    // The tools shown in this portal call private API routes: the pass lets src/proxy.ts admit the artist
+    const toolsPass = createPortalToolsToken(enabledPortalTools(portalConfig));
+    if (toolsPass) {
+      response.cookies.set(PORTAL_TOOLS_COOKIE, toolsPass, studioCookieOptions(request, PORTAL_TOOLS_MAX_AGE_SECONDS));
+    }
     return response;
   } catch (error: any) {
     console.error('API /portal/[id] GET error:', error);

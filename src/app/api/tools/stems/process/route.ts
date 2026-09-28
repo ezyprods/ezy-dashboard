@@ -49,6 +49,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se proporcionó un archivo de audio válido' }, { status: 400 });
     }
 
+    // The Drive file is deleted after reading it: only accept the temporary uploads made by
+    // /api/tools/stems/upload-session, never an arbitrary file id from the studio's Drive
+    if (driveFileId) {
+      const meta = await getDriveService().files
+        .get({ fileId: driveFileId, fields: 'appProperties', supportsAllDrives: true })
+        .catch(() => null);
+      const props = meta?.data.appProperties;
+      if (props?.purpose !== 'stems_split' || props?.isTemporary !== 'true') {
+        return NextResponse.json({ error: 'El archivo temporal no es válido. Vuelve a subir el audio.' }, { status: 400 });
+      }
+    }
+
     const fileExt = path.extname(filename).toLowerCase();
     const validExtensions = ['.mp3', '.wav', '.flac', '.m4a', '.ogg', '.aac', '.aiff', '.wma'];
     const isAudioType = fileType.startsWith('audio/') || validExtensions.includes(fileExt);
