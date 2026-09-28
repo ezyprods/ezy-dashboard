@@ -1,12 +1,15 @@
 /**
  * Spotify Playlist & Album Resolution Engine
  *
- * Strategy (in order of preference):
- *  1. Spotify Web API via Client Credentials (env SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET)
- *     → paginated, no user login, supports playlists of any size.
- *  2. Spotify anonymous access token extracted from the embed page
- *     → paginated via the internal partner API, supports playlists of any size.
- *  3. Embed __NEXT_DATA__ fallback (legacy, capped at ~100 tracks).
+ * Spotify cerró todos los endpoints anónimos desde servidor en 2024.
+ * El embed ahora usa JavaScript del lado del cliente para cargar los tracks,
+ * por lo que el HTML inicial no contiene tokens ni datos de tracks.
+ *
+ * Estrategias:
+ *  1. Spotify Web API (Client Credentials) → FULL pagination, ilimitado.
+ *     Requiere SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET en .env.local
+ *     Credenciales gratuitas en: https://developer.spotify.com/dashboard
+ *  2. Embed __NEXT_DATA__ fallback → limitado a ~100 tracks (depende de Spotify).
  */
 
 export interface SpotifyPlaylistTrack {
@@ -26,6 +29,8 @@ export interface SpotifyPlaylistInfo {
   trackCount: number;
   tracks: SpotifyPlaylistTrack[];
   platform: 'spotify';
+  isTruncated?: boolean; // true si hay más tracks que los devueltos
+  totalCount?: number;   // total real según Spotify
 }
 
 export function isSpotifyPlaylistOrAlbum(urlStr: string): boolean {
@@ -46,24 +51,23 @@ function formatDuration(ms: number): string {
   return `${min}:${sec.toString().padStart(2, '0')}`;
 }
 
-function buildTrack(
+function buildTrackFromAPI(
   item: any,
   fallbackThumb: string,
   fallbackUrl: string
-): SpotifyPlaylistTrack {
-  const track = item.track ?? item; // works for both playlist items and album tracks
-  if (!track || !track.name) return null as any;
+): SpotifyPlaylistTrack | null {
+  const track = item.track ?? item; // playlists wrap in .track; albums are direct
+  if (!track || !track.name) return null;
 
   const artists: string = Array.isArray(track.artists)
     ? track.artists.map((a: any) => a.name).join(', ')
     : '';
   const songName: string = track.name;
   const fullTitle = artists ? `${artists} - ${songName}` : songName;
-
   const trackId: string = track.id || '';
   const thumb: string =
     track.album?.images?.[0]?.url ||
-    (Array.isArray(track.images) ? track.images[0]?.url : undefined) ||
+    (Array.isArray(track.images) ? track.images[0]?.url : '') ||
     fallbackThumb;
 
   return {
@@ -77,15 +81,39 @@ function buildTrack(
   };
 }
 
+function buildTrackFromEmbed(
+  t: any,
+  fallbackThumb: string,
+  fallbackUrl: string,
+  idx: number
+): SpotifyPlaylistTrack {
+  const artist = t.subtitle || '';
+  const songName = t.title || `Pista ${idx + 1}`;
+  const fullTitle =
+    artist && !songName.toLowerCase().includes(artist.toLowerCase())
+      ? `${artist} - ${songName}`
+      : songName;
+  const trackId = t.uri ? t.uri.replace('spotify:track:', '') : '';
+  return {
+    videoId: '',
+    title: fullTitle,
+    artist,
+    trackName: songName,
+    thumbnail: fallbackThumb,
+    url: trackId ? `https://open.spotify.com/track/${trackId}` : fallbackUrl,
+    duration: t.duration ? formatDuration(t.duration) : undefined,
+  };
+}
+
 // ---------------------------------------------------------------------------
-// Strategy 1: Spotify Web API (Client Credentials)
+// Strategy 1: Official Spotify Web API — Client Credentials
 // ---------------------------------------------------------------------------
 
 let cachedClientToken: { token: string; expiresAt: number } | null = null;
 
 async function getClientCredentialsToken(): Promise<string | null> {
-  const clientId = process.env.SPOTIFY_CLIENT_ID;
-  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  const clientId = process.env.SPOTIFY_CLIENT_ID?.trim();
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) return null;
 
   if (cachedClientToken && Date.now() < cachedClientToken.expiresAt - 30_000) {
@@ -102,7 +130,10 @@ async function getClientCredentialsToken(): Promise<string | null> {
       body: 'grant_type=client_credentials',
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[spotify_playlist] Client credentials auth failed: ${res.status}`);
+      return null;
+    }
     const data = await res.json();
     if (!data.access_token) return null;
     cachedClientToken = {
@@ -110,177 +141,143 @@ async function getClientCredentialsToken(): Promise<string | null> {
       expiresAt: Date.now() + data.expires_in * 1000,
     };
     return data.access_token;
-  } catch {
+  } catch (e) {
+    console.error('[spotify_playlist] getClientCredentialsToken error:', e);
     return null;
   }
 }
 
-async function fetchAllViaWebAPI(
+async function fetchAllTracksWithToken(
   type: string,
   id: string,
-  token: string
-): Promise<{ tracks: SpotifyPlaylistTrack[]; title: string; thumbnail: string } | null> {
-  try {
-    // Fetch playlist/album metadata first
-    const metaRes = await fetch(`https://api.spotify.com/v1/${type}s/${id}?fields=name,images,tracks.total`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!metaRes.ok) return null;
-    const meta = await metaRes.json();
+  token: string,
+  fallbackThumb: string,
+  fallbackUrl: string
+): Promise<SpotifyPlaylistTrack[] | null> {
+  const LIMIT = 100;
+  const allTracks: SpotifyPlaylistTrack[] = [];
 
-    const playlistTitle: string = meta.name || 'Lista de Spotify';
-    const thumbnail: string = meta.images?.[0]?.url || '';
-    const totalTracks: number = meta.tracks?.total ?? 0;
+  const baseEndpoint =
+    type === 'album'
+      ? `https://api.spotify.com/v1/albums/${id}/tracks`
+      : `https://api.spotify.com/v1/playlists/${id}/tracks`;
 
-    const allTracks: SpotifyPlaylistTrack[] = [];
-    const LIMIT = 100;
-    const totalPages = Math.ceil(totalTracks / LIMIT);
+  const fields =
+    type === 'playlist'
+      ? 'items(track(id,name,duration_ms,artists(name),album(images(url)))),next,total'
+      : 'items(id,name,duration_ms,artists(name)),next,total';
 
-    console.log(`[spotify_playlist] Web API: fetching ${totalTracks} tracks in ${totalPages} page(s)`);
+  let nextUrl: string | null =
+    `${baseEndpoint}?limit=${LIMIT}&offset=0&fields=${encodeURIComponent(fields)}`;
 
-    // For albums the endpoint is /albums/:id/tracks, for playlists /playlists/:id/tracks
-    const tracksEndpoint =
-      type === 'album'
-        ? `https://api.spotify.com/v1/albums/${id}/tracks`
-        : `https://api.spotify.com/v1/playlists/${id}/tracks`;
+  let pageCount = 0;
+  const MAX_PAGES = 50; // 50 × 100 = 5000 tracks max
 
-    const fields =
-      type === 'playlist'
-        ? 'items(track(id,name,duration_ms,artists(name),album(images))),next'
-        : 'items(id,name,duration_ms,artists(name)),next';
-
-    let nextUrl: string | null =
-      `${tracksEndpoint}?limit=${LIMIT}&offset=0&fields=${encodeURIComponent(fields)}`;
-
-    while (nextUrl) {
-      const pageRes: Response = await fetch(nextUrl, {
-        headers: { Authorization: `Bearer ${token}` },
+  while (nextUrl && pageCount < MAX_PAGES) {
+    pageCount++;
+    let pageRes: Response;
+    try {
+      pageRes = await fetch(nextUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         signal: AbortSignal.timeout(15000),
       });
-      if (!pageRes.ok) break;
-      const page: any = await (pageRes as Response).json();
-
-      const items: any[] = page.items ?? [];
-      for (const item of items) {
-        const track = buildTrack(item, thumbnail, `https://open.spotify.com/track/${item?.track?.id || item?.id || ''}`);
-        if (track) allTracks.push(track);
-      }
-
-      nextUrl = page.next ?? null;
+    } catch (e) {
+      console.error(`[spotify_playlist] Page ${pageCount} fetch error:`, e);
+      break;
     }
 
-    return { tracks: allTracks, title: playlistTitle, thumbnail };
-  } catch (e) {
-    console.error('[spotify_playlist] Web API error:', e);
-    return null;
+    if (!pageRes.ok) {
+      console.error(`[spotify_playlist] API ${pageRes.status} on page ${pageCount}`);
+      if (pageRes.status === 401 || pageRes.status === 403) return null;
+      break;
+    }
+
+    const page: any = await pageRes.json();
+    const items: any[] = page.items ?? [];
+
+    for (const item of items) {
+      const track = buildTrackFromAPI(item, fallbackThumb, fallbackUrl);
+      if (track) allTracks.push(track);
+    }
+
+    nextUrl = page.next ?? null;
   }
+
+  console.log(`[spotify_playlist] API pagination: ${allTracks.length} tracks in ${pageCount} pages`);
+  return allTracks.length > 0 ? allTracks : null;
 }
 
 // ---------------------------------------------------------------------------
-// Strategy 2: Anonymous token from embed + internal partner API (no creds needed)
-// ---------------------------------------------------------------------------
-
-let cachedAnonToken: { token: string; expiresAt: number } | null = null;
-
-async function getAnonSpotifyToken(): Promise<string | null> {
-  if (cachedAnonToken && Date.now() < cachedAnonToken.expiresAt - 30_000) {
-    return cachedAnonToken.token;
-  }
-
-  try {
-    // Spotify's embed page exposes an anonymous access token in the page JS
-    const res = await fetch('https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-
-    // Token is embedded as: "accessToken":"BQA..."
-    const tokenMatch = html.match(/"accessToken"\s*:\s*"([^"]+)"/);
-    if (!tokenMatch) return null;
-
-    // Expiry is embedded as: "accessTokenExpirationTimestampMs":1234567890123
-    const expMatch = html.match(/"accessTokenExpirationTimestampMs"\s*:\s*(\d+)/);
-    const expiresAt = expMatch ? parseInt(expMatch[1], 10) : Date.now() + 3600_000;
-
-    cachedAnonToken = { token: tokenMatch[1], expiresAt };
-    return tokenMatch[1];
-  } catch {
-    return null;
-  }
-}
-
-async function fetchAllViaAnonAPI(
-  type: string,
-  id: string,
-  token: string
-): Promise<{ tracks: SpotifyPlaylistTrack[]; title: string; thumbnail: string } | null> {
-  // Use the same Web API endpoint as Strategy 1 but with the anon token
-  return fetchAllViaWebAPI(type, id, token);
-}
-
-// ---------------------------------------------------------------------------
-// Strategy 3: Embed __NEXT_DATA__ fallback (legacy, ~100 track cap)
+// Strategy 2: Embed __NEXT_DATA__ scraping (legacy, capped ~100 tracks)
 // ---------------------------------------------------------------------------
 
 async function fetchViaEmbed(
   type: string,
   id: string,
   urlStr: string
-): Promise<{ tracks: SpotifyPlaylistTrack[]; title: string; thumbnail: string; error?: string } | null> {
+): Promise<{
+  tracks: SpotifyPlaylistTrack[];
+  title: string;
+  thumbnail: string;
+  totalCount: number;
+  accessible: boolean;
+} | null> {
   try {
     const embedUrl = `https://open.spotify.com/embed/${type}/${id}`;
     const res = await fetch(embedUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(12000),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return res.status === 404 || res.status === 403
+        ? { tracks: [], title: '', thumbnail: '', totalCount: 0, accessible: false }
+        : null;
+    }
+
     const html = await res.text();
 
-    const nextMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]+?)<\/script>/);
-    if (!nextMatch) return null;
+    const nextMatch = html.match(
+      /<script id="__NEXT_DATA__" type="application\/json">([\s\S]+?)<\/script>/
+    );
+    if (!nextMatch) return { tracks: [], title: '', thumbnail: '', totalCount: 0, accessible: true };
 
     const data = JSON.parse(nextMatch[1]);
     const entity = data.props?.pageProps?.state?.data?.entity;
-    if (!entity || !Array.isArray(entity.trackList) || entity.trackList.length === 0) return null;
+
+    // Spotify's new embed may not include entity data in the HTML (loaded via JS)
+    if (!entity) {
+      return { tracks: [], title: '', thumbnail: '', totalCount: 0, accessible: true };
+    }
 
     const rawTitle = entity.name || entity.title || 'Lista de Spotify';
     const playlistTitle = rawTitle.replace(/^\/+|\/+$/g, '').trim() || rawTitle;
-    const thumbnail =
+    const thumbnail: string =
       entity.visualIdentity?.image?.[0]?.url ||
       entity.coverArt?.sources?.[0]?.url ||
       '';
 
-    const tracks: SpotifyPlaylistTrack[] = entity.trackList.map((t: any, idx: number) => {
-      const artist = t.subtitle || '';
-      const songName = t.title || `Pista ${idx + 1}`;
-      const fullTitle =
-        artist && !songName.toLowerCase().includes(artist.toLowerCase())
-          ? `${artist} - ${songName}`
-          : songName;
-      const trackId = t.uri ? t.uri.replace('spotify:track:', '') : '';
-      return {
-        videoId: '',
-        title: fullTitle,
-        artist,
-        trackName: songName,
-        thumbnail,
-        url: trackId ? `https://open.spotify.com/track/${trackId}` : urlStr,
-        duration: t.duration
-          ? formatDuration(t.duration)
-          : undefined,
-      };
-    });
+    const totalCount: number =
+      entity.totalCount ??
+      entity.trackCount ??
+      (Array.isArray(entity.trackList) ? entity.trackList.length : 0);
 
-    return { tracks, title: playlistTitle, thumbnail };
-  } catch {
+    const tracks: SpotifyPlaylistTrack[] = Array.isArray(entity.trackList)
+      ? entity.trackList.map((t: any, idx: number) =>
+          buildTrackFromEmbed(t, thumbnail, urlStr, idx)
+        )
+      : [];
+
+    return { tracks, title: playlistTitle, thumbnail, totalCount, accessible: true };
+  } catch (e) {
+    console.error('[spotify_playlist] fetchViaEmbed error:', e);
     return null;
   }
 }
@@ -298,70 +295,92 @@ export async function fetchSpotifyPlaylist(urlStr: string): Promise<{
     const pathParts = parsed.pathname.split('/').filter(Boolean);
     const typeIndex = pathParts.findIndex((p) => p === 'playlist' || p === 'album');
     const type = typeIndex !== -1 ? pathParts[typeIndex] : 'playlist';
-    const id = typeIndex !== -1 ? pathParts[typeIndex + 1]?.split('?')[0] : pathParts[0]?.split('?')[0];
+    const id = (
+      typeIndex !== -1 ? pathParts[typeIndex + 1] : pathParts[0]
+    )?.split('?')[0];
 
     if (!id) return { error: 'ID de lista de Spotify no válido' };
 
-    // ---- Try Strategy 1: Official Web API (client credentials) ----
+    console.log(`[spotify_playlist] Fetching ${type}/${id}`);
+
+    // -------------------------------------------------------------------------
+    // STRATEGY 1: Official Web API (Client Credentials) — unlimited pagination
+    // -------------------------------------------------------------------------
     const clientToken = await getClientCredentialsToken();
     if (clientToken) {
-      console.log('[spotify_playlist] Using Web API (client credentials)');
-      const result = await fetchAllViaWebAPI(type, id, clientToken);
-      if (result && result.tracks.length > 0) {
-        return {
-          playlist: {
+      console.log('[spotify_playlist] Strategy 1: Web API (Client Credentials)');
+      try {
+        const metaRes = await fetch(
+          `https://api.spotify.com/v1/${type}s/${id}?fields=name,images,tracks.total`,
+          {
+            headers: { Authorization: `Bearer ${clientToken}` },
+            signal: AbortSignal.timeout(8000),
+          }
+        );
+
+        if (metaRes.status === 404) {
+          return {
+            error:
+              'Esta lista de Spotify no existe o es privada. Ábrela en Spotify > (...) > "Hacer pública".',
+          };
+        }
+
+        if (metaRes.ok) {
+          const meta = await metaRes.json();
+          const title: string = meta.name || 'Lista de Spotify';
+          const thumbnail: string = meta.images?.[0]?.url || '';
+          const allTracks = await fetchAllTracksWithToken(
+            type,
             id,
-            title: result.title,
-            thumbnail: result.thumbnail,
-            trackCount: result.tracks.length,
-            tracks: result.tracks,
-            platform: 'spotify',
-          },
-        };
+            clientToken,
+            thumbnail,
+            urlStr
+          );
+          if (allTracks && allTracks.length > 0) {
+            console.log(`[spotify_playlist] ✓ Strategy 1 success: ${allTracks.length} tracks`);
+            return {
+              playlist: {
+                id,
+                title,
+                thumbnail,
+                trackCount: allTracks.length,
+                tracks: allTracks,
+                platform: 'spotify',
+              },
+            };
+          }
+        }
+      } catch (e) {
+        console.error('[spotify_playlist] Strategy 1 failed:', e);
       }
+    } else {
+      console.log(
+        '[spotify_playlist] Strategy 1 skipped: SPOTIFY_CLIENT_ID/SECRET not configured'
+      );
     }
 
-    // ---- Try Strategy 2: Anonymous token from embed ----
-    console.log('[spotify_playlist] Trying anonymous token strategy...');
-    const anonToken = await getAnonSpotifyToken();
-    if (anonToken) {
-      console.log('[spotify_playlist] Got anonymous token, fetching full playlist');
-      const result = await fetchAllViaAnonAPI(type, id, anonToken);
-      if (result && result.tracks.length > 0) {
-        return {
-          playlist: {
-            id,
-            title: result.title,
-            thumbnail: result.thumbnail,
-            trackCount: result.tracks.length,
-            tracks: result.tracks,
-            platform: 'spotify',
-          },
-        };
-      }
+    // -------------------------------------------------------------------------
+    // STRATEGY 2: Embed scraping (legacy, capped ~100 tracks)
+    // -------------------------------------------------------------------------
+    console.log('[spotify_playlist] Strategy 2: Embed scraping (may be capped at ~100)');
+    const embedResult = await fetchViaEmbed(type, id, urlStr);
+
+    if (!embedResult) {
+      return { error: 'Error de conexión con Spotify. Inténtalo de nuevo.' };
     }
 
-    // ---- Fallback Strategy 3: Embed scraping (capped ~100 tracks) ----
-    console.log('[spotify_playlist] Falling back to embed scraping (may be capped at ~100 tracks)');
-
-    // Check accessibility first
-    const probeRes = await fetch(`https://open.spotify.com/embed/${type}/${id}`, {
-      method: 'HEAD',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-      },
-      signal: AbortSignal.timeout(5000),
-    }).catch(() => null);
-
-    if (probeRes && (probeRes.status === 404 || probeRes.status === 403)) {
+    if (!embedResult.accessible) {
       return {
         error:
-          'Esta lista de Spotify es privada o no existe. Para descargarla, ábrela en Spotify > pulsa (...) > "Hacer pública" o "Añadir a mi perfil".',
+          'Esta lista de Spotify es privada o no existe. Ábrela en Spotify > pulsa (...) > "Hacer pública" o "Añadir a mi perfil".',
       };
     }
 
-    const embedResult = await fetchViaEmbed(type, id, urlStr);
-    if (embedResult && embedResult.tracks.length > 0) {
+    if (embedResult.tracks.length > 0) {
+      const isTruncated = embedResult.totalCount > embedResult.tracks.length;
+      console.log(
+        `[spotify_playlist] Strategy 2: ${embedResult.tracks.length}/${embedResult.totalCount} tracks (truncated: ${isTruncated})`
+      );
       return {
         playlist: {
           id,
@@ -370,16 +389,22 @@ export async function fetchSpotifyPlaylist(urlStr: string): Promise<{
           trackCount: embedResult.tracks.length,
           tracks: embedResult.tracks,
           platform: 'spotify',
+          isTruncated,
+          totalCount: embedResult.totalCount,
         },
       };
     }
 
+    // Embed gave us nothing — Spotify now loads tracks via JS (no SSR data)
+    // We need Client Credentials to get the full list
     return {
       error:
-        'Esta lista de Spotify es privada o está vacía. Para descargarla, ábrela en Spotify > pulsa (...) > "Hacer pública".',
+        `⚠️ Esta playlist tiene ${embedResult.totalCount || 'más de 100'} canciones y Spotify ya no permite obtenerlas sin credenciales de API.\n\n` +
+        `Para descargarlas todas, configura SPOTIFY_CLIENT_ID y SPOTIFY_CLIENT_SECRET en Ajustes.\n` +
+        `Obtén credenciales gratuitas en: https://developer.spotify.com/dashboard`,
     };
   } catch (e: any) {
-    console.error('[spotify_playlist] Failed to fetch playlist:', e);
+    console.error('[spotify_playlist] Uncaught error:', e);
     return { error: e.message || 'Error al procesar la lista de Spotify' };
   }
 }
