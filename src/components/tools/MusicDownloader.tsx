@@ -20,8 +20,14 @@ import {
   Scissors,
   Settings2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Heart,
+  Library,
+  Lock,
+  LogOut,
+  TriangleAlert,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 
 interface YtdlTask {
@@ -62,8 +68,27 @@ interface PlaylistPromptData {
     trackCount: number;
     thumbnail?: string;
     tracks: PlaylistTrackItem[];
+    /** Spotify only let us read part of it (see limitReason). */
+    isTruncated?: boolean;
+    limitReason?: 'connect' | 'not_owner' | null;
   };
   originalTaskId?: string;
+}
+
+interface SpotifyStatus {
+  configured: boolean;
+  connected: boolean;
+  displayName: string | null;
+}
+
+interface MySpotifyPlaylist {
+  id: string;
+  name: string;
+  url: string;
+  thumbnail: string;
+  trackCount: number | null;
+  owner: string;
+  fullAccess: boolean;
 }
 
 interface CustomConfirmData {
@@ -93,6 +118,53 @@ export function MusicDownloader() {
   const [trimSilence, setTrimSilence] = useState(false);
 
   const downloadedRef = useRef<Set<string>>(new Set());
+
+  // Spotify account connection (needed to read full playlists & Liked Songs)
+  const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
+  const [myPlaylists, setMyPlaylists] = useState<MySpotifyPlaylist[] | null>(null);
+  const [showMyPlaylists, setShowMyPlaylists] = useState(false);
+  const [loadingMyPlaylists, setLoadingMyPlaylists] = useState(false);
+
+  const refreshSpotifyStatus = async () => {
+    try {
+      const res = await fetch('/api/spotify/session', { cache: 'no-store' });
+      if (res.ok) setSpotify(await res.json());
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    refreshSpotifyStatus();
+  }, []);
+
+  const connectSpotify = () => {
+    window.location.href = '/api/spotify/login';
+  };
+
+  const disconnectSpotify = async () => {
+    await fetch('/api/spotify/session', { method: 'DELETE' });
+    setMyPlaylists(null);
+    setShowMyPlaylists(false);
+    await refreshSpotifyStatus();
+    toast.success('Spotify desconectado');
+  };
+
+  const openMyPlaylists = async () => {
+    setShowMyPlaylists(true);
+    if (myPlaylists) return;
+    setLoadingMyPlaylists(true);
+    try {
+      const res = await fetch('/api/spotify/playlists', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudieron cargar tus playlists');
+      setMyPlaylists(data.playlists);
+    } catch (e: any) {
+      toast.error(e.message);
+      setShowMyPlaylists(false);
+      await refreshSpotifyStatus();
+    } finally {
+      setLoadingMyPlaylists(false);
+    }
+  };
 
   // Listen to SSE events for cross-tab or server-driven updates
   useEffect(() => {
@@ -232,19 +304,23 @@ export function MusicDownloader() {
         }),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'Error en descarga');
       }
 
+      // Bulk-pasted Spotify tracks only get their real title during processing.
+      const finalTitle: string = data.title || track.title;
       setTasks(prev => prev.map(t => t.id === taskId ? {
         ...t,
+        title: finalTitle,
+        thumbnail: t.thumbnail || data.thumbnail,
         status: 'completed',
         progress: 100,
         format: selectedFormat,
       } : t));
 
-      triggerDownload(taskId, track.resolvedUrl || track.url, track.title, selectedFormat);
+      triggerDownload(taskId, track.resolvedUrl || track.url, finalTitle, selectedFormat);
 
     } catch (err: any) {
       setTasks(prev => prev.map(t => t.id === taskId ? {
@@ -386,6 +462,8 @@ export function MusicDownloader() {
             trackCount: pl.trackCount,
             thumbnail: pl.thumbnail,
             tracks: pl.tracks || [],
+            isTruncated: pl.isTruncated,
+            limitReason: pl.limitReason,
           },
           originalTaskId: taskId,
         });
@@ -514,6 +592,20 @@ export function MusicDownloader() {
   useEffect(() => {
     if (typeof window === 'undefined' || initialUrlHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
+
+    // Returning from the Spotify OAuth flow (/api/spotify/callback)
+    const spotifyResult = params.get('spotify');
+    if (spotifyResult) {
+      initialUrlHandledRef.current = true;
+      if (spotifyResult === 'connected') {
+        toast.success(`Spotify conectado${params.get('name') ? ` como ${params.get('name')}` : ''}. Ya puedes bajar playlists completas.`);
+      } else {
+        toast.error(params.get('reason') || 'No se pudo conectar Spotify');
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
     const paramUrl = params.get('url') || params.get('link') || params.get('q');
     const autoStart = params.get('autostart') === 'true' || params.get('download') === 'true';
 
@@ -641,7 +733,7 @@ export function MusicDownloader() {
           <div className="flex-1 flex items-center min-w-0">
             <input 
               type="text" 
-              placeholder="Pega enlace de YouTube, Spotify o SoundCloud..."
+              placeholder="Pega enlaces de YouTube, Spotify o SoundCloud..."
               value={url}
               onChange={e => {
                 setUrl(e.target.value);
@@ -667,6 +759,50 @@ export function MusicDownloader() {
             <Search className="w-4 h-4 mr-2" /> Buscar y Bajar
           </Button>
         </div>
+
+        {/* Conexión con Spotify (playlists completas y Canciones que te gustan) */}
+        {spotify?.configured && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-left">
+            <div className="flex-1 min-w-0 text-xs sm:text-sm">
+              {spotify.connected ? (
+                <span className="text-text-secondary">
+                  <strong className="text-emerald-400">Spotify conectado</strong> como {spotify.displayName}. Tus playlists se bajan completas.
+                </span>
+              ) : (
+                <span className="text-text-secondary">
+                  <strong className="text-emerald-400">Conecta Spotify</strong> para bajar tus playlists completas y tus canciones favoritas, sin límite de 100.
+                </span>
+              )}
+            </div>
+            {spotify.connected ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={openMyPlaylists}
+                  className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Library className="w-3.5 h-3.5" /> Mis playlists
+                </button>
+                <button
+                  type="button"
+                  onClick={disconnectSpotify}
+                  title="Desconectar Spotify"
+                  className="p-1.5 text-text-secondary hover:text-danger hover:bg-surface-elevated rounded-lg transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={connectSpotify}
+                className="shrink-0 px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black transition-colors cursor-pointer"
+              >
+                Conectar Spotify
+              </button>
+            )}
+          </div>
+        )}
 
         {/* BARRA DE CONFIGURACIÓN RÁPIDA (Formato, Calidad y Nomenclatura) */}
         <div className="pt-2 border-t border-border/40 space-y-4 text-left">
@@ -877,6 +1013,77 @@ export function MusicDownloader() {
         </div>
       )}
 
+      {/* MODAL: MIS PLAYLISTS DE SPOTIFY */}
+      {showMyPlaylists && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-surface border border-border rounded-2xl p-5 sm:p-6 max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl relative gap-4 animate-in zoom-in-95 duration-200">
+            <button
+              type="button"
+              onClick={() => setShowMyPlaylists(false)}
+              className="absolute top-4 right-4 p-2 text-text-secondary hover:text-text-primary rounded-lg hover:bg-surface-elevated transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 pr-10">
+              <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <Library className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary">Mis playlists de Spotify</h3>
+                <p className="text-xs text-text-secondary">Elige una y se descarga completa.</p>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-2 px-2 space-y-1.5">
+              {loadingMyPlaylists && (
+                <div className="py-10 flex justify-center">
+                  <Loader2 className="w-6 h-6 text-accent animate-spin" />
+                </div>
+              )}
+              {!loadingMyPlaylists && myPlaylists?.length === 0 && (
+                <p className="py-8 text-center text-sm text-text-secondary">No tienes playlists en Spotify.</p>
+              )}
+              {!loadingMyPlaylists && myPlaylists?.map((pl) => (
+                <button
+                  key={pl.id}
+                  type="button"
+                  onClick={() => {
+                    setShowMyPlaylists(false);
+                    handleSubmit(pl.url);
+                  }}
+                  className="w-full text-left p-2 rounded-xl hover:bg-surface-elevated border border-transparent hover:border-border transition-all flex items-center gap-3 cursor-pointer"
+                >
+                  {pl.id === 'liked' ? (
+                    <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-indigo-600 to-emerald-400 flex items-center justify-center shrink-0">
+                      <Heart className="w-5 h-5 text-white fill-white" />
+                    </div>
+                  ) : pl.thumbnail ? (
+                    <img src={pl.thumbnail} alt="" className="w-11 h-11 rounded-lg object-cover shrink-0" />
+                  ) : (
+                    <div className="w-11 h-11 rounded-lg bg-surface-elevated flex items-center justify-center shrink-0">
+                      <ListMusic className="w-5 h-5 text-text-secondary" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-sm text-text-primary line-clamp-1">{pl.name}</h4>
+                    <p className="text-xs text-text-secondary line-clamp-1">
+                      {pl.trackCount != null ? `${pl.trackCount} canciones · ` : ''}
+                      {pl.fullAccess ? pl.owner : `de ${pl.owner} · solo 100`}
+                    </p>
+                  </div>
+                  {!pl.fullAccess && (
+                    <span title="No es tuya: Spotify solo deja leer las primeras 100">
+                      <Lock className="w-4 h-4 text-text-secondary/60 shrink-0" />
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL / DIALOG PARA LISTAS DE REPRODUCCIÓN */}
       {playlistPrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
@@ -972,6 +1179,38 @@ export function MusicDownloader() {
                     <p className="text-xs text-text-secondary">{playlistPrompt.playlist.trackCount} canciones listas para descargar ({audioFormat.toUpperCase()})</p>
                   </div>
                 </div>
+
+                {playlistPrompt.playlist.isTruncated && (
+                  <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-text-secondary space-y-2">
+                    <p className="flex items-start gap-2">
+                      <TriangleAlert className="w-4 h-4 text-amber-400 shrink-0 mt-px" />
+                      <span>
+                        <strong className="text-amber-400">Spotify solo deja leer las primeras 100 canciones de esta lista.</strong>{' '}
+                        {playlistPrompt.playlist.limitReason === 'not_owner'
+                          ? 'Es de otra persona, y Spotify solo da la lista completa de las playlists que son tuyas.'
+                          : 'Si es tuya, conecta Spotify y se bajará entera.'}
+                      </span>
+                    </p>
+                    <p className="pl-6">
+                      <strong className="text-text-primary">Para bajarla entera:</strong> en Spotify abre la playlist → pulsa{' '}
+                      <kbd className="px-1 rounded bg-surface border border-border">Ctrl</kbd>+<kbd className="px-1 rounded bg-surface border border-border">A</kbd>{' '}
+                      → clic derecho → <em>Añadir a playlist → Nueva playlist</em>. Ya es tuya: elígela en <em>Mis playlists</em>.
+                      O copia todas con <kbd className="px-1 rounded bg-surface border border-border">Ctrl</kbd>+<kbd className="px-1 rounded bg-surface border border-border">C</kbd>{' '}
+                      y pégalas en el buscador.
+                    </p>
+                    {playlistPrompt.playlist.limitReason === 'connect' && spotify?.configured && !spotify.connected && (
+                      <div className="pl-6">
+                        <button
+                          type="button"
+                          onClick={connectSpotify}
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black transition-colors cursor-pointer"
+                        >
+                          Conectar Spotify
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex gap-3">
                   <Button

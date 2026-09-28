@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import https from 'https';
 import { createDecipheriv } from 'crypto';
 import { extractPlaylistId, fetchYouTubePlaylist, isRadioOrMix } from '../playlist';
-import { isSpotifyPlaylistOrAlbum, fetchSpotifyPlaylist } from '../spotify_playlist';
+import {
+  isSpotifyPlaylistOrAlbum,
+  fetchSpotifyPlaylist,
+  extractSpotifyTrackIds,
+  buildPastedSpotifyTracks,
+} from '../spotify_playlist';
 import { isSoundCloudPlaylist, fetchSoundCloudPlaylist } from '../soundcloud_playlist';
 import { getSpotifyTrackMetadata, pickBestYouTubeMatch } from '../engines';
+import { getSpotifyUser } from '@/lib/spotify';
 
 export const maxDuration = 60;
 
@@ -228,10 +234,35 @@ export async function POST(req: Request) {
     const playlistId = extractPlaylistId(trimmedUrl);
 
     // =========================================================================
-    // 1. SPOTIFY PLAYLISTS & ALBUMS
+    // 0. BULK SPOTIFY TRACK LINKS (Ctrl+A → Ctrl+C inside any Spotify playlist)
+    // =========================================================================
+    const pastedTrackIds = extractSpotifyTrackIds(trimmedUrl);
+    if (pastedTrackIds.length > 1) {
+      const tracks = buildPastedSpotifyTracks(pastedTrackIds);
+      const plData = {
+        id: `pasted-${Date.now()}`,
+        title: `${tracks.length} canciones pegadas de Spotify`,
+        thumbnail: '',
+        trackCount: tracks.length,
+        tracks,
+      };
+      return NextResponse.json({
+        isPlaylist: true,
+        playlistId: plData.id,
+        title: plData.title,
+        thumbnail: plData.thumbnail,
+        trackCount: plData.trackCount,
+        tracks,
+        platform: 'spotify',
+        playlist: plData,
+      });
+    }
+
+    // =========================================================================
+    // 1. SPOTIFY PLAYLISTS, ALBUMS & LIKED SONGS
     // =========================================================================
     if (isSpotifyPlaylistOrAlbum(trimmedUrl)) {
-      const { playlist: spotifyPl, error: spotifyErr } = await fetchSpotifyPlaylist(trimmedUrl);
+      const { playlist: spotifyPl, error: spotifyErr } = await fetchSpotifyPlaylist(trimmedUrl, await getSpotifyUser());
       if (spotifyPl && spotifyPl.tracks.length > 0) {
         const plData = {
           id: spotifyPl.id,
@@ -239,6 +270,8 @@ export async function POST(req: Request) {
           thumbnail: spotifyPl.thumbnail,
           trackCount: spotifyPl.trackCount,
           tracks: spotifyPl.tracks,
+          isTruncated: spotifyPl.isTruncated ?? false,
+          limitReason: spotifyPl.limitReason ?? null,
         };
         return NextResponse.json({
           isPlaylist: true,

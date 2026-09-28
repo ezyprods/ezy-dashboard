@@ -413,13 +413,20 @@ export async function getSpotifyTrackMetadata(url: string): Promise<SpotifyTrack
 
   if (trackId) {
     try {
-      const res = await fetch(`https://open.spotify.com/embed/track/${trackId}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-        },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (res.ok) {
+      // The embed throttles bursts with 429 + `retry-after: 0` (e.g. when a
+      // whole pasted playlist is downloading) — back off briefly and retry.
+      let res: Response | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt));
+        res = await fetch(`https://open.spotify.com/embed/track/${trackId}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+          },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (res.status !== 429) break;
+      }
+      if (res?.ok) {
         const html = await res.text();
         const nextMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]+?)<\/script>/);
         if (nextMatch) {

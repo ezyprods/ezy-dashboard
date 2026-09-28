@@ -9,7 +9,9 @@ import {
   isSpotifyUrl,
   searchYouTubeVideoIds,
   pickBestYouTubeMatch,
+  getSpotifyTrackMetadata,
 } from '../engines';
+import { isUnresolvedSpotifyTitle } from '../spotify_playlist';
 import { processAudioBuffer, AudioProcessOptions } from '../processor';
 import { spawn } from 'child_process';
 import os from 'os';
@@ -173,7 +175,8 @@ export async function POST(req: Request) {
 
   try {
     await processDownload(taskId, { format, quality, normalize, trimSilence });
-    return NextResponse.json({ success: true, taskId });
+    // The title may have been resolved during processing (bulk-pasted Spotify links).
+    return NextResponse.json({ success: true, taskId, title: task.title, thumbnail: task.thumbnail });
   } catch (error: any) {
     console.error('[ytdl/process] Fatal error:', error?.message || error);
     return NextResponse.json(
@@ -206,6 +209,15 @@ async function processDownload(taskId: string, options: AudioProcessOptions) {
     // Spotify links. task.title is "Artist - Track" (set from the playlist
     // metadata), so split it to verify candidates against the artist too.
     if (videoIdsToTry.length === 0 && (isSpotifyUrl(task.url) || task.url.includes('soundcloud.com') || !task.url.startsWith('http'))) {
+      // Bulk-pasted Spotify links the analyser ran out of time to resolve
+      // arrive with a placeholder title — fetch the real "Artist - Track" now.
+      if (isSpotifyUrl(task.url) && isUnresolvedSpotifyTitle(task.title)) {
+        const meta = await getSpotifyTrackMetadata(task.url);
+        task.title = meta.fullTitle;
+        task.thumbnail = task.thumbnail || meta.thumbnail;
+        broadcast({ type: 'update', task });
+      }
+
       const dashIdx = task.title.indexOf(' - ');
       const expectedArtist = dashIdx > 0 ? task.title.slice(0, dashIdx).trim() : '';
       const expectedTrack = dashIdx > 0 ? task.title.slice(dashIdx + 3).trim() : task.title;
