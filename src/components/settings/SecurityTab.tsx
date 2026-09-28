@@ -29,31 +29,31 @@ export function SecurityTab() {
               <div>
                 <h3 className="font-medium text-text-primary">Contraseña Global</h3>
                 <p className="text-sm text-text-secondary mt-1">
-                  La contraseña del estudio está blindada directamente en el código fuente de la aplicación para ofrecer la máxima seguridad contra ataques.
+                  La contraseña del estudio se guarda como variable de entorno en el servidor y se comprueba allí: nunca se envía al navegador.
                 </p>
               </div>
             </div>
             
             <div className="mt-4 p-4 bg-surface-elevated rounded-xl text-sm text-text-secondary border border-border/50">
-              <p className="mb-3">Para cambiar la contraseña, debes acceder al código fuente:</p>
+              <p className="mb-3">Para cambiar la contraseña, edítala en Vercel:</p>
               <ol className="list-decimal pl-5 space-y-3">
                 <li>
-                  Abre el archivo:
+                  Abre el proyecto en Vercel:
                   <div className="mt-1">
                     <code className="text-accent bg-accent/10 px-2 py-1 rounded block w-full overflow-x-auto whitespace-nowrap text-xs border border-accent/20">
-                      src/components/layout/PasswordGuard.tsx
+                      Settings → Environment Variables
                     </code>
                   </div>
                 </li>
                 <li>
-                  Modifica la constante:
+                  Modifica la variable (y en .env.local para desarrollo):
                   <div className="mt-1">
                     <code className="text-accent bg-accent/10 px-2 py-1 rounded inline-block text-xs border border-accent/20">
-                      AUTH_PASSWORD
+                      STUDIO_PASSWORD
                     </code>
                   </div>
                 </li>
-                <li>Guarda los cambios y realiza un despliegue (Deploy)</li>
+                <li>Vuelve a desplegar (Redeploy). Todos los dispositivos tendrán que introducir la nueva contraseña.</li>
               </ol>
             </div>
           </div>

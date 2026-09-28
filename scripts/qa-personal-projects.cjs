@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+require('dotenv').config({ path: '.env.local' }); // STUDIO_PASSWORD
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -62,7 +63,7 @@ async function runQA() {
       log('Pantalla de Acceso Protegido detectada. Desbloqueando...');
       const passInput = await page.$('input[type="password"]');
       if (passInput) {
-        await passInput.type('20923954Aa*');
+        await passInput.type(process.env.STUDIO_PASSWORD);
         const unlockBtn = await page.evaluateHandle(() => {
           const btns = Array.from(document.querySelectorAll('button'));
           return btns.find(b => b.innerText.includes('Desbloquear'));

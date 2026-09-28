@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+require('dotenv').config({ path: '.env.local' }); // STUDIO_PASSWORD
 
 const BASE_URL = 'http://localhost:3000';
 
@@ -54,7 +55,7 @@ async function runDeepAudit() {
     await page.goto(`${BASE_URL}/personal-projects`, { waitUntil: 'networkidle2' });
     const isPass = await page.evaluate(() => document.body.innerText.includes('Acceso Protegido'));
     if (isPass) {
-      await page.type('input[type="password"]', '20923954Aa*');
+      await page.type('input[type="password"]', process.env.STUDIO_PASSWORD);
       const unlockBtn = await page.evaluateHandle(() => {
         return Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Desbloquear'));
       });

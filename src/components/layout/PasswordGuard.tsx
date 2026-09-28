@@ -5,153 +5,42 @@ import { Button } from '@/components/ui/Button';
 import { Lock, Loader2, AlertCircle } from 'lucide-react';
 import { APP_NAME } from '@/lib/constants';
 
-const AUTH_KEY = 'ezy_dashboard_secure_auth';
-const AUTH_PASSWORD = '20923954Aa*';
-// 400 días = máximo que los navegadores permiten en cookies persistentes
-const REMEMBER_DAYS = 400;
-const REMEMBER_MS = REMEMBER_DAYS * 24 * 60 * 60 * 1000;
-const DB_NAME = 'ezy_auth_db';
-const DB_STORE = 'auth';
+// La contraseña se valida en el servidor (/api/studio/unlock), que responde con una cookie
+// httpOnly firmada. El navegador nunca ve la contraseña ni puede falsificar el desbloqueo.
 
-// ── Capa 1: IndexedDB (más persistente, ignora la limpieza automática del nav.) ──
-function openDB(): Promise<IDBDatabase | null> {
-  if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), 300);
-    try {
-      const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = () => {
-        try { req.result.createObjectStore(DB_STORE); } catch {}
-      };
-      req.onsuccess = () => { clearTimeout(timer); resolve(req.result); };
-      req.onerror = () => { clearTimeout(timer); resolve(null); };
-      req.onblocked = () => { clearTimeout(timer); resolve(null); };
-    } catch {
-      clearTimeout(timer);
-      resolve(null);
-    }
-  });
+// Restos del antiguo guard (validado en el cliente): ya no dan acceso, solo se limpian
+const LEGACY_AUTH_KEY = 'ezy_dashboard_secure_auth';
+const LEGACY_DB_NAME = 'ezy_auth_db';
+
+function purgeLegacyAuth(): void {
+  try { localStorage.removeItem(LEGACY_AUTH_KEY); } catch { /* ignore */ }
+  try { document.cookie = `${LEGACY_AUTH_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`; } catch { /* ignore */ }
+  try { window.indexedDB?.deleteDatabase(LEGACY_DB_NAME); } catch { /* ignore */ }
 }
 
-async function idbGet(key: string): Promise<string | null> {
-  const db = await openDB();
-  if (!db) return null;
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), 300);
-    try {
-      const tx = db.transaction(DB_STORE, 'readonly');
-      const req = tx.objectStore(DB_STORE).get(key);
-      req.onsuccess = () => { clearTimeout(timer); resolve(req.result ?? null); };
-      req.onerror = () => { clearTimeout(timer); resolve(null); };
-    } catch {
-      clearTimeout(timer);
-      resolve(null);
-    }
-  });
-}
-
-async function idbSet(key: string, value: string): Promise<void> {
-  const db = await openDB();
-  if (!db) return;
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(), 300);
-    try {
-      const tx = db.transaction(DB_STORE, 'readwrite');
-      tx.objectStore(DB_STORE).put(value, key);
-      tx.oncomplete = () => { clearTimeout(timer); resolve(); };
-      tx.onerror = () => { clearTimeout(timer); resolve(); };
-    } catch {
-      clearTimeout(timer);
-      resolve();
-    }
-  });
-}
-
-// ── Capa 2: localStorage ──
-function lsGet(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function lsSet(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* ignore */ }
-}
-
-// ── Capa 3: Cookie (SIN flag Secure para que funcione en HTTP/localhost también) ──
-function cookieGet(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  try {
-    const nameEQ = name + '=';
-    for (const part of document.cookie.split(';')) {
-      const c = part.trim();
-      if (c.startsWith(nameEQ)) return c.substring(nameEQ.length);
-    }
-  } catch { /* ignore */ }
-  return null;
-}
-function cookieSet(name: string, value: string, days: number): void {
-  if (typeof document === 'undefined') return;
-  try {
-    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
-    // SameSite=Lax sin Secure → funciona en HTTP (localhost) y HTTPS (Vercel)
-    document.cookie = `${name}=${value}; expires=${expires}; path=/; SameSite=Lax`;
-  } catch { /* ignore */ }
-}
-
-// ── Persistir el timestamp en las 3 capas a la vez ──
-async function persistAuth(): Promise<void> {
-  const now = Date.now().toString();
-  lsSet(AUTH_KEY, now);
-  cookieSet(AUTH_KEY, now, REMEMBER_DAYS);
-  await idbSet(AUTH_KEY, now);
-}
-
-// ── Purgar las 3 capas al cerrar sesión ──
+// ── Cerrar sesión: la cookie es httpOnly, así que solo el servidor puede borrarla ──
 export async function clearAuth(): Promise<void> {
-  try { localStorage.removeItem(AUTH_KEY); } catch { /* ignore */ }
-  try { document.cookie = `${AUTH_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`; } catch { /* ignore */ }
-  try {
-    const db = await openDB();
-    if (db) {
-      const tx = db.transaction(DB_STORE, 'readwrite');
-      tx.objectStore(DB_STORE).delete(AUTH_KEY);
-    }
-  } catch { /* ignore */ }
-}
-
-// ── Leer de cualquiera de las 3 capas y devolver el timestamp ──
-async function readAuth(): Promise<string | null> {
-  // 1. localStorage (instantáneo)
-  const lsVal = lsGet(AUTH_KEY);
-  if (lsVal) return lsVal;
-  // 2. Cookie (instantáneo)
-  const cookieVal = cookieGet(AUTH_KEY);
-  if (cookieVal) return cookieVal;
-  // 3. IndexedDB (fallback persistente)
-  const idbVal = await idbGet(AUTH_KEY);
-  if (idbVal) return idbVal;
-  return null;
+  try { await fetch('/api/studio/lock', { method: 'POST' }); } catch { /* ignore */ }
+  purgeLegacyAuth();
 }
 
 export function PasswordGuard({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    (async () => {
-      const stored = await readAuth();
-      if (stored) {
-        const ts = parseInt(stored, 10);
-        const valid = !isNaN(ts) && (Date.now() - ts < REMEMBER_MS);
-        if (valid) {
-          // Renovar en todas las capas en cada visita → nunca caduca mientras se use
-          await persistAuth();
-          setIsAuthenticated(true);
-          return;
-        }
-      }
-      setIsAuthenticated(false);
-    })();
+    purgeLegacyAuth();
+    // El servidor valida la cookie y la renueva en cada visita → nunca caduca mientras se use
+    fetch('/api/studio/status', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : { unlocked: false }))
+      .then((data) => setIsAuthenticated(data.unlocked === true))
+      .catch(() => {
+        setError('No se pudo comprobar el acceso. Revisa tu conexión.');
+        setIsAuthenticated(false);
+      });
   }, []);
 
   // Enfocar el input cuando aparece la pantalla de login
@@ -163,15 +52,31 @@ export function PasswordGuard({ children }: { children: React.ReactNode }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === AUTH_PASSWORD) {
-      await persistAuth();
-      setIsAuthenticated(true);
-      setError('');
-    } else {
-      setError('Contraseña incorrecta. Por favor, inténtalo de nuevo.');
-      setPasswordInput('');
-      setTimeout(() => inputRef.current?.focus(), 50);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch('/api/studio/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passwordInput }),
+      });
+      if (res.ok) {
+        setIsAuthenticated(true);
+        return;
+      }
+      if (res.status === 401) {
+        setError('Contraseña incorrecta. Por favor, inténtalo de nuevo.');
+        setPasswordInput('');
+      } else {
+        setError('El servidor no pudo verificar la contraseña. Inténtalo más tarde.');
+      }
+    } catch {
+      setError('No se pudo conectar con el servidor. Revisa tu conexión.');
+    } finally {
+      setIsSubmitting(false);
     }
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   // ── Loading ──
@@ -222,7 +127,8 @@ export function PasswordGuard({ children }: { children: React.ReactNode }) {
                 </div>
               )}
 
-              <Button type="submit" size="lg" className="w-full font-semibold">
+              <Button type="submit" size="lg" className="w-full font-semibold" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="animate-spin" />}
                 Desbloquear Estudio
               </Button>
             </form>
