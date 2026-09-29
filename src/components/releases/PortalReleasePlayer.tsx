@@ -1,5 +1,7 @@
 'use client';
 import { audioSrc } from '@/lib/audioUrl';
+import { bindEqualizer } from '@/lib/audio/equalizer';
+import { EqualizerButton } from '@/components/audio/EqualizerPanel';
 
 import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipForward, SkipBack, Disc, GripVertical, Trash2, Plus, Image as ImageIcon, Loader2, ExternalLink, Download } from 'lucide-react';
@@ -145,6 +147,10 @@ export function PortalReleasePlayer({
       setCurrentTrackIndex(tracks.length - 1);
     }
   }, [tracks.length, currentTrackIndex]);
+
+  // The <audio> only mounts once there is a track; bind whichever element is live
+  const hasTrack = !!currentTrack;
+  useEffect(() => bindEqualizer(audioRef.current), [hasTrack]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -346,6 +352,7 @@ export function PortalReleasePlayer({
           </div>
           {currentTrack && (
             <div className="flex items-center gap-1.5 shrink-0">
+              <EqualizerButton className="h-10 w-10 sm:h-8 sm:w-8 rounded-lg bg-surface/70 hover:bg-surface border border-border/60 inline-flex items-center justify-center" />
               <button
                 type="button"
                 onClick={(e) => {

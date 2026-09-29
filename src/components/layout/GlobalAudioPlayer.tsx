@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, X, Music, Loader2, Download, Share2, Scissors, User, ExternalLink, MoreVertical, ChevronDown, RotateCcw, RotateCw } from 'lucide-react';
 import { ShareModal } from '@/components/artists/ShareModal';
 import { MiniDAWModal } from '@/components/projects/MiniDAWModal';
+import { EqualizerButton } from '@/components/audio/EqualizerPanel';
 
 const SKIP_SECONDS = 10;
 
@@ -536,6 +537,8 @@ export function GlobalAudioPlayer() {
               </>
             )}
 
+            <EqualizerButton className="p-1.5 shrink-0" />
+
             {/* Volume Control */}
             <div className="flex items-center gap-1.5 lg:gap-2 w-16 sm:w-20 lg:w-28 group shrink-0">
               <button onClick={toggleMute} className="text-text-secondary hover:text-text-primary shrink-0" title={volume === 0 ? "Reactivar sonido" : "Silenciar"}>
@@ -654,6 +657,11 @@ export function GlobalAudioPlayer() {
                   <span className="absolute text-[9px] font-bold mt-0.5">{SKIP_SECONDS}</span>
                 </button>
               </div>
+
+              <EqualizerButton
+                variant="tile"
+                className="w-full flex items-center justify-center gap-2 min-h-[48px] mb-2 rounded-2xl bg-surface/70 border border-border/60 text-sm font-semibold text-text-secondary active:bg-surface active:scale-[0.98] transition-transform"
+              />
 
               {/* Producer actions */}
               {!isPublicRoute && (

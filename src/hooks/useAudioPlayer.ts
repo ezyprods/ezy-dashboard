@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { bindEqualizer } from '@/lib/audio/equalizer';
 
 interface UseAudioPlayerProps {
   currentTrackUrl: string | null;
@@ -115,6 +116,7 @@ export function useAudioPlayer({
     }
 
     audio.volume = isMuted ? 0 : volume;
+    const unbindEq = bindEqualizer(audio);
 
     const handleTimeUpdate = () => {
       if (!audio.duration) return;
@@ -167,6 +169,7 @@ export function useAudioPlayer({
       audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
+      unbindEq();
     };
   }, [currentTrackUrl]); // Notice we don't depend on isPlaying to avoid remounting, the start logic uses the current state
 

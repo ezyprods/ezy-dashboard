@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from 'react';
 import { audioSrc } from '@/lib/audioUrl';
+import { bindEqualizer } from '@/lib/audio/equalizer';
 
 export interface AudioTrack {
   id: string;
@@ -94,6 +95,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [volume, setVolume] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Personal EQ (only routes through Web Audio once the user switches it on)
+  useEffect(() => bindEqualizer(audioRef.current), []);
 
   // Sync volume safely
   useEffect(() => {
