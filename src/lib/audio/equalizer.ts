@@ -17,7 +17,11 @@
  * (createMediaElementSource can only be called once per element, and the
  * element then plays *only* through the graph). So elements are left on the
  * browser's native path until the EQ is actually switched on; after that,
- * "off" simply flattens every band instead of tearing the graph down.
+ * "off" flattens every band instead of tearing the graph down (instant A/B),
+ * and players swap in a fresh native element at the next track change.
+ *
+ * A routed element also depends on the AudioContext staying alive, which
+ * phones don't guarantee — see "Self-healing" below for how that is handled.
  */
 
 export const EQ_BANDS = [
@@ -164,7 +168,7 @@ export function updateEq(patch: Partial<EqSettings>) {
     // Toggling on / editing happens from a tap, which is exactly when mobile
     // browsers let us create or resume the AudioContext.
     ensureContext();
-    boundElements.forEach(el => { if (!el.paused) attach(el); });
+    bound.forEach((_, el) => { if (isAudible(el)) routeIfReady(el); });
   }
   applyAll();
   listeners.forEach(l => l());
@@ -186,9 +190,20 @@ interface Chain {
   output: GainNode;
 }
 
+interface Binding {
+  /**
+   * Called when this element must be thrown away and replaced by a fresh,
+   * un-routed one (the audio engine died under it). By then the element has
+   * already been detached and is permanently silent.
+   */
+  onFallback?: () => void;
+}
+
 let ctx: AudioContext | null = null;
 const chains = new WeakMap<HTMLMediaElement, Chain>();
-const boundElements = new Set<HTMLMediaElement>();
+const bound = new Map<HTMLMediaElement, Binding>();
+
+const isAudible = (el: HTMLMediaElement) => !el.paused && !el.ended;
 
 function ensureContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -200,9 +215,116 @@ function ensureContext(): AudioContext | null {
     } catch {
       return null;
     }
+    ctx.addEventListener('statechange', onContextStateChange);
+    installHealthMonitor();
   }
   if (ctx.state !== 'running') ctx.resume().catch(() => {});
   return ctx;
+}
+
+/**
+ * The one rule that keeps playback safe: an element is only ever routed into
+ * a context that is *running*. A routed element plays exclusively through the
+ * graph, so a suspended context means silence and a frozen playhead. If the
+ * context isn't running yet, the element simply keeps playing natively and
+ * gets picked up by onContextStateChange once it is.
+ */
+function routeIfReady(el: HTMLMediaElement) {
+  if (!settings.enabled || chains.has(el) || !bound.has(el)) return;
+  const ac = ensureContext();
+  if (ac && ac.state === 'running') attach(el);
+}
+
+function onContextStateChange() {
+  if (!ctx) return;
+  if (ctx.state === 'running') {
+    stalledSince = 0;
+    bound.forEach((_, el) => { if (isAudible(el)) routeIfReady(el); });
+  } else {
+    checkHealth();
+  }
+}
+
+// ── Self-healing ────────────────────────────────────────────────────────────
+
+const STALL_MS = 1500;
+let stalledSince = 0;
+let healthMonitorInstalled = false;
+
+/**
+ * Phones suspend or "interrupt" an AudioContext on their own: screen lock,
+ * a call, Siri, a Bluetooth route change, play pressed on the headphones
+ * (no on-page gesture to resume with). Any routed element then stalls. We
+ * keep trying to resume, and if the context won't come back promptly we hand
+ * the element back to the browser's native audio path rather than leave the
+ * music stuck — losing the EQ for a moment beats losing playback.
+ */
+function checkHealth() {
+  if (!ctx) return;
+  const stuck: HTMLMediaElement[] = [];
+  bound.forEach((_, el) => { if (chains.has(el) && isAudible(el)) stuck.push(el); });
+  if (ctx.state === 'running' || stuck.length === 0) {
+    stalledSince = 0;
+    return;
+  }
+  ctx.resume().catch(() => {});
+  const now = Date.now();
+  if (!stalledSince) {
+    stalledSince = now;
+    return;
+  }
+  if (now - stalledSince < STALL_MS) return;
+  stalledSince = 0;
+  for (const el of stuck) {
+    const binding = bound.get(el);
+    if (!binding?.onFallback) continue;
+    releaseEqualizer(el);
+    binding.onFallback();
+  }
+}
+
+function installHealthMonitor() {
+  if (healthMonitorInstalled || typeof window === 'undefined') return;
+  healthMonitorInstalled = true;
+  window.setInterval(checkHealth, 500);
+  const wake = () => {
+    if (ctx && ctx.state !== 'running' && settings.enabled) ctx.resume().catch(() => {});
+    checkHealth();
+  };
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('pageshow', wake);
+  window.addEventListener('focus', wake);
+  try {
+    navigator.mediaDevices?.addEventListener?.('devicechange', wake);
+  } catch { /* not available */ }
+}
+
+/**
+ * True when the element is still wired through Web Audio although the EQ is
+ * off. It keeps playing fine (flat), but a player that is about to load a new
+ * track anyway can take the chance to swap in a fresh element and get back on
+ * the browser's plain audio path — exactly as if the EQ had never been used.
+ */
+/** Whether the element currently plays through the equalizer graph. */
+export function isEqRouted(el: HTMLMediaElement | null | undefined): boolean {
+  return !!el && chains.has(el);
+}
+
+export function eqWantsNativeElement(el: HTMLMediaElement | null | undefined): boolean {
+  return isEqRouted(el) && !getEqSettings().enabled;
+}
+
+/**
+ * Tears down an element's graph. createMediaElementSource is irreversible, so
+ * the element is silent from here on: only call this on one being discarded.
+ */
+export function releaseEqualizer(el: HTMLMediaElement | null | undefined) {
+  if (!el) return;
+  const chain = chains.get(el);
+  if (!chain) return;
+  try { chain.source.disconnect(); } catch { /* already disconnected */ }
+  try { chain.output.disconnect(); } catch { /* already disconnected */ }
+  chains.delete(el);
 }
 
 const dbToGain = (db: number) => Math.pow(10, db / 20);
@@ -210,7 +332,7 @@ const dbToGain = (db: number) => Math.pow(10, db / 20);
 function attach(el: HTMLMediaElement): Chain | null {
   const existing = chains.get(el);
   if (existing) return existing;
-  const ac = ensureContext();
+  const ac = ctx;
   if (!ac) return null;
 
   let source: MediaElementAudioSourceNode;
@@ -277,7 +399,7 @@ function apply(chain: Chain, smooth = true) {
 }
 
 function applyAll() {
-  boundElements.forEach(el => {
+  bound.forEach((_, el) => {
     const chain = chains.get(el);
     if (chain) apply(chain);
   });
@@ -285,9 +407,10 @@ function applyAll() {
 
 let gestureUnlockInstalled = false;
 /**
- * iOS/Android only start an AudioContext inside a user gesture, and the
- * element's `play` event fires too late to count. Resuming on every tap keeps
- * the context alive (also after a phone call or Siri suspends it).
+ * Mobile browsers only start (or resume) an AudioContext inside a user
+ * gesture, and the element's `play` event fires too late to count. Doing it
+ * on every tap has the context running by the time playback starts, and
+ * revives it after a call or Siri suspended it.
  */
 function installGestureUnlock() {
   if (gestureUnlockInstalled || typeof window === 'undefined') return;
@@ -296,34 +419,35 @@ function installGestureUnlock() {
     if (!getEqSettings().enabled) return;
     ensureContext();
   };
-  for (const type of ['pointerdown', 'touchend', 'keydown'] as const) {
+  for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const) {
     window.addEventListener(type, unlock, { capture: true, passive: true });
   }
 }
 
 /**
  * Registers a media element with the equalizer. Safe to call repeatedly.
- * The element stays on the native audio path until the EQ is enabled and it
- * starts playing. Returns a cleanup that stops tracking the element.
+ * The element stays on the native audio path until the EQ is enabled, it is
+ * playing, and the audio engine is confirmed running. Returns a cleanup that
+ * stops tracking the element.
  */
-export function bindEqualizer(el: HTMLMediaElement | null | undefined): () => void {
+export function bindEqualizer(el: HTMLMediaElement | null | undefined, binding: Binding = {}): () => void {
   if (!el || typeof window === 'undefined') return () => {};
   load();
   installGestureUnlock();
-  boundElements.add(el);
+  bound.set(el, binding);
 
-  const onPlay = () => {
-    if (!getEqSettings().enabled) return;
-    attach(el);
-    if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
-  };
+  const onPlay = () => routeIfReady(el);
   el.addEventListener('play', onPlay);
-  if (!el.paused) onPlay();
+  el.addEventListener('playing', onPlay);
+  // Engine already up (e.g. the next track of a playlist): route before the
+  // first sample so there is no native→EQ switch at the start of the track.
+  if (getEqSettings().enabled && ctx?.state === 'running') attach(el);
 
   return () => {
     el.removeEventListener('play', onPlay);
+    el.removeEventListener('playing', onPlay);
     // Its chain (if any) lives in a WeakMap and goes away with the element
-    boundElements.delete(el);
+    bound.delete(el);
   };
 }
 

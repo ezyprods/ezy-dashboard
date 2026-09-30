@@ -1,6 +1,6 @@
 'use client';
 import { audioSrc } from '@/lib/audioUrl';
-import { bindEqualizer } from '@/lib/audio/equalizer';
+import { bindEqualizer, eqWantsNativeElement, releaseEqualizer } from '@/lib/audio/equalizer';
 import { EqualizerButton } from '@/components/audio/EqualizerPanel';
 
 import { useState, useEffect, useRef } from 'react';
@@ -148,9 +148,27 @@ export function PortalReleasePlayer({
     }
   }, [tracks.length, currentTrackIndex]);
 
-  // The <audio> only mounts once there is a track; bind whichever element is live
+  // An element routed through the equalizer can't return to the browser's plain
+  // audio path; getting off it means mounting a fresh <audio> (keyed on this).
+  const [audioEpoch, setAudioEpoch] = useState(0);
+  const resumeAtRef = useRef(0);
+  const swapAudioElement = (resumeAt: number) => {
+    const old = audioRef.current;
+    if (old) {
+      old.pause();
+      releaseEqualizer(old);
+    }
+    resumeAtRef.current = resumeAt;
+    setAudioEpoch(e => e + 1);
+  };
+
+  // The <audio> only mounts once there is a track; bind whichever element is live.
+  // If the audio engine dies mid-song, carry on natively from the same spot.
   const hasTrack = !!currentTrack;
-  useEffect(() => bindEqualizer(audioRef.current), [hasTrack]);
+  useEffect(() => {
+    const el = audioRef.current;
+    return bindEqualizer(el, { onFallback: () => swapAudioElement(el?.currentTime || 0) });
+  }, [hasTrack, audioEpoch]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -159,7 +177,7 @@ export function PortalReleasePlayer({
     } else {
       audioRef.current.pause();
     }
-  }, [isPlaying, currentTrackIndex, release.id]);
+  }, [isPlaying, currentTrackIndex, release.id, audioEpoch]);
 
   const handleTimeUpdate = () => {
     if (audioRef.current) {
@@ -185,6 +203,8 @@ export function PortalReleasePlayer({
     if (currentTrackIndex === index) {
       setIsPlaying(prev => !prev);
     } else {
+      // EQ was used and then switched off: return to a plain element now
+      if (eqWantsNativeElement(audioRef.current)) swapAudioElement(0);
       setCurrentTrackIndex(index);
       setIsPlaying(true);
       setProgress(0);
@@ -294,11 +314,19 @@ export function PortalReleasePlayer({
     <div className="space-y-4">
       {currentTrack && (
         <audio
+          key={audioEpoch}
           ref={audioRef}
           src={audioSrc(currentTrack.newFileId)}
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleTrackEnd}
-          onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+          onLoadedMetadata={() => {
+            const el = audioRef.current;
+            setDuration(el?.duration || 0);
+            if (el && resumeAtRef.current > 0) {
+              try { el.currentTime = resumeAtRef.current; } catch { /* not seekable yet */ }
+            }
+            resumeAtRef.current = 0;
+          }}
         />
       )}
 

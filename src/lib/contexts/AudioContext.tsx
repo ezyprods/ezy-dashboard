@@ -1,8 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { audioSrc } from '@/lib/audioUrl';
-import { bindEqualizer } from '@/lib/audio/equalizer';
+import { bindEqualizer, eqWantsNativeElement, releaseEqualizer } from '@/lib/audio/equalizer';
 
 export interface AudioTrack {
   id: string;
@@ -58,10 +58,13 @@ const noopControls: AudioControlsContextType = {
 // useAudioControls()/the non-time part of useAudio() are unaffected.
 function AudioTimeBridge({
   audioRef,
+  audioEpoch,
   trackId,
   children,
 }: {
   audioRef: React.RefObject<HTMLAudioElement | null>;
+  /** Bumps whenever the <audio> element itself is replaced. */
+  audioEpoch: number;
   trackId: string | null;
   children: React.ReactNode;
 }) {
@@ -84,7 +87,7 @@ function AudioTimeBridge({
       el.removeEventListener('timeupdate', onTimeUpdate);
       el.removeEventListener('loadedmetadata', onLoadedMetadata);
     };
-  }, [audioRef]);
+  }, [audioRef, audioEpoch]);
 
   return <AudioTimeContext.Provider value={state}>{children}</AudioTimeContext.Provider>;
 }
@@ -96,11 +99,64 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Personal EQ (only routes through Web Audio once the user switches it on)
-  useEffect(() => bindEqualizer(audioRef.current), []);
+  const volumeRef = useRef(volume);
+
+  // An element that has been routed through the equalizer can never go back to
+  // the browser's plain audio path, so getting off it means mounting a brand
+  // new <audio> (keyed on this counter) and handing it the playback state.
+  const [audioEpoch, setAudioEpoch] = useState(0);
+  const handoverRef = useRef<{ src: string; time: number; play: boolean } | null>(null);
+
+  const swapAudioElement = useCallback((next: { src: string; time: number; play: boolean }) => {
+    const old = audioRef.current;
+    if (old) {
+      old.pause();
+      releaseEqualizer(old);
+      old.removeAttribute('src');
+      old.load();
+    }
+    handoverRef.current = next;
+    setAudioEpoch(e => e + 1);
+  }, []);
+
+  // Layout effect: on a track change this still runs inside the tap that
+  // started it, which is what lets a brand new element play on iOS.
+  useLayoutEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.volume = volumeRef.current;
+
+    // Personal EQ (only routes through Web Audio once the user switches it on).
+    // If the audio engine dies mid-song, carry on natively from the same spot.
+    const unbind = bindEqualizer(el, {
+      onFallback: () => swapAudioElement({ src: el.currentSrc || el.src, time: el.currentTime, play: !el.paused }),
+    });
+
+    const handover = handoverRef.current;
+    handoverRef.current = null;
+    if (handover?.src) {
+      const { time } = handover;
+      if (time > 0) {
+        el.addEventListener('loadedmetadata', () => {
+          try { el.currentTime = time; } catch { /* not seekable yet */ }
+        }, { once: true });
+      }
+      el.src = handover.src;
+      el.load();
+      if (handover.play) {
+        el.play().catch(e => {
+          console.warn('Audio play block/interrupt:', e);
+          setIsPlaying(false);
+          setIsLoading(false);
+        });
+      }
+    }
+    return unbind;
+  }, [audioEpoch, swapAudioElement]);
 
   // Sync volume safely
   useEffect(() => {
+    volumeRef.current = volume;
     if (audioRef.current) {
       audioRef.current.volume = volume;
     }
@@ -139,19 +195,25 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       // have to get it right.
       const finalUrl = track.id ? audioSrc(track.id) : track.url;
 
-      audioRef.current.src = finalUrl;
-      audioRef.current.load();
+      // EQ was used and then switched off: take the track change as the moment
+      // to return to a plain, un-routed element (see swapAudioElement).
+      if (eqWantsNativeElement(audioRef.current)) {
+        swapAudioElement({ src: finalUrl, time: 0, play: true });
+      } else {
+        audioRef.current.src = finalUrl;
+        audioRef.current.load();
 
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          setIsPlaying(true);
-          setIsLoading(false);
-        }).catch(e => {
-          console.warn('Audio play block/interrupt:', e);
-          setIsPlaying(false);
-          setIsLoading(false);
-        });
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            setIsPlaying(true);
+            setIsLoading(false);
+          }).catch(e => {
+            console.warn('Audio play block/interrupt:', e);
+            setIsPlaying(false);
+            setIsLoading(false);
+          });
+        }
       }
 
       // Automatically fetch extra info (artist, path) if missing
@@ -218,11 +280,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AudioControlsContext.Provider value={controlsValue}>
-      <AudioTimeBridge audioRef={audioRef} trackId={currentTrack?.id ?? null}>
+      <AudioTimeBridge audioRef={audioRef} audioEpoch={audioEpoch} trackId={currentTrack?.id ?? null}>
         {children}
       </AudioTimeBridge>
       {/* Real, mounted audio element handles all events cleanly */}
       <audio
+        key={audioEpoch}
         ref={audioRef}
         preload="none"
         onLoadedMetadata={() => setIsLoading(false)}
