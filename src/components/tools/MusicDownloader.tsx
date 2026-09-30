@@ -205,17 +205,56 @@ export function MusicDownloader() {
     };
   }, []);
 
-  const triggerDownload = (taskId: string, targetUrl: string, title: string, format = 'mp3') => {
-    if (downloadedRef.current.has(taskId)) return;
-    downloadedRef.current.add(taskId);
+  // Ids whose file could not be saved even after retries (shown with a retry button).
+  const [failedFiles, setFailedFiles] = useState<Set<string>>(new Set());
 
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  // Fetches the file ourselves (with retries) and saves it from a blob. A plain
+  // <a href> download is handed to the browser's download manager, which gives up
+  // with "El sitio no estaba disponible" on any transient network/server hiccup
+  // and never retries — the cause of random failed tracks in big batches.
+  const saveFile = async (taskId: string, targetUrl: string, title: string, format: string): Promise<boolean> => {
     const downloadUrl = `/api/tools/ytdl/file?taskId=${taskId}&url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(title)}&format=${format}`;
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `${title}.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const res = await fetch(downloadUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const expected = Number(res.headers.get('Content-Length') || 0);
+        if (blob.size < 1024 || (expected && blob.size !== expected)) {
+          throw new Error('Archivo incompleto');
+        }
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `${title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio'}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        return true;
+      } catch (e) {
+        await sleep(1000 * (attempt + 1));
+      }
+    }
+    return false;
+  };
+
+  const triggerDownload = async (taskId: string, targetUrl: string, title: string, format = 'mp3', force = false) => {
+    if (!force && downloadedRef.current.has(taskId)) return;
+    downloadedRef.current.add(taskId);
+    setFailedFiles(prev => {
+      if (!prev.has(taskId)) return prev;
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
+
+    const ok = await saveFile(taskId, targetUrl, title, format);
+    if (!ok) {
+      setFailedFiles(prev => new Set(prev).add(taskId));
+    }
   };
 
   // Auto-download listener for tasks completed via SSE
@@ -286,28 +325,39 @@ export function MusicDownloader() {
     }
 
     try {
-      const res = await fetch('/api/tools/ytdl/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: track.url,
-          resolvedUrl: track.resolvedUrl,
-          title: track.title,
-          thumbnail: track.thumbnail,
-          platform: track.platform,
-          clientId,
-          taskId,
-          format: selectedFormat,
-          quality: selectedQuality,
-          normalize: normalizeVolume,
-          trimSilence: trimSilence,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Error en descarga');
+      // Transient failures (YouTube throttling, dropped connection) are common in
+      // big batches, so retry the whole resolve+download a few times.
+      let data: any = null;
+      let lastError = 'Error en descarga';
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch('/api/tools/ytdl/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: track.url,
+              resolvedUrl: track.resolvedUrl,
+              title: track.title,
+              thumbnail: track.thumbnail,
+              platform: track.platform,
+              clientId,
+              taskId,
+              format: selectedFormat,
+              quality: selectedQuality,
+              normalize: normalizeVolume,
+              trimSilence: trimSilence,
+            }),
+          });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.error || 'Error en descarga');
+          data = body;
+          break;
+        } catch (e: any) {
+          lastError = e?.message || lastError;
+          if (attempt < 2) await sleep(2000 * (attempt + 1));
+        }
       }
+      if (!data) throw new Error(lastError);
 
       // Bulk-pasted Spotify tracks only get their real title during processing.
       const finalTitle: string = data.title || track.title;
@@ -320,7 +370,7 @@ export function MusicDownloader() {
         format: selectedFormat,
       } : t));
 
-      triggerDownload(taskId, track.resolvedUrl || track.url, finalTitle, selectedFormat);
+      await triggerDownload(taskId, track.resolvedUrl || track.url, finalTitle, selectedFormat);
 
     } catch (err: any) {
       setTasks(prev => prev.map(t => t.id === taskId ? {
@@ -650,22 +700,24 @@ export function MusicDownloader() {
   };
 
   const getStatusIcon = (task: YtdlTask) => {
-    const targetUrl = `/api/tools/ytdl/file?taskId=${task.id}&url=${encodeURIComponent(task.resolvedUrl || task.url)}&title=${encodeURIComponent(task.title)}&format=${task.format || audioFormat}`;
-
     switch(task.status) {
       case 'downloading': return <Download className="w-5 h-5 text-blue-500 animate-pulse" />;
       case 'converting': return <RefreshCw className="w-5 h-5 text-purple-500 animate-spin" />;
       case 'completed':
         return (
-          <a
-            href={targetUrl}
-            download={`${task.title}.${task.format || audioFormat}`}
-            title={`Bajar ${(task.format || 'mp3').toUpperCase()}`}
-            className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 font-bold text-xs"
-            onClick={(e) => e.stopPropagation()}
+          <button
+            type="button"
+            title={failedFiles.has(task.id) ? 'La descarga falló, reintentar' : `Bajar ${(task.format || 'mp3').toUpperCase()}`}
+            className={`p-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 font-bold text-xs ${failedFiles.has(task.id) ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500'}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerDownload(task.id, task.resolvedUrl || task.url, task.title, task.format || audioFormat, true);
+            }}
           >
-            <CheckCircle2 className="w-4 h-4" /> Bajar {(task.format || 'mp3').toUpperCase()}
-          </a>
+            {failedFiles.has(task.id)
+              ? <><RefreshCw className="w-4 h-4" /> Reintentar guardado</>
+              : <><CheckCircle2 className="w-4 h-4" /> Bajar {(task.format || 'mp3').toUpperCase()}</>}
+          </button>
         );
       case 'error': 
         return (
