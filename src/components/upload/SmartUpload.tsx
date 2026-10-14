@@ -102,6 +102,10 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
   const [hovered, setHovered] = useState(false);
   const [folderPickerFor, setFolderPickerFor] = useState<{ ids: string[] | 'shared'; rootId: string; rootName: string } | null>(null);
   const [destEditorFor, setDestEditorFor] = useState<string[] | null>(null);
+  /** Project being created from the dialog (uploading is blocked until it exists) */
+  const [creatingProject, setCreatingProject] = useState<string | null>(null);
+  /** Projects created from this dialog: Drive can take a while to list them after a refresh */
+  const [createdProjects, setCreatedProjects] = useState<{ id: string; name: string; artistId: string }[]>([]);
 
   const controllers = useRef(new Map<string, AbortController>());
   const createdFolders = useRef(new Map<string, Promise<string>>());
@@ -123,15 +127,25 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
   expireRef.current = expire;
 
   const artist = artists.find(a => a.id === shared.artistId);
-  const projectFolders = shared.targetType === 'artist' && shared.artistId ? projectFoldersOf(shared.artistId) : [];
+  const projectFolders = useMemo(() => {
+    if (shared.targetType !== 'artist' || !shared.artistId) return [];
+    const listed = projectFoldersOf(shared.artistId);
+    const missing = createdProjects
+      .filter(p => p.artistId === shared.artistId && !listed.some(f => f.id === p.id))
+      .map(p => ({ id: p.id, name: p.name }));
+    return [...listed, ...missing].sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared.targetType, shared.artistId, createdProjects, storeVersion]);
   const sharedRoot = shared.targetType === 'artist' ? shared.artistId : library.rootId;
 
   const namesFor = useCallback((d: Destination): DestinationNames => ({
     artistName: artists.find(a => a.id === d.artistId)?.name,
-    projectName: d.projectId ? getFolder(d.artistId).items.find(i => i.id === d.projectId)?.name : undefined,
+    projectName: d.projectId
+      ? (getFolder(d.artistId).items.find(i => i.id === d.projectId)?.name || createdProjects.find(p => p.id === d.projectId)?.name)
+      : undefined,
     libraryRootId: library.rootId,
     libraryName: library.rootName,
-  }), [artists, library.rootId, library.rootName]);
+  }), [artists, library.rootId, library.rootName, createdProjects]);
 
 
   // ─── Queueing files ─────────────────────────────────────────────────────
@@ -352,7 +366,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
 
   const planErrors = groups.filter(g => g.error);
   const totalBytes = pending.reduce((s, i) => s + i.file.size, 0);
-  const canUpload = pending.length > 0 && planErrors.length === 0 && pending.every(i => i.baseName.trim());
+  const canUpload = pending.length > 0 && planErrors.length === 0 && pending.every(i => i.baseName.trim()) && !creatingProject;
   const selectedItems = pending.filter(i => selected.has(i.id));
 
   // ─── Upload engine ──────────────────────────────────────────────────────
@@ -866,8 +880,8 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                       </label>
                       <div className="relative">
                         <select
-                          value={shared.lockedFolder ? '__locked__' : shared.projectId}
-                          disabled={!shared.artistId}
+                          value={creatingProject ? '__creating__' : shared.lockedFolder ? '__locked__' : shared.projectId}
+                          disabled={!shared.artistId || !!creatingProject}
                           onChange={async e => {
                             const value = e.target.value;
                             if (value === '__pick__') {
@@ -877,21 +891,32 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                             if (value === '__new__') {
                               const title = (await customPrompt('Nombre del nuevo proyecto', '', 'Nuevo proyecto'))?.trim();
                               if (!title) return;
+                              const artistId = shared.artistId;
+                              setCreatingProject(title);
                               const t = toast.loading('Creando proyecto…');
                               try {
                                 const res = await fetch('/api/projects', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ artistId: shared.artistId, title, type: 'single' }),
+                                  body: JSON.stringify({ artistId, title, type: 'single' }),
                                 });
                                 const data = await res.json();
                                 if (!res.ok) throw new Error(data.error || 'Error');
+                                const projectId: string = data.project.id;
                                 const now = new Date().toISOString();
-                                insertItems([normalizeItem({ id: data.project.id, name: title, mimeType: FOLDER_MIME, createdTime: now, modifiedTime: now, parentFolderId: shared.artistId }, shared.artistId)], shared.artistId);
-                                setShared(d => ({ ...d, projectId: data.project.id, lockedFolder: null }));
+                                insertItems([normalizeItem({ id: projectId, name: title, mimeType: FOLDER_MIME, createdTime: now, modifiedTime: now, parentFolderId: artistId }, artistId)], artistId);
+                                setCreatedProjects(prev => [...prev, { id: projectId, name: title, artistId }]);
+                                // The artist may have changed while the project was being created
+                                if (sharedRef.current.artistId === artistId) {
+                                  sharedProjectRef.current = projectId;
+                                  setAutoDetected(a => ({ ...a, project: false }));
+                                  setShared(d => (d.artistId === artistId ? { ...d, projectId, lockedFolder: null } : d));
+                                }
                                 toast.success(`Proyecto "${title}" creado`, { id: t });
                               } catch (err: any) {
                                 toast.error(`No se pudo crear el proyecto: ${err.message}`, { id: t });
+                              } finally {
+                                setCreatingProject(null);
                               }
                               return;
                             }
@@ -900,6 +925,7 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
                           }}
                           className="w-full h-11 appearance-none bg-surface border border-border rounded-xl pl-3 pr-9 text-sm text-text-primary focus:outline-none focus:border-accent disabled:opacity-50"
                         >
+                          {creatingProject && <option value="__creating__">⏳ Creando «{creatingProject}»…</option>}
                           {shared.lockedFolder && <option value="__locked__">📁 {shared.lockedFolder.name}</option>}
                           <option value="">✨ Automático (bounces → Bounces)</option>
                           {projectFolders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1226,7 +1252,9 @@ export function SmartUpload({ session, onClose }: SmartUploadProps) {
           {/* Footer */}
           <div className="flex items-center gap-3 px-4 md:px-6 py-3 border-t border-border/60 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <p className="flex-1 min-w-0 text-xs text-text-secondary truncate">
-              {planErrors.length > 0
+              {creatingProject
+                ? <span className="text-accent font-medium inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creando el proyecto «{creatingProject}»…</span>
+                : planErrors.length > 0
                 ? <span className="text-warning font-medium">{planErrors[0].error}</span>
                 : pending.length > 0
                   ? (groups.length === 1 ? `Todo a ${groups[0].label}` : `${pending.length} archivos en ${groups.length} carpetas`)

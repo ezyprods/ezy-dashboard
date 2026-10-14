@@ -20,6 +20,9 @@ export interface DriveFile {
   url?: string;
   parents?: string[];
   expiresAt?: number | null;
+  /** Artist folder the file lives in (resolved by the API) */
+  artistId?: string;
+  artistName?: string;
 }
 
 export interface CalendarEvent {

@@ -1,30 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, Download, ExternalLink, FileAudio, Loader2, FolderOpen } from 'lucide-react';
+import { useState, useRef } from 'react';
+import Link from 'next/link';
+import { Play, Pause, Download, ExternalLink, FileAudio, Loader2, FolderOpen, Globe } from 'lucide-react';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { FolderExplorerModal } from './FolderExplorerModal';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
-import { useSmoothScroll } from '@/hooks/useSmoothScroll';
-
-interface DriveFile {
-  id: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  createdTime: string;
-  modifiedTime: string;
-  webViewLink?: string;
-  webContentLink?: string;
-  url?: string;
-  parents?: string[];
-  expiresAt?: number | null;
-}
-
-import { useAppData } from '@/lib/contexts/AppDataContext';
+import { copyText } from '@/components/explorer/explorerUtils';
+import { useAppData, type DriveFile } from '@/lib/contexts/AppDataContext';
 
 export function RecentFilesWidget() {
-  const { recentFiles: files, recentFilesLoading: isLoading, fetchRecentFiles } = useAppData();
+  const { recentFiles: files, recentFilesLoading: isLoading, artists } = useAppData();
   const [explorerContext, setExplorerContext] = useState<{ folderId: string; fileId: string; fileName: string } | null>(null);
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioControls();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -44,6 +30,22 @@ export function RecentFilesWidget() {
         });
       }
     }
+  };
+
+  /** Artist the file belongs to (only artists that exist in the app, so they have a portal) */
+  const artistOf = (file: DriveFile) => {
+    if (!file.artistId) return null;
+    const artist = artists.find(a => a.id === file.artistId);
+    return artist ? { id: artist.id, name: artist.name || file.artistName || 'Artista' } : null;
+  };
+
+  /** Artist profile opened on the folder that holds the file */
+  const artistFilesHref = (file: DriveFile, artistId: string) => {
+    const folderId = file.parents?.[0];
+    const params = new URLSearchParams({ tab: 'files' });
+    if (folderId && folderId !== artistId) params.set('folderId', folderId);
+    params.set('fileId', file.id);
+    return `/artists/${artistId}?${params.toString()}`;
   };
 
   const formatTimeAgo = (dateStr: string) => {
@@ -86,6 +88,7 @@ export function RecentFilesWidget() {
         ) : (
           files.map(file => {
             const isThisTrackPlaying = currentTrack?.id === file.id && isPlaying;
+            const artist = artistOf(file);
             
             return (
               <div 
@@ -113,10 +116,22 @@ export function RecentFilesWidget() {
                   <p className="text-[13px] font-bold text-text-primary truncate" title={file.name}>
                     {file.name}
                   </p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <p className="text-[10px] text-text-secondary font-medium">
+                  <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                    <p className="text-[10px] text-text-secondary font-medium shrink-0">
                       {formatTimeAgo(file.modifiedTime || file.createdTime)}
                     </p>
+                    {artist && (
+                      <>
+                        <span className="hidden md:inline text-[10px] text-text-secondary/60 font-medium" aria-hidden="true">·</span>
+                        <Link
+                          href={artistFilesHref(file, artist.id)}
+                          className="hidden md:inline min-w-0 truncate text-[10px] text-text-secondary font-medium hover:text-emerald-500 hover:underline transition-colors"
+                          title={`Abrir ${artist.name} en la carpeta de este archivo`}
+                        >
+                          {artist.name}
+                        </Link>
+                      </>
+                    )}
                     {file.expiresAt && (
                       <RealtimeCountdown expiresAt={file.expiresAt} />
                     )}
@@ -146,6 +161,16 @@ export function RecentFilesWidget() {
                       title="Abrir ubicación en la plataforma"
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {artist && (
+                    <button
+                      onClick={() => copyText(`${window.location.origin}/portal/${artist.id}`, `Enlace del portal de ${artist.name} copiado`)}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary transition-colors border border-border/60 shadow-sm"
+                      title={`Copiar enlace al portal de ${artist.name}`}
+                      aria-label={`Copiar enlace al portal de ${artist.name}`}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
                     </button>
                   )}
                   {file.webViewLink && (
