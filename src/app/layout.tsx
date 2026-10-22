@@ -66,6 +66,19 @@ export default function RootLayout({
             `,
           }}
         />
+        {/* Per-device audio cache (public/sw.js): replays never reach Vercel again */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(function() {});
+                });
+              }
+            `,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider>

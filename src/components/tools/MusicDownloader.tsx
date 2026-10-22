@@ -166,15 +166,25 @@ export function MusicDownloader() {
     }
   };
 
-  // Listen to SSE events for cross-tab or server-driven updates
+  // Listen to SSE events for cross-tab or server-driven updates.
+  // The stream is only kept open while something is in progress (plus once on
+  // mount to restore the list): an always-open stream held a Vercel Function
+  // busy for as long as this page stayed open, and the browser reconnects it
+  // forever, which ate into the free plan's compute and memory allowance.
+  const hasActiveTasks = tasks.some(t => t.status === 'analysing' || t.status === 'downloading' || t.status === 'converting');
+  const [needsInitialSync, setNeedsInitialSync] = useState(true);
   useEffect(() => {
+    if (!hasActiveTasks && !needsInitialSync) return;
     let eventSource: EventSource | null = null;
     try {
       eventSource = new EventSource('/api/tools/ytdl/events');
+      // Unreachable stream: stop retrying unless a download is in progress
+      eventSource.onerror = () => setNeedsInitialSync(false);
       
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          if (data.type === 'init') setNeedsInitialSync(false);
           if (data.type === 'init' && Array.isArray(data.tasks)) {
             setTasks(prev => {
               const activeLocal = prev.filter(t => t.status === 'analysing' || t.status === 'downloading' || t.status === 'converting');
@@ -203,7 +213,7 @@ export function MusicDownloader() {
     return () => {
       if (eventSource) eventSource.close();
     };
-  }, []);
+  }, [hasActiveTasks, needsInitialSync]);
 
   // Ids whose file could not be saved even after retries (shown with a retry button).
   const [failedFiles, setFailedFiles] = useState<Set<string>>(new Set());

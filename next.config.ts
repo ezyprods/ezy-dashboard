@@ -40,6 +40,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // The audio cache service worker must always be re-checked so a fix
+        // (or a kill switch) reaches every device on its next visit.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+      {
         // Apply Cross-Origin Isolation headers to all dashboard and portal routes
         // Required for SharedArrayBuffer used by FFmpeg.wasm
         source: "/((?!api|_next|favicon|icon).*)",

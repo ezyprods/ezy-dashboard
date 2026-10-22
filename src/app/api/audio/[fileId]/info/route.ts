@@ -69,11 +69,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     pathSegments.unshift({ name: 'Dashboard', url: '/dashboard' });
     pathSegments.push({ name: fileName });
 
-    return NextResponse.json({
-      pathSegments,
-      artistName,
-      name: fileName
-    });
+    // Fetched on every play and costs up to 15 Drive calls; a file's location
+    // rarely changes, so let the CDN answer repeats (keyed per file id).
+    return NextResponse.json(
+      { pathSegments, artistName, name: fileName },
+      { headers: { 'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800' } }
+    );
   } catch (error: any) {
     console.error('API /audio/[fileId]/info error:', error);
     return NextResponse.json({ error: 'Failed to fetch audio info' }, { status: 500 });
