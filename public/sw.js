@@ -48,8 +48,13 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || !AUDIO_PATH.test(url.pathname)) return;
   if (url.searchParams.get('type') === 'image') return;
 
-  event.respondWith(handleAudio(event, request, url).catch(() => fetch(request)));
+  event.respondWith(handleAudio(event, request, url).catch(() => fetch(request).then(rebuild)));
 });
+
+// See teeIntoCache: audio responses must all be built by the worker.
+function rebuild(res) {
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
 
 function cacheKey(url) {
   // Keep the version token: bumping it in src/lib/audioUrl.ts must also
@@ -161,7 +166,13 @@ function teeIntoCache(event, res, cache, key) {
     !type.startsWith('text/') &&
     !type.includes('json') &&
     !type.startsWith('image/');
-  if (!cacheable) return res;
+  // Even when not caching, hand back a response built here and never the raw
+  // network one: Chrome aborts a media element ("FFmpegDemuxer: data source
+  // error") when the range requests for one file mix responses built by the
+  // service worker with passthrough ones (WAVs that probe the end of the file).
+  if (!cacheable) {
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
+  }
 
   const reader = res.body.getReader();
   const chunks = [];
