@@ -26,6 +26,8 @@ import {
   Lock,
   LogOut,
   TriangleAlert,
+  FolderOpen,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
@@ -220,6 +222,68 @@ export function MusicDownloader() {
 
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+  // Optional destination folder (File System Access API, Chrome/Edge only). It
+  // lives only in memory on purpose: reloading the page drops it and files go
+  // back to the browser's Descargas folder. The ref lets playlist workers that
+  // are already running pick up a folder changed mid-batch.
+  const [canPickFolder, setCanPickFolder] = useState(false);
+  const [saveDir, setSaveDir] = useState<FileSystemDirectoryHandle | null>(null);
+  const saveDirRef = useRef<FileSystemDirectoryHandle | null>(null);
+  // Where each task's file ended up, for the status line.
+  const [savedTo, setSavedTo] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setCanPickFolder(typeof (window as any).showDirectoryPicker === 'function');
+  }, []);
+
+  const changeSaveDir = (dir: FileSystemDirectoryHandle | null) => {
+    saveDirRef.current = dir;
+    setSaveDir(dir);
+  };
+
+  const pickSaveDir = async () => {
+    try {
+      const dir: FileSystemDirectoryHandle = await (window as any).showDirectoryPicker({ id: 'mp3-downloader', mode: 'readwrite', startIn: 'downloads' });
+      changeSaveDir(dir);
+      toast.success(`Las descargas se guardarán en "${dir.name}" hasta que recargues la página`);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') toast.error('No se pudo usar esa carpeta');
+    }
+  };
+
+  // Mirrors the browser's "name (1).mp3" so nothing in the folder is overwritten.
+  const uniqueFileName = async (dir: FileSystemDirectoryHandle, name: string) => {
+    const dot = name.lastIndexOf('.');
+    const base = name.slice(0, dot);
+    const ext = name.slice(dot);
+    for (let i = 0; ; i++) {
+      const candidate = i === 0 ? name : `${base} (${i})${ext}`;
+      try {
+        await dir.getFileHandle(candidate);
+      } catch (e: any) {
+        if (e?.name === 'NotFoundError') return candidate;
+      }
+    }
+  };
+
+  const writeToDir = async (dir: FileSystemDirectoryHandle, name: string, blob: Blob) => {
+    const fileHandle = await dir.getFileHandle(await uniqueFileName(dir, name), { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+  };
+
+  const saveToDownloads = (name: string, blob: Blob) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  };
+
   // Fetches the file ourselves (with retries) and saves it from a blob. A plain
   // <a href> download is handed to the browser's download manager, which gives up
   // with "El sitio no estaba disponible" on any transient network/server hiccup
@@ -235,14 +299,20 @@ export function MusicDownloader() {
         if (blob.size < 1024 || (expected && blob.size !== expected)) {
           throw new Error('Archivo incompleto');
         }
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = `${title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio'}.${format}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        const name = `${title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio'}.${format}`;
+        const dir = saveDirRef.current;
+        if (dir) {
+          try {
+            await writeToDir(dir, name, blob);
+            setSavedTo(prev => ({ ...prev, [taskId]: dir.name }));
+            return true;
+          } catch (e) {
+            // Folder gone or permission revoked: don't lose the song.
+            toast.error(`No se pudo guardar en "${dir.name}". Se ha guardado en Descargas.`, { id: 'save-dir-fallback' });
+          }
+        }
+        saveToDownloads(name, blob);
+        setSavedTo(prev => ({ ...prev, [taskId]: 'Descargas' }));
         return true;
       } catch (e) {
         await sleep(1000 * (attempt + 1));
@@ -752,7 +822,7 @@ export function MusicDownloader() {
     switch(task.status) {
       case 'downloading': return `Descargando... ${task.progress.toFixed(0)}%`;
       case 'converting': return `Procesando ${fmt} (${task.quality || audioQuality}k)...`;
-      case 'completed': return `Guardado en Descargas (${fmt})`;
+      case 'completed': return `Guardado en ${savedTo[task.id] || 'Descargas'} (${fmt})`;
       case 'error': {
         const err = task.error || 'Error en la descarga';
         if (err.includes('Sign in to confirm') || err.includes('bot')) {
@@ -948,6 +1018,37 @@ export function MusicDownloader() {
               </div>
             </div>
           </div>
+
+          {/* 4. Carpeta de destino (solo en esta sesión; al recargar vuelve a Descargas) */}
+          {canPickFolder && (
+            <div className="bg-surface-elevated/50 p-3 rounded-xl border border-border/60 flex items-center gap-3">
+              <FolderOpen className="w-4 h-4 text-accent shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider block">Guardar en</span>
+                <p className="text-xs font-bold text-text-primary truncate" title={saveDir ? `${saveDir.name} (hasta que recargues la página)` : 'Carpeta de descargas del navegador'}>
+                  {saveDir ? saveDir.name : 'Descargas'}
+                  {saveDir && <span className="font-medium text-text-secondary"> · hasta que recargues</span>}
+                </p>
+              </div>
+              {saveDir && (
+                <button
+                  type="button"
+                  onClick={() => changeSaveDir(null)}
+                  title="Volver a Descargas"
+                  className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-surface rounded-lg transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={pickSaveDir}
+                className="shrink-0 px-3 py-1.5 text-xs font-bold rounded-lg bg-surface hover:bg-surface-elevated text-text-secondary hover:text-text-primary border border-border/40 transition-all cursor-pointer"
+              >
+                Cambiar
+              </button>
+            </div>
+          )}
 
           {/* AJUSTES AVANZADOS (Colapsables: Normalizar Volumen & Recortar Silencios) */}
           <div className="bg-surface-elevated/30 rounded-xl border border-border/40 overflow-hidden">
