@@ -7,24 +7,25 @@ export const dynamic = 'force-dynamic';
 
 const LONG_CACHE = 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800';
 const CHUNK_BYTES = 4 * 1024 * 1024; // keep in sync with public/sw.js
+const TAIL_BYTES = 256 * 1024; // keep in sync with public/sw.js
 const PLAIN_RANGE_BYTES = 8 * 1024 * 1024;
 
 /**
  * One fixed slice of a file, as a plain 200 with no Range header involved, which
- * is what lets Vercel's CDN cache it (responses up to 10 MB). public/sw.js builds
+ * is what lets Vercel's CDN cache it (streamed responses up to 20 MB). public/sw.js builds
  * every play out of these; its URL carries the file's md5, so a cached slice can
  * never go stale when the file is overwritten.
  */
 async function serveChunk(fileId: string, chunk: string, accessToken: string) {
-  const index = /^\d+$/.test(chunk) ? Number(chunk) : -1;
-  if (index < 0) {
+  if (chunk !== 'tail' && !/^\d+$/.test(chunk)) {
     return new NextResponse('Invalid chunk', { status: 400, headers: { 'Cache-Control': 'no-store' } });
   }
 
-  const start = index * CHUNK_BYTES;
+  const start = Number(chunk) * CHUNK_BYTES;
+  const range = chunk === 'tail' ? `bytes=-${TAIL_BYTES}` : `bytes=${start}-${start + CHUNK_BYTES - 1}`;
   const gDriveRes = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
-    { headers: { Authorization: `Bearer ${accessToken}`, Range: `bytes=${start}-${start + CHUNK_BYTES - 1}` } }
+    { headers: { Authorization: `Bearer ${accessToken}`, Range: range } }
   );
 
   if (!gDriveRes.ok) {
@@ -35,15 +36,14 @@ async function serveChunk(fileId: string, chunk: string, accessToken: string) {
     });
   }
 
-  const bytes = await gDriveRes.arrayBuffer();
-  return new NextResponse(bytes, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'Content-Length': String(bytes.byteLength),
-      'Cache-Control': 'public, s-maxage=2592000',
-    },
+  const headers = new Headers({
+    'Content-Type': 'application/octet-stream',
+    'Cache-Control': 'public, s-maxage=2592000',
   });
+  const contentLength = gDriveRes.headers.get('content-length');
+  if (contentLength) headers.set('Content-Length', contentLength);
+
+  return new NextResponse(gDriveRes.body, { status: 200, headers });
 }
 
 /**
