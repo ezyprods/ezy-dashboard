@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
+import { boundedRange } from '@/lib/boundedRange';
 import { getDriveService } from '@/lib/drive';
 
 export const runtime = 'nodejs';
@@ -86,7 +87,7 @@ export async function GET(
     }
 
     // 4. Stream binary/media file with Range support (fallback if ?proxy=true)
-    const range = request.headers.get('range');
+    const range = boundedRange(request.headers.get('range'), 16 * 1024 * 1024);
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
     };

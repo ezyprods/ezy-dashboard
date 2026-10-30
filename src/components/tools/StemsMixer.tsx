@@ -175,7 +175,7 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
     setVolumes(prev => ({ ...prev, [stemId]: parseFloat(e.target.value) }));
   };
 
-  const downloadStem = (stemId: string) => {
+  const downloadStem = (stemId: string, fromProxy = false) => {
     const directUrl = stems?.[stemId as keyof typeof stems];
     const safeBaseName = filename.replace(/\.[^/.]+$/, "") || 'track';
 
@@ -192,7 +192,29 @@ export function StemsMixer({ taskId, filename, stems }: StemsMixerProps) {
       return;
     }
 
-    const downloadUrl = directUrl 
+    // Cloud stems are WAVs of tens of MB: fetch them straight from Replicate (it allows CORS,
+    // the mixer already plays them that way) so they don't count as Vercel transfer.
+    if (directUrl && !fromProxy) {
+      fetch(directUrl)
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.blob();
+        })
+        .then(blob => {
+          const objectUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = objectUrl;
+          a.download = `${safeBaseName}_${stemId}.wav`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        })
+        .catch(() => downloadStem(stemId, true));
+      return;
+    }
+
+    const downloadUrl = directUrl
       ? `/api/tools/stems/stream?url=${encodeURIComponent(directUrl)}&stem=${stemId}&filename=${encodeURIComponent(filename)}&download=true`
       : `/api/tools/stems/stream?taskId=${taskId}&stem=${stemId}&filename=${encodeURIComponent(filename)}&download=true`;
 

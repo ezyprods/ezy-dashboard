@@ -1,35 +1,42 @@
 /*
- * Ezy service worker: a per-device cache for audio.
+ * Ezy service worker: a per-device cache for audio, fed by fixed-size chunks.
  *
- * Why it exists: every play of a track used to stream the whole file through
- * /api/audio/[fileId], i.e. through a Vercel Function. That is billed as
- * "Fast Origin Transfer" (10 GB/month on Hobby) and the CDN cannot help:
- * Vercel never caches a request that carries a `Range` header, and <audio>
- * always sends one. Producers and artists replay the same beats over and over,
- * so each replay was paid for again.
+ * Why it exists: playing a track through /api/audio/[fileId] is billed as
+ * "Fast Origin Transfer" (10 GB/month on Hobby), and a plain open-ended
+ * `Range: bytes=0-` request is the worst case for it:
+ *  - Vercel's CDN never caches a request that carries a `Range` header.
+ *  - The function pushes the file to the CDN faster than the player reads it,
+ *    so a skipped or paused track is still paid for. The dashboard showed more
+ *    origin transfer (24 GB) than was ever delivered to browsers (18.7 GB).
  *
- * What it does: the first time a track is played to the end of its download,
- * the bytes the page was already receiving are also kept in Cache Storage.
- * Every later play — seeks included — is answered here, with proper 206
- * responses, and never reaches Vercel.
+ * What it does: <audio> keeps asking for ranges as usual, but this worker answers
+ * them from 4 MiB chunks, fetched only when the player gets that far:
+ *  - A chunk request has no Range header, so the CDN can cache it for every device.
+ *  - Each chunk is kept in Cache Storage, so half-heard tracks are not lost and
+ *    every later play or seek over them never leaves the device.
  *
  * Safety rules (playback must never break because of this file):
  *  - Only GET /api/audio/<id> is touched. Everything else goes to the network
  *    exactly as if there were no service worker.
- *  - A miss is the original request, sent unchanged. We only copy the bytes the
- *    page reads; we never download anything extra, and if the page stops
- *    reading (skip, seek, close) the copy is simply dropped.
- *  - Any error falls back to a plain network fetch.
+ *  - Chunks are keyed by the file's md5 (from /api/audio/<id>/meta), so
+ *    overwriting a file in Drive can never play old or mixed audio.
+ *  - Anything unexpected before the first byte falls back to the original
+ *    request, which the route still answers with plain ranges.
  *
  * To switch it off for everyone, replace this file with one that calls
  * self.registration.unregister() and deletes the caches.
  */
 
-const CACHE = 'ezy-audio-v1';
-const MAX_ENTRY_BYTES = 200 * 1024 * 1024; // longer files just stream, uncached
-const MAX_TOTAL_BYTES = 1024 * 1024 * 1024; // ~1 GB per device, oldest evicted first
-const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // re-validate a file after 30 days
+const CACHE = 'ezy-audio-v2';
+const CHUNK_BYTES = 4 * 1024 * 1024; // keep in sync with src/app/api/audio/[fileId]/route.ts
+const MAX_TOTAL_BYTES = 1024 * 1024 * 1024; // ~1 GB per device, least recently used evicted first
+const META_TTL_MS = 60 * 1000; // one track's range requests share a single metadata lookup
+const EVICT_EVERY = 16; // chunks stored between eviction passes
 const AUDIO_PATH = /^\/api\/audio\/[A-Za-z0-9_-]{10,}$/;
+
+const metaMemo = new Map();
+const inFlight = new Map();
+let storedSinceEvict = 0;
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -43,67 +50,81 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET') return;
+  if (request.method !== 'GET' || request.destination === 'image') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || !AUDIO_PATH.test(url.pathname)) return;
   if (url.searchParams.get('type') === 'image') return;
 
-  event.respondWith(handleAudio(event, request, url).catch(() => fetch(request).then(rebuild)));
+  event.respondWith(handleAudio(request, url).catch(() => fetch(request).then(rebuild)));
 });
 
-// See teeIntoCache: audio responses must all be built by the worker.
+// Audio responses must all be built by the worker: Chrome aborts a media element
+// ("FFmpegDemuxer: data source error") when the range requests for one file mix
+// responses built here with passthrough ones (WAVs that probe the end of the file).
 function rebuild(res) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
 }
 
-function cacheKey(url) {
-  // Keep the version token: bumping it in src/lib/audioUrl.ts must also
-  // skip anything stored here.
-  const v = url.searchParams.get('v');
-  return `${url.origin}${url.pathname}${v ? `?v=${v}` : ''}`;
-}
-
-async function handleAudio(event, request, url) {
-  const key = cacheKey(url);
+async function handleAudio(request, url) {
   const cache = await caches.open(CACHE);
-  const hit = await cache.match(key);
+  const meta = await getMeta(cache, url.pathname);
+  if (!meta) throw new Error('not chunkable');
 
-  if (hit) {
-    const cachedAt = Number(hit.headers.get('x-ezy-cached-at') || 0);
-    if (Date.now() - cachedAt < MAX_AGE_MS) {
-      const res = await fromCache(hit, request.headers.get('range'));
-      if (res) {
-        touch(cache, key, hit);
-        return res;
-      }
-    } else {
-      event.waitUntil(cache.delete(key));
-    }
-  }
+  const span = parseRange(request.headers.get('range'), meta.size);
+  if (!span) throw new Error('unsupported range');
 
-  const network = await fetch(request);
-  return teeIntoCache(event, network, cache, key);
-}
-
-/* ---------- serving from the cache ---------- */
-
-async function fromCache(hit, rangeHeader) {
-  const blob = await hit.blob();
-  const size = blob.size;
-  const type = hit.headers.get('content-type') || 'audio/mpeg';
   const base = {
-    'Content-Type': type,
+    'Content-Type': meta.mimeType,
     'Accept-Ranges': 'bytes',
     'Cache-Control': 'no-store',
-    'X-Ezy-Cache': 'HIT',
   };
-
-  if (!rangeHeader) {
-    return new Response(blob, { status: 200, headers: { ...base, 'Content-Length': String(size) } });
+  if (span.unsatisfiable) {
+    return new Response(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${meta.size}` } });
   }
 
-  const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
-  if (!m || (m[1] === '' && m[2] === '')) return null; // odd/multi range: let the network handle it
+  const { start, end } = span;
+  // Awaited here so that a failure can still fall back to the plain route.
+  let index = Math.floor(start / CHUNK_BYTES);
+  const first = await getChunk(cache, url.pathname, meta, index);
+  let pending = new Uint8Array(first).subarray(start - index * CHUNK_BYTES);
+  let remaining = end - start + 1;
+
+  const body = new ReadableStream({
+    async pull(controller) {
+      try {
+        if (!pending) {
+          index += 1;
+          pending = new Uint8Array(await getChunkWithRetries(cache, url.pathname, meta, index));
+        }
+        const part = pending.subarray(0, remaining);
+        pending = null;
+        remaining -= part.byteLength;
+        controller.enqueue(part);
+        if (remaining <= 0) controller.close();
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+  });
+
+  if (!request.headers.get('range')) {
+    return new Response(body, { status: 200, headers: { ...base, 'Content-Length': String(meta.size) } });
+  }
+  return new Response(body, {
+    status: 206,
+    headers: {
+      ...base,
+      'Content-Range': `bytes ${start}-${end}/${meta.size}`,
+      'Content-Length': String(end - start + 1),
+    },
+  });
+}
+
+// { start, end } in bytes, { unsatisfiable: true }, or null for odd/multi ranges.
+function parseRange(header, size) {
+  if (!header) return { start: 0, end: size - 1 };
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m || (m[1] === '' && m[2] === '')) return null;
 
   let start;
   let end;
@@ -115,120 +136,97 @@ async function fromCache(hit, rangeHeader) {
     start = Number(m[1]);
     end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
   }
+  return start >= size || start > end ? { unsatisfiable: true } : { start, end };
+}
 
-  if (start >= size || start > end) {
-    return new Response(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${size}` } });
+/* ---------- file metadata ---------- */
+
+// { size, mimeType, rev } when the file can be served in chunks, else null. The last
+// answer is kept in the cache so that tracks already on the device replay offline.
+async function getMeta(cache, pathname) {
+  const memo = metaMemo.get(pathname);
+  if (memo && Date.now() - memo.at < META_TTL_MS) return memo.meta;
+
+  const key = `${self.location.origin}${pathname}/meta`;
+  let res;
+  try {
+    res = await fetch(key);
+  } catch {
+    const stored = await cache.match(key);
+    return stored ? stored.json() : null;
   }
 
-  return new Response(blob.slice(start, end + 1, type), {
-    status: 206,
-    headers: {
-      ...base,
-      'Content-Range': `bytes ${start}-${end}/${size}`,
-      'Content-Length': String(end - start + 1),
-    },
-  });
+  const meta = res.ok ? await res.json() : null;
+  const usable =
+    meta && meta.rev && meta.size > 0 && !/^(image|text)\/|json/.test(meta.mimeType || '') ? meta : null;
+  if (usable) await cache.put(key, new Response(JSON.stringify(usable))).catch(() => {});
+  else await cache.delete(key);
+  metaMemo.set(pathname, { meta: usable, at: Date.now() });
+  return usable;
+}
+
+/* ---------- chunks ---------- */
+
+function getChunk(cache, pathname, meta, index) {
+  const key = `${self.location.origin}${pathname}?chunk=${index}&rev=${meta.rev}`;
+  // The player often asks for the same bytes twice in a row: never pay for them twice.
+  let job = inFlight.get(key);
+  if (!job) {
+    job = loadChunk(cache, key, meta, index).finally(() => inFlight.delete(key));
+    inFlight.set(key, job);
+  }
+  return job;
+}
+
+async function getChunkWithRetries(cache, pathname, meta, index) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await getChunk(cache, pathname, meta, index);
+    } catch (err) {
+      if (attempt >= 2) throw err;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+}
+
+async function loadChunk(cache, key, meta, index) {
+  const hit = await cache.match(key);
+  if (hit) {
+    const buf = await hit.arrayBuffer();
+    touch(cache, key, hit, buf);
+    return buf;
+  }
+
+  const res = await fetch(key, { redirect: 'error' });
+  if (!res.ok) throw new Error(`chunk HTTP ${res.status}`);
+  const buf = await res.arrayBuffer();
+  if (buf.byteLength !== Math.min(CHUNK_BYTES, meta.size - index * CHUNK_BYTES)) {
+    throw new Error('chunk of unexpected size');
+  }
+  await store(cache, key, buf);
+  return buf;
 }
 
 // Refresh the LRU timestamp at most once a day so popular tracks stay put.
-function touch(cache, key, hit) {
+function touch(cache, key, hit, buf) {
   const last = Number(hit.headers.get('x-ezy-used-at') || 0);
   if (Date.now() - last < 24 * 60 * 60 * 1000) return;
-  hit.clone().blob().then((blob) => {
-    const headers = new Headers(hit.headers);
-    headers.set('x-ezy-used-at', String(Date.now()));
-    return cache.put(key, new Response(blob, { status: 200, headers }));
-  }).catch(() => {});
+  const headers = new Headers(hit.headers);
+  headers.set('x-ezy-used-at', String(Date.now()));
+  cache.put(key, new Response(buf, { status: 200, headers })).catch(() => {});
 }
 
-/* ---------- filling the cache on a miss ---------- */
-
-// Size of the whole file if this response carries all of it, else -1.
-function wholeFileSize(res) {
-  if (res.status === 200) {
-    const len = Number(res.headers.get('content-length'));
-    return Number.isFinite(len) && len > 0 ? len : -1;
-  }
-  if (res.status === 206) {
-    const m = /^bytes 0-(\d+)\/(\d+)$/.exec((res.headers.get('content-range') || '').trim());
-    if (m && Number(m[1]) + 1 === Number(m[2])) return Number(m[2]);
-  }
-  return -1;
-}
-
-function teeIntoCache(event, res, cache, key) {
-  const type = res.headers.get('content-type') || '';
-  const size = wholeFileSize(res);
-  const cacheable =
-    res.body &&
-    size > 0 &&
-    size <= MAX_ENTRY_BYTES &&
-    !type.startsWith('text/') &&
-    !type.includes('json') &&
-    !type.startsWith('image/');
-  // Even when not caching, hand back a response built here and never the raw
-  // network one: Chrome aborts a media element ("FFmpegDemuxer: data source
-  // error") when the range requests for one file mix responses built by the
-  // service worker with passthrough ones (WAVs that probe the end of the file).
-  if (!cacheable) {
-    return new Response(res.body, { status: res.status, statusText: res.statusText, headers: res.headers });
-  }
-
-  const reader = res.body.getReader();
-  const chunks = [];
-  let received = 0;
-  let settle;
-  // Lets the final cache.put() finish even if the page goes idle right after
-  // the last byte. Always settles (end, cancel or error), and after 4 minutes
-  // at most: browsers kill a worker whose event is extended for more than 5,
-  // which would cut a long, paused stream. Past that the copy is best-effort.
-  event.waitUntil(new Promise((r) => { settle = r; setTimeout(r, 4 * 60 * 1000); }));
-
-  const body = new ReadableStream({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-          if (received === size) {
-            await store(cache, key, new Blob(chunks, { type }), type);
-          }
-          chunks.length = 0;
-          settle();
-          return;
-        }
-        chunks.push(value);
-        received += value.byteLength;
-        controller.enqueue(value);
-      } catch (err) {
-        chunks.length = 0;
-        settle();
-        controller.error(err);
-      }
-    },
-    cancel(reason) {
-      chunks.length = 0;
-      settle();
-      return reader.cancel(reason);
-    },
-  });
-
-  return new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
-}
-
-async function store(cache, key, blob, type) {
+async function store(cache, key, buf) {
   try {
-    const now = String(Date.now());
-    await cache.put(key, new Response(blob, {
+    await cache.put(key, new Response(buf, {
       status: 200,
-      headers: {
-        'Content-Type': type,
-        'Content-Length': String(blob.size),
-        'x-ezy-cached-at': now,
-        'x-ezy-used-at': now,
-      },
+      headers: { 'Content-Length': String(buf.byteLength), 'x-ezy-used-at': String(Date.now()) },
     }));
-    await evict(cache);
+    storedSinceEvict += 1;
+    if (storedSinceEvict >= EVICT_EVERY) {
+      storedSinceEvict = 0;
+      await evict(cache);
+    }
   } catch {
     // Quota exceeded or storage unavailable: playback already worked, nothing else to do.
   }
@@ -242,7 +240,8 @@ async function evict(cache) {
     const res = await cache.match(req);
     if (!res) continue;
     const size = Number(res.headers.get('content-length') || 0);
-    const used = Number(res.headers.get('x-ezy-used-at') || res.headers.get('x-ezy-cached-at') || 0);
+    const used = Number(res.headers.get('x-ezy-used-at') || 0);
+    if (!size) continue; // metadata entries
     entries.push({ req, size, used });
     total += size;
   }

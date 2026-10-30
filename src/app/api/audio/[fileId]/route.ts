@@ -1,10 +1,50 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
+import { boundedRange } from '@/lib/boundedRange';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const LONG_CACHE = 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800';
+const CHUNK_BYTES = 4 * 1024 * 1024; // keep in sync with public/sw.js
+const PLAIN_RANGE_BYTES = 8 * 1024 * 1024;
+
+/**
+ * One fixed slice of a file, as a plain 200 with no Range header involved, which
+ * is what lets Vercel's CDN cache it (responses up to 10 MB). public/sw.js builds
+ * every play out of these; its URL carries the file's md5, so a cached slice can
+ * never go stale when the file is overwritten.
+ */
+async function serveChunk(fileId: string, chunk: string, accessToken: string) {
+  const index = /^\d+$/.test(chunk) ? Number(chunk) : -1;
+  if (index < 0) {
+    return new NextResponse('Invalid chunk', { status: 400, headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  const start = index * CHUNK_BYTES;
+  const gDriveRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${accessToken}`, Range: `bytes=${start}-${start + CHUNK_BYTES - 1}` } }
+  );
+
+  if (!gDriveRes.ok) {
+    gDriveRes.body?.cancel().catch(() => {});
+    return new NextResponse(`Google Drive API error: ${gDriveRes.statusText}`, {
+      status: gDriveRes.status,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
+  const bytes = await gDriveRes.arrayBuffer();
+  return new NextResponse(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Length': String(bytes.byteLength),
+      'Cache-Control': 'public, s-maxage=2592000',
+    },
+  });
+}
 
 /**
  * Audio delivery.
@@ -56,11 +96,17 @@ export async function GET(
       return res;
     }
 
-    // Stream through the function with HTTP 206 Partial Content so seeking and
-    // scrubbing work. `max-age` lets the browser reuse what it already has, so
-    // replaying a track on the same device costs nothing.
     const accessToken = await getGoogleAccessToken();
-    const range = request.headers.get('range');
+
+    const chunk = request.nextUrl.searchParams.get('chunk');
+    if (chunk !== null) {
+      return await serveChunk(fileId, chunk, accessToken);
+    }
+
+    // No service worker yet (first visit, unsupported browser): stream through the
+    // function with HTTP 206 Partial Content so seeking and scrubbing work.
+    // `max-age` lets the browser reuse what it already has.
+    const range = boundedRange(request.headers.get('range'), PLAIN_RANGE_BYTES);
     const fetchHeaders: Record<string, string> = {
       Authorization: `Bearer ${accessToken}`,
     };

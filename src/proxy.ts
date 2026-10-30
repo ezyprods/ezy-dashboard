@@ -19,7 +19,7 @@ const PUBLIC_PREFIXES = ['/api/studio', '/api/auth', '/api/portal', '/api/cron']
 // Drive id, so the static routes next to them (/api/files/path, /api/files/trash…) stay private.
 const DRIVE_ID = '[A-Za-z0-9_-]{20,}';
 const PUBLIC_READS = [
-  new RegExp(`^/api/audio/${DRIVE_ID}(?:/info|/resolve)?$`),
+  new RegExp(`^/api/audio/${DRIVE_ID}(?:/info|/resolve|/meta)?$`),
   new RegExp(`^/api/files/${DRIVE_ID}$`),
   new RegExp(`^/api/releases/${DRIVE_ID}$`),
 ];
