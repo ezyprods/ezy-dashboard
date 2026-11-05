@@ -133,6 +133,48 @@ function AccountChip({ account, onChanged }: { account: IgAccountInfo | null; on
   );
 }
 
+function TokenConnect({ onConnected }: { onConnected: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/instagram/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo conectar');
+      toast.success(`Instagram conectado: @${data.username}`);
+      setToken('');
+      onConnected();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="p-4 rounded-2xl border border-accent/30 bg-accent/5 space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <InstagramIcon className="w-5 h-5 text-accent-light shrink-0" />
+        <p className="text-sm text-text-primary flex-1">Conecta <b>@ezyprods</b> para empezar a publicar.</p>
+        <button type="button" onClick={() => setOpen(o => !o)} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold">Pegar identificador</button>
+        <a href="/api/instagram/connect" className="h-10 px-4 rounded-xl border border-border text-sm font-medium flex items-center justify-center hover:border-accent">Entrar con Facebook</a>
+      </div>
+      {open && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && token) submit(); }}
+            placeholder="Identificador del usuario del sistema (EAA…)"
+            className="flex-1 h-10 bg-surface border border-border rounded-xl px-3 text-sm font-mono focus:outline-none focus:border-accent" />
+          <button type="button" disabled={!token || busy} onClick={submit} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold disabled:opacity-40 flex items-center gap-2">
+            {busy && <Loader2 className="w-4 h-4 animate-spin" />}Conectar
+          </button>
+        </div>
+      )}
+      {open && <p className="text-[11px] text-text-secondary">Se guarda cifrado en tu Drive y no se vuelve a mostrar.</p>}
+    </div>
+  );
+}
+
 function RowMenu({ items }: { items: { label: string; Icon: typeof Copy; onClick: () => void; danger?: boolean }[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -367,11 +409,7 @@ function InstagramPageInner() {
       </div>
 
       {account && !account.connected && !account.missingConfig && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border border-accent/30 bg-accent/5">
-          <InstagramIcon className="w-5 h-5 text-accent-light shrink-0" />
-          <p className="text-sm text-text-primary flex-1">Conecta <b>@ezyprods</b> para empezar a publicar. Entrarás con Facebook y elegirás el portfolio Ezyprods: es un paso de un minuto y no caduca.</p>
-          <a href="/api/instagram/connect" className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold flex items-center justify-center">Conectar</a>
-        </div>
+        <TokenConnect onConnected={() => { loadAccount(); loadPosts(); }} />
       )}
       {account?.missingConfig && (
         <div className="flex items-center gap-2 p-4 rounded-2xl border border-error/30 bg-error/5 text-sm"><AlertTriangle className="w-4 h-4 text-error" />Faltan las claves de Meta (META_APP_ID, META_APP_SECRET, META_LOGIN_CONFIG_ID) en el servidor.</div>
