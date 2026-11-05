@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { openComposer } from '@/components/instagram/igClient';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { useContextMenu, type MenuItem } from '@/lib/contexts/ContextMenuContext';
 import { useGlobalDragDrop } from '@/lib/contexts/GlobalDragDropContext';
@@ -1003,6 +1004,9 @@ export function useExplorerController({ rootId, rootName, scope }: ExplorerProps
       action: () => download(targets),
     });
     if (single) menu.push({ label: 'Abrir en Google Drive', icon: 'HardDrive', action: () => openInDrive(single) });
+    if (single && (single.kind === 'image' || single.kind === 'video')) {
+      menu.push({ label: 'Publicar en Instagram…', icon: 'Send', action: () => openComposer({ mode: 'schedule', driveFileId: single.id }) });
+    }
     menu.push({ separator: true });
 
     // Compartir ▸ everything about visibility/links: library sends & assignment, Drive sharing, links

@@ -170,6 +170,11 @@ function QuickActionsPopover({ onClose }: { onClose: () => void }) {
       icon: '📁',
       onClick: () => { window.dispatchEvent(new CustomEvent('ezy:quick-upload')); onClose(); },
     },
+    {
+      label: 'Publicar en Instagram',
+      icon: '📸',
+      onClick: () => { window.dispatchEvent(new CustomEvent('ezy:instagram-compose', { detail: { mode: 'schedule' } })); onClose(); },
+    },
   ];
 
   return (

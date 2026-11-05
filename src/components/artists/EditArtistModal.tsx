@@ -27,6 +27,7 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
     name: '',
     email: '',
     phone: '',
+    instagram: '',
     genre: '',
   });
 
@@ -38,6 +39,7 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
         name: artist.name || '',
         email: artist.email || '',
         phone: artist.phone || '',
+        instagram: artist.instagram || '',
         genre: artist.genre ? artist.genre.join(', ') : '',
       });
       setSelectedServices(artist.services || []);
@@ -61,6 +63,7 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
       name: formData.name,
       email: formData.email,
       phone: formatPhoneNumber(formData.phone),
+      instagram: formData.instagram.trim().replace(/^@+/, '').replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/[/?].*$/, ''),
       genre: formData.genre.split(',').map(g => g.trim()).filter(Boolean),
       services: selectedServices,
     };
@@ -128,6 +131,18 @@ export function EditArtistModal({ isOpen, onClose, artist }: EditArtistModalProp
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-instagram">Instagram (Opcional)</Label>
+            <Input
+              id="edit-instagram"
+              placeholder="@usuario"
+              autoCapitalize="none"
+              autoCorrect="off"
+              value={formData.instagram}
+              onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+            />
+            <p className="text-[11px] text-text-secondary">Para mencionarle o invitarle como colaborador al publicar.</p>
           </div>
 
         </div>

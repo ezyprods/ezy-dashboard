@@ -22,6 +22,8 @@ const PUBLIC_READS = [
   new RegExp(`^/api/audio/${DRIVE_ID}(?:/info|/resolve|/meta)?$`),
   new RegExp(`^/api/files/${DRIVE_ID}$`),
   new RegExp(`^/api/releases/${DRIVE_ID}$`),
+  // Images Instagram downloads when publishing. The route itself only serves files signed with ?s=
+  new RegExp(`^/api/instagram/media/${DRIVE_ID}$`),
 ];
 
 // Tools an artist portal can offer, and the private routes each one calls (src/components/tools)

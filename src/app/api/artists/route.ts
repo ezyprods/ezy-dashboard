@@ -83,6 +83,7 @@ export async function POST(request: Request) {
       genre: body.genre || [],
       email: body.email,
       phone: body.phone,
+      instagram: body.instagram,
       tags: body.tags || [],
       services: body.services || [],
       notes: body.notes,

@@ -19,6 +19,7 @@ import {
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { InstagramIcon } from '@/components/instagram/InstagramIcon';
 import { useAudio } from '@/lib/contexts/AudioContext';
 
 const mainNavItems = [
@@ -27,6 +28,7 @@ const mainNavItems = [
   { name: 'Proyectos Personales', href: '/personal-projects', icon: Music },
   { name: 'Matrices', href: '/matrices', icon: Grid },
   { name: 'Calendario', href: '/calendar', icon: Calendar },
+  { name: 'Instagram', href: '/instagram', icon: InstagramIcon },
   { name: 'Pagos', href: '/payments', icon: CreditCard },
 ];
 

@@ -18,6 +18,7 @@ export interface Artist {
   genre: string[];
   email?: string;
   phone?: string;
+  instagram?: string;
   tags: string[];
   services: ServiceType[];
   notes?: string;
@@ -39,6 +40,7 @@ export interface ArtistConfig {
   genre: string[];
   email?: string;
   phone?: string;
+  instagram?: string;
   tags: string[];
   services: ServiceType[];
   notes?: string;
@@ -54,6 +56,7 @@ export interface CreateArtistInput {
   genre?: string[];
   email?: string;
   phone?: string;
+  instagram?: string;
   tags?: string[];
   services?: ServiceType[];
   notes?: string;
