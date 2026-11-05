@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { discoverInstagramAccounts, exchangeCode, getAccount, setGraphHost, whoAmI } from '@/lib/instagram/graph';
 import { encryptText, verifyOAuthState } from '@/lib/instagram/secrets';
-import { saveConnection } from '@/lib/instagram/store';
+import { saveConnection, savePendingToken } from '@/lib/instagram/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
     const { accounts, host, notes } = await discoverInstagramAccounts(token);
     if (accounts.length === 0) {
       console.warn('[api/instagram/callback] sin cuentas:', notes);
+      // Se guarda cifrado para poder diagnosticar y terminar la conexión sin volver a pasar por Meta
+      const who = await whoAmI(token);
+      await savePendingToken({ token: encryptText(token), businessId: who.client_business_id, systemUserId: who.id, at: new Date().toISOString() }).catch(() => {});
       return back(request, { error: 'no_accounts', msg: notes.join(' | ').slice(0, 600) });
     }
     setGraphHost(host);
@@ -48,6 +51,7 @@ export async function GET(request: NextRequest) {
       businessId: me.client_business_id,
       connectedAt: new Date().toISOString(),
     });
+    await savePendingToken(null).catch(() => {});
     return back(request, { connected: chosen.username || '1' });
   } catch (err) {
     console.error('[api/instagram/callback]', err);

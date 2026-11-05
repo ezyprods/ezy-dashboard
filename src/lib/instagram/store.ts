@@ -359,3 +359,29 @@ export async function deleteMediaFiles(ids: (string | undefined)[]): Promise<num
   }
   return removed;
 }
+
+const PENDING_FILE = 'pendiente.json';
+
+export interface PendingToken {
+  token: string;
+  businessId?: string;
+  systemUserId?: string;
+  at: string;
+}
+
+/** Guarda (cifrado) el token de un inicio de sesión cuya cuenta aún no se pudo localizar */
+export async function savePendingToken(p: PendingToken | null): Promise<void> {
+  const { root } = await getFolders();
+  if (p) {
+    await writeNamedJson(PENDING_FILE, root, p);
+  } else {
+    const id = await findFileId(PENDING_FILE, root);
+    if (id) await getDriveService().files.delete({ fileId: id, supportsAllDrives: true }).catch(() => {});
+  }
+}
+
+export async function readPendingToken(): Promise<PendingToken | null> {
+  const { root } = await getFolders();
+  const id = await findFileId(PENDING_FILE, root);
+  return id ? readJson<PendingToken>(id).catch(() => null) : null;
+}
