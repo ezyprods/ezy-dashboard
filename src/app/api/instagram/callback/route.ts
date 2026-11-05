@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { assignedInstagramAccounts, exchangeCode, getAccount, whoAmI } from '@/lib/instagram/graph';
+import { discoverInstagramAccounts, exchangeCode, getAccount, setGraphHost, whoAmI } from '@/lib/instagram/graph';
 import { encryptText, verifyOAuthState } from '@/lib/instagram/secrets';
 import { saveConnection } from '@/lib/instagram/store';
 
@@ -27,10 +27,13 @@ export async function GET(request: NextRequest) {
   try {
     const redirectUri = `${request.nextUrl.origin}/api/instagram/callback`;
     const token = await exchangeCode(code, redirectUri);
-    const accounts = await assignedInstagramAccounts(token);
-    if (accounts.length === 0) return back(request, { error: 'no_accounts' });
-
-    const detailed = await Promise.all(accounts.map(a => getAccount(a.id, token).catch(() => a)));
+    const { accounts, host, notes } = await discoverInstagramAccounts(token);
+    if (accounts.length === 0) {
+      console.warn('[api/instagram/callback] sin cuentas:', notes);
+      return back(request, { error: 'no_accounts', msg: notes.join(' | ').slice(0, 600) });
+    }
+    setGraphHost(host);
+    const detailed = await Promise.all(accounts.map(a => (a.username ? Promise.resolve(a) : getAccount(a.id, token).catch(() => a))));
     const chosen = detailed.find(a => a.username?.toLowerCase() === PREFERRED_USERNAME) || detailed[0];
     const me = await whoAmI(token);
 
@@ -40,6 +43,7 @@ export async function GET(request: NextRequest) {
       name: chosen.name,
       profilePictureUrl: chosen.profile_picture_url,
       token: encryptText(token),
+      host,
       systemUserId: me.id,
       businessId: me.client_business_id,
       connectedAt: new Date().toISOString(),

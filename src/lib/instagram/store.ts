@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getDriveService } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+import { setGraphHost } from './graph';
 import type { IgPost, IgSettings, IgStatus } from '@/types/instagram';
 
 /**
@@ -35,6 +36,8 @@ export interface IgConnection {
   profilePictureUrl?: string;
   /** Token cifrado (ver secrets.ts) */
   token: string;
+  /** graph.facebook.com o graph.instagram.com, según con cuál funcione el token */
+  host?: 'facebook' | 'instagram';
   systemUserId?: string;
   businessId?: string;
   connectedAt: string;
@@ -142,11 +145,15 @@ let connectionCache: { at: number; value: IgConnection | null } | null = null;
 const CONNECTION_TTL_MS = 60 * 1000;
 
 export async function readConnection(fresh = false): Promise<IgConnection | null> {
-  if (!fresh && connectionCache && Date.now() - connectionCache.at < CONNECTION_TTL_MS) return connectionCache.value;
+  if (!fresh && connectionCache && Date.now() - connectionCache.at < CONNECTION_TTL_MS) {
+    setGraphHost(connectionCache.value?.host);
+    return connectionCache.value;
+  }
   const { root } = await getFolders();
   const id = await findFileId(CONNECTION_FILE, root);
   const value = id ? await readJson<IgConnection>(id).catch(() => null) : null;
   connectionCache = { at: Date.now(), value };
+  setGraphHost(value?.host);
   return value;
 }
 

@@ -5,6 +5,14 @@
 
 export const GRAPH_VERSION = 'v24.0';
 export const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+export const IG_GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
+
+/** Host con el que funciona el token de la cuenta conectada (se decide al conectar) */
+export type GraphHost = 'facebook' | 'instagram';
+let currentBase = GRAPH_BASE;
+export function setGraphHost(host: GraphHost | undefined) {
+  currentBase = host === 'instagram' ? IG_GRAPH_BASE : GRAPH_BASE;
+}
 
 export function metaConfig() {
   const appId = process.env.META_APP_ID || '';
@@ -50,13 +58,13 @@ function friendlyError(err: any, status: number): string {
 
 type Params = Record<string, string | number | boolean | undefined | null>;
 
-async function call<T = any>(method: 'GET' | 'POST' | 'DELETE', path: string, params: Params, token?: string): Promise<T> {
+async function call<T = any>(method: 'GET' | 'POST' | 'DELETE', path: string, params: Params, token?: string, base = currentBase): Promise<T> {
   const clean = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v === undefined || v === null || v === '') continue;
     clean.append(k, String(v));
   }
-  const url = `${GRAPH_BASE}${path}`;
+  const url = `${base}${path}`;
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   let res: Response;
@@ -101,7 +109,7 @@ export async function exchangeCode(code: string, redirectUri: string): Promise<s
     client_secret: appSecret,
     redirect_uri: redirectUri,
     code,
-  });
+  }, undefined, GRAPH_BASE);
   if (!data.access_token) throw new GraphError('Meta no devolvió el token de acceso.');
   return data.access_token;
 }
@@ -114,27 +122,74 @@ export interface IgAccount {
 }
 
 export async function whoAmI(token: string): Promise<{ id?: string; client_business_id?: string }> {
-  return call('GET', '/me', { fields: 'id,client_business_id' }, token).catch(() => ({}));
+  return call('GET', '/me', { fields: 'id,client_business_id' }, token, GRAPH_BASE).catch(() => ({}));
 }
 
-/** Cuentas de Instagram que se compartieron con la app al conectar */
-export async function assignedInstagramAccounts(token: string): Promise<IgAccount[]> {
-  try {
-    const data = await call<{ data?: IgAccount[] }>('GET', '/me/assigned_instagram_accounts', { fields: 'id,username' }, token);
-    if (data.data?.length) return data.data;
-  } catch (err) {
-    if ((err as GraphError).authExpired) throw err;
+export interface Discovery {
+  accounts: IgAccount[];
+  host: GraphHost;
+  /** Qué respondió cada vía, para poder diagnosticar si no aparece ninguna cuenta */
+  notes: string[];
+}
+
+/**
+ * Busca la cuenta de Instagram que se compartió al conectar. Meta la expone por sitios distintos
+ * según el tipo de inicio de sesión, así que se prueban varias vías en orden.
+ */
+export async function discoverInstagramAccounts(token: string): Promise<Discovery> {
+  const notes: string[] = [];
+  const attempt = async <T,>(label: string, fn: () => Promise<T>): Promise<T | null> => {
+    try {
+      return await fn();
+    } catch (err) {
+      notes.push(`${label}: ${(err as Error).message}`);
+      return null;
+    }
+  };
+
+  // 1. Usuario del sistema con cuentas asignadas (inicio de sesión unificado)
+  const assigned = await attempt('assigned', () => call<{ data?: IgAccount[] }>('GET', '/me/assigned_instagram_accounts', { fields: 'id,username' }, token, GRAPH_BASE));
+  if (assigned?.data?.length) return { accounts: assigned.data, host: 'facebook', notes };
+  if (assigned) notes.push('assigned: vacío');
+
+  // 2. Token compatible con el inicio de sesión de Instagram (graph.instagram.com)
+  const igMe = await attempt('graph.instagram', () => call<{ user_id?: string; id?: string; username?: string; name?: string; profile_picture_url?: string }>(
+    'GET', '/me', { fields: 'user_id,username,name,profile_picture_url' }, token, IG_GRAPH_BASE));
+  if (igMe && (igMe.user_id || igMe.id)) {
+    return {
+      accounts: [{ id: String(igMe.user_id || igMe.id), username: igMe.username || '', name: igMe.name, profile_picture_url: igMe.profile_picture_url }],
+      host: 'instagram',
+      notes,
+    };
   }
-  // Alternativa: los ids concedidos que aparecen en el propio token
+
+  // 3. Cuentas de Instagram de la empresa del cliente
+  const me = await whoAmI(token);
+  if (me.client_business_id) {
+    for (const edge of ['owned_instagram_accounts', 'instagram_business_accounts', 'instagram_accounts']) {
+      const r = await attempt(edge, () => call<{ data?: IgAccount[] }>('GET', `/${me.client_business_id}/${edge}`, { fields: 'id,username' }, token, GRAPH_BASE));
+      if (r?.data?.length) return { accounts: r.data, host: 'facebook', notes };
+    }
+  } else {
+    notes.push(`sin client_business_id (me=${me.id || '?'})`);
+  }
+
+  // 4. Páginas de Facebook con Instagram vinculado
+  const pages = await attempt('pages', () => call<{ data?: { instagram_business_account?: IgAccount }[] }>(
+    'GET', '/me/accounts', { fields: 'instagram_business_account{id,username,name,profile_picture_url}' }, token, GRAPH_BASE));
+  const fromPages = (pages?.data || []).map(p => p.instagram_business_account).filter((a): a is IgAccount => !!a?.id);
+  if (fromPages.length) return { accounts: fromPages, host: 'facebook', notes };
+
+  // 5. Los ids concedidos que aparecen en el propio token
   const { appId, appSecret } = metaConfig();
-  const dbg = await call<{ data?: { granular_scopes?: { scope: string; target_ids?: string[] }[] } }>(
-    'GET', '/debug_token', { input_token: token, access_token: `${appId}|${appSecret}` }
-  );
+  const dbg = await attempt('debug_token', () => call<{ data?: { type?: string; granular_scopes?: { scope: string; target_ids?: string[] }[] } }>(
+    'GET', '/debug_token', { input_token: token, access_token: `${appId}|${appSecret}` }, undefined, GRAPH_BASE));
   const ids = new Set<string>();
-  for (const s of dbg.data?.granular_scopes || []) {
-    if (s.scope.startsWith('instagram_')) (s.target_ids || []).forEach(id => ids.add(id));
+  for (const sc of dbg?.data?.granular_scopes || []) {
+    if (sc.scope.startsWith('instagram_')) (sc.target_ids || []).forEach(id => ids.add(id));
   }
-  return [...ids].map(id => ({ id, username: '' }));
+  if (dbg) notes.push(`token ${dbg.data?.type || '?'} · scopes ${(dbg.data?.granular_scopes || []).map(g => g.scope + (g.target_ids?.length ? `(${g.target_ids.length})` : '')).join(',') || 'ninguno'}`);
+  return { accounts: [...ids].map(id => ({ id, username: '' })), host: 'facebook', notes };
 }
 
 export async function getAccount(igUserId: string, token: string): Promise<IgAccount> {
