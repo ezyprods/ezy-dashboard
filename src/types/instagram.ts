@@ -71,6 +71,8 @@ export interface IgPost {
   links: IgPostLinks;
   /** Etiqueta libre para reconocerla en la agenda */
   title?: string;
+  /** ISO: cuándo se borra de Instagram (opcional) */
+  deleteAt?: string;
 
   // ── Estado de la publicación (lo escribe el servidor) ──
   attempts: number;
@@ -86,12 +88,18 @@ export interface IgPost {
   permalink?: string;
   publishedAt?: string;
   firstCommentDone?: boolean;
+  /** Borrada de Instagram (por el borrado programado o a mano desde aquí) */
+  deletedAt?: string;
+  deleteAttempts?: number;
+  /** Motivo por el que no se pudo borrar; tras varios intentos se deja de reintentar */
+  deleteError?: string;
+  deleteGaveUp?: boolean;
 }
 
 /** Lo que el navegador envía al crear o editar */
 export type IgPostInput = Pick<
   IgPost,
-  'format' | 'media' | 'caption' | 'firstComment' | 'collaborators' | 'storyMentions' | 'reel' | 'links' | 'title'
+  'format' | 'media' | 'caption' | 'firstComment' | 'collaborators' | 'storyMentions' | 'reel' | 'links' | 'title' | 'deleteAt'
 > & {
   /** null o ausente = publicar ahora */
   scheduledFor?: string | null;

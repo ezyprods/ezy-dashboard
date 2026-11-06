@@ -1,6 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import { toView } from '@/lib/instagram/account';
-import { runPost } from '@/lib/instagram/publisher';
+import { deletePublished, runPost } from '@/lib/instagram/publisher';
 import { deleteMediaFiles, deletePost, getPost, readConnection, savePost } from '@/lib/instagram/store';
 import { sanitizeInput } from '@/lib/instagram/validate';
 
@@ -23,6 +23,35 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
     const busy = post.status === 'PROCESSING';
     const action = body?.action as string | undefined;
+
+    // Borrar de Instagram ahora mismo una ya publicada
+    if (action === 'deleteNow') {
+      if (post.status !== 'PUBLISHED' || post.deletedAt) return NextResponse.json({ error: 'Solo se pueden borrar publicaciones que estén en Instagram.' }, { status: 409 });
+      const conn = await readConnection();
+      if (!conn) return NextResponse.json({ error: 'Conecta la cuenta de Instagram.' }, { status: 409 });
+      post.deleteGaveUp = false;
+      post.deleteAttempts = 0;
+      const after = await deletePublished(post, conn);
+      if (!after.deletedAt) return NextResponse.json({ error: after.deleteError || 'No se pudo borrar.', post: toView(after) }, { status: 502 });
+      return NextResponse.json({ post: toView(after) });
+    }
+
+    // Cambiar o quitar la hora de borrado (también en las ya publicadas)
+    if (action === 'setDelete') {
+      if (post.deletedAt) return NextResponse.json({ error: 'Ya está borrada.' }, { status: 409 });
+      if (body.deleteAt) {
+        const d = new Date(body.deleteAt);
+        if (isNaN(d.getTime()) || d.getTime() < Date.now() + 60_000) return NextResponse.json({ error: 'Elige una hora de borrado en el futuro.' }, { status: 400 });
+        post.deleteAt = d.toISOString();
+      } else {
+        post.deleteAt = undefined;
+      }
+      post.deleteGaveUp = false;
+      post.deleteAttempts = 0;
+      post.deleteError = undefined;
+      await savePost(post);
+      return NextResponse.json({ post: toView(post) });
+    }
 
     if (action === 'cancel') {
       if (busy || post.status === 'PUBLISHED') return NextResponse.json({ error: 'Ya se está publicando o ya está publicada.' }, { status: 409 });

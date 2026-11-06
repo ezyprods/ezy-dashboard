@@ -266,6 +266,24 @@ export async function mediaInfo(mediaId: string, token: string): Promise<{ perma
   return call('GET', `/${mediaId}`, { fields: 'permalink,timestamp' }, token).catch(() => ({}));
 }
 
+/** Borra una publicación de Instagram (requiere instagram_manage_contents) */
+export async function deleteMedia(mediaId: string, token: string): Promise<void> {
+  const d = await call<{ success?: boolean }>('DELETE', `/${mediaId}`, {}, token, GRAPH_BASE);
+  if (d && d.success === false) throw new GraphError('Instagram no confirmó el borrado.');
+}
+
+/** ¿Sigue existiendo la publicación? (null = no se sabe) */
+export async function mediaExists(mediaId: string, token: string): Promise<boolean | null> {
+  try {
+    await call('GET', `/${mediaId}`, { fields: 'id' }, token);
+    return true;
+  } catch (err) {
+    const e = err as GraphError;
+    if (e.code === 100 || e.subcode === 33) return false;
+    return null;
+  }
+}
+
 export async function postComment(mediaId: string, message: string, token: string): Promise<void> {
   await call('POST', `/${mediaId}/comments`, { message }, token);
 }

@@ -29,7 +29,10 @@ export async function createPost(input: IgPostInput) {
   );
 }
 
-export async function updatePost(id: string, body: Partial<IgPostInput> | { action: 'cancel' | 'reactivate' | 'retry' | 'publishNow' }) {
+export async function updatePost(
+  id: string,
+  body: Partial<IgPostInput> | { action: 'cancel' | 'reactivate' | 'retry' | 'publishNow' | 'deleteNow' } | { action: 'setDelete'; deleteAt: string | null },
+) {
   return json<{ post: IgPostView; publishing?: boolean }>(
     await fetch(`/api/instagram/posts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   );

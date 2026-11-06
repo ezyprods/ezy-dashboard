@@ -5,6 +5,8 @@ import {
   GraphError,
   containerStatus,
   createContainer,
+  deleteMedia,
+  mediaExists,
   mediaInfo,
   postComment,
   publishContainer,
@@ -12,7 +14,7 @@ import {
   recentStories,
 } from './graph';
 import { decryptText, signMedia } from './secrets';
-import { getPost, listPosts, readConnection, savePost, type IgConnection } from './store';
+import { getPost, listPosts, listPostsToDelete, readConnection, savePost, type IgConnection } from './store';
 
 /**
  * Publicación en Instagram como una pequeña máquina de estados guardada en la propia publicación:
@@ -232,6 +234,38 @@ async function markPublished(post: IgPost, mediaId: string | undefined, conn: Ig
 
 export type AdvanceResult = 'published' | 'waiting' | 'failed' | 'skipped';
 
+const DELETE_MAX_ATTEMPTS = 4;
+
+/** Borra de Instagram una publicación ya publicada. Devuelve el post actualizado. */
+export async function deletePublished(post: IgPost, conn: IgConnection): Promise<IgPost> {
+  if (!post.igMediaId) {
+    post.deleteError = 'No se sabe el ID de la publicación en Instagram: bórrala a mano.';
+    post.deleteGaveUp = true;
+    return savePost(post);
+  }
+  const token = decryptText(conn.token);
+  try {
+    await deleteMedia(post.igMediaId, token);
+    post.deletedAt = new Date().toISOString();
+    post.deleteError = undefined;
+  } catch (err) {
+    // Si ya no existe (borrada a mano o historia caducada), se da por borrada
+    const exists = await mediaExists(post.igMediaId, token);
+    if (exists === false) {
+      post.deletedAt = new Date().toISOString();
+      post.deleteError = undefined;
+    } else {
+      post.deleteAttempts = (post.deleteAttempts || 0) + 1;
+      const msg = (err as Error).message;
+      post.deleteError = /permiso/i.test(msg)
+        ? 'Instagram no deja borrarla automáticamente (falta el permiso instagram_manage_contents). Bórrala a mano desde el enlace.'
+        : `No se pudo borrar: ${msg}`;
+      if (post.deleteAttempts >= DELETE_MAX_ATTEMPTS || /permiso/i.test(msg)) post.deleteGaveUp = true;
+    }
+  }
+  return savePost(post);
+}
+
 /** Avanza una publicación ya reservada tanto como permita el presupuesto de tiempo */
 async function advance(post: IgPost, conn: IgConnection, budgetMs: number): Promise<AdvanceResult> {
   const deadline = Date.now() + budgetMs;
@@ -348,6 +382,13 @@ export async function processQueue(totalBudgetMs = 48000): Promise<QueueRunResul
   if (!conn) return result;
   result.connected = true;
 
+  // Borrados programados que ya tocan (rápidos: van antes que las publicaciones)
+  const nowForDelete = new Date().toISOString();
+  for (const p of (await listPostsToDelete()).filter(x => x.deleteAt && x.deleteAt <= nowForDelete)) {
+    if (Date.now() - start > 15000) break;
+    await deletePublished(p, conn).catch(err => console.warn('[instagram] borrado programado', p.id, (err as Error).message));
+  }
+
   const nowIso = new Date().toISOString();
   const candidates = (await listPosts(['PENDING', 'PROCESSING']))
     .filter(p => p.status === 'PROCESSING' || (p.scheduledFor && p.scheduledFor <= nowIso))
@@ -359,6 +400,13 @@ export async function processQueue(totalBudgetMs = 48000): Promise<QueueRunResul
   result.due = candidates.length;
 
   for (const c of candidates) {
+    // Su hora de borrado llegó antes de poder publicarse: no tiene sentido publicarla ya
+    if (c.status === 'PENDING' && c.deleteAt && c.deleteAt <= nowIso) {
+      c.status = 'CANCELLED';
+      c.error = 'Cancelada: su hora de borrado llegó antes de que se publicara.';
+      await savePost(c);
+      continue;
+    }
     const left = totalBudgetMs - (Date.now() - start);
     // Empezar algo nuevo solo si queda tiempo de sobra; lo que ya está en curso solo necesita consultar
     if (left < (c.status === 'PROCESSING' ? 6000 : 20000)) break;

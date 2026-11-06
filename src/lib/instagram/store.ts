@@ -267,6 +267,28 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
+/** Publicadas con borrado programado aún pendiente */
+export async function listPostsToDelete(): Promise<IgPost[]> {
+  const { posts } = await getFolders();
+  const drive = getDriveService();
+  const res: any = await drive.files.list({
+    q: `'${posts}' in parents and trashed = false and appProperties has { key='igDel' and value='1' }`,
+    fields: 'files(id, name, modifiedTime, appProperties)',
+    pageSize: 200,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  const metas: PostFileMeta[] = (res.data.files || []).map((f: any) => ({
+    fileId: f.id,
+    postId: String(f.name || '').replace(/\.json$/, ''),
+    modified: f.modifiedTime || '',
+    status: (f.appProperties?.igStatus || 'PUBLISHED') as IgStatus,
+    scheduledFor: f.appProperties?.igAt || '',
+  }));
+  const loaded = await mapLimit(metas, 8, loadPost);
+  return loaded.filter((p): p is IgPost => !!p);
+}
+
 export async function listPosts(statuses?: IgStatus[]): Promise<IgPost[]> {
   const metas = await listPostFiles(statuses);
   const posts = await mapLimit(metas, 8, loadPost);
@@ -297,7 +319,8 @@ export async function savePost(post: IgPost): Promise<IgPost> {
   const drive = getDriveService();
   const { posts } = await getFolders();
   post.updatedAt = new Date().toISOString();
-  const appProperties = { igStatus: post.status, igAt: post.scheduledFor || '' };
+  const deletePending = post.status === 'PUBLISHED' && !!post.deleteAt && !post.deletedAt && !post.deleteGaveUp;
+  const appProperties = { igStatus: post.status, igAt: post.scheduledFor || '', igDel: deletePending ? '1' : '0' };
   const media = { mimeType: 'application/json', body: JSON.stringify(post, null, 2) };
   const existing = await postFileId(post.id);
   let modified = '';

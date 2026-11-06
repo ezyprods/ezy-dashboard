@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   Zap, CalendarClock, Smartphone, Image as ImageIcon, Film, GalleryHorizontalEnd, Upload, HardDrive, Music4,
   X, Loader2, AlertTriangle, ChevronLeft, ChevronRight, Plus, AtSign, Users, Link2, ChevronDown, Hash, FileText,
-  MessageSquarePlus, Eye, Sparkles, Tag,
+  MessageSquarePlus, Eye, Sparkles, Tag, Trash2,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { DatePicker } from '@/components/ui/DatePicker';
@@ -211,6 +211,11 @@ export function InstagramComposer({ request, onClose }: { request: ComposeReques
   const [artistId, setArtistId] = useState(base?.links?.artistId || request.artistId || '');
   const [linkedFiles, setLinkedFiles] = useState<{ id: string; name: string }[]>(base?.links?.files || []);
   const [title, setTitle] = useState(base?.title || '');
+  // Borrado automático: nunca, a las 24 h, a los 7 días o en una fecha concreta
+  const [deleteMode, setDeleteMode] = useState<'none' | '24h' | '7d' | 'custom'>(editing?.deleteAt ? 'custom' : 'none');
+  const initialDelete = editing?.deleteAt ? new Date(editing.deleteAt) : null;
+  const [deleteDate, setDeleteDate] = useState(initialDelete ? ymd(initialDelete) : '');
+  const [deleteTime, setDeleteTime] = useState(initialDelete ? hm(initialDelete) : '12:00');
   const initialWhen = useMemo(() => {
     if (editing && new Date(editing.scheduledFor).getTime() > Date.now()) return new Date(editing.scheduledFor);
     if (request.at) return new Date(request.at);
@@ -528,6 +533,7 @@ export function InstagramComposer({ request, onClose }: { request: ComposeReques
   // ── Comprobaciones ────────────────────────────────────────────────────────
   const used = format === 'CAROUSEL' ? drafts : drafts.slice(0, 1);
   const whenDate = combine(date, time);
+  const deleteAtDate = deleteMode === 'custom' ? combine(deleteDate, deleteTime) : null;
   const problems = useMemo(() => {
     const p: string[] = [];
     if (!boot?.account.connected && mode === 'now') p.push('Conecta la cuenta de Instagram para publicar ahora.');
@@ -545,10 +551,24 @@ export function InstagramComposer({ request, onClose }: { request: ComposeReques
       if (!whenDate) p.push('Elige fecha y hora.');
       else if (whenDate.getTime() < Date.now() + 60_000) p.push('La hora programada ya ha pasado.');
     }
+    if (deleteMode === 'custom') {
+      const publishAt = mode === 'now' ? Date.now() : whenDate?.getTime() ?? Date.now();
+      if (!deleteAtDate) p.push('Elige cuándo se borra.');
+      else if (deleteAtDate.getTime() <= publishAt + 5 * 60_000) p.push('El borrado tiene que ser al menos 5 minutos después de publicarse.');
+    }
     return [...new Set(p)];
-  }, [boot, mode, used, format, caption, whenDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boot, mode, used, format, caption, whenDate, deleteMode, deleteDate, deleteTime]);
 
   const busy = used.some(d => d.stage === 'loading' || d.stage === 'optimizing' || d.stage === 'uploading');
+
+  /** Hora de borrado resultante (relativa a la de publicación en los atajos) */
+  function computeDeleteAt(): Date | null {
+    if (format === 'STORY' || deleteMode === 'none') return null;
+    if (deleteMode === 'custom') return combine(deleteDate, deleteTime);
+    const base = mode === 'now' || !whenDate ? new Date() : whenDate;
+    return new Date(base.getTime() + (deleteMode === '24h' ? 24 : 24 * 7) * 3600_000);
+  }
 
   // ── Guardar ───────────────────────────────────────────────────────────────
   const submit = async () => {
@@ -602,6 +622,7 @@ export function InstagramComposer({ request, onClose }: { request: ComposeReques
         } : undefined,
         links: { artistId: artistId || undefined, artistName: artist?.name, files: linkedFiles.length ? linkedFiles : undefined },
         title: title.trim() || undefined,
+        deleteAt: computeDeleteAt()?.toISOString(),
         scheduledFor: mode === 'now' ? null : whenDate!.toISOString(),
       };
 
@@ -978,6 +999,37 @@ export function InstagramComposer({ request, onClose }: { request: ComposeReques
                 </div>
               )}
             </div>
+
+            {/* Borrado automático */}
+            {format !== 'STORY' && (
+              <Section title="Borrado automático" icon={Trash2}>
+                <div className="flex flex-wrap gap-1.5">
+                  <Pill active={deleteMode === 'none'} onClick={() => setDeleteMode('none')}>Nunca</Pill>
+                  <Pill active={deleteMode === '24h'} onClick={() => setDeleteMode('24h')}>A las 24 h</Pill>
+                  <Pill active={deleteMode === '7d'} onClick={() => setDeleteMode('7d')}>A los 7 días</Pill>
+                  <Pill active={deleteMode === 'custom'} onClick={() => {
+                    if (!deleteDate) {
+                      const d = new Date((mode === 'now' || !whenDate ? Date.now() : whenDate.getTime()) + 2 * 86400_000);
+                      setDeleteDate(ymd(d));
+                      setDeleteTime(hm(d));
+                    }
+                    setDeleteMode('custom');
+                  }}>Elegir fecha</Pill>
+                </div>
+                {deleteMode === 'custom' && (
+                  <div className="flex gap-2">
+                    <div className="flex-1"><DatePicker value={deleteDate} onChange={setDeleteDate} /></div>
+                    <input type="time" value={deleteTime} onChange={e => setDeleteTime(e.target.value)}
+                      className="w-32 h-10 bg-surface border border-border rounded-xl px-3 text-sm focus:outline-none focus:border-accent" />
+                  </div>
+                )}
+                {deleteMode !== 'none' && (
+                  <p className="text-[11px] text-text-secondary">
+                    {computeDeleteAt() ? `Se borrará de Instagram el ${whenFmt.format(computeDeleteAt()!)}.` : ''} Si Instagram no deja borrarla sola, te avisaremos en la agenda con el enlace para quitarla a mano.
+                  </p>
+                )}
+              </Section>
+            )}
 
             {/* Cuándo */}
             {mode === 'schedule' && (

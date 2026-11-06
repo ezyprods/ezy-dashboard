@@ -85,6 +85,15 @@ export function sanitizeInput(body: any): { input?: IgPostInput; error?: string 
     scheduledFor = d.toISOString();
   }
 
+  let deleteAt: string | undefined;
+  if (body.deleteAt) {
+    const d = new Date(body.deleteAt);
+    if (isNaN(d.getTime())) return { error: 'La fecha de borrado no es válida.' };
+    const from = scheduledFor ? new Date(scheduledFor).getTime() : Date.now();
+    if (d.getTime() <= from + 5 * 60 * 1000) return { error: 'El borrado tiene que ser al menos 5 minutos después de publicarse.' };
+    deleteAt = d.toISOString();
+  }
+
   const reelIn = body.reel || {};
   const links = body.links || {};
   return {
@@ -115,6 +124,7 @@ export function sanitizeInput(body: any): { input?: IgPostInput; error?: string 
           : undefined,
       },
       title: str(body.title, 120) || undefined,
+      deleteAt,
       scheduledFor,
     },
   };

@@ -5,12 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Zap, CalendarClock, Smartphone, Image as ImageIcon, Film, GalleryHorizontalEnd, Loader2, ExternalLink, Pencil,
-  Copy, XCircle, RotateCcw, Trash2, MoreHorizontal, AlertTriangle, CheckCircle2, Clock, Link2, Users, LogOut, RefreshCw,
+  Copy, XCircle, RotateCcw, Trash2, MoreHorizontal, Timer, TimerOff, Eraser, AlertTriangle, CheckCircle2, Clock, Link2, Users, LogOut, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useArtists } from '@/lib/hooks/useArtists';
 import { ArtistAvatar } from '@/components/ui/ArtistAvatar';
-import { customConfirm } from '@/lib/dialog';
+import { customConfirm, customPrompt } from '@/lib/dialog';
 import { FORMAT_LABEL } from '@/lib/instagram/limits';
 import type { IgAccountInfo, IgFormat, IgPostView, IgStatus } from '@/types/instagram';
 import { InstagramIcon } from '@/components/instagram/InstagramIcon';
@@ -53,6 +53,7 @@ const ERRORS: Record<string, string> = {
 
 const dayFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
 const timeFmt = new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit' });
+const deleteFmt = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 function dayKey(iso: string) {
   const d = new Date(iso);
@@ -207,12 +208,18 @@ function PostRow({ post, onAction }: { post: IgPostView; onAction: (p: IgPostVie
   const { artists } = useArtists();
   const artist = post.links?.artistId ? artists.find(a => a.id === post.links.artistId) : undefined;
   const fmt = FORMAT_STYLE[post.format];
-  const st = STATUS_STYLE[post.status];
+  const st = post.deletedAt ? { label: 'Borrada de Instagram', cls: 'text-text-secondary bg-surface-elevated' } : STATUS_STYLE[post.status];
+  const onInstagram = post.status === 'PUBLISHED' && !post.deletedAt;
   const canEdit = post.status === 'PENDING' || post.status === 'FAILED' || post.status === 'CANCELLED';
   const extra: Parameters<typeof RowMenu>[0]['items'] = [];
   if (canEdit) extra.push({ label: 'Editar', Icon: Pencil, onClick: () => onAction(post, 'edit') });
   extra.push({ label: 'Duplicar', Icon: Copy, onClick: () => onAction(post, 'duplicate') });
   if (post.status === 'PENDING') extra.push({ label: 'Cancelar', Icon: XCircle, onClick: () => onAction(post, 'cancel'), danger: true });
+  if (onInstagram) {
+    extra.push({ label: post.deleteAt ? 'Cambiar hora de borrado' : 'Programar borrado', Icon: Timer, onClick: () => onAction(post, 'setDelete') });
+    if (post.deleteAt) extra.push({ label: 'No borrar', Icon: TimerOff, onClick: () => onAction(post, 'clearDelete') });
+    extra.push({ label: 'Borrar de Instagram ahora', Icon: Eraser, onClick: () => onAction(post, 'deleteNow'), danger: true });
+  }
   if (post.status !== 'PROCESSING' && post.status !== 'PENDING') extra.push({ label: 'Quitar de la lista', Icon: Trash2, onClick: () => onAction(post, 'delete'), danger: true });
 
   return (
@@ -243,6 +250,15 @@ function PostRow({ post, onAction }: { post: IgPostView; onAction: (p: IgPostVie
           {post.collaborators?.length > 0 && <span className="flex items-center gap-1 truncate"><Users className="w-3 h-3" />{post.collaborators.map(c => `@${c}`).join(' ')}</span>}
           {post.links?.files?.length ? <span className="flex items-center gap-1"><Link2 className="w-3 h-3" />{post.links.files.length}</span> : null}
         </div>
+        {post.deleteAt && !post.deletedAt && !post.deleteError && post.status !== 'CANCELLED' && (
+          <p className="text-[11px] text-text-secondary flex items-center gap-1"><Timer className="w-3 h-3" />Se borra el {deleteFmt.format(new Date(post.deleteAt))}</p>
+        )}
+        {post.deleteError && !post.deletedAt && (
+          <p className="text-[11px] text-warning flex items-start gap-1">
+            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+            <span>{post.deleteError}{post.permalink && <> · <a href={post.permalink} target="_blank" rel="noreferrer" className="underline">Abrir en Instagram</a></>}</span>
+          </p>
+        )}
         {post.error && (
           <p className={cn('text-[11px] flex items-start gap-1', post.status === 'FAILED' ? 'text-error' : 'text-warning')}>
             <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" /><span className="line-clamp-2">{post.error}</span>
@@ -371,6 +387,22 @@ function InstagramPageInner() {
       } else if (action === 'cancel') {
         await updatePost(post.id, { action: 'cancel' });
         toast.success('Publicación cancelada');
+      } else if (action === 'deleteNow') {
+        if (!(await customConfirm('Se borrará de tu perfil de Instagram. No se puede deshacer.', '¿Borrar de Instagram?'))) return;
+        await updatePost(post.id, { action: 'deleteNow' });
+        toast.success('Borrada de Instagram');
+      } else if (action === 'clearDelete') {
+        await updatePost(post.id, { action: 'setDelete', deleteAt: null });
+        toast.success('Ya no se borrará');
+      } else if (action === 'setDelete') {
+        const def = post.deleteAt ? new Date(post.deleteAt) : new Date(Date.now() + 86400_000);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const value = await customPrompt('Fecha y hora de borrado (AAAA-MM-DD HH:MM)', `${def.getFullYear()}-${pad(def.getMonth() + 1)}-${pad(def.getDate())} ${pad(def.getHours())}:${pad(def.getMinutes())}`, 'Programar borrado');
+        if (!value) return;
+        const d = new Date(value.trim().replace(' ', 'T'));
+        if (isNaN(d.getTime())) return toast.error('Fecha no válida. Usa el formato 2026-11-20 19:30');
+        await updatePost(post.id, { action: 'setDelete', deleteAt: d.toISOString() });
+        toast.success(`Se borrará el ${deleteFmt.format(d)}`);
       } else if (action === 'publishNow' || action === 'retry' || action === 'reactivate') {
         const r = await updatePost(post.id, { action: action as 'publishNow' | 'retry' | 'reactivate' });
         toast.success(r.publishing ? 'Publicando en Instagram…' : 'Vuelve a estar programada');
