@@ -68,6 +68,10 @@ export function PasswordGuard({ children }: { children: React.ReactNode }) {
       if (res.status === 401) {
         setError('Contraseña incorrecta. Por favor, inténtalo de nuevo.');
         setPasswordInput('');
+      } else if (res.status === 429) {
+        const minutes = Math.max(1, Math.ceil(Number(res.headers.get('Retry-After') || 900) / 60));
+        setError(`Demasiados intentos fallidos. Vuelve a probar en ${minutes} min.`);
+        setPasswordInput('');
       } else {
         setError('El servidor no pudo verificar la contraseña. Inténtalo más tarde.');
       }

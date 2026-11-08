@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 const FIELDS = 'id, name, mimeType, size, modifiedTime, parents, imageMediaMetadata(width,height), videoMediaMetadata(width,height,durationMillis)';
@@ -25,6 +26,8 @@ function toItem(f: any) {
  *   ?kind=image|video|audio   (&q=texto) los más recientes de ese tipo
  */
 export async function GET(request: NextRequest) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const sp = request.nextUrl.searchParams;
     const drive = getDriveService();

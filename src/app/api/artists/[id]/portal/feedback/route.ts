@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 async function read(id: string) {
@@ -11,6 +12,8 @@ async function read(id: string) {
 
 /** Producer inbox: every message the artist sent from the portal (and the producer's replies). */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const data = await read(id);
@@ -22,6 +25,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 /** Reply to the artist (visible in their portal). */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const body = await request.json();
@@ -50,6 +55,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 /** Mark messages as read/unread: { ids: string[], isRead: boolean } (ids omitted = all). */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const body = await request.json();
@@ -65,6 +72,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const messageId = new URL(request.url).searchParams.get('messageId');

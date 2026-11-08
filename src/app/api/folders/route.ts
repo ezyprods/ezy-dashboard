@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createFolder } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { name, parentId } = await request.json();
     

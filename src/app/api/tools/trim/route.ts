@@ -4,6 +4,7 @@ import path from 'path';
 import { writeFile, unlink, readFile } from 'fs/promises';
 import { contentDisposition, resolveFfmpegPath, uniqueTempPath } from '@/lib/serverFiles';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const maxDuration = 120;
 
 const MIME_TYPES: Record<string, string> = {
@@ -15,6 +16,8 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('trimmer');
+  if (denied) return denied;
   let inputPath: string | null = null;
   let outputPath: string | null = null;
 

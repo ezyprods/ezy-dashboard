@@ -4,7 +4,10 @@ import { NextResponse } from 'next/server';
 import { getLibraryRootId, LibraryError, updateLibraryDb } from '@/lib/beatLibrary';
 import { errorResponse, idList, text } from '@/lib/libraryApi';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
@@ -41,6 +44,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const rootId = await getLibraryRootId();

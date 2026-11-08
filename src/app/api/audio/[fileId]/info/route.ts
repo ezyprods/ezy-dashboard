@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
+import { applyPrivacy, checkPublicFileAccess } from '@/lib/driveScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,8 @@ const MAX_DEPTH = 15;
 export async function GET(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   try {
     const { fileId } = await params;
+    const access = await checkPublicFileAccess(fileId);
+    if (access.denied) return access.denied;
     const drive = getDriveService();
 
     // Resolve breadcrumbs walking up the folder tree until the artist folder
@@ -71,10 +74,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Fetched on every play and costs up to 15 Drive calls; a file's location
     // rarely changes, so let the CDN answer repeats (keyed per file id).
-    return NextResponse.json(
+    return applyPrivacy(NextResponse.json(
       { pathSegments, artistName, name: fileName },
       { headers: { 'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800' } }
-    );
+    ), access);
   } catch (error: any) {
     console.error('API /audio/[fileId]/info error:', error);
     return NextResponse.json({ error: 'Failed to fetch audio info' }, { status: 500 });

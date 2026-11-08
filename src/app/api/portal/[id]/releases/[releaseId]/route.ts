@@ -2,21 +2,25 @@ import { NextResponse, NextRequest } from 'next/server';
 import { Readable } from 'stream';
 import { findAndReadJsonFile, saveJsonFile, getDriveService } from '@/lib/drive';
 import type { Release } from '@/types';
+import { isArtistFolder, isDriveId, portalNotFound } from '@/lib/driveScope';
+import { requireStudioOrPortalSession } from '@/lib/routeAuth';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Verifies the portal token and that the artist is allowed to edit releases.
+ * Verifies that this browser opened the artist's portal (portal session cookie, or the studio)
+ * and that the artist is allowed to edit releases. The portal token is no longer sent by the
+ * browser: it never leaves the server.
  * Returns an error response or null when access is granted.
  */
-async function verifyPortalAccess(artistId: string, token: string | null | undefined) {
-  if (!token) {
-    return NextResponse.json({ error: 'Faltan datos' }, { status: 400 });
-  }
+async function verifyPortalAccess(artistId: string, releaseId: string) {
+  if (!isDriveId(releaseId) || !(await isArtistFolder(artistId))) return portalNotFound();
+  const denied = await requireStudioOrPortalSession(artistId);
+  if (denied) return denied;
 
   const portalConfig = await findAndReadJsonFile<any>('portal_config.json', artistId);
-  if (!portalConfig || portalConfig.token !== token) {
-    return NextResponse.json({ error: 'No autorizado (token inválido)' }, { status: 401 });
+  if (!portalConfig) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
   const releasesModule = portalConfig.modules?.find((m: any) => m.type === 'releases');
@@ -39,8 +43,8 @@ async function readArtistRelease(artistId: string, releaseId: string) {
   return config;
 }
 
-// The portal client sends requests here. The portal is public but secured by a token
-// (sent in the request body), and editing must be enabled by the producer.
+// The portal client sends requests here. It needs the portal session cookie that opening the
+// portal hands out, and editing must be enabled by the producer.
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; releaseId: string }> }
@@ -49,13 +53,13 @@ export async function PUT(
     const { id: artistId, releaseId } = await params;
 
     const body = await request.json();
-    const { token, release } = body as { token: string; release: Release };
+    const { release } = body as { release: Release };
 
     if (!release) {
       return NextResponse.json({ error: 'Faltan datos' }, { status: 400 });
     }
 
-    const denied = await verifyPortalAccess(artistId, token);
+    const denied = await verifyPortalAccess(artistId, releaseId);
     if (denied) return denied;
 
     const currentRelease = await readArtistRelease(artistId, releaseId);
@@ -90,7 +94,6 @@ export async function POST(
   try {
     const { id: artistId, releaseId } = await params;
     const formData = await request.formData();
-    const token = formData.get('token') as string | null;
     const file = formData.get('file') as File | null;
 
     if (!file) {
@@ -100,7 +103,7 @@ export async function POST(
       return NextResponse.json({ error: 'El archivo debe ser una imagen' }, { status: 400 });
     }
 
-    const denied = await verifyPortalAccess(artistId, token);
+    const denied = await verifyPortalAccess(artistId, releaseId);
     if (denied) return denied;
 
     const currentRelease = await readArtistRelease(artistId, releaseId);

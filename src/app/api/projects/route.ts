@@ -4,8 +4,11 @@ import { listFolders, findAndReadJsonFile, createFolder, saveJsonFile } from '@/
 import { PROJECT_FOLDER_STRUCTURE, isSystemOrSpecialFolder } from '@/lib/constants';
 import type { Project, CreateProjectInput } from '@/types';
 
+import { requireStudio } from '@/lib/routeAuth';
 // Obtener todos los proyectos de un artista
 export async function GET(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const artistId = searchParams.get('artistId');
@@ -72,6 +75,8 @@ export async function GET(request: Request) {
 
 // Crear un nuevo proyecto
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body: CreateProjectInput = await request.json();
     

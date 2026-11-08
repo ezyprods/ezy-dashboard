@@ -2,9 +2,12 @@ import { NextResponse, after } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import { syncProductionGridToGoogleCalendar } from '@/lib/calendarSync';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string; matrixId: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id, matrixId } = resolvedParams;
@@ -44,6 +47,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string; matrixId: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id, matrixId } = resolvedParams;

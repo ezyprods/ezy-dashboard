@@ -3,10 +3,13 @@ import { accountInfo } from '@/lib/instagram/account';
 import { getFolders, readSettings, saveSettings } from '@/lib/instagram/store';
 import type { IgBootstrap, IgSettings } from '@/types/instagram';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 // Estado de la cuenta, carpeta de subida y ajustes: lo primero que pide la página de Instagram
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const [account, folders, settings] = await Promise.all([accountInfo(), getFolders(), readSettings()]);
     const body: IgBootstrap = { account, mediaFolderId: folders.media, settings };
@@ -19,6 +22,8 @@ export async function GET() {
 
 // Guardar hashtags y plantillas
 export async function PUT(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = (await request.json()) as Partial<IgSettings>;
     const clean = <T extends { id: string; name: string }>(list: unknown, field: 'tags' | 'text') =>

@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const drive = getDriveService();
     const response = await drive.about.get({

@@ -46,7 +46,9 @@ function basicAuthHeader(clientId: string, clientSecret: string) {
 // ---------------------------------------------------------------------------
 
 function cookieKey(): Buffer {
-  const secret = process.env.BETTER_AUTH_SECRET || process.env.SPOTIFY_CLIENT_SECRET || '';
+  const secret = process.env.BETTER_AUTH_SECRET || process.env.SPOTIFY_CLIENT_SECRET;
+  // Never seal cookies with an empty key: without a secret Spotify login simply stays unavailable
+  if (!secret) throw new Error('Spotify cookies need BETTER_AUTH_SECRET');
   return createHash('sha256').update(`ezy-spotify:${secret}`).digest();
 }
 

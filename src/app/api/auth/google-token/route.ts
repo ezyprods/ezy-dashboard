@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { auth as googleAuth } from '@googleapis/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const type = searchParams.get('type') || 'both'; // 'drive', 'calendar', or 'both'

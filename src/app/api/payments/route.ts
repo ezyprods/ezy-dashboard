@@ -5,7 +5,10 @@ import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 import type { Payment } from '@/types';
 import { randomUUID } from 'crypto';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const payments = await findAndReadJsonFile<Payment[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID);
     return NextResponse.json({ payments: payments || [] });
@@ -15,6 +18,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const payments = (await findAndReadJsonFile<Payment[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID)) || [];
@@ -42,6 +47,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const payments = (await findAndReadJsonFile<Payment[]>('payments_db.json', DRIVE_ROOT_FOLDER_ID)) || [];

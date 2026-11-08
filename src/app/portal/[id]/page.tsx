@@ -176,7 +176,7 @@ export default function PortalPage() {
   const projects: any[] = data?.projects || [];
   const realProjects = projects.filter(p => p.id !== 'all' && p.id !== 'general');
   const allFiles: any[] = projects.find(p => p.id === 'all')?.files || [];
-  const pending = data?.finances?.pendingPayment || 0;
+  const pending = data?.finances?.pendingPayment || (data?.paymentPending ? 1 : 0);
   const projectById = useMemo(() => new Map(projects.map(p => [p.id, p])), [projects]);
 
   const isLocked = (file: any) => {

@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, listFolders, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     // List all artist folders
     const folders = await listFolders(DRIVE_ROOT_FOLDER_ID);

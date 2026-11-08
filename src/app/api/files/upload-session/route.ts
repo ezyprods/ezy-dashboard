@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getDriveAuthClient } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { name, mimeType, parentId, fileId, appProperties } = await request.json();
 

@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { calendar as calendarApi } from '@googleapis/calendar';
 import { getCalendarAuthClient } from '@/lib/calendarAuth';
 
+import { requireStudio } from '@/lib/routeAuth';
 const TIME_ZONE = 'Europe/Madrid';
 
 /** Start of "today" in the studio time zone (the server runs in UTC on Vercel). */
@@ -35,6 +36,8 @@ function mapEvent(item: any) {
 }
 
 export async function GET(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const timeMinParam = searchParams.get('timeMin');
@@ -90,6 +93,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { summary, description, startDateTime, endDateTime, startDate, endDate } = body;

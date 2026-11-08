@@ -5,6 +5,7 @@ import { getLibraryRootId, LibraryError, newId, updateLibraryDb } from '@/lib/be
 import { errorResponse, idList, text } from '@/lib/libraryApi';
 import type { BeatSend } from '@/types';
 
+import { requireStudio } from '@/lib/routeAuth';
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every(x => b.includes(x));
 
 /**
@@ -12,6 +13,8 @@ const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every(x
  * A send with exactly the same items is reused instead of creating a duplicate.
  */
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json().catch(() => ({}));
     const itemIds = idList(body.itemIds);

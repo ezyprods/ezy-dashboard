@@ -3,9 +3,12 @@ import { auth as googleAuth, drive as driveApi } from '@googleapis/drive';
 import { getDriveAuthClient, listFolders } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const driveToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
   const generalToken = process.env.GOOGLE_REFRESH_TOKEN;
   const calendarToken = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
@@ -51,8 +54,11 @@ export async function GET() {
     status: 'Diagnostics V2',
     tokens: {
       hasClientId: !!clientId,
-      driveToken: driveToken ? `${driveToken.substring(0, 10)}... (length: ${driveToken.length})` : null,
-      activeTokenUsed: activeToken ? `${activeToken.substring(0, 10)}...` : null,
+      // Never echo any part of a secret: only whether each one is set
+      hasDriveToken: !!driveToken,
+      hasGeneralToken: !!generalToken,
+      hasCalendarToken: !!calendarToken,
+      activeTokenSource: driveToken ? 'GOOGLE_DRIVE_REFRESH_TOKEN' : generalToken ? 'GOOGLE_REFRESH_TOKEN' : null,
       folderId: DRIVE_ROOT_FOLDER_ID
     },
     testCallRaw: {

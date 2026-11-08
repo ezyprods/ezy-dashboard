@@ -3,12 +3,15 @@ import { findAndReadJsonFile, saveJsonFile, getDriveService } from '@/lib/drive'
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 import type { Artist, ArtistConfig } from '@/types';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 // Obtener detalle de un artista
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;
@@ -67,6 +70,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 // Actualizar un artista
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;
@@ -137,6 +142,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 // Eliminar un artista: su carpeta se mueve a la papelera de Google Drive (recuperable)
 // y se quita de la base de datos global de artistas.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     if (!id || id === DRIVE_ROOT_FOLDER_ID) {

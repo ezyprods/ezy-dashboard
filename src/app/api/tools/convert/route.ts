@@ -6,6 +6,7 @@ import fs from 'fs';
 import { writeFile, unlink } from 'fs/promises';
 import { ensureBinaries } from '../ytdl/binaries';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const maxDuration = 120;
 
 const MIME_TYPES: Record<string, string> = {
@@ -18,6 +19,8 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('converter');
+  if (denied) return denied;
   let inputPath: string | null = null;
   let outputPath: string | null = null;
 

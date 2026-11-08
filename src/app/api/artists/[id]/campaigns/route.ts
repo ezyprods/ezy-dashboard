@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import type { EzyConfig, Campaign } from '@/types';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams; // artist drive folder ID
@@ -20,6 +23,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;

@@ -3,6 +3,12 @@ import { DRIVE_ROOT_FOLDER_ID } from './constants';
 import { getFileType } from './utils';
 import type { DriveFile, FileType } from '@/types';
 
+/**
+ * Escapes a value placed inside a quoted Drive query literal. Ids and names reach these queries
+ * from URLs (e.g. the public portal), so an unescaped quote could rewrite the query.
+ */
+export const escapeDriveQuery = (value: string) => String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
 // Cliente de Google Auth para Drive
 export const getDriveAuthClient = () => {
   const oauth2Client = new driveAuth.OAuth2(
@@ -69,7 +75,7 @@ export async function saveJsonFile(name: string, data: any, parentId: string): P
   const drive = getDriveService();
   
   // Primero comprobamos si ya existe
-  const query = `name='${name}' and '${parentId}' in parents and trashed=false`;
+  const query = `name='${escapeDriveQuery(name)}' and '${escapeDriveQuery(parentId)}' in parents and trashed=false`;
   const existing = await drive.files.list({ 
     q: query, 
     fields: 'files(id)',
@@ -129,7 +135,7 @@ export async function readJsonFile<T>(fileId: string): Promise<T> {
  */
 export async function findAndReadJsonFile<T>(name: string, folderId: string): Promise<T | null> {
   const drive = getDriveService();
-  const query = `name='${name}' and '${folderId}' in parents and trashed=false`;
+  const query = `name='${escapeDriveQuery(name)}' and '${escapeDriveQuery(folderId)}' in parents and trashed=false`;
   
   const existing = await drive.files.list({ 
     q: query, 
@@ -150,7 +156,7 @@ export async function findAndReadJsonFile<T>(name: string, folderId: string): Pr
  */
 export async function listFolders(parentId: string = DRIVE_ROOT_FOLDER_ID) {
   const drive = getDriveService();
-  const query = `mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  const query = `mimeType='application/vnd.google-apps.folder' and '${escapeDriveQuery(parentId)}' in parents and trashed=false`;
   
   let allFiles: any[] = [];
   let pageToken: string | undefined = undefined;
@@ -186,7 +192,7 @@ export async function fetchFoldersRecursively(drive: any, parentId: string, pare
 
   do {
     const response: any = await drive.files.list({
-      q: `'${parentId}' in parents and trashed=false`,
+      q: `'${escapeDriveQuery(parentId)}' in parents and trashed=false`,
       fields: 'nextPageToken, files(id, name, mimeType, webViewLink, webContentLink, createdTime, modifiedTime, size, appProperties)',
       orderBy: 'folder, name',
       pageSize: 1000,
@@ -262,7 +268,7 @@ export async function fetchFoldersRecursively(drive: any, parentId: string, pare
  */
 export async function listFiles(parentId: string): Promise<DriveFile[]> {
   const drive = getDriveService();
-  const query = `mimeType!='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  const query = `mimeType!='application/vnd.google-apps.folder' and '${escapeDriveQuery(parentId)}' in parents and trashed=false`;
   
   let allFiles: any[] = [];
   let pageToken: string | undefined = undefined;

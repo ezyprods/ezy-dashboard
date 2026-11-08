@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 const FIELDS = 'nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, appProperties, thumbnailLink, parents, explicitlyTrashed, trashedTime, fileExtension)';
 
 /**
@@ -9,6 +10,8 @@ const FIELDS = 'nextPageToken, files(id, name, mimeType, size, createdTime, modi
  * POST { folderIds: string[] } → { items }
  */
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { folderIds } = await request.json();
     if (!Array.isArray(folderIds) || folderIds.length === 0) {

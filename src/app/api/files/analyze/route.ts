@@ -1,8 +1,11 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 // GET: Find up to 5 audio files that don't have bpm or key in appProperties
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const drive = getDriveService();
 
@@ -34,6 +37,8 @@ export async function GET() {
 
 // PATCH: Update appProperties with bpm and key
 export async function PATCH(request: NextRequest) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { fileId, bpm, key } = body;

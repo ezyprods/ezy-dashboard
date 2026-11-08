@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { getDriveService, listFolders, listFiles } from '@/lib/drive';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { artistId, folderType, tempFiles, targetFolderId: providedFolderId } = await request.json();
 

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { makeFilesPublic } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(request: NextRequest) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const rawIds = body?.fileIds || body?.fileId;

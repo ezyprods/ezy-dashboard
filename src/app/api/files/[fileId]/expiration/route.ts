@@ -1,10 +1,13 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { setFileExpiration } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { fileId } = await params;
     const body = await request.json();

@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { completeSpotifyLogin, SPOTIFY_STATE_COOKIE, unsealCookie } from '@/lib/spotify';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export async function GET(req: Request) {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   const url = new URL(req.url);
   const back = (params: Record<string, string>) =>
     NextResponse.redirect(`${url.origin}/tools/downloader?${new URLSearchParams(params)}`);

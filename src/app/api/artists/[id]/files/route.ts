@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 // Función recursiva para obtener SOLO archivos de audio (búsqueda profunda en todas las subcarpetas)
 async function fetchAudioFilesRecursively(drive: any, parentId: string, depth: number = 0): Promise<any[]> {
   // Limit depth to 6 levels to prevent infinite loops on very complex structures
@@ -48,6 +49,8 @@ async function fetchAudioFilesRecursively(drive: any, parentId: string, depth: n
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;

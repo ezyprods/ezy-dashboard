@@ -2,11 +2,14 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 /**
  * Duplicates a file (Drive cannot copy folders).
  * POST { fileId, parentId?, name? } → { file }
  */
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { fileId, parentId, name } = await request.json();
     if (!fileId) {

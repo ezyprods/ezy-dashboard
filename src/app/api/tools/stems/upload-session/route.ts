@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDriveAuthClient } from '@/lib/drive';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('stems');
+  if (denied) return denied;
   try {
     const body = await req.json();
     const { filename, mimeType } = body;

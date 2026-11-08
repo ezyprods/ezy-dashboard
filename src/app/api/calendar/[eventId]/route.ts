@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { calendar as calendarApi } from '@googleapis/calendar';
 import { getCalendarAuthClient } from '@/lib/calendarAuth';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function PUT(request: Request, { params }: { params: Promise<{ eventId: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { eventId } = await params;
     const body = await request.json();
@@ -49,6 +52,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ even
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ eventId: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { eventId } = await params;
 

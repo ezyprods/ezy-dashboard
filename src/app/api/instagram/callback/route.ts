@@ -3,6 +3,7 @@ import { discoverInstagramAccounts, exchangeCode, getAccount, setGraphHost, whoA
 import { encryptText, verifyOAuthState } from '@/lib/instagram/secrets';
 import { saveConnection, savePendingToken } from '@/lib/instagram/store';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 const PREFERRED_USERNAME = 'ezyprods';
@@ -14,6 +15,8 @@ function back(request: NextRequest, params: Record<string, string>) {
 }
 
 export async function GET(request: NextRequest) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const sp = request.nextUrl.searchParams;
   if (sp.get('error') || sp.get('error_reason')) {
     return back(request, { error: 'cancelled' });

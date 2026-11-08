@@ -5,9 +5,12 @@ import { Readable } from 'stream';
 import { FOLDER_NAME_MAP } from '@/lib/constants';
 import { getNormalizedBaseName, stringSimilarity } from '@/lib/utils';
 
+import { requireStudio } from '@/lib/routeAuth';
 // POST /api/files/upload
 // Body: FormData with fields: artistId, folderType, file (repeatable)
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const formData = await request.formData();
     const artistId = formData.get('artistId') as string | null;

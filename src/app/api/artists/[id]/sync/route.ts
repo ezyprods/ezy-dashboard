@@ -3,8 +3,11 @@ import { findAndReadJsonFile, saveJsonFile, createFolder, listFolders, getDriveS
 import { ARTIST_FOLDER_STRUCTURE } from '@/lib/constants';
 import type { ArtistConfig } from '@/types';
 
+import { requireStudio } from '@/lib/routeAuth';
 // Sincronizar (inicializar) una carpeta antigua de Drive
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;

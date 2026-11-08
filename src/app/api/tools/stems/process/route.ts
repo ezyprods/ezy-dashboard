@@ -9,9 +9,12 @@ import { spawn } from 'child_process';
 import { stemsTasks, broadcastStems } from '../state';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('stems');
+  if (denied) return denied;
   try {
     let driveFileId: string | null = null;
     let file: File | null = null;

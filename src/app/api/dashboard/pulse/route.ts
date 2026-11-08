@@ -7,7 +7,10 @@ import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 
 import type { ArtistConfig, Artist } from '@/types';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const [foldersRaw, artistsDbResult] = await Promise.all([
       listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {

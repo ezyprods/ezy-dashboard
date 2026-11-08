@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 /**
  * Resolves the breadcrumb trail of a folder inside an explorer root.
  * GET /api/files/path?folderId=<id>&rootId=<id>
@@ -9,6 +10,8 @@ import { getDriveService } from '@/lib/drive';
  * `insideRoot` is false when the folder does not live under rootId.
  */
 export async function GET(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const folderId = searchParams.get('folderId');

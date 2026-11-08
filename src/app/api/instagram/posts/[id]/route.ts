@@ -4,6 +4,7 @@ import { deletePublished, runPost } from '@/lib/instagram/publisher';
 import { deleteMediaFiles, deletePost, getPost, readConnection, savePost } from '@/lib/instagram/store';
 import { sanitizeInput } from '@/lib/instagram/validate';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -15,6 +16,8 @@ type Ctx = { params: Promise<{ id: string }> };
  *  o los campos del formulario para editarla (solo si aún no se ha publicado)
  */
 export async function PATCH(request: Request, { params }: Ctx) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const body = await request.json();
@@ -100,6 +103,8 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
 // Quita la publicación de la lista y sus archivos de Medios (no la borra de Instagram)
 export async function DELETE(_request: Request, { params }: Ctx) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const post = await getPost(id);

@@ -11,9 +11,13 @@ import type { PortalToolId } from '@/types/portal';
  * It must live next to `app` (src/), a proxy.ts at the repo root is never loaded.
  */
 
-// Open to everyone: the studio lock itself, better-auth / Google OAuth, the artist portal
-// and Vercel Cron (the cron route checks CRON_SECRET on its own)
+// Open to everyone: the studio lock itself, better-auth, the artist portal and Vercel Cron.
+// Each of these checks its own credential in the route (portal session cookie, CRON_SECRET…).
 const PUBLIC_PREFIXES = ['/api/studio', '/api/auth', '/api/portal', '/api/cron'];
+
+// Under /api/auth but private: the Google refresh-token helper prints a secret, and the status
+// probe uses the studio's Drive account
+const PRIVATE_EXCEPTIONS = ['/api/auth/google-token', '/api/auth/status'];
 
 // Read-only endpoints used by the artist portal and the /previews share page. They only match a
 // Drive id, so the static routes next to them (/api/files/path, /api/files/trash…) stay private.
@@ -41,6 +45,7 @@ const isUnder = (pathname: string, prefix: string) => pathname === prefix || pat
 
 function isPublic(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
+  if (PRIVATE_EXCEPTIONS.some((prefix) => isUnder(pathname, prefix))) return false;
   if (PUBLIC_PREFIXES.some((prefix) => isUnder(pathname, prefix))) return true;
   const isRead = request.method === 'GET' || request.method === 'HEAD';
   return isRead && PUBLIC_READS.some((pattern) => pattern.test(pathname));

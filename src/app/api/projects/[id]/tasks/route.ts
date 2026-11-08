@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import type { FlexBoardData, Task } from '@/types';
 import { syncProductionGridToGoogleCalendar } from '@/lib/calendarSync';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 type StoredBoard = FlexBoardData & { workSessions?: any[] };
@@ -42,6 +43,8 @@ function migrateOldFormat(data: any): StoredBoard {
 
 // Leer tareas (con migración automática)
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;
@@ -58,6 +61,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 // Guardar board (sync). Solo se sobrescriben los campos presentes en el body:
 // así guardar únicamente las sesiones de trabajo no borra las tareas ni las matrices.
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;

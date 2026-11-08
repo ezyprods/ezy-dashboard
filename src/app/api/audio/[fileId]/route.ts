@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
 import { boundedRange } from '@/lib/boundedRange';
+import { applyPrivacy, checkPublicFileAccess } from '@/lib/driveScope';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -80,11 +81,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
+  // Public (portal, /previews, service worker), but only for files inside the studio folder
+  const { fileId } = await params;
+  const access = await checkPublicFileAccess(fileId);
+  if (access.denied) return access.denied;
+  return applyPrivacy(await serveAudio(request, fileId), access);
+}
+
+async function serveAudio(request: NextRequest, fileId: string): Promise<NextResponse> {
   try {
-    const { fileId } = await params;
-    if (!fileId) {
-      return new NextResponse('File ID is required', { status: 400 });
-    }
 
     // Images still redirect: the thumbnail host is CORP-permissive, so this
     // costs 0 bytes of origin transfer and keeps working.

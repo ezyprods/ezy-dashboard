@@ -3,7 +3,10 @@ import { getDriveService, findAndReadJsonFile, saveJsonFile } from '@/lib/drive'
 import { Release, ReleaseTrack } from '@/types';
 import { randomUUID } from 'crypto';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const { id } = await params;
   const { originalFileId, title } = await request.json();
   const drive = getDriveService();

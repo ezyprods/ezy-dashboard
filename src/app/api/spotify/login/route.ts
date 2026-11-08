@@ -8,6 +8,7 @@ import {
   SPOTIFY_STATE_PREFIX,
 } from '@/lib/spotify';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 /**
  * Starts the Spotify OAuth flow.
  *
@@ -17,6 +18,8 @@ import {
  * /api/spotify/callback. SPOTIFY_REDIRECT_URI overrides it if needed.
  */
 export async function GET(req: Request) {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   const origin = new URL(req.url).origin;
   const redirectUri = process.env.SPOTIFY_REDIRECT_URI?.trim() || origin;
   const state = SPOTIFY_STATE_PREFIX + randomBytes(16).toString('hex');

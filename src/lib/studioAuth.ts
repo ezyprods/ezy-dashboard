@@ -100,3 +100,40 @@ export function verifyPortalToolsToken(token: string | undefined, tool: string):
   if (Date.now() - Number(issuedAt) > PORTAL_TOOLS_MAX_AGE_SECONDS * 1000) return false;
   return safeEqual(signature, signPortalTools(issuedAt, list, secret)) && list.split(',').includes(tool);
 }
+
+/**
+ * Artist portal session: opening /portal/<artistId> hands out an httpOnly cookie that only travels
+ * to that artist's own portal routes (its path is /api/portal/<artistId>). The routes that change
+ * data (comments, contact details, release edits, download alerts) require it, so the portal token
+ * never has to reach the browser.
+ */
+export const PORTAL_SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+
+export const portalSessionCookieName = (artistId: string) => `ezy_portal_${artistId}`;
+export const portalSessionCookiePath = (artistId: string) => `/api/portal/${artistId}`;
+
+function signPortalSession(issuedAt: string, artistId: string, secret: string): string {
+  return createHmac('sha256', secret).update(`portal-session:${issuedAt}:${artistId}`).digest('base64url');
+}
+
+export function createPortalSessionToken(artistId: string): string | null {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret || !artistId) return null;
+  const issuedAt = Date.now().toString();
+  return `${issuedAt}.${signPortalSession(issuedAt, artistId, secret)}`;
+}
+
+export function verifyPortalSessionToken(token: string | undefined, artistId: string): boolean {
+  const secret = process.env.BETTER_AUTH_SECRET;
+  if (!secret || !token || !artistId) return false;
+  const [issuedAt, signature, ...rest] = token.split('.');
+  if (rest.length > 0 || !signature || !/^\d+$/.test(issuedAt)) return false;
+  if (Date.now() - Number(issuedAt) > PORTAL_SESSION_MAX_AGE_SECONDS * 1000) return false;
+  return safeEqual(signature, signPortalSession(issuedAt, artistId, secret));
+}
+
+/** Constant-time comparison of a presented secret with the expected one (e.g. CRON_SECRET, HUB_TOKEN). */
+export function secretMatches(presented: string | null | undefined, expected: string | undefined): boolean {
+  if (!expected || typeof presented !== 'string' || !presented) return false;
+  return safeEqual(presented, expected);
+}

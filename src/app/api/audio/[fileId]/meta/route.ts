@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getDriveService } from '@/lib/drive';
+import { checkPublicFileAccess } from '@/lib/driveScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
   try {
     const { fileId } = await params;
+    const access = await checkPublicFileAccess(fileId);
+    if (access.denied) return access.denied;
     const drive = getDriveService();
     const { data } = await drive.files.get({
       fileId,

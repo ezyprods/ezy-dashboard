@@ -3,7 +3,10 @@ import path from 'path';
 import * as NodeID3 from 'node-id3';
 import { contentDisposition } from '@/lib/serverFiles';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export async function POST(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('tags');
+  if (denied) return denied;
   try {
     const formData = await req.formData();
     const action = formData.get('action') as string;

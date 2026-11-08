@@ -12,6 +12,7 @@ import { isSoundCloudPlaylist, fetchSoundCloudPlaylist } from '../soundcloud_pla
 import { getSpotifyTrackMetadata, pickBestYouTubeMatch } from '../engines';
 import { getSpotifyUser } from '@/lib/spotify';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const maxDuration = 60;
 
 const AES_KEY_HEX = 'C5D58EF67A7584E4A29F6C35BBC4EB12';
@@ -223,6 +224,8 @@ async function getSaveTubeInfo(videoId: string) {
 }
 
 export async function POST(req: Request) {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   try {
     const { url } = await req.json();
     if (!url || typeof url !== 'string' || !url.trim()) {

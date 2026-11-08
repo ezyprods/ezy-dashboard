@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getDriveService, findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import { Release } from '@/types';
+import { requireStudio } from '@/lib/routeAuth';
+import { checkPublicFileAccess } from '@/lib/driveScope';
 
 export const dynamic = 'force-dynamic';
 
+// Public: the /previews/<id> share page reads it. Only release folders inside the studio folder.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  
+  const access = await checkPublicFileAccess(id);
+  if (access.denied) return NextResponse.json({ error: 'Release not found' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+
   const config = await findAndReadJsonFile<Release>('release_config.json', id);
   if (!config) {
     return NextResponse.json({ error: 'Release not found' }, { status: 404 });
@@ -31,6 +36,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const { id } = await params;
   const updates = await request.json();
   
@@ -52,6 +59,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const { id } = await params;
   const drive = getDriveService();
   

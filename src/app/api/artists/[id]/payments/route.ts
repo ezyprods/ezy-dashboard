@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import { randomUUID } from 'crypto';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;
@@ -14,6 +17,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const resolvedParams = await params;
     const { id } = resolvedParams;

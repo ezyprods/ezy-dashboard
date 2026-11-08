@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,8 @@ export const dynamic = 'force-dynamic';
 const MAX_BYTES = 60 * 1024 * 1024;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const { id } = await params;
   if (!/^[\w-]{10,}$/.test(id)) return new NextResponse('Bad id', { status: 400 });
   try {

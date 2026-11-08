@@ -4,9 +4,12 @@ import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 import fs from 'fs';
 import path from 'path';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const fileId = searchParams.get('fileId');

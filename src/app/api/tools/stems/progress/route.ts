@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stemsClients, stemsTasks, broadcastStems } from '../state';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('stems');
+  if (denied) return denied;
   const taskId = req.nextUrl.searchParams.get('taskId');
   const predictionId = req.nextUrl.searchParams.get('predictionId');
   const clientToken = req.headers.get('x-replicate-token') || req.nextUrl.searchParams.get('token');

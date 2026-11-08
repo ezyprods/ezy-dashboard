@@ -45,3 +45,6 @@ scratch/
 test-google.js
 
 .vercel
+
+# local state of the one-off import scripts (real catalogue paths and Drive ids)
+scripts/*-progress.json

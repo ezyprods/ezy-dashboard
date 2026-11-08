@@ -12,6 +12,9 @@ export const maxDuration = 60;
  * Si no hay nada que hacer tarda menos de un segundo.
  */
 export async function GET(request: Request) {
+  if (!process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'not_configured' }, { status: 503 });
+  }
   if (!isCronAuthorized(request)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }

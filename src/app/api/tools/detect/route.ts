@@ -7,6 +7,7 @@ import MusicTempo from 'music-tempo';
 import Meyda from 'meyda';
 import { resolveFfmpegPath, uniqueTempPath } from '@/lib/serverFiles';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const maxDuration = 120;
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -63,6 +64,8 @@ function analyzeKey(chromagram: number[]) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('detector');
+  if (denied) return denied;
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;

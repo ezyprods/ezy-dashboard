@@ -4,9 +4,12 @@ import path from 'path';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('stems');
+  if (denied) return denied;
   try {
     const taskId = req.nextUrl.searchParams.get('taskId');
     const stem = req.nextUrl.searchParams.get('stem') as 'vocals' | 'drums' | 'bass' | 'other' | null;

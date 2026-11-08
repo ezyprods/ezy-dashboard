@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSpotifyUser, spotifyGet } from '@/lib/spotify';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export const maxDuration = 30;
 
 export interface MySpotifyPlaylist {
@@ -19,6 +20,8 @@ export interface MySpotifyPlaylist {
  * they own, collaborate on or follow (flagging which ones can be read in full).
  */
 export async function GET() {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   const user = await getSpotifyUser();
   if (!user) return NextResponse.json({ error: 'Spotify no está conectado' }, { status: 401 });
 

@@ -3,6 +3,7 @@ import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import type { PortalConfig } from '@/types';
 import { randomBytes } from 'crypto';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 const DEFAULT_MODULES = [
@@ -14,6 +15,8 @@ const DEFAULT_MODULES = [
 ];
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     let config = await findAndReadJsonFile<PortalConfig>('portal_config.json', id);
@@ -57,6 +60,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const body = await request.json();

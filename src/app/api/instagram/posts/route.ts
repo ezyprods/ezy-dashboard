@@ -5,10 +5,13 @@ import { listPosts, newPostId, readConnection, savePost } from '@/lib/instagram/
 import { sanitizeInput } from '@/lib/instagram/validate';
 import type { IgPost } from '@/types/instagram';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const posts = await listPosts();
     posts.sort((a, b) => b.scheduledFor.localeCompare(a.scheduledFor));
@@ -21,6 +24,8 @@ export async function GET() {
 
 // Crear: programada (scheduledFor en el futuro) o "publicar ahora" (sin scheduledFor)
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { input, error } = sanitizeInput(await request.json());
     if (!input) return NextResponse.json({ error }, { status: 400 });

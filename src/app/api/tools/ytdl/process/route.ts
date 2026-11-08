@@ -18,6 +18,7 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 /**
  * Downloads a YouTube video's audio via yt-dlp using bestaudio selection.
  * This is the highest-quality path: downloads the native stream (opus/m4a)
@@ -140,6 +141,8 @@ async function downloadVideoIdViaNativeYtdlp(
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   const body = await req.json();
   const {
     url,

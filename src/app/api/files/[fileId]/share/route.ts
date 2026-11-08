@@ -1,10 +1,13 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { listPermissions, shareFile, revokePermission } from '@/lib/drive';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { fileId } = await params;
     const permissions = await listPermissions(fileId);
@@ -19,6 +22,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { fileId } = await params;
     const body = await request.json();
@@ -40,6 +45,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { fileId } = await params;
     const { searchParams } = new URL(request.url);

@@ -6,7 +6,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { findAndReadJsonFile, getDriveService, listFolders, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
 import { getPortalBeatSends } from '@/lib/beatLibrary';
-import { PORTAL_TOOLS_COOKIE, PORTAL_TOOLS_MAX_AGE_SECONDS, createPortalToolsToken, studioCookieOptions } from '@/lib/studioAuth';
+import {
+  PORTAL_SESSION_MAX_AGE_SECONDS,
+  PORTAL_TOOLS_COOKIE,
+  PORTAL_TOOLS_MAX_AGE_SECONDS,
+  createPortalSessionToken,
+  createPortalToolsToken,
+  portalSessionCookieName,
+  portalSessionCookiePath,
+  studioCookieOptions,
+} from '@/lib/studioAuth';
+import { isArtistFolder, portalNotFound } from '@/lib/driveScope';
+import { requireStudioOrPortalSession } from '@/lib/routeAuth';
 import { enabledPortalTools } from '@/types/portal';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
@@ -55,6 +66,8 @@ function matrixStats(matrix: any) {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    // The portal link is the artist folder id: nothing else in Drive is served through it
+    if (!(await isArtistFolder(id))) return portalNotFound();
     const drive = getDriveService();
 
     const [artistConfig, storedPortalConfig, matricesData, feedbackData, allPayments, beatSends] = await Promise.all([
@@ -304,8 +317,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // releases are optional
     }
 
-    // The producer-only fields never reach the artist
-    const { hiddenProjectIds: _hidden, ...publicConfig } = portalConfig;
+    // The producer-only fields never reach the artist, and neither does the portal token
+    // (the routes that change data rely on the portal session cookie set below)
+    const { hiddenProjectIds: _hidden, token: _token, ...publicConfig } = portalConfig;
+    const financesVisible = portalConfig.modules.some((m: { type?: string; isVisible?: boolean }) => m.type === 'finances' && m.isVisible !== false);
     const beatsModule = portalConfig.modules.find((m: any) => m.type === 'beats');
 
     const response = NextResponse.json({
@@ -317,7 +332,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       welcomeMessage: portalConfig.welcomeMessage || '',
       projects: projectsData,
       releases,
-      finances: { totalBudget, totalPaid, pendingPayment },
+      // Amounts only when the producer shows the finances module; the paywall only needs a yes/no
+      finances: financesVisible ? { totalBudget, totalPaid, pendingPayment } : null,
+      paymentPending: pendingPayment > 0,
       sharedMatrices,
       beatSends: beatsModule?.isVisible === false ? [] : beatSends,
       feedback: (feedbackData?.feedback || []).filter((f: any) => !f.fromProducer || f.visibleToArtist !== false).slice(0, 50),
@@ -330,6 +347,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (toolsPass) {
       response.cookies.set(PORTAL_TOOLS_COOKIE, toolsPass, studioCookieOptions(request, PORTAL_TOOLS_MAX_AGE_SECONDS));
     }
+    // Lets this browser comment, edit releases and update its contact details in this portal only
+    const session = createPortalSessionToken(id);
+    if (session) {
+      response.cookies.set(portalSessionCookieName(id), session, {
+        ...studioCookieOptions(request, PORTAL_SESSION_MAX_AGE_SECONDS),
+        path: portalSessionCookiePath(id),
+      });
+    }
     return response;
   } catch (error: any) {
     console.error('API /portal/[id] GET error:', error);
@@ -341,6 +366,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!(await isArtistFolder(id))) return portalNotFound();
+    const denied = await requireStudioOrPortalSession(id);
+    if (denied) return denied;
     const body = await request.json();
     const message = typeof body.message === 'string' ? body.message.trim().slice(0, 4000) : '';
     const authorName = typeof body.authorName === 'string' ? body.authorName.trim().slice(0, 80) : '';

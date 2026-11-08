@@ -3,21 +3,17 @@ export const revalidate = 0;
 
 import { NextResponse } from 'next/server';
 import { cleanupExpiredFiles } from '@/lib/drive';
+import { isCronAuthorized } from '@/lib/instagram/secrets';
 
 export async function GET(request: Request) {
+  // Vercel Cron sends Authorization: Bearer CRON_SECRET. Without CRON_SECRET the route stays closed.
+  if (!process.env.CRON_SECRET) {
+    return NextResponse.json({ error: 'not_configured' }, { status: 503 });
+  }
+  if (!isCronAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-    
-    // When CRON_SECRET is configured, Vercel Cron sends it as a Bearer token: enforce it
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      const url = new URL(request.url);
-      const queryKey = url.searchParams.get('key');
-      if (queryKey !== cronSecret) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
-
     const result = await cleanupExpiredFiles();
     return NextResponse.json({
       success: true,

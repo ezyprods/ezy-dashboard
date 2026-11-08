@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 
+import { requireStudio } from '@/lib/routeAuth';
 type FolderInfo = { name: string; parent?: string };
 
 /** Every folder's name and parent, so each file can be traced up to its artist folder. */
@@ -41,6 +42,8 @@ function artistOf(parentId: string | undefined, folders: Map<string, FolderInfo>
 }
 
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const drive = getDriveService();
     const query = `mimeType contains 'audio/' and trashed=false`;

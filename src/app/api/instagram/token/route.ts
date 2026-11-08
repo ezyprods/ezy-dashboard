@@ -3,6 +3,7 @@ import { discoverInstagramAccounts, getAccount, setGraphHost, whoAmI } from '@/l
 import { encryptText } from '@/lib/instagram/secrets';
 import { saveConnection, savePendingToken } from '@/lib/instagram/store';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 const PREFERRED_USERNAME = 'ezyprods';
@@ -13,6 +14,8 @@ const PREFERRED_USERNAME = 'ezyprods';
  * El token se guarda cifrado en Drive y nunca se devuelve.
  */
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { token: raw } = await request.json().catch(() => ({}));
     const token = String(raw || '').trim();

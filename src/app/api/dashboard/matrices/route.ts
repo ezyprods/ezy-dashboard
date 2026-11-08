@@ -2,11 +2,14 @@ import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, listFolders } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const foldersRaw = await listFolders(DRIVE_ROOT_FOLDER_ID);
     const folders = (foldersRaw || []).filter(f => !isSystemOrSpecialFolder(f.name));

@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import ProjectUpdateEmail from '@/components/emails/ProjectUpdateEmail';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(request: Request) {
-  const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy');
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { artistEmail, artistName, projectName, message, portalUrl } = body;
@@ -14,6 +16,7 @@ export async function POST(request: Request) {
         { status: 503 }
       );
     }
+    const resend = new Resend(process.env.RESEND_API_KEY);
 
     if (!artistEmail) {
       return NextResponse.json(

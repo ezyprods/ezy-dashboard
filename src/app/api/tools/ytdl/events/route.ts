@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server';
 import { tasks, sseClients } from '../state';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 export async function GET(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   let controllerRef: ReadableStreamDefaultController | null = null;
 
   const stream = new ReadableStream({

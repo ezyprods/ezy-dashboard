@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { findAndReadJsonFile, getDriveService } from '@/lib/drive';
 import { STUDIO_COOKIE, verifyStudioToken } from '@/lib/studioAuth';
+import { isArtistFolder } from '@/lib/driveScope';
+import { requireStudioOrPortalSession } from '@/lib/routeAuth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,6 +36,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!process.env.RESEND_API_KEY) return NextResponse.json({ ok: true, skipped: 'no-mail' });
 
     const { id } = await params;
+    if (!(await isArtistFolder(id))) return NextResponse.json({ ok: false }, { status: 404 });
+    // Without the portal session anyone could make the server send these emails
+    const denied = await requireStudioOrPortalSession(id);
+    if (denied) return denied;
     const body = await request.json().catch(() => ({}));
     const kind = ['file', 'beat', 'release', 'folder'].includes(body.kind) ? body.kind : 'file';
     const context = typeof body.context === 'string' ? body.context.trim().slice(0, 200) : '';

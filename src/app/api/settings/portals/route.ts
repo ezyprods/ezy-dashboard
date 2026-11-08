@@ -4,6 +4,7 @@ import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 import type { ArtistConfig, PortalConfig } from '@/types';
 import { randomBytes } from 'crypto';
 
+import { requireStudio } from '@/lib/routeAuth';
 const DEFAULT_MODULES = [
   { id: 'bounces', type: 'bounces', isVisible: true, order: 0, title: 'Últimas Mezclas / Audios' },
   { id: 'tasks', type: 'tasks', isVisible: true, order: 1, title: 'Estado del Trabajo' },
@@ -13,6 +14,8 @@ const DEFAULT_MODULES = [
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const [foldersRaw, artistsDbResult] = await Promise.all([
       listFolders(DRIVE_ROOT_FOLDER_ID).catch(e => {

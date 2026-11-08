@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server';
 import { getDriveService } from '@/lib/drive';
 import { Readable } from 'stream';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const parentId = searchParams.get('folderId');
@@ -152,6 +155,8 @@ function getSimilarity(s1: string, s2: string): number {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -261,6 +266,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const fileId = searchParams.get('id');
@@ -294,6 +301,8 @@ export async function DELETE(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const body = await request.json();
     const { fileId, name, newParentId, oldParentId, trashed, starred, folderColorRgb, description } = body;

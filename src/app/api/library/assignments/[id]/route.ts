@@ -4,8 +4,11 @@ import { NextResponse } from 'next/server';
 import { undoAssignment } from '@/lib/beatLibrary';
 import { errorResponse } from '@/lib/libraryApi';
 
+import { requireStudio } from '@/lib/routeAuth';
 /** Undoes an assignment: the beat (which never moved) becomes visible again in what's shared. */
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { id } = await params;
     const { db } = await undoAssignment(id);

@@ -17,6 +17,7 @@ import {
   pickBestYouTubeMatch,
 } from '../engines';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 const execFileAsync = promisify(execFile);
 
 export const maxDuration = 300;
@@ -42,6 +43,8 @@ function findAudioFileInTmpDir(id: string): string | null {
 }
 
 export async function GET(req: Request) {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const taskId = searchParams.get('taskId');

@@ -17,6 +17,7 @@ import {
   pickBestYouTubeMatch,
 } from './engines';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 const execFileAsync = promisify(execFile);
 
 const cleanTitle = (t: string) => t.replace(/[\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
@@ -24,6 +25,8 @@ const cleanTitle = (t: string) => t.replace(/[\/:*?"<>|]/g, ' ').replace(/\s+/g,
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
+  const denied = await requireStudioOrPortalTool('downloader');
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const rawUrl = searchParams.get('url') || searchParams.get('resolvedUrl');

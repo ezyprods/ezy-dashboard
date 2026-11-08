@@ -18,6 +18,7 @@ This skill ensures that whenever changes, fixes, or additions are made to the co
 5. **Verify**: Ensure git push succeeds.
 6. **Deploy to Vercel Production**: Run:
    ```bash
-   node -e "const dotenv = require('dotenv'); dotenv.config({ path: '.env.local' }); const { execSync } = require('child_process'); try { execSync('npx vercel --token ' + process.env.VERCEL_TOKEN + ' --prod --yes', { stdio: 'inherit' }); } catch(e) { fetch('https://api.vercel.com/v1/integrations/deploy/prj_4u156DrxjxOFavPEY7P0OuOqzi0V/Thx5eA8KNs', { method: 'POST' }).then(r => r.json()).then(console.log); }"
+   node -e "require('dotenv').config({ path: '.env.local' }); const hook = process.env.VERCEL_DEPLOY_HOOK_URL; if (!hook) { console.error('Falta VERCEL_DEPLOY_HOOK_URL en .env.local'); process.exit(1); } fetch(hook, { method: 'POST' }).then(r => r.json()).then(console.log);"
    ```
+   The deploy hook URL is a secret: it lives only in `.env.local` (`VERCEL_DEPLOY_HOOK_URL`), never in the repository.
    This guarantees that Vercel compiles and deploys the latest commit to Production immediately in real time.

@@ -3,6 +3,7 @@ import { GRAPH_BASE, IG_GRAPH_BASE, metaConfig } from '@/lib/instagram/graph';
 import { decryptText } from '@/lib/instagram/secrets';
 import { readConnection, readPendingToken } from '@/lib/instagram/store';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
@@ -12,6 +13,8 @@ export const maxDuration = 60;
  * devuelve las respuestas originales de Meta. El token nunca sale en la respuesta.
  */
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   const conn = await readConnection(true);
   const pending = conn ? null : await readPendingToken();
   const enc = conn?.token || pending?.token;

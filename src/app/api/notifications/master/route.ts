@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import MasterReadyEmail from '@/components/emails/MasterReadyEmail';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function POST(request: Request) {
-  const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy');
+  const denied = await requireStudio();
+  if (denied) return denied;
   
   try {
     const body = await request.json();
@@ -15,6 +17,7 @@ export async function POST(request: Request) {
         { status: 503 }
       );
     }
+    const resend = new Resend(process.env.RESEND_API_KEY);
 
     if (!artistEmail) {
       return NextResponse.json(

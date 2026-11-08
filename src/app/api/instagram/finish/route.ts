@@ -3,6 +3,7 @@ import { discoverInstagramAccounts, getAccount, setGraphHost } from '@/lib/insta
 import { readPendingToken, saveConnection, savePendingToken } from '@/lib/instagram/store';
 import { decryptText } from '@/lib/instagram/secrets';
 
+import { requireStudio } from '@/lib/routeAuth';
 export const dynamic = 'force-dynamic';
 
 const PREFERRED_USERNAME = 'ezyprods';
@@ -13,6 +14,8 @@ const PREFERRED_USERNAME = 'ezyprods';
  * Usa el token guardado en 00_INSTAGRAM/pendiente.json, sin volver a pasar por Meta.
  */
 export async function POST() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const pending = await readPendingToken();
     if (!pending) return NextResponse.json({ error: 'No hay ninguna conexión pendiente. Pulsa Conectar.' }, { status: 404 });

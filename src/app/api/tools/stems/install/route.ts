@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 
+import { requireStudioOrPortalTool } from '@/lib/routeAuth';
 const execAsync = promisify(exec);
 
 let localDemucsCache: { hasPython: boolean; hasLocalDemucs: boolean; timestamp: number } | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 
 export async function GET(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('stems');
+  if (denied) return denied;
   try {
     const clientToken = req.headers.get('x-replicate-token') || req.nextUrl.searchParams.get('token');
     const cloudToken = clientToken || process.env.REPLICATE_API_TOKEN;
@@ -85,6 +88,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireStudioOrPortalTool('stems');
+  if (denied) return denied;
   try {
     let body: any = {};
     try {

@@ -3,7 +3,10 @@ import { NextResponse } from 'next/server';
 import { getDriveService, listFolders, findAndReadJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID, isSystemOrSpecialFolder } from '@/lib/constants';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET(request: Request) {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get('q') || '').toLowerCase().trim();

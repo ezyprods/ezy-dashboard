@@ -2,19 +2,24 @@ import { NextResponse, NextRequest } from 'next/server';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
 import { boundedRange } from '@/lib/boundedRange';
 import { getDriveService } from '@/lib/drive';
+import { applyPrivacy, checkPublicFileAccess } from '@/lib/driveScope';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Public (the artist portal and /previews use it), but only for files inside the studio folder
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
 ) {
+  const { fileId } = await params;
+  const access = await checkPublicFileAccess(fileId);
+  if (access.denied) return access.denied;
+  return applyPrivacy(await serveFile(request, fileId), access);
+}
+
+async function serveFile(request: NextRequest, fileId: string): Promise<NextResponse> {
   try {
-    const { fileId } = await params;
-    if (!fileId) {
-      return new NextResponse('File ID is required', { status: 400 });
-    }
 
     const inline = request.nextUrl.searchParams.get('inline') === 'true';
     const accessToken = await getGoogleAccessToken();

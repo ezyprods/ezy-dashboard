@@ -3,7 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { getLibraryRootId, LIBRARY_DISPLAY_NAME, readLibraryDb } from '@/lib/beatLibrary';
 
+import { requireStudio } from '@/lib/routeAuth';
 export async function GET() {
+  const denied = await requireStudio();
+  if (denied) return denied;
   try {
     const rootId = await getLibraryRootId();
     const db = await readLibraryDb(rootId);

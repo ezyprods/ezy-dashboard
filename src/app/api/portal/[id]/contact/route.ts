@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { findAndReadJsonFile, saveJsonFile } from '@/lib/drive';
 import { DRIVE_ROOT_FOLDER_ID } from '@/lib/constants';
+import { isArtistFolder, portalNotFound } from '@/lib/driveScope';
+import { requireStudioOrPortalSession } from '@/lib/routeAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +16,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!(await isArtistFolder(id))) return portalNotFound();
+    // Only a browser that opened this artist's portal (or the studio) may change its contact details
+    const denied = await requireStudioOrPortalSession(id);
+    if (denied) return denied;
     const body = await request.json().catch(() => ({}));
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 200) : '';
     const phone = typeof body.phone === 'string' ? body.phone.replace(/[^\d+\s()-]/g, '').trim().slice(0, 30) : '';
