@@ -84,7 +84,6 @@ describe('API route protection', () => {
 
   it('every public route still exists (keeps the allow-list honest)', () => {
     for (const route of Object.keys(PUBLIC_ROUTES)) {
-      if (route.startsWith('hub/')) continue; // added in phase B
       expect(routes, route).toContain(route);
     }
   });
@@ -117,6 +116,7 @@ describe('proxy', () => {
     expect(passes(call(`/api/files/${ID}`))).toBe(true);
     expect(passes(call(`/api/audio/${ID}/meta`))).toBe(true);
     expect(passes(call('/api/cron/instagram'))).toBe(true);
+    expect(passes(call('/api/hub/v1/pendientes'))).toBe(true);
     expect(passes(call('/api/auth/callback/google'))).toBe(true);
   });
 

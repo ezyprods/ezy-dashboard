@@ -12,8 +12,9 @@ import type { PortalToolId } from '@/types/portal';
  */
 
 // Open to everyone: the studio lock itself, better-auth, the artist portal and Vercel Cron.
-// Each of these checks its own credential in the route (portal session cookie, CRON_SECRET…).
-const PUBLIC_PREFIXES = ['/api/studio', '/api/auth', '/api/portal', '/api/cron'];
+// Each of these checks its own credential in the route (portal session cookie, CRON_SECRET,
+// HUB_TOKEN for the hub feed…).
+const PUBLIC_PREFIXES = ['/api/studio', '/api/auth', '/api/portal', '/api/cron', '/api/hub'];
 
 // Under /api/auth but private: the Google refresh-token helper prints a secret, and the status
 // probe uses the studio's Drive account
