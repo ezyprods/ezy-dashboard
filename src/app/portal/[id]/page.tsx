@@ -7,8 +7,9 @@ import {
   Loader2, Music, CheckCircle2, Circle, CreditCard, AlertCircle, Sparkles, Disc, Play, Pause,
   ChevronRight, Lock, Download, ExternalLink, Clock, TrendingUp, ListMusic, Eye, Wrench, RefreshCw, Search, X,
   FolderOpen, Home, Files, FileText, FileImage, Film, FolderArchive, File as FileIcon, ChevronDown, ChevronUp,
-  Scissors, Tags, Activity, Layers, Table2, Music2,
+  Scissors, Tags, Activity, Layers, Table2, Music2, Settings, Mail, Phone,
 } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { MusicDownloader } from '@/components/tools/MusicDownloader';
 import { AudioConverter } from '@/components/tools/AudioConverter';
 import { AudioTrimmer } from '@/components/tools/AudioTrimmer';
@@ -19,7 +20,7 @@ import { PortalReleasePlayer } from '@/components/releases/PortalReleasePlayer';
 import { RealtimeCountdown } from '@/components/ui/RealtimeCountdown';
 import { useAudioControls } from '@/lib/contexts/AudioContext';
 import { PORTAL_TOOLS, enabledPortalTools, type PortalToolId } from '@/types/portal';
-import { cn, getCoverArtUrl, formatRelativeTime, triggerFileDownload } from '@/lib/utils';
+import { cn, getCoverArtUrl, formatRelativeTime, triggerFileDownload, formatPhoneNumber } from '@/lib/utils';
 
 const TOOL_ICONS: Record<string, React.ElementType> = { Download, RefreshCw, Scissors, Tags, Activity, Layers };
 
@@ -68,6 +69,21 @@ function dateGroup(ts?: number): DateGroup {
   return 'older';
 }
 
+/** Silent download report: the producer gets an email, the artist sees nothing (errors are swallowed). */
+function reportDownload(artistId: string, kind: 'file' | 'beat' | 'release' | 'folder', files: { id: string; name?: string }[], context?: string) {
+  if (!files.length) return;
+  try {
+    fetch(`/api/portal/${artistId}/downloads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, files, context }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // never let the report get in the way of the download
+  }
+}
+
 export default function PortalPage() {
   const params = useParams();
   const artistId = params.id as string;
@@ -85,6 +101,39 @@ export default function PortalPage() {
   const [activeToolId, setActiveToolId] = useState<PortalToolId>('downloader');
   const [expandedMatrix, setExpandedMatrix] = useState<string | null>(null);
   const [beatQuery, setBeatQuery] = useState('');
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactForm, setContactForm] = useState({ email: '', phone: '' });
+  const [savingContact, setSavingContact] = useState(false);
+
+  const openContact = () => {
+    setContactForm({ email: data?.contact?.email || '', phone: data?.contact?.phone || '' });
+    setContactOpen(true);
+  };
+
+  const saveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = contactForm.email.trim();
+    const phone = contactForm.phone.trim() ? formatPhoneNumber(contactForm.phone.trim()) : '';
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Revisa el email'); return; }
+    if (phone && phone.replace(/\D/g, '').length < 8) { toast.error('Revisa el teléfono'); return; }
+    setSavingContact(true);
+    try {
+      const res = await fetch(`/api/portal/${artistId}/contact`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, phone }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'No se pudo guardar');
+      setData((d: any) => (d ? { ...d, contact: json.contact } : d));
+      setContactOpen(false);
+      toast.success('Datos de contacto guardados');
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo guardar');
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   // Deep link from the producer's messages: /portal/<id>?tab=beats
   useEffect(() => {
@@ -161,6 +210,7 @@ export default function PortalPage() {
       return;
     }
     toast.success(tracks.length === 1 ? `Descargando ${tracks[0].title || release.title}...` : `Descargando ${tracks.length} canciones...`);
+    reportDownload(artistId, 'release', tracks.map((t: any) => ({ id: t.newFileId || t.originalFileId, name: t.title })).filter((t: any) => t.id), release.title ? `Lanzamiento: ${release.title}` : undefined);
     tracks.forEach((track: any, idx: number) => {
       const fileId = track.newFileId || track.originalFileId;
       if (fileId) {
@@ -275,6 +325,7 @@ export default function PortalPage() {
                 e.preventDefault();
                 e.stopPropagation();
                 triggerFileDownload(file.id, file.name);
+                reportDownload(artistId, 'file', [{ id: file.id, name: file.name }], file.parentFolderName || undefined);
               }}
               className="w-10 h-10 md:w-9 md:h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface active:bg-surface cursor-pointer"
               title="Descargar" 
@@ -323,7 +374,7 @@ export default function PortalPage() {
         {send.allowDownload && (
           <button
             type="button"
-            onClick={e => { e.preventDefault(); e.stopPropagation(); triggerFileDownload(beat.id, beat.name); }}
+            onClick={e => { e.preventDefault(); e.stopPropagation(); triggerFileDownload(beat.id, beat.name); reportDownload(artistId, 'beat', [{ id: beat.id, name: beat.name }], send.title ? `Envío de beats: ${send.title}` : undefined); }}
             className="w-10 h-10 md:w-9 md:h-9 rounded-lg flex items-center justify-center text-text-secondary hover:text-accent hover:bg-surface active:bg-surface cursor-pointer shrink-0"
             title="Descargar"
             aria-label="Descargar"
@@ -663,8 +714,36 @@ export default function PortalPage() {
           <button type="button" onClick={() => fetchPortal(true)} className="w-10 h-10 rounded-xl border border-border flex items-center justify-center text-text-secondary hover:text-accent" aria-label="Actualizar" title="Actualizar">
             <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
           </button>
+          <button type="button" onClick={openContact} className="w-10 h-10 -ml-1 rounded-xl flex items-center justify-center text-text-secondary/70 hover:text-accent hover:bg-surface" aria-label="Ajustes de contacto" title="Ajustes">
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </header>
+
+      <Modal isOpen={contactOpen} onClose={() => setContactOpen(false)} title="Tus datos de contacto" description="Para avisarte cuando haya archivos nuevos en tu portal.">
+        <form onSubmit={saveContact} className="space-y-4">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-text-secondary">Email</span>
+            <div className="relative">
+              <Mail className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="email" inputMode="email" autoComplete="email" value={contactForm.email} onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))} placeholder="tu@email.com" className="w-full h-11 bg-surface border border-border rounded-xl pl-9 pr-3 text-sm focus:outline-none focus:border-accent" />
+            </div>
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-text-secondary">Teléfono (WhatsApp)</span>
+            <div className="relative">
+              <Phone className="w-4 h-4 text-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="tel" inputMode="tel" autoComplete="tel" value={contactForm.phone} onChange={e => setContactForm(f => ({ ...f, phone: e.target.value }))} placeholder="+34 600 00 00 00" className="w-full h-11 bg-surface border border-border rounded-xl pl-9 pr-3 text-sm focus:outline-none focus:border-accent" />
+            </div>
+          </label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={() => setContactOpen(false)} className="h-10 px-4 rounded-xl border border-border text-sm font-medium hover:bg-surface">Cancelar</button>
+            <button type="submit" disabled={savingContact} className="h-10 px-4 rounded-xl bg-accent text-white text-sm font-semibold inline-flex items-center gap-2 disabled:opacity-60">
+              {savingContact && <Loader2 className="w-4 h-4 animate-spin" />} Guardar
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Mobile tab bar */}
       {showBottomNav && (
@@ -759,7 +838,7 @@ export default function PortalPage() {
                   </div>
                   {currentProject?.requirePaymentForDownload && pending > 0 && <span className="text-[11px] text-warning inline-flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Descargas bloqueadas</span>}
                   {currentProject?.driveUrl && !(currentProject.requirePaymentForDownload && pending > 0) && (
-                    <a href={currentProject.driveUrl} target="_blank" rel="noopener noreferrer" className="h-9 px-3 rounded-xl border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-surface" title="Abre la carpeta en Google Drive para descargarla completa">
+                    <a href={currentProject.driveUrl} target="_blank" rel="noopener noreferrer" onClick={() => reportDownload(artistId, 'folder', [{ id: currentProject.id, name: currentProject.title }], `Proyecto: ${currentProject.title}`)} className="h-9 px-3 rounded-xl border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-surface" title="Abre la carpeta en Google Drive para descargarla completa">
                       <ExternalLink className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Descargar carpeta</span>
                     </a>
                   )}

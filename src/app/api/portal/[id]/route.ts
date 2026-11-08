@@ -310,6 +310,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const response = NextResponse.json({
       artist: { id: artistConfig.id || id, name: artistConfig.name, photo: artistConfig.photo, photoUrl: artistConfig.photoUrl },
+      // The artist's own contact details, editable from the portal's gear icon
+      contact: { email: artistConfig.email || '', phone: artistConfig.phone || '' },
       producerName: portalConfig.producerName || 'EZY Studio',
       producerLogo: portalConfig.producerLogo,
       welcomeMessage: portalConfig.welcomeMessage || '',
