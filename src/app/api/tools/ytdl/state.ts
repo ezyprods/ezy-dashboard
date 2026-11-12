@@ -22,6 +22,8 @@ export interface CachedAudioFile {
   title: string;
   format?: string;
   mimeType?: string;
+  /** Verified decoded length (seconds). */
+  durationSeconds?: number;
 }
 
 const globalAny: any = global;

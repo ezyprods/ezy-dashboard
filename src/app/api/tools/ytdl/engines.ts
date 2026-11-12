@@ -1,4 +1,6 @@
 import { createDecipheriv } from 'crypto';
+import { ensureBinaries } from './binaries';
+import { assertCompleteAudio, getYouTubeDurationSeconds, IncompleteAudioError } from './verify';
 
 /**
  * Multi-Engine YouTube/Spotify/SoundCloud MP3 Download System
@@ -39,8 +41,12 @@ const FAST_CDNS = [
 /**
  * Engine 1: SaveTube Direct Extraction with Native Fetch & AES Decryption
  */
-async function engineSaveTubeDirect(videoId: string, requestedQuality: string = '320'): Promise<Buffer> {
+async function engineSaveTubeDirect(
+  videoId: string,
+  requestedQuality: string = '320',
+): Promise<{ buffer: Buffer; expectedSeconds: number | null; decodedSeconds: number }> {
   const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const startedAt = Date.now();
 
   let primaryCdn = '';
   try {
@@ -128,49 +134,100 @@ async function engineSaveTubeDirect(videoId: string, requestedQuality: string = 
         throw new Error('Could not obtain download URL from CDN');
       }
 
-      // Step C: Stream the MP3 file into buffer
-      const audioRes = await fetch(downloadUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-        },
-        signal: AbortSignal.timeout(45000),
-      });
+      // Step C: fetch the MP3 and make sure it is the WHOLE song.
+      //
+      // SaveTube hands out the file while it is still converting, and its
+      // Cloudflare CDN caches that partial copy for 30 days — the root cause
+      // of songs stopping halfway. So: decode every copy and compare it with
+      // the video length; if it's short, bypass the CDN cache with a unique
+      // query string and wait for the origin to finish converting.
+      const expected = Number(info.duration) > 0
+        ? Number(info.duration)
+        : await getYouTubeDurationSeconds(videoId);
+      const { ffmpegPath } = await ensureBinaries();
 
-      if (!audioRes.ok) {
-        throw new Error(`Audio stream HTTP ${audioRes.status}`);
+      for (let attempt = 0; ; attempt++) {
+        const url = attempt === 0
+          ? downloadUrl
+          : `${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}ezy=${Date.now()}${attempt}`;
+        const buffer = await fetchAudio(url);
+        try {
+          const m = await assertCompleteAudio(ffmpegPath, buffer, expected);
+          if (!expected) {
+            // No reference length: only trust a copy the origin no longer grows.
+            await new Promise((r) => setTimeout(r, 3000));
+            const again = await fetchAudio(`${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}ezy=${Date.now()}s`);
+            if (again.length !== buffer.length) throw new IncompleteAudioError(m.decodedSeconds, 0);
+          }
+          if (attempt > 0) console.log(`[engines/savetube] ${videoId}: complete copy after ${attempt} retries`);
+          return { buffer, expectedSeconds: expected, decodedSeconds: m.decodedSeconds };
+        } catch (e: any) {
+          if (!(e instanceof IncompleteAudioError)) throw e;
+          console.warn(`[engines/savetube] ${videoId}: ${e.message} (intento ${attempt + 1})`);
+          if (Date.now() - startedAt > SAVETUBE_COMPLETE_DEADLINE_MS) {
+            throw new FatalSaveTubeError(`SaveTube solo entrega un audio incompleto (${e.message})`);
+          }
+          // First retry right away (most cuts are just a stale CDN copy),
+          // then give the origin time to finish converting.
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 5000));
+        }
       }
-
-      const arrayBuffer = await audioRes.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      if (buffer.length < 1000) {
-        throw new Error(`Downloaded buffer too small (${buffer.length} bytes)`);
-      }
-
-      return buffer;
     } catch (err: any) {
       console.warn(`[engines/savetube] CDN ${cdn} failed for ${videoId}:`, err?.message || err);
       lastError = err;
+      // Another CDN host serves the same broken file; don't burn minutes on it.
+      if (err instanceof FatalSaveTubeError) break;
     }
   }
 
   throw lastError || new Error('All SaveTube CDNs failed');
 }
 
+/** Max time spent waiting for SaveTube to produce a complete file. */
+const SAVETUBE_COMPLETE_DEADLINE_MS = 75_000;
+
+class FatalSaveTubeError extends Error {}
+
+async function fetchAudio(url: string): Promise<Buffer> {
+  const audioRes = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+    },
+    signal: AbortSignal.timeout(60000),
+  });
+  if (!audioRes.ok) {
+    throw new Error(`Audio stream HTTP ${audioRes.status}`);
+  }
+  const buffer = Buffer.from(await audioRes.arrayBuffer());
+  const declared = Number(audioRes.headers.get('content-length') || 0);
+  if (declared && buffer.length !== declared) {
+    throw new Error(`Descarga cortada (${buffer.length} de ${declared} bytes)`);
+  }
+  if (buffer.length < 1000) {
+    throw new Error(`Downloaded buffer too small (${buffer.length} bytes)`);
+  }
+  return buffer;
+}
+
 export interface EngineResult {
   buffer: Buffer;
   engine: string;
+  /** Length of the source video (null if unknown). */
+  expectedSeconds: number | null;
+  /** Verified decoded length of `buffer`. */
+  decodedSeconds: number;
 }
 
 export type ProgressCallback = (status: string, progress: number) => void;
 
+/** Returns only files whose full length has been verified (see verify.ts). */
 export async function downloadWithEngines(
   videoId: string,
   onProgress?: ProgressCallback,
 ): Promise<EngineResult> {
   onProgress?.('downloading', 35);
-  const buffer = await engineSaveTubeDirect(videoId, '320');
-  return { buffer, engine: 'savetube-direct' };
+  const r = await engineSaveTubeDirect(videoId, '320');
+  return { ...r, engine: 'savetube-direct' };
 }
 
 export function isYouTubeUrl(url: string): boolean {

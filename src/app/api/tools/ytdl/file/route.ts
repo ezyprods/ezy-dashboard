@@ -4,12 +4,7 @@ import { contentDisposition } from '@/lib/serverFiles';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { ensureBinaries } from '../binaries';
-import { buildCookieArgs } from '../cookies';
 import {
-  downloadWithEngines,
   getYouTubeVideoId,
   isSpotifyUrl,
   isSoundCloudUrl,
@@ -17,7 +12,8 @@ import {
   pickBestYouTubeMatch,
 } from '../engines';
 
-const execFileAsync = promisify(execFile);
+import { downloadVerifiedVideo, downloadUrlViaYtdlp } from '../reliable';
+import { AudioProcessOptions } from '../processor';
 
 export const maxDuration = 300;
 
@@ -30,15 +26,14 @@ const MIME_TYPES: Record<string, string> = {
   m4a: 'audio/mp4',
 };
 
+// Only the final file /process writes (`<taskId>.<ext>`), never an
+// intermediate or half-written file that merely starts with the same id.
 function findAudioFileInTmpDir(id: string): string | null {
-  try {
-    const downloadsDir = os.tmpdir();
-    const files = fs.readdirSync(downloadsDir);
-    const match = files.find(f => f.startsWith(id) && AUDIO_EXTS.some(ext => f.endsWith(ext)));
-    return match ? path.join(downloadsDir, match) : null;
-  } catch (e) {
-    return null;
+  for (const ext of AUDIO_EXTS) {
+    const candidate = path.join(os.tmpdir(), `${id}${ext}`);
+    if (fs.existsSync(candidate)) return candidate;
   }
+  return null;
 }
 
 export async function GET(req: Request) {
@@ -65,6 +60,7 @@ export async function GET(req: Request) {
           'Content-Length': cached.buffer.length.toString(),
           'Content-Disposition': contentDisposition(`${cleanSafeTitle}.${fileExt}`),
           'Cache-Control': 'public, max-age=3600',
+          ...(cached.durationSeconds ? { 'X-Audio-Duration': cached.durationSeconds.toFixed(2) } : {}),
         },
       });
     }
@@ -130,80 +126,23 @@ export async function GET(req: Request) {
       } catch (e) {}
     }
 
-    // Priority 1: Multi-engine API system
-    if (videoId) {
-      try {
-        const result = await downloadWithEngines(videoId);
-        const cleanSafeTitle = title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
-
-        return new NextResponse(result.buffer as any, {
-          headers: {
-            'Content-Type': 'audio/mpeg',
-            'Content-Length': result.buffer.length.toString(),
-            'Content-Disposition': contentDisposition(`${cleanSafeTitle}.mp3`),
-          },
-        });
-      } catch (e: any) {
-        console.warn('[ytdl/file] Multi-engine failed in ondemand fallback:', e?.message);
-      }
-    }
-
-    // Fallback: yt-dlp binary
-    const { ytdlpPath, ffmpegPath } = await ensureBinaries();
-    const tempId = `ondemand_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
-
-    const cookieArgs = await buildCookieArgs();
-    const proxyUrl = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.YTDL_PROXY;
-    const nodePath = process.execPath || 'node';
-
-    const args = [
-      '--no-warnings',
-      '--no-playlist',
-      '--no-check-certificates',
-      '--geo-bypass',
-      '--js-runtimes',
-      `node:${nodePath}`,
-      ...cookieArgs,
-      '-f',
-      'ba/ba*/bestaudio/b/best',
-      '-x',
-      '--audio-format',
-      paramFormat || 'mp3',
-      '--audio-quality',
-      '320K',
-      '--ffmpeg-location',
-      ffmpegPath,
-      '--output',
-      outputTemplate,
-    ];
-
-    if (proxyUrl) {
-      args.push('--proxy', proxyUrl);
-    }
-
-    args.push(url);
-
-    await execFileAsync(ytdlpPath, args, { timeout: 120000 });
-
-    const expectedFile = path.join(os.tmpdir(), `${tempId}.${paramFormat || 'mp3'}`);
-    let foundFile = fs.existsSync(expectedFile) ? expectedFile : findAudioFileInTmpDir(tempId);
-
-    if (!foundFile || !fs.existsSync(foundFile)) {
-      throw new Error('No se pudo generar el archivo de audio');
-    }
-
-    const buffer = await fs.promises.readFile(foundFile);
-    try { await fs.promises.unlink(foundFile); } catch (e) {}
+    // Regenerate (the task ran on another server instance or expired).
+    // Same verified pipeline as /process: a partial song is never served.
+    const options: AudioProcessOptions = {
+      format: (task?.format || paramFormat || 'mp3') as AudioProcessOptions['format'],
+      quality: (task?.quality || '320') as AudioProcessOptions['quality'],
+    };
+    const result = videoId
+      ? await downloadVerifiedVideo(videoId, options)
+      : await downloadUrlViaYtdlp(url, options);
 
     const cleanSafeTitle = title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
-    const mimeType = MIME_TYPES[paramFormat] || 'audio/mpeg';
-
-    return new NextResponse(buffer as any, {
+    return new NextResponse(result.buffer as any, {
       headers: {
-        'Content-Type': mimeType,
-        'Content-Length': buffer.length.toString(),
-        'Content-Disposition': contentDisposition(`${cleanSafeTitle}.${paramFormat}`),
+        'Content-Type': result.mimeType,
+        'Content-Length': result.buffer.length.toString(),
+        'Content-Disposition': contentDisposition(`${cleanSafeTitle}.${result.format}`),
+        'X-Audio-Duration': result.durationSeconds.toFixed(2),
       },
     });
 

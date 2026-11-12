@@ -1,23 +1,13 @@
 import { NextResponse } from 'next/server';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-import { ensureBinaries } from './binaries';
 import { contentDisposition } from '@/lib/serverFiles';
-import { buildCookieArgs } from './cookies';
+import { downloadVerifiedVideo, downloadUrlViaYtdlp } from './reliable';
 import {
-  downloadWithEngines,
   getYouTubeVideoId,
-  isYouTubeUrl,
   isSpotifyUrl,
   isSoundCloudUrl,
   getSpotifyTrackMetadata,
   pickBestYouTubeMatch,
 } from './engines';
-
-const execFileAsync = promisify(execFile);
 
 const cleanTitle = (t: string) => t.replace(/[\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
 
@@ -79,151 +69,19 @@ export async function GET(req: Request) {
       } catch (e) {}
     }
 
-    // Primary: yt-dlp native bestaudio (best quality — single encode step)
-    // Fallback: multi-engine SaveTube API (re-encoded, lower quality)
-    if (videoId) {
-      // Try native yt-dlp first: downloads the raw YouTube stream (opus/m4a)
-      // and converts once with FFmpeg. This gives the maximum possible quality
-      // and avoids the double-transcoding "fake 320k" problem of SaveTube.
-      let nativeSuccess = false;
-      try {
-        const { ytdlpPath, ffmpegPath } = await ensureBinaries();
-        const cookieArgs = await buildCookieArgs();
-        const tempId = `get_native_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
-        const nodePath = process.execPath || 'node';
+    // yt-dlp first, SaveTube as fallback; both decoded end to end and
+    // checked against the source length, so a song that stops halfway is
+    // never handed out (see verify.ts).
+    const result = videoId
+      ? await downloadVerifiedVideo(videoId, { format: 'mp3', quality: '320' })
+      : await downloadUrlViaYtdlp(rawUrl, { format: 'mp3', quality: '320' });
 
-        const ytdlpArgs = [
-          '--no-warnings',
-          '--no-playlist',
-          '--no-check-certificates',
-          '--geo-bypass',
-          '--js-runtimes',
-          `node:${nodePath}`,
-          ...cookieArgs,
-          '-f',
-          'bestaudio[ext=opus]/bestaudio[ext=m4a]/bestaudio/best',
-          '-x',
-          '--audio-format',
-          'mp3',
-          '--audio-quality',
-          '0',
-          '--ffmpeg-location',
-          ffmpegPath,
-          '--output',
-          outputTemplate,
-          `https://www.youtube.com/watch?v=${videoId}`,
-        ];
-
-        const proxyUrl = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.YTDL_PROXY;
-        if (proxyUrl) ytdlpArgs.push('--proxy', proxyUrl);
-
-        await execFileAsync(ytdlpPath, ytdlpArgs, { timeout: 120000 });
-
-        const expectedMp3 = path.join(os.tmpdir(), `${tempId}.mp3`);
-        let foundFile = fs.existsSync(expectedMp3) ? expectedMp3 : null;
-
-        if (!foundFile) {
-          const AUDIO_EXTS = ['.mp3', '.m4a', '.webm', '.opus', '.aac', '.ogg', '.wav', '.flac'];
-          const dirFiles = fs.readdirSync(os.tmpdir());
-          const match = dirFiles.find(f => f.startsWith(tempId) && AUDIO_EXTS.some(ext => f.endsWith(ext)));
-          if (match) foundFile = path.join(os.tmpdir(), match);
-        }
-
-        if (foundFile && fs.existsSync(foundFile)) {
-          const buffer = await fs.promises.readFile(foundFile);
-          try { await fs.promises.unlink(foundFile); } catch (e) {}
-
-          nativeSuccess = true;
-          return new NextResponse(buffer as any, {
-            headers: {
-              'Content-Type': 'audio/mpeg',
-              'Content-Length': buffer.length.toString(),
-              'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
-            },
-          });
-        }
-      } catch (e: any) {
-        console.warn('[ytdl/get] yt-dlp native failed, falling back to SaveTube:', e?.message);
-      }
-
-      // Fallback: SaveTube engine (re-encoded — still functional if yt-dlp is blocked)
-      if (!nativeSuccess) {
-        try {
-          const result = await downloadWithEngines(videoId);
-          return new NextResponse(result.buffer as any, {
-            headers: {
-              'Content-Type': 'audio/mpeg',
-              'Content-Length': result.buffer.length.toString(),
-              'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
-            },
-          });
-        } catch (e: any) {
-          console.warn('[ytdl/direct] Multi-engine failed in GET:', e?.message);
-        }
-      }
-    }
-
-
-    // Fallback: yt-dlp binary (for other URLs)
-    const target = rawUrl;
-    const { ytdlpPath, ffmpegPath } = await ensureBinaries();
-    const tempId = `direct_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const outputTemplate = path.join(os.tmpdir(), `${tempId}.%(ext)s`);
-    const cookieArgs = await buildCookieArgs();
-    const proxyUrl = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.YTDL_PROXY;
-    const nodePath = process.execPath || 'node';
-
-    const args = [
-      '--no-warnings',
-      '--no-playlist',
-      '--no-check-certificates',
-      '--geo-bypass',
-      '--js-runtimes',
-      `node:${nodePath}`,
-      ...cookieArgs,
-      '-f',
-      'ba/ba*/bestaudio/b/best',
-      '-x',
-      '--audio-format',
-      'mp3',
-      '--audio-quality',
-      '320K',
-      '--ffmpeg-location',
-      ffmpegPath,
-      '--output',
-      outputTemplate,
-    ];
-
-    if (proxyUrl) {
-      args.push('--proxy', proxyUrl);
-    }
-
-    args.push(target);
-
-    await execFileAsync(ytdlpPath, args, { timeout: 120000 });
-
-    const expectedMp3 = path.join(os.tmpdir(), `${tempId}.mp3`);
-    let foundFile = fs.existsSync(expectedMp3) ? expectedMp3 : null;
-
-    if (!foundFile) {
-      const files = fs.readdirSync(os.tmpdir());
-      const match = files.find(f => f.startsWith(tempId) && f.endsWith('.mp3'));
-      if (match) foundFile = path.join(os.tmpdir(), match);
-    }
-
-    if (!foundFile || !fs.existsSync(foundFile)) {
-      throw new Error('No se pudo generar el archivo MP3');
-    }
-
-    const buffer = await fs.promises.readFile(foundFile);
-    try { await fs.promises.unlink(foundFile); } catch (e) {}
-
-    return new NextResponse(buffer as any, {
+    return new NextResponse(result.buffer as any, {
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Content-Length': buffer.length.toString(),
+        'Content-Length': result.buffer.length.toString(),
         'Content-Disposition': contentDisposition(`${cleanTitle(title)}.mp3`),
+        'X-Audio-Duration': result.durationSeconds.toFixed(2),
       },
     });
   } catch (error: any) {

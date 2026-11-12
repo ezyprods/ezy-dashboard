@@ -95,7 +95,14 @@ export async function ensureBinaries(): Promise<{ ytdlpPath: string; ffmpegPath:
         const st = require('ffmpeg-static');
         ffmpegPath = (st as string) || 'ffmpeg';
       } catch {
+        // yt-dlp's --ffmpeg-location needs a real path, not a bare command name
         ffmpegPath = 'ffmpeg';
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { execSync } = require('child_process');
+          const found = String(execSync('where ffmpeg', { encoding: 'utf8' })).split(/\r?\n/)[0].trim();
+          if (found) ffmpegPath = found;
+        } catch {}
       }
     } else {
       const tmpFfmpeg = path.join(tmpDir, 'ffmpeg_bin');
