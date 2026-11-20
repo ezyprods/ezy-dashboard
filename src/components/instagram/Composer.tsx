@@ -13,6 +13,7 @@ import { ArtistPicker } from '@/components/upload/EntityPickers';
 import { useArtists } from '@/lib/hooks/useArtists';
 import { cn, formatFileSize } from '@/lib/utils';
 import { uploadFileToDrive } from '@/lib/driveUpload';
+import { useDropContext } from '@/lib/contexts/GlobalDragDropContext';
 import {
   CAPTION_MAX, CAROUSEL_MAX, COLLABORATORS_MAX, FORMAT_LABEL, HASHTAGS_MAX, MENTIONS_MAX, USER_TAGS_MAX,
   cleanUsername, countHashtags, countMentions, formatSeconds, mediaProblem,
@@ -420,6 +421,25 @@ export function InstagramComposer({ request, onClose }: { request: ComposeReques
       }
     }
   };
+
+  // Archivos soltados en cualquier parte mientras el formulario está abierto → se añaden aquí
+  const addLocalRef = useRef(addLocalFiles);
+  addLocalRef.current = addLocalFiles;
+  useDropContext({
+    mode: 'custom',
+    label: 'Suelta para añadirlo a la publicación',
+    hint: 'Imágenes y vídeos',
+    onFiles: files => addLocalRef.current(files),
+  });
+
+  // Desde la página de Instagram: empezar con los archivos arrastrados
+  const startedWithFiles = useRef(false);
+  useEffect(() => {
+    if (!boot || !request.files?.length || startedWithFiles.current) return;
+    startedWithFiles.current = true;
+    addLocalFiles(request.files);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boot, request.files]);
 
   // Desde el explorador: empezar con ese archivo
   const startedWithDrive = useRef(false);

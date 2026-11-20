@@ -98,6 +98,8 @@ export interface ComposeRequest {
   duplicate?: IgPostView;
   /** Empezar con un archivo de Drive (p. ej. desde el explorador) */
   driveFileId?: string;
+  /** Empezar con archivos del ordenador (p. ej. arrastrados sobre la página de Instagram) */
+  files?: File[];
   artistId?: string;
   /** Fecha sugerida (ISO) */
   at?: string;

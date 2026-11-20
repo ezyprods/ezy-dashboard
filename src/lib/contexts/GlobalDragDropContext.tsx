@@ -39,7 +39,8 @@ export interface UploadSession {
 
 export interface DropContextInfo {
   /** 'disabled' turns the global fallback off (pages with their own drop zones, e.g. tools). */
-  mode: 'auto' | 'artist' | 'library' | 'disabled';
+  /** 'custom' hands the dropped files to `onFiles` instead of opening the Smart Upload. */
+  mode: 'auto' | 'artist' | 'library' | 'disabled' | 'custom';
   /** Short text shown while dragging, e.g. "Subir a Aaron Bzn". */
   label?: string;
   hint?: string;
@@ -48,6 +49,8 @@ export interface DropContextInfo {
   folderId?: string;
   folderName?: string;
   onFinished?: () => void;
+  /** Only for mode 'custom': receives the dropped files. */
+  onFiles?: (files: File[]) => void;
 }
 
 interface GlobalDragDropContextValue {
@@ -90,13 +93,19 @@ export function isFileDrag(e: { dataTransfer: DataTransfer | null }): boolean {
  */
 export function useDropContext(info: DropContextInfo | null) {
   const { registerDropContext } = useGlobalDragDrop();
-  const key = info ? JSON.stringify({ ...info, onFinished: undefined }) : '';
+  const key = info ? JSON.stringify({ ...info, onFinished: undefined, onFiles: undefined }) : '';
   const onFinishedRef = useRef(info?.onFinished);
   onFinishedRef.current = info?.onFinished;
+  const onFilesRef = useRef(info?.onFiles);
+  onFilesRef.current = info?.onFiles;
 
   useEffect(() => {
     if (!info) return;
-    return registerDropContext({ ...info, onFinished: () => onFinishedRef.current?.() });
+    return registerDropContext({
+      ...info,
+      onFinished: () => onFinishedRef.current?.(),
+      onFiles: info.onFiles ? (files: File[]) => onFilesRef.current?.(files) : undefined,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, registerDropContext]);
 }

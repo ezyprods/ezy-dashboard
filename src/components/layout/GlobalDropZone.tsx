@@ -7,6 +7,7 @@ import { UploadCloud, Plus } from 'lucide-react';
 import { isFileDrag, useGlobalDragDrop, type DropContextInfo } from '@/lib/contexts/GlobalDragDropContext';
 import { SmartUpload } from '@/components/upload/SmartUpload';
 import { extractDroppedFiles } from '@/components/upload/fileIntake';
+import { openComposer } from '@/components/instagram/igClient';
 
 /** Pages whose own drop zones own the gesture (audio tools, release editor, previews manager). */
 function isDisabledPath(pathname: string) {
@@ -19,6 +20,9 @@ function defaultContext(pathname: string): DropContextInfo {
   if (isDisabledPath(pathname)) return { mode: 'disabled' };
   if (pathname === '/artists') {
     return { mode: 'auto', label: 'Suelta sobre un artista', hint: 'O en cualquier otra parte para detectar el artista automáticamente' };
+  }
+  if (pathname === '/instagram') {
+    return { mode: 'custom', label: 'Suelta para crear una publicación', hint: 'Se abre «Programar» con el archivo ya añadido', onFiles: files => openComposer({ mode: 'schedule', files }) };
   }
   if (pathname === '/personal-projects') {
     return { mode: 'library', label: 'Subir a Proyectos personales', hint: 'Suéltalo sobre una carpeta para elegir el destino exacto' };
@@ -50,6 +54,7 @@ export function GlobalDropZone() {
       // The DataTransfer is emptied when the handler returns, so read it synchronously here
       extractDroppedFiles(e.dataTransfer).then(({ files }) => {
         if (files.length === 0) return;
+        if (ctx.mode === 'custom') { ctx.onFiles?.(files); return; }
         openSmartUpload({
           files,
           targetType: ctx.mode === 'library' ? 'library' : ctx.mode === 'artist' ? 'artist' : undefined,
