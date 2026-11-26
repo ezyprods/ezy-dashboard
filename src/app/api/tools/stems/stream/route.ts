@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { originGuard, meterStream, meterBuffer } from '@/lib/originBudget';
 import { stemsTasks } from '../state';
 import path from 'path';
 import { existsSync } from 'fs';
@@ -7,6 +8,8 @@ import { readFile } from 'fs/promises';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const blocked = await originGuard('tools');
+  if (blocked) return blocked;
   try {
     const taskId = req.nextUrl.searchParams.get('taskId');
     const stem = req.nextUrl.searchParams.get('stem') as 'vocals' | 'drums' | 'bass' | 'other' | null;
@@ -61,7 +64,7 @@ export async function GET(req: NextRequest) {
             const contentLength = remoteRes.headers.get('content-length');
             if (contentLength) headers['Content-Length'] = contentLength;
 
-            return new NextResponse(remoteRes.body as any, { status: 200, headers });
+            return new NextResponse(meterStream(remoteRes.body) as any, { status: 200, headers });
           }
         } catch (fetchErr) {
           console.error('[Stream] Error streaming remote cloud stem:', fetchErr);
@@ -108,7 +111,7 @@ export async function GET(req: NextRequest) {
         const chunkSize = (end - start) + 1;
         const sliced = buffer.subarray(start, end + 1);
 
-        return new NextResponse(sliced, {
+        return new NextResponse(meterBuffer(sliced), {
           status: 206,
           headers: {
             'Content-Range': `bytes ${start}-${end}/${buffer.length}`,
@@ -129,7 +132,7 @@ export async function GET(req: NextRequest) {
         headers['Content-Disposition'] = getSafeDisposition(safeName, stem);
       }
 
-      return new NextResponse(buffer, {
+      return new NextResponse(meterBuffer(buffer), {
         status: 200,
         headers
       });

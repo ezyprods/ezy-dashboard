@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { originGuard, meterBuffer } from '@/lib/originBudget';
 import { spawn } from 'child_process';
 import path from 'path';
 import { writeFile, unlink, readFile } from 'fs/promises';
@@ -15,6 +16,8 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  const blocked = await originGuard('tools');
+  if (blocked) return blocked;
   let inputPath: string | null = null;
   let outputPath: string | null = null;
 
@@ -66,7 +69,7 @@ export async function POST(req: NextRequest) {
     const outputName = `${baseName}_recorte.${format}`;
 
     // The trimmed file is returned to the browser (works both locally and on Vercel)
-    return new NextResponse(output as any, {
+    return new NextResponse(meterBuffer(output) as any, {
       status: 200,
       headers: {
         'Content-Type': MIME_TYPES[format] || 'application/octet-stream',

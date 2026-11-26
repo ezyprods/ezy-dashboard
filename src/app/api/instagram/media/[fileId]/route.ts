@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { originGuard, meterStream } from '@/lib/originBudget';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
 import { verifyMedia } from '@/lib/instagram/secrets';
 
@@ -11,6 +12,8 @@ export const dynamic = 'force-dynamic';
  * Solo imágenes, que pesan poco: los vídeos los descarga Meta directamente de Drive.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
+  const blocked = await originGuard('instagram');
+  if (blocked) return blocked;
   const { fileId } = await params;
   if (!/^[\w-]{10,}$/.test(fileId) || !verifyMedia(fileId, request.nextUrl.searchParams.get('s'))) {
     return new NextResponse('Not found', { status: 404 });
@@ -24,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const type = res.headers.get('content-type') || '';
     if (!res.ok || !res.body) return new NextResponse('Not found', { status: 404 });
     if (!type.startsWith('image/')) return new NextResponse('Unsupported', { status: 415 });
-    return new NextResponse(res.body, {
+    return new NextResponse(meterStream(res.body), {
       status: 200,
       headers: {
         'Content-Type': type,

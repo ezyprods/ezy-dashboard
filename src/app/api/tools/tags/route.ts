@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { originGuard, meterBuffer } from '@/lib/originBudget';
 import path from 'path';
 import * as NodeID3 from 'node-id3';
 import { contentDisposition } from '@/lib/serverFiles';
 
 export async function POST(req: NextRequest) {
+  const blocked = await originGuard('tools');
+  if (blocked) return blocked;
   try {
     const formData = await req.formData();
     const action = formData.get('action') as string;
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
       const outputName = `${baseName}_(Tagged).mp3`;
 
       // Return the tagged file to the browser so it is downloaded on the user's device
-      return new NextResponse(taggedBuffer as any, {
+      return new NextResponse(meterBuffer(taggedBuffer) as any, {
         status: 200,
         headers: {
           'Content-Type': 'audio/mpeg',

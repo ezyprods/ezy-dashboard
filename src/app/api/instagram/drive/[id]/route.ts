@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { originGuard, meterStream } from '@/lib/originBudget';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
 
 export const runtime = 'nodejs';
@@ -9,6 +10,8 @@ export const dynamic = 'force-dynamic';
 const MAX_BYTES = 60 * 1024 * 1024;
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const blocked = await originGuard('instagram');
+  if (blocked) return blocked;
   const { id } = await params;
   if (!/^[\w-]{10,}$/.test(id)) return new NextResponse('Bad id', { status: 400 });
   try {
@@ -26,13 +29,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Archivo recién subido: Drive aún no ha hecho su miniatura. Si es una imagen pequeña, se sirve tal cual.
         if (/^image\//.test(m.mimeType || '') && Number(m.size) < 3 * 1024 * 1024) {
           const raw = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${token}` } });
-          if (raw.ok && raw.body) return new NextResponse(raw.body, { headers: { 'Content-Type': m.mimeType, 'Cache-Control': 'private, max-age=86400' } });
+          if (raw.ok && raw.body) return new NextResponse(meterStream(raw.body), { headers: { 'Content-Type': m.mimeType, 'Cache-Control': 'private, max-age=86400' } });
         }
         return new NextResponse('Sin miniatura', { status: 404, headers: { 'Cache-Control': 'no-store' } });
       }
       const img = await fetch(String(m.thumbnailLink).replace(/=s\d+(-[a-z0-9-]+)?$/i, `=s${size}`), { headers: { Authorization: `Bearer ${token}` } });
       if (!img.ok || !img.body) return new NextResponse('Sin miniatura', { status: 404, headers: { 'Cache-Control': 'no-store' } });
-      return new NextResponse(img.body, {
+      return new NextResponse(meterStream(img.body), {
         headers: { 'Content-Type': img.headers.get('content-type') || 'image/jpeg', 'Cache-Control': 'private, max-age=86400' },
       });
     }
@@ -49,7 +52,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       cache: 'no-store',
     });
     if (!res.ok || !res.body) return new NextResponse('No encontrado', { status: 404 });
-    return new NextResponse(res.body, {
+    return new NextResponse(meterStream(res.body), {
       headers: {
         'Content-Type': meta.mimeType,
         ...(meta.size ? { 'Content-Length': String(meta.size) } : {}),

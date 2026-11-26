@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { originGuard, meterBuffer } from '@/lib/originBudget';
 import { contentDisposition } from '@/lib/serverFiles';
 import { downloadVerifiedVideo, downloadUrlViaYtdlp } from './reliable';
 import {
@@ -14,6 +15,8 @@ const cleanTitle = (t: string) => t.replace(/[\/:*?"<>|]/g, ' ').replace(/\s+/g,
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
+  const blocked = await originGuard('downloader');
+  if (blocked) return blocked;
   try {
     const { searchParams } = new URL(req.url);
     const rawUrl = searchParams.get('url') || searchParams.get('resolvedUrl');
@@ -76,7 +79,7 @@ export async function GET(req: Request) {
       ? await downloadVerifiedVideo(videoId, { format: 'mp3', quality: '320' })
       : await downloadUrlViaYtdlp(rawUrl, { format: 'mp3', quality: '320' });
 
-    return new NextResponse(result.buffer as any, {
+    return new NextResponse(meterBuffer(result.buffer) as any, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Content-Length': result.buffer.length.toString(),

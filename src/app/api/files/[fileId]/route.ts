@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
+import { originGuard, meterStream } from '@/lib/originBudget';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
 import { boundedRange } from '@/lib/boundedRange';
 import { getDriveService } from '@/lib/drive';
@@ -86,6 +87,8 @@ export async function GET(
       return res;
     }
 
+    const blocked = await originGuard('files');
+    if (blocked) return blocked;
     // 4. Stream binary/media file with Range support (fallback if ?proxy=true)
     const range = boundedRange(request.headers.get('range'), 16 * 1024 * 1024);
     const fetchHeaders: Record<string, string> = {
@@ -124,7 +127,7 @@ export async function GET(
     responseHeaders.set('Cache-Control', 'public, max-age=86400');
     responseHeaders.set('Access-Control-Allow-Origin', '*');
 
-    return new NextResponse(gDriveRes.body, {
+    return new NextResponse(meterStream(gDriveRes.body), {
       status: gDriveRes.status,
       headers: responseHeaders,
     });

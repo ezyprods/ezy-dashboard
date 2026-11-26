@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { originGuard, meterBuffer } from '@/lib/originBudget';
 import { tasks, completedFileBuffers } from '../state';
 import { contentDisposition } from '@/lib/serverFiles';
 import fs from 'fs';
@@ -37,6 +38,8 @@ function findAudioFileInTmpDir(id: string): string | null {
 }
 
 export async function GET(req: Request) {
+  const blocked = await originGuard('downloader');
+  if (blocked) return blocked;
   try {
     const { searchParams } = new URL(req.url);
     const taskId = searchParams.get('taskId');
@@ -54,7 +57,7 @@ export async function GET(req: Request) {
       const mimeType = cached.mimeType || MIME_TYPES[fileExt] || 'audio/mpeg';
       const cleanSafeTitle = (cached.title || title).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
 
-      return new NextResponse(cached.buffer as any, {
+      return new NextResponse(meterBuffer(cached.buffer) as any, {
         headers: {
           'Content-Type': mimeType,
           'Content-Length': cached.buffer.length.toString(),
@@ -74,7 +77,7 @@ export async function GET(req: Request) {
       const buffer = await fs.promises.readFile(diskPath);
 
       if (buffer.length > 0) {
-        return new NextResponse(buffer as any, {
+        return new NextResponse(meterBuffer(buffer) as any, {
           headers: {
             'Content-Type': mimeType,
             'Content-Length': buffer.length.toString(),
@@ -137,7 +140,7 @@ export async function GET(req: Request) {
       : await downloadUrlViaYtdlp(url, options);
 
     const cleanSafeTitle = title.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'audio';
-    return new NextResponse(result.buffer as any, {
+    return new NextResponse(meterBuffer(result.buffer) as any, {
       headers: {
         'Content-Type': result.mimeType,
         'Content-Length': result.buffer.length.toString(),

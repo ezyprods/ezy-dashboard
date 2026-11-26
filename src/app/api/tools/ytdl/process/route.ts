@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { originGuard } from '@/lib/originBudget';
 import { v4 as uuidv4 } from 'uuid';
 import { tasks, broadcast, completedFileBuffers } from '../state';
 import {
@@ -19,6 +20,8 @@ import fs from 'fs';
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
+  const blocked = await originGuard('downloader');
+  if (blocked) return blocked;
   const body = await req.json();
   const {
     url,

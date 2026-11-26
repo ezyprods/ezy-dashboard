@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
+import { originGuard, meterStream } from '@/lib/originBudget';
 import { getGoogleAccessToken } from '@/lib/googleTokenCache';
 import { boundedRange } from '@/lib/boundedRange';
 
@@ -43,7 +44,7 @@ async function serveChunk(fileId: string, chunk: string, accessToken: string) {
   const contentLength = gDriveRes.headers.get('content-length');
   if (contentLength) headers.set('Content-Length', contentLength);
 
-  return new NextResponse(gDriveRes.body, { status: 200, headers });
+  return new NextResponse(meterStream(gDriveRes.body), { status: 200, headers });
 }
 
 /**
@@ -96,6 +97,8 @@ export async function GET(
       return res;
     }
 
+    const blocked = await originGuard('audio');
+    if (blocked) return blocked;
     const accessToken = await getGoogleAccessToken();
 
     const chunk = request.nextUrl.searchParams.get('chunk');
@@ -147,7 +150,7 @@ export async function GET(
     responseHeaders.set('Cache-Control', 'public, max-age=86400');
     responseHeaders.set('Access-Control-Allow-Origin', '*');
 
-    return new NextResponse(gDriveRes.body, {
+    return new NextResponse(meterStream(gDriveRes.body), {
       status: gDriveRes.status,
       headers: responseHeaders,
     });
